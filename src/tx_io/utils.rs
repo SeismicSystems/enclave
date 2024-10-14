@@ -58,6 +58,7 @@ where
     T::decode(&mut &buf[..]).unwrap_or_else(|err| panic!("Failed to decode: {:?}", err))
 }
 
+// derives a aes key from a shared secret
 pub fn derive_aes_key(shared_secret: &SharedSecret) -> Result<Key<Aes256Gcm>, hkdf::InvalidLength> {
     // Initialize HKDF with SHA-256
     let hk = Hkdf::<Sha256>::new(None, &shared_secret.secret_bytes());
@@ -68,6 +69,7 @@ pub fn derive_aes_key(shared_secret: &SharedSecret) -> Result<Key<Aes256Gcm>, hk
     Ok(*Key::<Aes256Gcm>::from_slice(&okm))
 }
 
+// reads a secp256k1 keypair from a file
 pub fn read_secp256k1_keypair(path: &str) -> io::Result<Secp256k1KeyPair> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);

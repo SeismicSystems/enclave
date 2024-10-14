@@ -6,6 +6,7 @@ use std::convert::Infallible;
 use crate::tx_io::structs::*;
 use crate::tx_io::utils::*;
 
+// handles a tx io encryption request
 pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = to_bytes(req.into_body()).await.unwrap();
@@ -24,6 +25,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     Ok(Response::new(Body::from(response_json)))
 }
 
+// handles a tx io decryption request
 pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = to_bytes(req.into_body()).await.unwrap();
