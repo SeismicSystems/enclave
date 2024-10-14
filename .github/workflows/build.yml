@@ -14,7 +14,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  echo:
+  rustfmt:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
