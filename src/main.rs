@@ -5,12 +5,11 @@ use attestation_agent::{AttestationAPIs, AttestationAgent};
 use log::debug;
 
 use hyper::{Body, Request, Response, Server, StatusCode};
-use routerify::{Middleware, RequestInfo, Router, RouterService, prelude::*};
+use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
 use tx_io::handlers::*;
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,9 +32,8 @@ async fn main() -> Result<()> {
     let service = RouterService::new(router).unwrap();
     let server = Server::bind(&addr).serve(service);
 
-
     println!("Listening on http://{}\n", addr);
-    
+
     if let Err(e) = server.await {
         eprintln!("Server error: {}", e);
     }
