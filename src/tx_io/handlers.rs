@@ -18,7 +18,6 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let aes_key = derive_aes_key(&shared_secret).unwrap();
     let encrypted_data = aes_encrypt(&aes_key, &encryption_request.data, encryption_request.nonce);
 
-    // response
     let response_body = IoEncryptionResponse { encrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
@@ -37,7 +36,6 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let aes_key = derive_aes_key(&shared_secret).unwrap();
     let decrypted_data = aes_decrypt(&aes_key, &decryption_request.data, decryption_request.nonce);
 
-    // response
     let response_body = IoDecryptionResponse { decrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
