@@ -79,7 +79,7 @@ mod tests {
 
         let req = Request::builder()
             .method("POST")
-            .uri(format!("{}/io_encrypt", base_url))
+            .uri(format!("{}/tx_io/encrypt", base_url))
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json))
             .unwrap();
@@ -106,7 +106,7 @@ mod tests {
         let payload_json = serde_json::to_string(&decryption_request).unwrap();
         let req = Request::builder()
             .method("POST")
-            .uri(format!("{}/io_decrypt", base_url))
+            .uri(format!("{}/tx_io/decrypt", base_url))
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json))
             .unwrap();
