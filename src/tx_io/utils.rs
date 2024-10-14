@@ -5,12 +5,11 @@ use aes_gcm::{
 use alloy_rlp::{Decodable, Encodable};
 use hkdf::Hkdf;
 use secp256k1::{ecdh::SharedSecret, PublicKey, SecretKey};
-use sha2::Sha256;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use sha2::Sha256;
 use std::fs::File;
 use std::io::{self, BufReader};
-
 
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
