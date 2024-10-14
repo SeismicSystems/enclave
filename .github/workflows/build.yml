@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ io_tx ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+#   build:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 30
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: dtolnay/rust-toolchain@stable
+#       - uses: Swatinem/rust-cache@v2
+#         with:
+#           shared-key: "build-cache"
+#       - name: cargo build without flags
+#         run: cargo build
+#       - name: cargo check warnings
+#         run: RUSTFLAGS="-D warnings" cargo check
+#       - name: cargo test
+#         run: cargo test
