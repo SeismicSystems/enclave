@@ -17,6 +17,7 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     // configure the attestation agent
+    // Not currently used or configured, but it will be later on
     let aa = AttestationAgent::new(None).context("Failed to create an AttestationAgent")?;
     debug!("Detected TEE type: {:?}", aa.get_tee_type());
 
