@@ -1,0 +1,27 @@
+[package]
+name = "TeeService"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+aes-gcm = "0.10"
+tokio = { version = "1.28.2", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.22"
+bytes = "1.4"                  
+hyper = { version = "0.14", features = ["full"] }                                   
+anyhow = "1.0"
+az-tdx-vtpm = "0.7.0"
+openssl = "0.10.66"
+alloy-rlp = { version = "0.3", default-features = false }
+routerify = "3.0.0"
+secp256k1 = {version = "0.24", features = ["rand", "recovery", "std", "serde"]}
+sha2 = "0.10"
+hkdf = "0.12"   
+attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["tdx-attester", "coco_as"] }
+log = "0.4"
+env_logger = "0.11"
+
+# tss-esapi = "7.0.0"  # only include this for tpm2
