@@ -58,7 +58,7 @@ mod tests {
     use std::str::FromStr;
 
     #[tokio::test]
-    async fn test_io_encryptin() {
+    async fn test_io_encryption() {
         // Prepare encryption request body
         let base_url = "http://localhost:7878";
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
