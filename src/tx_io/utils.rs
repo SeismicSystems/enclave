@@ -1,18 +1,15 @@
 use aes_gcm::{
     aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit},
-    Aes256Gcm, 
-    Key
+    Aes256Gcm, Key,
 };
-use secp256k1::ecdh::SharedSecret;
-use hkdf::Hkdf;
-use sha2::Sha256;
 use alloy_rlp::{Decodable, Encodable};
-use std::fs::File;
-
-use secp256k1::{SecretKey, PublicKey};
-use serde::{Serialize, Deserialize};
-use std::io::{self, BufReader};
+use hkdf::Hkdf;
+use secp256k1::{ecdh::SharedSecret, PublicKey, SecretKey};
+use sha2::Sha256;
+use serde::{Deserialize, Serialize};
 use serde_json;
+use std::fs::File;
+use std::io::{self, BufReader};
 
 
 #[derive(Serialize, Deserialize)]
@@ -33,7 +30,7 @@ fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as AeadCor
 pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64) -> Vec<u8> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
-    
+
     // convert the encodable object to a Vec<u8>
     let mut buf = Vec::new();
     plaintext.encode(&mut buf);
@@ -51,9 +48,11 @@ where
 {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
-    
+
     // recover the plaintext byte encoding of the object
-    let buf = cipher.decrypt(&nonce, ciphertext.as_ref()).expect("AES decryption failed");
+    let buf = cipher
+        .decrypt(&nonce, ciphertext.as_ref())
+        .expect("AES decryption failed");
 
     // recover the object from the byte encoding
     T::decode(&mut &buf[..]).unwrap_or_else(|err| panic!("Failed to decode: {:?}", err))
@@ -66,18 +65,11 @@ pub fn derive_aes_key(shared_secret: &SharedSecret) -> Result<Key<Aes256Gcm>, hk
     // Output a 32-byte key for AES-256
     let mut okm = [0u8; 32];
     hk.expand(b"aes-gcm key", &mut okm)?;
-    Ok(Key::<Aes256Gcm>::from_slice(&okm).clone())
-}
-
-pub fn write_secp256k1_keypair(keypair: &Secp256k1KeyPair, path: &str) -> io::Result<()> {
-    let file = File::create(path)?;
-    serde_json::to_writer_pretty(file, keypair)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    Ok(*Key::<Aes256Gcm>::from_slice(&okm))
 }
 
 pub fn read_secp256k1_keypair(path: &str) -> io::Result<Secp256k1KeyPair> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    serde_json::from_reader(reader)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    serde_json::from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }

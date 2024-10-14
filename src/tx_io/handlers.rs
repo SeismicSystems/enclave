@@ -1,5 +1,4 @@
-use hyper::body::to_bytes;
-use hyper::{Body, Request, Response};
+use hyper::{body::to_bytes, Body, Request, Response};
 use secp256k1::ecdh::SharedSecret;
 use secp256k1::SecretKey;
 use std::convert::Infallible;
@@ -37,9 +36,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let decrypted_data = aes_decrypt(&aes_key, &decryption_request.data, decryption_request.nonce);
 
     // response
-    let response_body = IoDecryptionResponse {
-        decrypted_data: decrypted_data,
-    };
+    let response_body = IoDecryptionResponse { decrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
     Ok(Response::new(Body::from(response_json)))
@@ -48,11 +45,9 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 // temporary function for testing that reads the keypair from a file
 // should eventually make a request to a kms service
 fn get_secp256k1_sk() -> SecretKey {
-    let ecdh_sk = read_secp256k1_keypair("./src/tx_io/ex_keypair.json")
+    read_secp256k1_keypair("./src/tx_io/ex_keypair.json")
         .unwrap()
-        .secret_key;
-
-    ecdh_sk
+        .secret_key
 }
 
 #[cfg(test)]
