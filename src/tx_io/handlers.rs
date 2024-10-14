@@ -6,7 +6,18 @@ use std::convert::Infallible;
 use crate::tx_io::structs::*;
 use crate::tx_io::utils::*;
 
-// handles a tx io encryption request
+/// Handles an IO encryption request, encrypting the provided data using AES.
+/// 
+/// # Arguments
+/// * `req` - The incoming HTTP request containing the data to be encrypted. The body of the request
+/// should be a JSON-encoded `IoEncryptionRequest`.
+///
+/// # Returns
+/// A `Result` containing an HTTP response with the encrypted data, or an error of type `Infallible`.
+/// The response body is JSON-encoded and contains the encrypted data as part of an `IoEncryptionResponse`.
+///
+/// # Errors
+/// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
 pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = to_bytes(req.into_body()).await.unwrap();
@@ -24,7 +35,18 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     Ok(Response::new(Body::from(response_json)))
 }
 
-// handles a tx io decryption request
+/// Handles an IO decryption request, decrypting the provided encrypted data using AES.
+/// 
+/// # Arguments
+/// * `req` - The incoming HTTP request containing the encrypted data. The body of the request
+/// should be a JSON-encoded `IoDecryptionRequest`.
+///
+/// # Returns
+/// A `Result` containing an HTTP response with the decrypted data, or an error of type `Infallible`.
+/// The response body is JSON-encoded and contains the decrypted data as part of an `IoDecryptionResponse`.
+///
+/// # Errors
+/// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
 pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = to_bytes(req.into_body()).await.unwrap();
@@ -42,8 +64,16 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     Ok(Response::new(Body::from(response_json)))
 }
 
-// temporary function for testing that reads the keypair from a file
-// should eventually make a request to a kms service
+/// Loads a secp256k1 private key from a file.
+///
+/// This function reads the keypair from a JSON file for testing purposes. Eventually, it should
+/// be replaced with a more secure solution, such as requesting a key from a KMS service.
+///
+/// # Returns
+/// A secp256k1 `SecretKey` loaded from the keypair file.
+///
+/// # Panics
+/// The function may panic if the file is missing or if it cannot deserialize the keypair.
 fn get_secp256k1_sk() -> SecretKey {
     read_secp256k1_keypair("./src/tx_io/ex_keypair.json")
         .unwrap()
