@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Struct representing the IO encryption request.
-/// 
+///
 /// # Fields
 /// * `msg_sender` - The secp256k1 public key of the message sender.
 /// * `data` - The data to be encrypted, represented as a `Vec<u8>`.
@@ -14,7 +14,7 @@ pub struct IoEncryptionRequest {
 }
 
 /// Struct representing the IO encryption response.
-/// 
+///
 /// # Fields
 /// * `encrypted_data` - The encrypted data, represented as a `Vec<u8>`.
 #[derive(Debug, Serialize, Deserialize)]

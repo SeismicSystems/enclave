@@ -7,7 +7,7 @@ use crate::tx_io::structs::*;
 use crate::tx_io::utils::*;
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
-/// 
+///
 /// # Arguments
 /// * `req` - The incoming HTTP request containing the data to be encrypted. The body of the request
 /// should be a JSON-encoded `IoEncryptionRequest`.
@@ -36,7 +36,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 }
 
 /// Handles an IO decryption request, decrypting the provided encrypted data using AES.
-/// 
+///
 /// # Arguments
 /// * `req` - The incoming HTTP request containing the encrypted data. The body of the request
 /// should be a JSON-encoded `IoDecryptionRequest`.
