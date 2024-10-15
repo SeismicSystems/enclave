@@ -138,7 +138,8 @@ pub fn secp256k1_sign_digest(msg: &[u8], key: SecretKey) -> Result<Vec<u8>, secp
 
     // Hash the message using SHA256
     let hash = Sha256::digest(msg);
-    let message = Message::from_slice(&hash)?;
+    let hash_bytes: [u8; 32] = hash.into();
+    let message = Message::from_digest(hash_bytes);
 
     // Sign the message with the secret key
     let signature = secp.sign_ecdsa(&message, &key);
@@ -175,7 +176,8 @@ pub fn secp256k1_verify(
 
     // Hash the message using SHA256
     let hash = Sha256::digest(msg);
-    let message = Message::from_slice(&hash)?;
+    let hash_bytes: [u8; 32] = hash.into();
+    let message = Message::from_digest(hash_bytes);
 
     // Deserialize the signature from a compact format
     let signature = Signature::from_compact(sig)?;
