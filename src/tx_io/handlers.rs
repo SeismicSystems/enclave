@@ -4,13 +4,13 @@ use secp256k1::SecretKey;
 use std::convert::Infallible;
 
 use crate::tx_io::structs::*;
-use crate::tx_io::utils::*;
+use crate::utils::crypto_utils::*;
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
 /// # Arguments
 /// * `req` - The incoming HTTP request containing the data to be encrypted. The body of the request
-/// should be a JSON-encoded `IoEncryptionRequest`.
+///   Should be a JSON-encoded `IoEncryptionRequest`.
 ///
 /// # Returns
 /// A `Result` containing an HTTP response with the encrypted data, or an error of type `Infallible`.
@@ -39,7 +39,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 ///
 /// # Arguments
 /// * `req` - The incoming HTTP request containing the encrypted data. The body of the request
-/// should be a JSON-encoded `IoDecryptionRequest`.
+///   Should be a JSON-encoded `IoDecryptionRequest`.
 ///
 /// # Returns
 /// A `Result` containing an HTTP response with the decrypted data, or an error of type `Infallible`.
@@ -75,9 +75,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 /// # Panics
 /// The function may panic if the file is missing or if it cannot deserialize the keypair.
 fn get_secp256k1_sk() -> SecretKey {
-    read_secp256k1_keypair("./src/tx_io/ex_keypair.json")
-        .unwrap()
-        .secret_key
+    get_sample_secp256k1_sk()
 }
 
 #[cfg(test)]
