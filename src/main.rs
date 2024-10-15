@@ -1,4 +1,6 @@
+mod signing;
 mod tx_io;
+mod utils;
 
 use anyhow::{Context, Result};
 use attestation_agent::{AttestationAPIs, AttestationAgent};
@@ -9,6 +11,7 @@ use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
+use signing::handlers::*;
 use tx_io::handlers::*;
 
 #[tokio::main]
@@ -25,6 +28,8 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
+        .post("/signing/sign", secp256k1_sign_handler)
+        .post("/siging/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
         .post("/tx_io/decrypt", tx_io_decrypt_handler)
         .err_handler_with_info(error_handler)

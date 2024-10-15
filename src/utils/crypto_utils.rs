@@ -4,10 +4,10 @@ use aes_gcm::{
 };
 use alloy_rlp::{Decodable, Encodable};
 use hkdf::Hkdf;
-use secp256k1::{ecdh::SharedSecret, PublicKey, SecretKey};
+use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, BufReader};
 
@@ -116,6 +116,79 @@ pub fn derive_aes_key(shared_secret: &SharedSecret) -> Result<Key<Aes256Gcm>, hk
     Ok(*Key::<Aes256Gcm>::from_slice(&okm))
 }
 
+/// Signs a message digest using the provided Secp256k1 secret key.
+///
+/// This function first hashes the provided message using SHA-256 to create a digest,
+/// then signs the resulting hash using the given `SecretKey`. The signature is returned
+/// in compact form as a `Vec<u8>`.
+///
+/// # Arguments
+///
+/// * `msg` - A byte slice representing the message to be signed.
+/// * `key` - The `SecretKey` used to sign the hashed message.
+///
+/// # Returns
+///
+/// This function returns a `Result` containing:
+/// * `Ok(Vec<u8>)` - A vector containing the compact serialized signature on success.
+/// * `Err(secp256k1::Error)` - An error if signing fails (e.g., if the message digest is invalid).
+pub fn secp256k1_sign_digest(msg: &[u8], key: SecretKey) -> Result<Vec<u8>, secp256k1::Error> {
+    // Create a Secp256k1 context for signing
+    let secp = Secp256k1::signing_only();
+
+    // Hash the message using SHA256
+    let hash = Sha256::digest(msg);
+    let hash_bytes: [u8; 32] = hash.into();
+    let message = Message::from_digest(hash_bytes);
+
+    // Sign the message with the secret key
+    let signature = secp.sign_ecdsa(&message, &key);
+
+    // Return the signature as a byte vector
+    Ok(signature.serialize_compact().to_vec())
+}
+
+/// Verifies a Secp256k1 signature for a given message and public key.
+///
+/// This function hashes the message using SHA-256 to create a digest, then verifies
+/// the provided signature using the corresponding `PublicKey`. The signature must be
+/// in compact form (64 bytes).
+///
+/// # Arguments
+///
+/// * `msg` - A byte slice representing the original message.
+/// * `sig` - A byte slice containing the compact serialized signature to verify.
+/// * `pubkey` - The `PublicKey` used to verify the signature.
+///
+/// # Returns
+///
+/// This function returns a `Result` containing:
+/// * `Ok(true)` - If the signature is valid for the provided message and public key.
+/// * `Ok(false)` - If the signature is invalid.
+/// * `Err(secp256k1::Error)` - If verification fails due to an invalid message,
+pub fn secp256k1_verify(
+    msg: &[u8],
+    sig: &[u8],
+    pubkey: PublicKey,
+) -> Result<bool, secp256k1::Error> {
+    // Create a Secp256k1 context for verification
+    let secp = Secp256k1::verification_only();
+
+    // Hash the message using SHA256
+    let hash = Sha256::digest(msg);
+    let hash_bytes: [u8; 32] = hash.into();
+    let message = Message::from_digest(hash_bytes);
+
+    // Deserialize the signature from a compact format
+    let signature = Signature::from_compact(sig)?;
+
+    // Verify the signature with the public key
+    match secp.verify_ecdsa(&message, &signature, &pubkey) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
 /// Reads a secp256k1 keypair from a JSON file.
 ///
 /// This function reads a secp256k1 keypair from a file in JSON format.
@@ -130,4 +203,21 @@ pub fn read_secp256k1_keypair(path: &str) -> io::Result<Secp256k1KeyPair> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     serde_json::from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+}
+
+/// Returns a sample Secp256k1 key pair for testing purposes.
+pub fn get_sample_secp256k1_keypair() -> Secp256k1KeyPair {
+    read_secp256k1_keypair("./src/utils/ex_keypair.json").unwrap()
+}
+
+/// Returns a sample Secp256k1 secret key for testing purposes.
+pub fn get_sample_secp256k1_sk() -> secp256k1::SecretKey {
+    let keypair = get_sample_secp256k1_keypair();
+    keypair.secret_key
+}
+
+/// Returns a sample Secp256k1 public key for testing purposes.
+pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
+    let keypair = get_sample_secp256k1_keypair();
+    keypair.public_key
 }
