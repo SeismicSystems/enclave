@@ -17,10 +17,10 @@ az-tdx-vtpm = "0.7.0"
 openssl = "0.10.66"
 alloy-rlp = { version = "0.3", default-features = false }
 routerify = "3.0.0"
-secp256k1 = {version = "0.24", features = ["rand", "recovery", "std", "serde"]}
+secp256k1 = {version = "0.30", features = ["rand", "recovery", "std", "serde"]}
 sha2 = "0.10"
 hkdf = "0.12"   
-attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["tdx-attester", "coco_as"] }
+attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester", "coco_as"] }
 log = "0.4"
 env_logger = "0.11"
 
