@@ -85,3 +85,78 @@ fn get_secp256k1_sk() -> secp256k1::SecretKey {
 fn get_secp256k1_pk() -> secp256k1::PublicKey {
     get_sample_secp256k1_pk()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyper::{Body, Request};
+
+    #[tokio::test]
+    async fn test_secp256k1_sign() {
+        // Prepare sign request body
+        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
+        let sign_request = Secp256k1SignRequest {
+            msg: msg_to_sign.clone(),
+        };
+        let payload_json = serde_json::to_string(&sign_request).unwrap();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/sign")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        let res = secp256k1_sign_handler(req).await.unwrap();
+        assert_eq!(res.status(), 200);
+
+        // Parse the response body
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let sign_response: Secp256k1SignResponse = serde_json::from_slice(&body).unwrap();
+        assert!(!sign_response.sig.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_secp256k1_verify() {
+        // Prepare sign request to get a valid signature
+        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
+        let sign_request = Secp256k1SignRequest {
+            msg: msg_to_sign.clone(),
+        };
+        let sign_payload_json = serde_json::to_string(&sign_request).unwrap();
+
+        let sign_req = Request::builder()
+            .method("POST")
+            .uri("/sign")
+            .header("Content-Type", "application/json")
+            .body(Body::from(sign_payload_json))
+            .unwrap();
+
+        let sign_res = secp256k1_sign_handler(sign_req).await.unwrap();
+        let sign_body = hyper::body::to_bytes(sign_res.into_body()).await.unwrap();
+        let sign_response: Secp256k1SignResponse = serde_json::from_slice(&sign_body).unwrap();
+
+        // Prepare verify request body
+        let verify_request = Secp256k1VerifyRequest {
+            msg: msg_to_sign,
+            sig: sign_response.sig,
+        };
+        let verify_payload_json = serde_json::to_string(&verify_request).unwrap();
+
+        let verify_req = Request::builder()
+            .method("POST")
+            .uri("/verify")
+            .header("Content-Type", "application/json")
+            .body(Body::from(verify_payload_json))
+            .unwrap();
+
+        let verify_res = secp256k1_verify_handler(verify_req).await.unwrap();
+        assert_eq!(verify_res.status(), 200);
+
+        // Parse the response body
+        let verify_body = hyper::body::to_bytes(verify_res.into_body()).await.unwrap();
+        let verify_response: Secp256k1VerifyResponse =
+            serde_json::from_slice(&verify_body).unwrap();
+        assert!(verify_response.verified);
+    }
+}
