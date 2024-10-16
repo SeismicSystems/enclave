@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AttestationEvidenceRequest {
+pub struct AttestationGetEvidenceRequest {
     pub runtime_data: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AttestationEvidenceResponse {
+pub struct AttestationGetEvidenceResponse {
     pub evidence: Vec<u8>,
 }

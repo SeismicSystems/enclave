@@ -44,7 +44,7 @@ pub async fn attestation_get_evidence_handler(
     };
 
     // Deserialize the request body into the appropriate struct
-    let evidence_request: AttestationEvidenceRequest = match serde_json::from_slice(&body_bytes) {
+    let evidence_request: AttestationGetEvidenceRequest = match serde_json::from_slice(&body_bytes) {
         Ok(request) => request,
         Err(_) => {
             let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
@@ -63,7 +63,7 @@ pub async fn attestation_get_evidence_handler(
         .unwrap();
 
     // Return the evidence as a response
-    let response_body = AttestationEvidenceResponse { evidence };
+    let response_body = AttestationGetEvidenceResponse { evidence };
     let response_json = serde_json::to_string(&response_body).unwrap();
     Ok(Response::new(Body::from(response_json)))
 }
@@ -76,9 +76,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_attestation_evidence_handler_valid_request() {
-        // Mock a valid AttestationEvidenceRequest
+        // Mock a valid AttestationGetEvidenceRequest
         let runtime_data = "nonce".as_bytes(); // Example runtime data
-        let evidence_request = AttestationEvidenceRequest {
+        let evidence_request = AttestationGetEvidenceRequest {
             runtime_data: runtime_data.to_vec(),
         };
 
@@ -100,11 +100,12 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK);
 
         // Parse and check the response body
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let get_evidence_resp: AttestationGetEvidenceResponse = serde_json::from_slice(&body).unwrap();
 
-        // Ensure the response includes the expected keys (like evidence)
-        assert!(response_json.get("evidence").is_some());
+        // Ensure the response is not empty
+        assert!(get_evidence_resp.evidence.len() > 0);
+        println!("Evidence: {:?}", get_evidence_resp.evidence);
     }
 
     #[tokio::test]
