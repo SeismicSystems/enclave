@@ -3,10 +3,8 @@ mod signing;
 mod tx_io;
 mod utils;
 
-use anyhow::{Context, Result};
-use attestation_agent::{AttestationAPIs, AttestationAgent};
+use anyhow::Result;
 use hyper::{Body, Request, Response, Server, StatusCode};
-use log::debug;
 use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -20,16 +18,11 @@ async fn main() -> Result<()> {
     // Initialize the logger
     env_logger::init();
 
-    // configure the attestation agent
-    // Not currently used or configured, but it will be later on
-    let aa = AttestationAgent::new(None).context("Failed to create an AttestationAgent")?;
-    debug!("Detected TEE type: {:?}", aa.get_tee_type());
-
     // create the server
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
-        .post("/attestation/attester/evidence", attestation_evidence_handler)
+        .post("/attestation/aa/evidence", attestation_evidence_handler)
         .post("/signing/sign", secp256k1_sign_handler)
         .post("/siging/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
