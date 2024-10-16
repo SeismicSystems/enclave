@@ -65,3 +65,67 @@ pub async fn attestation_evidence_handler(req: Request<Body>) -> Result<Response
     let response_json = serde_json::to_string(&response_body).unwrap();
     Ok(Response::new(Body::from(response_json)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyper::{Body, Request, Response};
+    use serde_json::Value;
+    use crate::attester::structs::AttestationEvidenceRequest;
+
+    #[tokio::test]
+    async fn test_attestation_evidence_handler_valid_request() {
+        // Mock a valid AttestationEvidenceRequest
+        let runtime_data = "nonce".as_bytes(); // Example runtime data
+        let evidence_request = AttestationEvidenceRequest {
+            runtime_data: runtime_data.to_vec(),
+        };
+        
+        // Serialize the request to JSON
+        let payload_json = serde_json::to_string(&evidence_request).unwrap();
+        
+        // Create a request
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/attester/evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+        
+        // Call the handler
+        let res: Response<Body> = attestation_evidence_handler(req).await.unwrap();
+        
+        // Check that the response status is 200 OK
+        assert_eq!(res.status(), StatusCode::OK);
+        
+        // Parse and check the response body
+        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
+        
+        // Ensure the response includes the expected keys (like evidence)
+        assert!(response_json.get("evidence").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_attestation_evidence_handler_invalid_json() {
+        // Create a request with invalid JSON body
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/attester/evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from("Invalid JSON"))
+            .unwrap();
+        
+        // Call the handler
+        let res: Response<Body> = attestation_evidence_handler(req).await.unwrap();
+        
+        // Check that the response status is 400 Bad Request
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        
+        // Parse and check the response body
+        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
+        
+        assert_eq!(response_json["error"], "Invalid JSON in request body");
+    }
+}
