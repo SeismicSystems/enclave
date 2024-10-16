@@ -76,6 +76,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_attestation_evidence_handler_valid_request() {
+        // NOTE: This test will run with the Sample TEE Type 
+        // because it doesn't run with sudo privileges
+
         // Mock a valid AttestationGetEvidenceRequest
         let runtime_data = "nonce".as_bytes(); // Example runtime data
         let evidence_request = AttestationGetEvidenceRequest {
