@@ -2,7 +2,7 @@ use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use serde_json::json;
 use std::convert::Infallible;
 
-use crate::signing::structs::*;
+use super::structs::*;
 use crate::utils::crypto_utils::*;
 
 /// Handles request to sign a message using secp256k1.

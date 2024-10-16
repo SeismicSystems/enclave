@@ -5,7 +5,7 @@ use std::convert::Infallible;
 use secp256k1::ecdh::SharedSecret;
 use secp256k1::SecretKey;
 
-use crate::tx_io::structs::*;
+use super::structs::*;
 use crate::utils::crypto_utils::*;
 
 /// Handles an IO encryption request, encrypting the provided data using AES.

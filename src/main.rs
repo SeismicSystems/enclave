@@ -1,4 +1,5 @@
-mod aa;
+mod coco_aa;
+mod coco_as;
 mod signing;
 mod tx_io;
 mod utils;
@@ -9,7 +10,7 @@ use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
-use aa::handlers::*;
+use coco_aa::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
 

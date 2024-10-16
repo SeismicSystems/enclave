@@ -5,7 +5,7 @@ use serde_json::json;
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use crate::aa::structs::*;
+use super::structs::*;
 
 // Initialize an Arc-wrapped AttestationAgent lazily
 // the attestation agent provides APIs to interact with the secure hardware features
