@@ -187,9 +187,9 @@ mod tests {
     #[test]
     fn test_serialize_deserialize() {
         let original_request = AttestationEvalEvidenceRequest {
-            evidence: vec![1, 2, 3],
-            tee: Tee::Sgx,       
-            runtime_data: Some(Data::Raw(vec![7, 8, 9])),
+            evidence: vec![123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125], // Example evidence data
+            tee: Tee::Sample,
+            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         };
 

@@ -69,9 +69,9 @@ mod tests {
 
         // Mock a valid AttestationEvalEvidenceRequest
         let eval_request = AttestationEvalEvidenceRequest {
-            evidence: vec![0; 64], // Example evidence data
-            tee: Tee::AzTdxVtpm,
-            runtime_data: Some(Data::Raw(vec![7, 8, 9])), // Example runtime data
+            evidence: vec![123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125], // Example evidence data
+            tee: Tee::Sample,
+            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         };
 
