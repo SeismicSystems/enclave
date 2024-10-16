@@ -13,6 +13,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use coco_aa::handlers::*;
+use coco_as::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
 
@@ -33,7 +34,7 @@ async fn main() -> Result<()> {
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
         .post("/attestation/aa/get_evidence", attestation_get_evidence_handler)
-        // .post("/attestation/as/eval_evidence", attestation_eval_evidence_handler)
+        .post("/attestation/as/eval_evidence", attestation_eval_evidence_handler)
         .post("/signing/sign", secp256k1_sign_handler)
         .post("/siging/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
