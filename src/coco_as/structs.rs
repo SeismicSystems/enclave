@@ -10,38 +10,29 @@ use serde_json::Value;
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
-    pub runtime_data: Vec<Data>,
+    pub runtime_data: Option<Data>,
     pub runtime_data_hash_algorithm: Option<HashAlgorithm>,
-    // pub init_data: Option<Data>,
-    // pub init_data_hash_algorithm: Option<HashAlgorithm>,
-    // pub policy_ids: Vec<String>,
 }
+// pub init_data: Option<Data>,
+// pub init_data_hash_algorithm: Option<HashAlgorithm>,
+// pub policy_ids: Vec<String>,
 
 impl fmt::Debug for AttestationEvalEvidenceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AttestationEvalEvidenceRequest")
             .field("evidence", &self.evidence)
             .field("tee", &self.tee)
-            .field(
-                "runtime_data",
-                &self
-                    .runtime_data
-                    .iter()
-                    .map(|data| {
-                        match data {
-                            Data::Raw(bytes) => format!("Raw({:?})", bytes),
-                            Data::Structured(value) => format!("Structured({:?})", value),
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            ) 
-            .field(
-                "runtime_data_hash_algorithm",
-                &match &self.runtime_data_hash_algorithm {
-                    Some(alg) => alg.to_string(),
-                    None => "None".to_string(),
+            .field("runtime_data", &match &self.runtime_data {
+                Some(data) => match data {
+                    Data::Raw(bytes) => format!("Raw({:?})", bytes),
+                    Data::Structured(value) => format!("Structured({:?})", value),
                 },
-            )
+                None => "None".to_string(),
+            })
+            .field("runtime_data_hash_algorithm", &match &self.runtime_data_hash_algorithm {
+                Some(alg) => alg.to_string(),
+                None => "None".to_string(),
+            })
             .finish()
     }
 }
@@ -55,14 +46,11 @@ impl Serialize for AttestationEvalEvidenceRequest {
         state.serialize_field("evidence", &self.evidence)?;
         state.serialize_field("tee", &self.tee)?;
 
-        // Manually serialize `runtime_data`
-        let runtime_data: Vec<String> = self.runtime_data.iter().map(|data| {
-            match data {
-                Data::Raw(bytes) => format!("Raw({:?})", bytes),  // Serialize Raw as string
-                Data::Structured(value) => serde_json::to_string(value).unwrap(),  // Directly serialize `Value` from serde_json
-            }
-        }).collect();
-        state.serialize_field("runtime_data", &runtime_data)?;
+        match &self.runtime_data {
+            Some(Data::Raw(bytes)) => state.serialize_field("runtime_data", bytes)?,
+            Some(Data::Structured(value)) => state.serialize_field("runtime_data", value)?,
+            None => state.serialize_field("runtime_data", &None::<()> )?,
+        };
 
         // Serialize `runtime_data_hash_algorithm` using its Display implementation
         let runtime_data_hash_algorithm = match &self.runtime_data_hash_algorithm {
@@ -110,46 +98,32 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Evidence => {
-                            if evidence.is_some() {
-                                return Err(de::Error::duplicate_field("evidence"));
-                            }
                             evidence = Some(map.next_value()?);
                         }
                         Field::Tee => {
-                            if tee.is_some() {
-                                return Err(de::Error::duplicate_field("tee"));
-                            }
                             tee = Some(map.next_value()?);
                         }
                         Field::RuntimeData => {
                             if runtime_data.is_some() {
                                 return Err(de::Error::duplicate_field("runtime_data"));
                             }
-                            let raw_data: Vec<String> = map.next_value()?;
-                            let parsed_data: Vec<Data> = raw_data.into_iter().map(|s| {
-                                if s.starts_with("Raw(") {
-                                    let bytes = s.trim_start_matches("Raw(").trim_end_matches(")").as_bytes().to_vec();
-                                    Data::Raw(bytes)
-                                } else if s.starts_with("Structured(") {
-                                    // Deserialize `Value` directly using serde_json
-                                    let json_str = s.trim_start_matches("Structured(").trim_end_matches(")");
-                                    let value: Value = serde_json::from_str(json_str).unwrap();  // Deserialize back to Value
-                                    Data::Structured(value)
-                                } else {
-                                    panic!("Unexpected data format");
+                            // Attempt to deserialize as a byte array (for Data::Raw)
+                            let raw_data: Option<Vec<u8>> = map.next_value()?;
+                            if let Some(bytes) = raw_data {
+                                runtime_data = Some(Data::Raw(bytes));
+                            } else {
+                                let structured_data: Option<Value> = map.next_value()?;
+                                if let Some(value) = structured_data {
+                                    runtime_data = Some(Data::Structured(value));
                                 }
-                            }).collect();
-                            runtime_data = Some(parsed_data);
+                            }
                         }
                         Field::RuntimeDataHashAlgorithm => {
-                            if runtime_data_hash_algorithm.is_some() {
-                                return Err(de::Error::duplicate_field("runtime_data_hash_algorithm"));
-                            }
                             let alg_str: String = map.next_value()?;
                             runtime_data_hash_algorithm = if alg_str == "None" {
                                 None
                             } else {
-                                HashAlgorithm::from_str(&alg_str).ok()  // Use `from_str` or equivalent
+                                HashAlgorithm::from_str(&alg_str).ok()
                             };
                         }
                     }
@@ -157,9 +131,7 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
 
                 let evidence = evidence.ok_or_else(|| de::Error::missing_field("evidence"))?;
                 let tee = tee.ok_or_else(|| de::Error::missing_field("tee"))?;
-                let runtime_data = runtime_data.ok_or_else(|| de::Error::missing_field("runtime_data"))?;
-                let runtime_data_hash_algorithm = runtime_data_hash_algorithm; // Option type
-
+               
                 Ok(AttestationEvalEvidenceRequest {
                     evidence,
                     tee,
@@ -185,7 +157,7 @@ mod tests {
         let request = AttestationEvalEvidenceRequest {
             evidence: vec![1, 2, 3],
             tee: Tee::Sgx,
-            runtime_data: vec![Data::Raw(vec![7, 8, 9])],
+            runtime_data: Some(Data::Raw(vec![7, 8, 9])),
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         };
 
@@ -195,7 +167,7 @@ mod tests {
         let expected_output = "AttestationEvalEvidenceRequest { \
         evidence: [1, 2, 3], \
         tee: Sgx, \
-        runtime_data: [\"Raw([7, 8, 9])\"], \
+        runtime_data: \"Raw([7, 8, 9])\", \
         runtime_data_hash_algorithm: \"Sha256\" }";
 
         assert_eq!(
@@ -208,7 +180,7 @@ mod tests {
         assert!(debug_output.contains("AttestationEvalEvidenceRequest"));
         assert!(debug_output.contains("evidence: [1, 2, 3]"));
         assert!(debug_output.contains("tee: Sgx"));
-        assert!(debug_output.contains("runtime_data: [\"Raw([7, 8, 9])\"]"));
+        assert!(debug_output.contains("runtime_data: \"Raw([7, 8, 9])\""));
         assert!(debug_output.contains("runtime_data_hash_algorithm: \"Sha256\""));
     }
 
@@ -217,7 +189,7 @@ mod tests {
         let original_request = AttestationEvalEvidenceRequest {
             evidence: vec![1, 2, 3],
             tee: Tee::Sgx,       
-            runtime_data: vec![Data::Raw(vec![7, 8, 9])],
+            runtime_data: Some(Data::Raw(vec![7, 8, 9])),
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         };
 
@@ -231,10 +203,11 @@ mod tests {
         // Check that the deserialized object is equal to the original
         assert_eq!(original_request.evidence, deserialized.evidence);
         assert_eq!(original_request.tee, deserialized.tee);
-        assert_eq!(
-            original_request.runtime_data.len(),
-            deserialized.runtime_data.len()
-        );
-        // assert_eq!(original_request.runtime_data_hash_algorithm, deserialized.runtime_data_hash_algorithm);
+        match (&original_request.runtime_data.unwrap(), &deserialized.runtime_data.unwrap()) {
+            (Data::Raw(bytes1), Data::Raw(bytes2)) => assert_eq!(bytes1, bytes2),
+            (Data::Structured(value1), Data::Structured(value2)) => assert_eq!(value1, value2),
+            _ => panic!("Mismatched runtime data types"),
+        }
+        assert_eq!(original_request.runtime_data_hash_algorithm.unwrap().to_string(), deserialized.runtime_data_hash_algorithm.unwrap().to_string());
     }
 }
