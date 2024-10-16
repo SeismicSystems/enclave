@@ -1,4 +1,4 @@
-mod attester;
+mod aa;
 mod signing;
 mod tx_io;
 mod utils;
@@ -9,7 +9,7 @@ use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
-use attester::handlers::*;
+use aa::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
 

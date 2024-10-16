@@ -5,7 +5,7 @@ use std::sync::Arc;
 use once_cell::sync::Lazy;
 use attestation_agent::{AttestationAPIs, AttestationAgent};
 
-use crate::attester::structs::*;
+use crate::aa::structs::*;
 
 // Initialize an Arc-wrapped AttestationAgent lazily
 // the attestation agent provides APIs to interact with the secure hardware features
@@ -71,7 +71,6 @@ mod tests {
     use super::*;
     use hyper::{Body, Request, Response};
     use serde_json::Value;
-    use crate::attester::structs::AttestationEvidenceRequest;
 
     #[tokio::test]
     async fn test_attestation_evidence_handler_valid_request() {

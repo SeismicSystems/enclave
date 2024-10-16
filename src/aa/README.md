@@ -1,6 +1,6 @@
-# Attester
+# Attestion Agent
 
-The attester package provides handlers for interacting with the [CoCo Attestation Agent](https://github.com/confidential-containers/guest-components/tree/main/attestation-agent). The attestation agent privides APIs to interact with the secure hardware features of the enclave. 
+The Attestation Agent package provides handlers for interacting with the [CoCo Attestation Agent](https://github.com/confidential-containers/guest-components/tree/main/attestation-agent). The attestation agent privides APIs to interact with the secure hardware features of the enclave. 
 
 Below is a quick explainer of the features offered by the attestation agent, and how they are relevant to Seismic.
 
