@@ -96,8 +96,10 @@ mod tests {
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
 
-        // Ensure the response includes the expected keys (like result of evaluation)
-        assert!(response_json.get("some_expected_key").is_some());
+        assert_eq!("thing", response_json);
+
+        // // Ensure the response includes the expected keys (like result of evaluation)
+        // assert!(response_json.get("some_expected_key").is_some());
     }
 
     #[tokio::test]
