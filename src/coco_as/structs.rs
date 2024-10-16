@@ -1,1 +1,1 @@
-use attestation_service::{AttestationEvidence, AttestationReport};
+use attestation_service::AttestationService;
