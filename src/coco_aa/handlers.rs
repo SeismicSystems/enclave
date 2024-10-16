@@ -28,7 +28,7 @@ static ATTESTATION_AGENT: Lazy<Arc<AttestationAgent>> = Lazy::new(|| {
 ///
 /// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
 /// Section 2.3.2 for more details
-pub async fn attestation_evidence_handler(
+pub async fn attestation_get_evidence_handler(
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
     // parse the request body
@@ -94,7 +94,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_evidence_handler(req).await.unwrap();
+        let res: Response<Body> = attestation_get_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK);
@@ -118,7 +118,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_evidence_handler(req).await.unwrap();
+        let res: Response<Body> = attestation_get_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 400 Bad Request
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
