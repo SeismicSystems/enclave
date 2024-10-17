@@ -2,6 +2,7 @@ use attestation_service::HashAlgorithm;
 use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use serde_json::json;
 use std::convert::Infallible;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 
 use crate::ATTESTATION_SERVICE;
 use super::structs::*;
@@ -34,8 +35,9 @@ pub async fn attestation_eval_evidence_handler(
     };
 
     // Call the evaluate function of the attestation service
+    // Gets back a b64 JWT web token of the form "header.claims.signature"
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    let evaluate_response = coco_as
+    let as_token = coco_as
         .evaluate(
             evaluate_request.evidence,
             evaluate_request.tee,
@@ -48,8 +50,15 @@ pub async fn attestation_eval_evidence_handler(
         .map_err(|e| format!("Error while evaluating evidence: {:?}", e))
         .unwrap();
 
-    // Return the evaluation result as a response
-    let response_json = serde_json::to_string(&evaluate_response).unwrap();
+    let parts: Vec<&str> = as_token.splitn(3, '.').collect();
+    let claims_b64 = parts[1];
+
+    // TODO: Decode and parse claims into a respose struct
+    let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(&claims_b64).unwrap();
+    let claims_decoded_string = String::from_utf8(claims_decoded_bytes).unwrap();
+    println!("eval_decoded_string: {:?}", claims_decoded_string);
+
+    let response_json = serde_json::to_string(&claims_decoded_string).unwrap();
     Ok(Response::new(Body::from(response_json)))
 }
 
