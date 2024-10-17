@@ -1,11 +1,11 @@
 use attestation_service::HashAlgorithm;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use serde_json::json;
 use std::convert::Infallible;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 
-use crate::ATTESTATION_SERVICE;
 use super::structs::*;
+use crate::ATTESTATION_SERVICE;
 
 pub async fn attestation_eval_evidence_handler(
     req: Request<Body>,
@@ -23,7 +23,8 @@ pub async fn attestation_eval_evidence_handler(
     };
 
     // Deserialize the request body into the evaluate request struct
-    let evaluate_request: AttestationEvalEvidenceRequest = match serde_json::from_slice(&body_bytes) {
+    let evaluate_request: AttestationEvalEvidenceRequest = match serde_json::from_slice(&body_bytes)
+    {
         Ok(request) => request,
         Err(e) => {
             println!("error 2: {:?}", e);
@@ -49,48 +50,60 @@ pub async fn attestation_eval_evidence_handler(
             evaluate_request.tee,
             evaluate_request.runtime_data,
             runtime_data_hash_algorithm,
-            None,
+            None,                  // hardcoded because AzTdxVtpm doesn't support init data
             HashAlgorithm::Sha256, // dummy val to make this compile
-            Vec::new(), // replace with the actual policy
-        ).await
+            Vec::new(),            // TODO: replace with the actual policy
+        )
+        .await
         .map_err(|e| format!("Error while evaluating evidence: {:?}", e))
         .unwrap();
 
     let parts: Vec<&str> = as_token.splitn(3, '.').collect();
     let claims_b64 = parts[1];
 
-    // TODO: Decode and parse claims into a respose struct
+    // Decode and parse claims into a response struct
     let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(&claims_b64).unwrap();
-    let claims_decoded_string = String::from_utf8(claims_decoded_bytes).unwrap();
-    println!("eval_decoded_string: {:?}", claims_decoded_string);
 
+    // Store the string in a variable so it lives long enough
+    let claims_decoded_string = String::from_utf8(claims_decoded_bytes).unwrap();
+
+    // // Deserialize the claims
+    // let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string).unwrap();
+    // println!("Deserialized claims: {:?}", claims);
+
+    // Serialize the response back to JSON
     let response_json = serde_json::to_string(&claims_decoded_string).unwrap();
     Ok(Response::new(Body::from(response_json)))
+
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper::{Body, Request, Response};
-    use serde_json::Value;
     use crate::init_coco_as;
-    use kbs_types::Tee;
     use attestation_service::Data;
+    use hyper::{Body, Request, Response};
+    use kbs_types::Tee;
+    use serde_json::Value;
 
     #[tokio::test]
     async fn test_eval_evidence_sample() {
         // Initialize ATTESTATION_SERVICE
-        init_coco_as().await.expect("Failed to initialize AttestationService");
+        init_coco_as()
+            .await
+            .expect("Failed to initialize AttestationService");
 
         // Mock a valid AttestationEvalEvidenceRequest
         let _eval_request = AttestationEvalEvidenceRequest {
-            evidence: vec![123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125], // Example evidence data
+            evidence: vec![
+                123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
+                95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+            ], // Example evidence data
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         };
 
-    
         let tdx_evidence = URL_SAFE_NO_PAD.decode(TDX_ENCODED_EVIDENCE_EX).unwrap();
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: tdx_evidence,
@@ -101,9 +114,6 @@ mod tests {
 
         // Serialize the request to JSON
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        // println!("payload_json: {:?}", payload_json);
-
-        // println!("payload_json: {:?}", serde_json::to_string(&_eval_request).unwrap());
 
         // Create a request
         let req = Request::builder()
