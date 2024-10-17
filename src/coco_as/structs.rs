@@ -26,16 +26,27 @@ pub struct AttestationEvalEvidenceRequest {
     pub runtime_data: Option<Data>,
     pub runtime_data_hash_algorithm: Option<HashAlgorithm>,
 }
-// pub init_data: Option<Data>,
-// pub init_data_hash_algorithm: Option<HashAlgorithm>,
-// pub policy_ids: Vec<String>,
 
+/// Struct representing the relevant fields of an AS token's claims
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ASCoreTokenClaims {
+    /// The TEE type of the attestation evidence
     pub tee: &'static str,
+
+    /// The list of policies the evidence was evaluated against
+    /// More info can be found at https://github.com/confidential-containers/trustee/blob/bd6b25add83ece4bb5204b8cf560e0727a7c3f8e/attestation-service/docs/policy.md
     pub evaluation_reports: Vec<Value>,
+
+    /// The TCB (Trusted Computing Base) status that was attested to
+    /// This is verified against the hardware signature and then
+    /// checked against a policy
     pub tcb_status: Map<String, Value>,
+
+    /// Reference values provided by the RVPS to check against the evidence
     pub reference_data: HashMap<String, Vec<String>>,
+
+    /// The init data and the runtime data that 
+    /// were enforced to match against the evidence
     pub customized_claims: ASCustomizedClaims,
 }
 
