@@ -127,16 +127,21 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                             tee = Some(map.next_value()?);
                         }
                         Field::RuntimeData => {
-                            // Try to deserialize runtime_data as Option<Vec<u8>> first
-                            let raw_data: Option<Option<Vec<u8>>> = map.next_value()?;
-                            if let Some(Some(bytes)) = raw_data {
-                                runtime_data = Some(Data::Raw(bytes));
-                            } else {
-                                // Try to deserialize as Option<Value> if Vec<u8> was not present
-                                let structured_data: Option<Option<Value>> = map.next_value()?;
-                                if let Some(Some(value)) = structured_data {
+                            // Deserialize runtime_data only once
+                            let value: Option<serde_json::Value> = map.next_value()?;
+            
+                            // Check for None
+                            if let Some(value) = value {
+                                // Check if it's a byte array (Vec<u8>)
+                                if let Ok(bytes) = serde_json::from_value::<Vec<u8>>(value.clone()) {
+                                    runtime_data = Some(Data::Raw(bytes));
+                                } else {
+                                    // If not Vec<u8>, treat it as structured data (Value)
                                     runtime_data = Some(Data::Structured(value));
                                 }
+                            } else {
+                                // If it was None (null in JSON), set runtime_data to None
+                                runtime_data = None;
                             }
                         }
                         Field::RuntimeDataHashAlgorithm => {
@@ -179,7 +184,6 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use serde_json;
 
     #[test]
@@ -228,7 +232,6 @@ mod tests {
 
         // Serialize the request to a JSON string
         let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
-        println!("serialized: {:?}", serialized);
 
         // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
         let deserialized: AttestationEvalEvidenceRequest =
@@ -271,7 +274,6 @@ mod tests {
 
         // Serialize the request to a JSON string
         let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
-        println!("serialized: {:?}", serialized);
 
         // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
         let deserialized: AttestationEvalEvidenceRequest =
@@ -305,7 +307,6 @@ mod tests {
 
         // Serialize the request to a JSON string
         let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
-        println!("serialized: {:?}", serialized);
 
         // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
         let deserialized: AttestationEvalEvidenceRequest =
