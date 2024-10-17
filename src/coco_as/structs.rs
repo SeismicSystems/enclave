@@ -9,6 +9,17 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
+/// Struct representing the request to evaluate an attestation evidence.
+/// 
+/// evidence: The raw bytes of the attestation evidence to be evaluated.
+/// tee: The TEE type of the attestation evidence.
+/// runtime_data: the expected runtime data that evidence should match against
+/// runtime_data_hash_algorithm: The hash algorithm to use for the runtime data
+/// 
+///  Note that for AzTdxVtpm, runtime_data and runtime_data_hash_algorithm may not be None
+///  For AzTdxVtpm empty data, set
+///     runtime_data = Some(Data::Raw("".into()))
+///     runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
