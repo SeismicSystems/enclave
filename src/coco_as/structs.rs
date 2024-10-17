@@ -127,15 +127,21 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                             tee = Some(map.next_value()?);
                         }
                         Field::RuntimeData => {
-                            // Try to deserialize runtime_data as Option<Vec<u8>> first
-                            let raw_data: Option<Option<Vec<u8>>> = map.next_value()?;
-                            if let Some(Some(bytes)) = raw_data {
-                                runtime_data = Some(Data::Raw(bytes));
+                            // First, check if the value is None (i.e., null in the JSON)
+                            let is_none: Option<()> = map.next_value()?;
+                            if is_none.is_none() {
+                                runtime_data = None;
                             } else {
-                                // Try to deserialize as Option<Value> if Vec<u8> was not present
-                                let structured_data: Option<Option<Value>> = map.next_value()?;
-                                if let Some(Some(value)) = structured_data {
-                                    runtime_data = Some(Data::Structured(value));
+                                // Attempt to deserialize as a Vec<u8> if it's not None
+                                let raw_data: Option<Vec<u8>> = map.next_value()?;
+                                if let Some(bytes) = raw_data {
+                                    runtime_data = Some(Data::Raw(bytes));
+                                } else {
+                                    // If Vec<u8> fails, attempt to deserialize as a Value
+                                    let structured_data: Option<Value> = map.next_value()?;
+                                    if let Some(value) = structured_data {
+                                        runtime_data = Some(Data::Structured(value));
+                                    }
                                 }
                             }
                         }
