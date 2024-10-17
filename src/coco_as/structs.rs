@@ -35,14 +35,18 @@ pub struct ASCoreTokenClaims {
 
     /// The list of policies the evidence was evaluated against
     /// More info can be found at https://github.com/confidential-containers/trustee/blob/bd6b25add83ece4bb5204b8cf560e0727a7c3f8e/attestation-service/docs/policy.md
+    #[serde(rename = "evaluation-reports")]
     pub evaluation_reports: Vec<Value>,
 
     /// The TCB (Trusted Computing Base) status that was attested to
     /// This is verified against the hardware signature and then
     /// checked against a policy
+    #[serde(rename = "tcb-status")]
     pub tcb_status: Map<String, Value>,
 
+    
     /// Reference values provided by the RVPS to check against the evidence
+    #[serde(rename = "reference-data")]
     pub reference_data: HashMap<String, Vec<String>>,
 
     /// The init data and the runtime data that 
@@ -52,7 +56,7 @@ pub struct ASCoreTokenClaims {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ASCustomizedClaims {
-    pub init_value: Value,
+    pub init_data: Value,
     pub runtime_data: Value,
 }
 
