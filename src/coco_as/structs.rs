@@ -31,7 +31,7 @@ pub struct AttestationEvalEvidenceRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ASCoreTokenClaims {
     /// The TEE type of the attestation evidence
-    pub tee: &'static str,
+    pub tee: String,
 
     /// The list of policies the evidence was evaluated against
     /// More info can be found at https://github.com/confidential-containers/trustee/blob/bd6b25add83ece4bb5204b8cf560e0727a7c3f8e/attestation-service/docs/policy.md

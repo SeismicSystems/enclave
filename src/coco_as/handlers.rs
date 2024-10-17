@@ -58,23 +58,22 @@ pub async fn attestation_eval_evidence_handler(
         .map_err(|e| format!("Error while evaluating evidence: {:?}", e))
         .unwrap();
 
+    let claims: ASCoreTokenClaims = parse_as_token(&as_token)
+        .map_err(|e| format!("Error while parsing AS token: {:?}", e))
+        .unwrap();
+
+    let response_json = serde_json::to_string(&claims).unwrap();
+    Ok(Response::new(Body::from(response_json)))
+}
+
+fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     let parts: Vec<&str> = as_token.splitn(3, '.').collect();
     let claims_b64 = parts[1];
+    let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
+    let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
+    let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string)?;
 
-    // Decode and parse claims into a response struct
-    let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(&claims_b64).unwrap();
-
-    // Store the string in a variable so it lives long enough
-    let claims_decoded_string = String::from_utf8(claims_decoded_bytes).unwrap();
-
-    // // Deserialize the claims
-    // let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string).unwrap();
-    // println!("Deserialized claims: {:?}", claims);
-
-    // Serialize the response back to JSON
-    let response_json = serde_json::to_string(&claims_decoded_string).unwrap();
-    Ok(Response::new(Body::from(response_json)))
-
+    Ok(claims)
 }
 
 #[cfg(test)]
