@@ -27,6 +27,12 @@ pub struct AttestationEvalEvidenceRequest {
     pub runtime_data_hash_algorithm: Option<HashAlgorithm>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AttestationEvalEvidenceResponse {
+    pub eval: bool,
+    pub claims: Option<ASCoreTokenClaims>,
+}
+
 /// Struct representing the relevant fields of an AS token's claims
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ASCoreTokenClaims {
