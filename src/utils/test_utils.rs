@@ -1,5 +1,3 @@
-#[allow(dead_code)]
-
 /// Checks if the current user has root (sudo) privileges.
 ///
 /// This function runs the `id -u` command, which returns the current user's ID.
