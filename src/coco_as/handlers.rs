@@ -1,10 +1,10 @@
 use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
-use serde_json::json;
+use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
 use super::structs::*;
+use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
 use crate::ATTESTATION_SERVICE;
 
 pub async fn attestation_eval_evidence_handler(
@@ -14,11 +14,7 @@ pub async fn attestation_eval_evidence_handler(
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
         Err(_) => {
-            let error_response = json!({ "error": "Invalid request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_req_body_resp());
         }
     };
 
@@ -27,11 +23,7 @@ pub async fn attestation_eval_evidence_handler(
     {
         Ok(request) => request,
         Err(_) => {
-            let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_json_body_resp());
         }
     };
 
@@ -85,7 +77,7 @@ mod tests {
     use crate::init_coco_as;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::Data;
-    use hyper::{Body, Request, Response};
+    use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;

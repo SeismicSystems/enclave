@@ -1,11 +1,11 @@
 use attestation_agent::{AttestationAPIs, AttestationAgent};
-use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
+use hyper::{body::to_bytes, Body, Request, Response};
 use once_cell::sync::Lazy;
-use serde_json::json;
 use std::convert::Infallible;
 use std::sync::Arc;
 
 use super::structs::*;
+use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
 
 // Initialize an Arc-wrapped AttestationAgent lazily
 // the attestation agent provides APIs to interact with the secure hardware features
@@ -35,11 +35,7 @@ pub async fn attestation_get_evidence_handler(
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
         Err(_) => {
-            let error_response = json!({ "error": "Invalid request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_req_body_resp());
         }
     };
 
@@ -48,11 +44,7 @@ pub async fn attestation_get_evidence_handler(
     {
         Ok(request) => request,
         Err(_) => {
-            let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_json_body_resp());
         }
     };
 
@@ -72,7 +64,7 @@ pub async fn attestation_get_evidence_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper::{Body, Request, Response};
+    use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
 
     #[tokio::test]

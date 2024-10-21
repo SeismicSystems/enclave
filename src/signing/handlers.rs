@@ -4,6 +4,7 @@ use std::convert::Infallible;
 
 use super::structs::*;
 use crate::utils::crypto_utils::*;
+use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
 
 /// Handles request to sign a message using secp256k1.
 ///
@@ -22,12 +23,7 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
         Err(_) => {
-            // Return 400 Bad Request if there is an error while reading the body
-            let error_response = json!({ "error": "Invalid request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_req_body_resp());
         }
     };
 
@@ -35,12 +31,7 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
     let sign_request: Secp256k1SignRequest = match serde_json::from_slice(&body_bytes) {
         Ok(request) => request,
         Err(_) => {
-            // Return 400 Bad Request if deserialization fails
-            let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_json_body_resp());
         }
     };
 
@@ -86,12 +77,7 @@ pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Bod
     let verify_request: Secp256k1VerifyRequest = match serde_json::from_slice(&body_bytes) {
         Ok(request) => request,
         Err(_) => {
-            // Return 400 Bad Request if deserialization fails
-            let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_json_body_resp());
         }
     };
 
