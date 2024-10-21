@@ -44,7 +44,8 @@ pub async fn attestation_get_evidence_handler(
     };
 
     // Deserialize the request body into the appropriate struct
-    let evidence_request: AttestationGetEvidenceRequest = match serde_json::from_slice(&body_bytes) {
+    let evidence_request: AttestationGetEvidenceRequest = match serde_json::from_slice(&body_bytes)
+    {
         Ok(request) => request,
         Err(_) => {
             let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
@@ -76,7 +77,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_attestation_evidence_handler_valid_request() {
-        // NOTE: This test will run with the Sample TEE Type 
+        // NOTE: This test will run with the Sample TEE Type
         // because it doesn't run with sudo privileges
 
         // Mock a valid AttestationGetEvidenceRequest
@@ -104,10 +105,11 @@ mod tests {
 
         // Parse and check the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let get_evidence_resp: AttestationGetEvidenceResponse = serde_json::from_slice(&body).unwrap();
+        let get_evidence_resp: AttestationGetEvidenceResponse =
+            serde_json::from_slice(&body).unwrap();
 
         // Ensure the response is not empty
-        assert!(get_evidence_resp.evidence.len() > 0);
+        assert!(!get_evidence_resp.evidence.is_empty());
         println!("Evidence: {:?}", get_evidence_resp.evidence);
     }
 

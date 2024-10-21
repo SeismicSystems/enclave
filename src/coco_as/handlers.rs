@@ -84,7 +84,7 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
 mod tests {
     use super::*;
     use crate::init_coco_as;
-    use crate::utils::is_sudo;
+    use crate::utils::test_utils::is_sudo;
     use attestation_service::Data;
     use hyper::{Body, Request, Response};
     use kbs_types::Tee;
@@ -94,9 +94,8 @@ mod tests {
     fn test_parse_as_token() {
         let ex_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
 
-
         let claims = parse_as_token(&ex_token).unwrap();
-        
+
         assert_eq!(claims.tee, "aztdxvtpm");
         assert!(claims.evaluation_reports.is_empty());
         assert_eq!(
@@ -173,7 +172,8 @@ mod tests {
 
         // Parse and check the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let eval_evidence_response: AttestationEvalEvidenceResponse = serde_json::from_slice(&body).unwrap();
+        let eval_evidence_response: AttestationEvalEvidenceResponse =
+            serde_json::from_slice(&body).unwrap();
 
         assert!(eval_evidence_response.eval);
         let claims = eval_evidence_response.claims.unwrap();
@@ -194,8 +194,11 @@ mod tests {
             .expect("Failed to initialize AttestationService");
 
         // Mock a valid AttestationEvalEvidenceRequest
-        let tdx_evidence_encoded = std::fs::read_to_string("./src/coco_as/examples/tdx_encoded_evidence.txt").unwrap();
-        let tdx_evidence = URL_SAFE_NO_PAD.decode(tdx_evidence_encoded.as_str()).unwrap();
+        let tdx_evidence_encoded =
+            std::fs::read_to_string("./src/coco_as/examples/tdx_encoded_evidence.txt").unwrap();
+        let tdx_evidence = URL_SAFE_NO_PAD
+            .decode(tdx_evidence_encoded.as_str())
+            .unwrap();
 
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: tdx_evidence,
@@ -223,7 +226,8 @@ mod tests {
 
         // Parse and check the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let eval_evidence_response: AttestationEvalEvidenceResponse = serde_json::from_slice(&body).unwrap();
+        let eval_evidence_response: AttestationEvalEvidenceResponse =
+            serde_json::from_slice(&body).unwrap();
 
         assert!(eval_evidence_response.eval);
         let claims = eval_evidence_response.claims.unwrap();

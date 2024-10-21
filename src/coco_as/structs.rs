@@ -9,17 +9,25 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
-/// Struct representing the request to evaluate an attestation evidence.
-/// 
-/// evidence: The raw bytes of the attestation evidence to be evaluated.
-/// tee: The TEE type of the attestation evidence.
-/// runtime_data: the expected runtime data that evidence should match against
-/// runtime_data_hash_algorithm: The hash algorithm to use for the runtime data
-/// 
-///  Note that for AzTdxVtpm, runtime_data and runtime_data_hash_algorithm may not be None
-///  For AzTdxVtpm empty data, set
-///     runtime_data = Some(Data::Raw("".into()))
-///     runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)
+/// Represents the request to evaluate attestation evidence.
+///
+/// This struct contains the necessary information for evaluating attestation
+/// evidence, including the raw evidence bytes, the TEE (Trusted Execution Environment)
+/// type, and optional runtime data and its associated hash algorithm.
+///
+/// # Fields
+///
+/// - `evidence`: The raw bytes of the attestation evidence to be evaluated.
+/// - `tee`: The TEE type of the attestation evidence, indicating which TEE generated the evidence.
+/// - `runtime_data`: The expected runtime data that the evidence should match against. This is optional.
+/// - `runtime_data_hash_algorithm`: The hash algorithm to use for the runtime data. This is optional.
+///
+/// # Notes
+///
+/// - For the `AzTdxVtpm` TEE, `runtime_data` and `runtime_data_hash_algorithm` must not be `None`.
+/// - For empty data in `AzTdxVtpm`, set the following:
+///   - `runtime_data = Some(Data::Raw("".into()))`
+///   - `runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)`
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
@@ -27,36 +35,48 @@ pub struct AttestationEvalEvidenceRequest {
     pub runtime_data_hash_algorithm: Option<HashAlgorithm>,
 }
 
+/// Represents the response to an attestation evidence evaluation request.
+///
+/// This struct contains the result of the attestation evaluation, including whether
+/// the evidence was deemed valid and any claims extracted from the evidence.
+///
+/// # Fields
+///
+/// - `eval`: A boolean indicating whether the attestation service deemed the evidence valid (`true`) or invalid (`false`).
+/// - `claims`: A summary of the claims included in the attestation evidence. This may be `None` if there are no claims.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AttestationEvalEvidenceResponse {
     pub eval: bool,
     pub claims: Option<ASCoreTokenClaims>,
 }
 
-/// Struct representing the relevant fields of an AS token's claims
+/// Struct representing the relevant fields of an Attestation Service (AS) token's claims.
+///
+/// This struct contains information about the Trusted Execution Environment (TEE),
+/// the evaluation of evidence, and various security properties attested by the AS.
+///
+/// # Fields
+///
+/// - `tee` - The TEE type of the attestation evidence.
+/// - `evaluation_reports` - A list of policies that the evidence was evaluated against.  
+///   More information can be found in the [policy documentation](https://github.com/confidential-containers/trustee/blob/bd6b25add83ece4bb5204b8cf560e0727a7c3f8e/attestation-service/docs/policy.md).
+/// - `tcb_status` - The Trusted Computing Base (TCB) status that was attested to.  
+///   This is verified against the hardware signature and then checked against a policy.
+/// - `reference_data` - Reference values provided by the Reference Value Provider Service (RVPS)  
+///   to check against the attestation evidence.
+/// - `customized_claims` - The initialization and runtime data that were enforced to match the evidence.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ASCoreTokenClaims {
-    /// The TEE type of the attestation evidence
     pub tee: String,
-
-    /// The list of policies the evidence was evaluated against
-    /// More info can be found at https://github.com/confidential-containers/trustee/blob/bd6b25add83ece4bb5204b8cf560e0727a7c3f8e/attestation-service/docs/policy.md
     #[serde(rename = "evaluation-reports")]
     pub evaluation_reports: Vec<Value>,
 
-    /// The TCB (Trusted Computing Base) status that was attested to
-    /// This is verified against the hardware signature and then
-    /// checked against a policy
     #[serde(rename = "tcb-status")]
     pub tcb_status: Map<String, Value>,
 
-    
-    /// Reference values provided by the RVPS to check against the evidence
     #[serde(rename = "reference-data")]
     pub reference_data: HashMap<String, Vec<String>>,
 
-    /// The init data and the runtime data that 
-    /// were enforced to match against the evidence
     pub customized_claims: ASCustomizedClaims,
 }
 
@@ -161,11 +181,12 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                         Field::RuntimeData => {
                             // Deserialize runtime_data only once
                             let value: Option<serde_json::Value> = map.next_value()?;
-            
+
                             // Check for None
                             if let Some(value) = value {
                                 // Check if it's a byte array (Vec<u8>)
-                                if let Ok(bytes) = serde_json::from_value::<Vec<u8>>(value.clone()) {
+                                if let Ok(bytes) = serde_json::from_value::<Vec<u8>>(value.clone())
+                                {
                                     runtime_data = Some(Data::Raw(bytes));
                                 } else {
                                     // If not Vec<u8>, treat it as structured data (Value)
@@ -199,7 +220,7 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &[
+        const FIELDS: &[&str] = &[
             "evidence",
             "tee",
             "runtime_data",

@@ -5,8 +5,8 @@ mod tx_io;
 mod utils;
 
 use anyhow::Result;
-use once_cell::sync::OnceCell;
 use hyper::{Body, Request, Response, Server, StatusCode};
+use once_cell::sync::OnceCell;
 use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -17,8 +17,7 @@ use coco_as::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
 
-
-use attestation_service::{AttestationService, config::Config};
+use attestation_service::{config::Config, AttestationService};
 static ATTESTATION_SERVICE: OnceCell<Arc<AttestationService>> = OnceCell::new();
 
 #[tokio::main]
@@ -33,8 +32,14 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
-        .post("/attestation/aa/get_evidence", attestation_get_evidence_handler)
-        .post("/attestation/as/eval_evidence", attestation_eval_evidence_handler)
+        .post(
+            "/attestation/aa/get_evidence",
+            attestation_get_evidence_handler,
+        )
+        .post(
+            "/attestation/as/eval_evidence",
+            attestation_eval_evidence_handler,
+        )
         .post("/signing/sign", secp256k1_sign_handler)
         .post("/siging/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
@@ -81,8 +86,11 @@ async fn init_coco_as() -> Result<()> {
     // let config_path = std::path::Path::new(config_path_str);
     // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
     let config = Config::default();
-    let coco_as = AttestationService::new(config).await.expect("Failed to create an AttestationService");
-    ATTESTATION_SERVICE.set(Arc::new(coco_as))
+    let coco_as = AttestationService::new(config)
+        .await
+        .expect("Failed to create an AttestationService");
+    ATTESTATION_SERVICE
+        .set(Arc::new(coco_as))
         .map_err(|_| anyhow::anyhow!("Failed to set AttestationService"))?;
 
     Ok(())
