@@ -1,11 +1,12 @@
-use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
-use secp256k1::ecdh::SharedSecret;
-use secp256k1::SecretKey;
-use serde_json::json;
+use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
-use crate::tx_io::structs::*;
+use secp256k1::ecdh::SharedSecret;
+use secp256k1::SecretKey;
+
+use super::structs::*;
 use crate::utils::crypto_utils::*;
+use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
@@ -21,16 +22,10 @@ use crate::utils::crypto_utils::*;
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
 pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
-    // Parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
         Err(_) => {
-            // Return 400 Bad Request if there is an error reading the body
-            let error_response = json!({ "error": "Invalid request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_req_body_resp());
         }
     };
 
@@ -38,12 +33,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let encryption_request: IoEncryptionRequest = match serde_json::from_slice(&body_bytes) {
         Ok(request) => request,
         Err(_) => {
-            // Return 400 Bad Request if deserialization fails
-            let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_json_body_resp());
         }
     };
 
@@ -78,12 +68,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
         Err(_) => {
-            // Return 400 Bad Request if there is an error reading the body
-            let error_response = json!({ "error": "Invalid request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_req_body_resp());
         }
     };
 
@@ -91,12 +76,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let decryption_request: IoDecryptionRequest = match serde_json::from_slice(&body_bytes) {
         Ok(request) => request,
         Err(_) => {
-            // Return 400 Bad Request if deserialization fails
-            let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
+            return Ok(invalid_json_body_resp());
         }
     };
     // load key and decrypt data
@@ -199,7 +179,6 @@ mod tests {
 
         // Parse the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        println!("body: {:?}", body);
         let enc_response: IoEncryptionResponse = serde_json::from_slice(&body).unwrap();
         assert!(!enc_response.encrypted_data.is_empty());
 
