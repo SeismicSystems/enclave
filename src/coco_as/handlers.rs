@@ -135,7 +135,7 @@ mod tests {
     async fn test_eval_evidence_sample() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("Skipping test because it requires sudo privileges.");
+            eprintln!("test_eval_evidence_sample: skipped (requires sudo privileges)");
             return;
         }
 
@@ -188,7 +188,7 @@ mod tests {
     async fn test_eval_evidence_az_tdx() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("Skipping test because it requires sudo privileges.");
+            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
             return;
         }
 
