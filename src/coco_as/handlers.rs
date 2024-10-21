@@ -7,6 +7,12 @@ use super::structs::*;
 use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
 use crate::ATTESTATION_SERVICE;
 
+/// Handles attestation evidence request.
+/// 
+/// The attestation service checks the following:
+/// 1) That the provided evidence is internally consistent, e.g. the data matches the TEE signature, the init_data and runtime_data in the request match the evidence, etc.
+/// 2) That the evidence matches against reference values provided by the RVPS. Reference values are usually provided by a manufacturer 
+/// 3) That the TEE state matches the AS policy, e.g. that the correct code is being run
 pub async fn attestation_eval_evidence_handler(
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
