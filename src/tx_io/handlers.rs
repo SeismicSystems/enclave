@@ -199,7 +199,6 @@ mod tests {
 
         // Parse the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        println!("body: {:?}", body);
         let enc_response: IoEncryptionResponse = serde_json::from_slice(&body).unwrap();
         assert!(!enc_response.encrypted_data.is_empty());
 

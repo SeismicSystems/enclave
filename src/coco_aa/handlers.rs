@@ -110,7 +110,6 @@ mod tests {
 
         // Ensure the response is not empty
         assert!(!get_evidence_resp.evidence.is_empty());
-        println!("Evidence: {:?}", get_evidence_resp.evidence);
     }
 
     #[tokio::test]
