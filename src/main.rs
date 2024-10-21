@@ -93,7 +93,7 @@ async fn init_coco_as() -> Result<()> {
     // let config_path_str = "path/to/config.json";
     // let config_path = std::path::Path::new(config_path_str);
     // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
-    
+
     // Initialize the AttestationService
     let config = Config::default();
     let coco_as = AttestationService::new(config)
