@@ -84,6 +84,7 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
 mod tests {
     use super::*;
     use crate::init_coco_as;
+    use crate::utils::is_sudo;
     use attestation_service::Data;
     use hyper::{Body, Request, Response};
     use kbs_types::Tee;
@@ -132,6 +133,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_eval_evidence_sample() {
+        if !is_sudo() {
+            eprintln!("Skipping test because it requires sudo privileges.");
+            return;
+        }
+
         // Initialize ATTESTATION_SERVICE
         init_coco_as()
             .await
@@ -177,6 +183,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_eval_evidence_az_tdx() {
+        if !is_sudo() {
+            eprintln!("Skipping test because it requires sudo privileges.");
+            return;
+        }
+
         // Initialize ATTESTATION_SERVICE
         init_coco_as()
             .await
