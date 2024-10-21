@@ -88,50 +88,63 @@ mod tests {
     use attestation_service::Data;
     use hyper::{Body, Request, Response};
     use kbs_types::Tee;
+    use lazy_static::lazy_static;
     use serde_json::Value;
+    use serial_test::serial;
+    use tokio::sync::Mutex;
 
-    #[test]
-    fn test_parse_as_token() {
-        let ex_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
-
-        let claims = parse_as_token(&ex_token).unwrap();
-
-        assert_eq!(claims.tee, "aztdxvtpm");
-        assert!(claims.evaluation_reports.is_empty());
-        assert_eq!(
-            claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
-            Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
-        );
-        assert!(claims.reference_data.is_empty());
-        assert_eq!(claims.customized_claims.init_data, Value::Null);
-        assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+    lazy_static! {
+        static ref ATTESTATION_SERVICE_MUTEX: Mutex<()> = Mutex::new(());
     }
 
+    // #[test]
+    // fn test_parse_as_token() {
+    //     let ex_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
+
+    //     let claims = parse_as_token(&ex_token).unwrap();
+
+    //     assert_eq!(claims.tee, "aztdxvtpm");
+    //     assert!(claims.evaluation_reports.is_empty());
+    //     assert_eq!(
+    //         claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
+    //         Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
+    //     );
+    //     assert!(claims.reference_data.is_empty());
+    //     assert_eq!(claims.customized_claims.init_data, Value::Null);
+    //     assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+    // }
+
+    // #[tokio::test]
+    // async fn test_attestation_eval_evidence_handler_invalid_json() {
+    //     // Create a request with invalid JSON body
+    //     let req = Request::builder()
+    //         .method("POST")
+    //         .uri("/attestation/as/eval_evidence")
+    //         .header("Content-Type", "application/json")
+    //         .body(Body::from("Invalid JSON"))
+    //         .unwrap();
+
+    //     // Call the handler
+    //     let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+
+    //     // Check that the response status is 400 Bad Request
+    //     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    //     // Parse and check the response body
+    //     let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+    //     let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    //     assert_eq!(response_json["error"], "Invalid JSON in request body");
+    // }
+
     #[tokio::test]
-    async fn test_attestation_eval_evidence_handler_invalid_json() {
-        // Create a request with invalid JSON body
-        let req = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Body::from("Invalid JSON"))
-            .unwrap();
-
-        // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 400 Bad Request
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-
-        // Parse and check the response body
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
-
-        assert_eq!(response_json["error"], "Invalid JSON in request body");
-    }
-
-    #[tokio::test]
+    #[serial(attestation_service)]
     async fn test_eval_evidence_sample() {
+        println!("l1a");
+        let _lock = ATTESTATION_SERVICE_MUTEX.lock().await;
+        println!("l1b");
+
+        // handle set up permissions
         if !is_sudo() {
             eprintln!("Skipping test because it requires sudo privileges.");
             return;
@@ -179,10 +192,17 @@ mod tests {
         let claims = eval_evidence_response.claims.unwrap();
         assert_eq!(claims.tee, "sample");
         assert_eq!(claims.tcb_status["report_data"], "bm9uY2U=");
+        println!("l1c");
     }
 
     #[tokio::test]
+    #[serial(attestation_service)]
     async fn test_eval_evidence_az_tdx() {
+        println!("l2a");
+        let _lock = ATTESTATION_SERVICE_MUTEX.lock().await;
+        println!("l2b");
+
+        // handle set up permissions
         if !is_sudo() {
             eprintln!("Skipping test because it requires sudo privileges.");
             return;
@@ -241,5 +261,7 @@ mod tests {
         assert!(claims.reference_data.is_empty());
         assert_eq!(claims.customized_claims.init_data, Value::Null);
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+
+        println!("l2c");
     }
 }

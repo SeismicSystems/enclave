@@ -82,9 +82,19 @@ async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<B
 }
 
 async fn init_coco_as() -> Result<()> {
+    // Check if the service is already initialized
+    // This helps with multithreaded testing
+    if ATTESTATION_SERVICE.get().is_some() {
+        // AttestationService is already initialized, so we skip re-initialization.
+        return Ok(());
+    }
+
+    // TODO: load a real config with a policy once we have one
     // let config_path_str = "path/to/config.json";
     // let config_path = std::path::Path::new(config_path_str);
     // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
+    
+    // Initialize the AttestationService
     let config = Config::default();
     let coco_as = AttestationService::new(config)
         .await
