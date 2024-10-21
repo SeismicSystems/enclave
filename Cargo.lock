@@ -18,7 +18,6 @@ dependencies = [
  "hkdf",
  "hyper 0.14.30",
  "kbs-types",
- "lazy_static",
  "log",
  "once_cell",
  "routerify",

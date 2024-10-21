@@ -88,14 +88,8 @@ mod tests {
     use attestation_service::Data;
     use hyper::{Body, Request, Response};
     use kbs_types::Tee;
-    use lazy_static::lazy_static;
     use serde_json::Value;
     use serial_test::serial;
-    use tokio::sync::Mutex;
-
-    lazy_static! {
-        static ref ATTESTATION_SERVICE_MUTEX: Mutex<()> = Mutex::new(());
-    }
 
     // #[test]
     // fn test_parse_as_token() {
@@ -140,10 +134,6 @@ mod tests {
     #[tokio::test]
     #[serial(attestation_service)]
     async fn test_eval_evidence_sample() {
-        println!("l1a");
-        let _lock = ATTESTATION_SERVICE_MUTEX.lock().await;
-        println!("l1b");
-
         // handle set up permissions
         if !is_sudo() {
             eprintln!("Skipping test because it requires sudo privileges.");
@@ -192,16 +182,11 @@ mod tests {
         let claims = eval_evidence_response.claims.unwrap();
         assert_eq!(claims.tee, "sample");
         assert_eq!(claims.tcb_status["report_data"], "bm9uY2U=");
-        println!("l1c");
     }
 
     #[tokio::test]
     #[serial(attestation_service)]
     async fn test_eval_evidence_az_tdx() {
-        println!("l2a");
-        let _lock = ATTESTATION_SERVICE_MUTEX.lock().await;
-        println!("l2b");
-
         // handle set up permissions
         if !is_sudo() {
             eprintln!("Skipping test because it requires sudo privileges.");
@@ -261,7 +246,5 @@ mod tests {
         assert!(claims.reference_data.is_empty());
         assert_eq!(claims.customized_claims.init_data, Value::Null);
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
-
-        println!("l2c");
     }
 }
