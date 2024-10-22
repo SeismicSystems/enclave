@@ -38,12 +38,7 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
-
-        .get(
-            "/genesis/data",
-            genesis_get_data_handler,
-        )
-
+        .get("/genesis/data", genesis_get_data_handler)
         .post(
             "/attestation/aa/get_evidence",
             attestation_get_evidence_handler,
@@ -93,7 +88,6 @@ async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<B
         .unwrap()
 }
 
-
 fn init_coco_aa() -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
@@ -103,8 +97,7 @@ fn init_coco_aa() -> Result<()> {
     }
 
     let config_path = None;
-    let coco_aa = AttestationAgent::new(config_path)
-    .expect("Failed to create an AttestationAgent");
+    let coco_aa = AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent");
     ATTESTATION_AGENT
         .set(Arc::new(coco_aa))
         .map_err(|_| anyhow::anyhow!("Failed to set AttestationAgent"))?;

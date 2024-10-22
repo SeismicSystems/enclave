@@ -1,11 +1,12 @@
-use serde::{Deserialize, Serialize};
 use bincode;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenesisData {
     pub io_pk: secp256k1::PublicKey,
 }
 
+#[allow(dead_code)]
 impl GenesisData {
     // Serialize the struct to bytes
     pub fn to_bytes(&self) -> Vec<u8> {

@@ -60,14 +60,16 @@ mod tests {
     use crate::init_coco_aa;
     use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
+    use serial_test::serial;
 
     #[tokio::test]
+    #[serial(attestation_agent)]
     async fn test_attestation_evidence_handler_valid_request() {
         // NOTE: This test will run with the Sample TEE Type
         // because it doesn't run with sudo privileges
 
         init_coco_aa().expect("Failed to initialize AttestationAgent");
-        
+
         // Mock a valid AttestationGetEvidenceRequest
         let runtime_data = "nonce".as_bytes(); // Example runtime data
         let evidence_request = AttestationGetEvidenceRequest {
