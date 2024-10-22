@@ -1,18 +1,10 @@
-use attestation_agent::{AttestationAPIs, AttestationAgent};
+use attestation_agent::AttestationAPIs;
 use hyper::{body::to_bytes, Body, Request, Response};
-use once_cell::sync::Lazy;
 use std::convert::Infallible;
-use std::sync::Arc;
 
 use super::structs::*;
 use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
-
-// Initialize an Arc-wrapped AttestationAgent lazily
-// the attestation agent provides APIs to interact with the secure hardware features
-static ATTESTATION_AGENT: Lazy<Arc<AttestationAgent>> = Lazy::new(|| {
-    let config_path = None;
-    Arc::new(AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"))
-});
+use crate::ATTESTATION_AGENT;
 
 /// Handles attestation evidence request.
 ///
@@ -49,7 +41,8 @@ pub async fn attestation_get_evidence_handler(
     };
 
     // Get the evidence from the attestation agent
-    let evidence = ATTESTATION_AGENT
+    let coco_aa = ATTESTATION_AGENT.get().unwrap();
+    let evidence = coco_aa
         .get_evidence(evidence_request.runtime_data.as_slice())
         .await
         .map_err(|e| format!("Error while getting evidence: {:?}", e))
@@ -64,6 +57,7 @@ pub async fn attestation_get_evidence_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::init_coco_aa;
     use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
 
@@ -72,6 +66,8 @@ mod tests {
         // NOTE: This test will run with the Sample TEE Type
         // because it doesn't run with sudo privileges
 
+        init_coco_aa().expect("Failed to initialize AttestationAgent");
+        
         // Mock a valid AttestationGetEvidenceRequest
         let runtime_data = "nonce".as_bytes(); // Example runtime data
         let evidence_request = AttestationGetEvidenceRequest {
