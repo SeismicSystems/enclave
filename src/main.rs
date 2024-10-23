@@ -1,5 +1,6 @@
 mod coco_aa;
 mod coco_as;
+mod genesis;
 mod signing;
 mod tx_io;
 mod utils;
@@ -14,24 +15,30 @@ use std::sync::Arc;
 
 use coco_aa::handlers::*;
 use coco_as::handlers::*;
+use genesis::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
 
+use attestation_agent::AttestationAgent;
 use attestation_service::{config::Config, AttestationService};
+
 static ATTESTATION_SERVICE: OnceCell<Arc<AttestationService>> = OnceCell::new();
+static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize the logger
     env_logger::init();
 
-    // Initialize the AttestationService
+    // Initialize the Attestation Agent and Attestation Service
+    init_coco_aa()?;
     init_coco_as().await?;
 
     // create the server
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
+        .get("/genesis/data", genesis_get_data_handler)
         .post(
             "/attestation/aa/get_evidence",
             attestation_get_evidence_handler,
@@ -41,7 +48,7 @@ async fn main() -> Result<()> {
             attestation_eval_evidence_handler,
         )
         .post("/signing/sign", secp256k1_sign_handler)
-        .post("/siging/verify", secp256k1_verify_handler)
+        .post("/signing/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
         .post("/tx_io/decrypt", tx_io_decrypt_handler)
         .err_handler_with_info(error_handler)
@@ -79,6 +86,23 @@ async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<B
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(Body::from(format!("Something went wrong: {}", err)))
         .unwrap()
+}
+
+fn init_coco_aa() -> Result<()> {
+    // Check if the service is already initialized
+    // This helps with multithreaded testing
+    if ATTESTATION_AGENT.get().is_some() {
+        // AttestationAgent is already initialized, so we skip re-initialization.
+        return Ok(());
+    }
+
+    let config_path = None;
+    let coco_aa = AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent");
+    ATTESTATION_AGENT
+        .set(Arc::new(coco_aa))
+        .map_err(|_| anyhow::anyhow!("Failed to set AttestationAgent"))?;
+
+    Ok(())
 }
 
 async fn init_coco_as() -> Result<()> {
