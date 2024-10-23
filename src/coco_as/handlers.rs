@@ -13,9 +13,10 @@ use crate::ATTESTATION_SERVICE;
 /// The attestation service checks the following criteria:
 ///
 /// 1. **Internal Consistency of Evidence:**
-///    - Verifies that the provided evidence is consistent with itself.
+///    - Verifies that the provided evidence is consistent with itself through the AS verifier dependency
 ///    - Ex checks that the evidence data matches the TEE's signature.
 ///    - Ex checks that the init_data and runtime_data in the request match with the attestation evidence.
+///    - Also includes a call to the PCCS to verify the TEE public key is valid
 ///
 /// 2. **Comparison with Reference Values (RVPS):**
 ///    - Validates the evidence against trusted reference values provided by the **Reference Value Provider Service (RVPS)**.
