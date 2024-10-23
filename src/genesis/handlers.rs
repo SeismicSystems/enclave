@@ -48,11 +48,16 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "verifier")]
     use crate::attestation_eval_evidence_handler;
+    #[cfg(feature = "verifier")]
     use crate::coco_as::structs::AttestationEvalEvidenceRequest;
     use crate::coco_as::structs::AttestationEvalEvidenceResponse;
     use crate::utils::test_utils::is_sudo;
-    use crate::{init_coco_aa, init_coco_as};
+    use crate::{init_coco_aa};
+    #[cfg(feature = "verifier")]
+    use crate::init_coco_as;
+    #[cfg(feature = "verifier")]
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
@@ -86,6 +91,7 @@ mod tests {
         assert!(!response.evidence.is_empty());
     }
 
+    #[cfg(feature = "verifier")]
     #[tokio::test]
     #[serial(attestation_agent, attestation_service)]
     async fn test_genesis_get_data_handler_evidence_verifies() {

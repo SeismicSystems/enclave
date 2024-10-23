@@ -20,8 +20,10 @@ use signing::handlers::*;
 use tx_io::handlers::*;
 
 use attestation_agent::AttestationAgent;
+#[cfg(feature = "verifier")]
 use attestation_service::{config::Config, AttestationService};
 
+#[cfg(feature = "verifier")]
 static ATTESTATION_SERVICE: OnceCell<Arc<AttestationService>> = OnceCell::new();
 static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
@@ -32,28 +34,31 @@ async fn main() -> Result<()> {
 
     // Initialize the Attestation Agent and Attestation Service
     init_coco_aa()?;
+    #[cfg(feature = "verifier")]
     init_coco_as().await?;
 
     // create the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 7878));
-    let router = Router::builder()
+    let builder = Router::builder()
         .middleware(Middleware::pre(logger))
         .get("/genesis/data", genesis_get_data_handler)
         .post(
             "/attestation/aa/get_evidence",
             attestation_get_evidence_handler,
         )
-        .post(
-            "/attestation/as/eval_evidence",
-            attestation_eval_evidence_handler,
-        )
         .post("/signing/sign", secp256k1_sign_handler)
         .post("/signing/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
         .post("/tx_io/decrypt", tx_io_decrypt_handler)
-        .err_handler_with_info(error_handler)
-        .build()
-        .unwrap();
+        .err_handler_with_info(error_handler);
+
+    #[cfg(feature = "verifier")]
+    let builder = builder.post(
+        "/attestation/as/eval_evidence",
+        attestation_eval_evidence_handler,
+    );
+    
+    let router = builder.build().unwrap();
     let service = RouterService::new(router).unwrap();
     let server = Server::bind(&addr).serve(service);
 
@@ -105,6 +110,7 @@ fn init_coco_aa() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "verifier")]
 async fn init_coco_as() -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing

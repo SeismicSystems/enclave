@@ -1,3 +1,4 @@
+#[cfg(feature = "verifier")]
 use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hyper::{body::to_bytes, Body, Request, Response};
@@ -5,6 +6,7 @@ use std::convert::Infallible;
 
 use super::structs::*;
 use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
+#[cfg(feature = "verifier")]
 use crate::ATTESTATION_SERVICE;
 
 /// Handles attestation evidence verification.
@@ -25,6 +27,8 @@ use crate::ATTESTATION_SERVICE;
 /// 3. **TEE State Compliance with Attestation Service (AS) Policy:**
 ///    - Ensures that the TEE state aligns with the security policies defined by the attestation service.
 ///    - This includes confirming that the correct software is running within the TEE
+
+#[cfg(feature = "verifier")]
 pub async fn attestation_eval_evidence_handler(
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
@@ -92,8 +96,10 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "verifier")]
     use crate::init_coco_as;
     use crate::utils::test_utils::is_sudo;
+    #[cfg(feature = "verifier")]
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
@@ -117,6 +123,7 @@ mod tests {
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
     }
 
+    #[cfg(feature = "verifier")]
     #[tokio::test]
     async fn test_attestation_eval_evidence_handler_invalid_json() {
         // Create a request with invalid JSON body
@@ -140,6 +147,7 @@ mod tests {
         assert_eq!(response_json["error"], "Invalid JSON in request body");
     }
 
+    #[cfg(feature = "verifier")]
     #[tokio::test]
     #[serial(attestation_service)]
     async fn test_eval_evidence_sample() {
@@ -193,6 +201,7 @@ mod tests {
         assert_eq!(claims.tcb_status["report_data"], "bm9uY2U=");
     }
 
+    #[cfg(feature = "verifier")]
     #[tokio::test]
     #[serial(attestation_service)]
     async fn test_eval_evidence_az_tdx() {
