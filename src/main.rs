@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     init_coco_as().await?;
 
     // create the server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 7878));
     let router = Router::builder()
         .middleware(Middleware::pre(logger))
         .post(
