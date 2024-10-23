@@ -80,66 +80,66 @@ mod tests {
 
         // Parse and check the response body
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
-        println!("response_json: {:?}", response_json);
         let response: GenesisDataResponse = serde_json::from_slice(&body_bytes).unwrap();
 
         // assert that the attestation is not empty
         assert!(!response.evidence.is_empty());
     }
 
-    // #[tokio::test]
-    // #[serial(attestation_agent, attestation_service)]
-    // async fn test_genesis_get_data_handler_evidence_verifies() {
-    //     // handle set up permissions
-    //     if !is_sudo() {
-    //         eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-    //         return;
-    //     }
+    #[tokio::test]
+    #[serial(attestation_agent, attestation_service)]
+    async fn test_genesis_get_data_handler_evidence_verifies() {
+        // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+            return;
+        }
 
-    //     // Initialize ATTESTATION_AGENT
-    //     init_coco_aa().expect("Failed to initialize AttestationAgent");
+        // Initialize ATTESTATION_AGENT
+        init_coco_aa().expect("Failed to initialize AttestationAgent");
 
-    //     // Make a genesis data request
-    //     let req = Request::builder()
-    //         .method("GET")
-    //         .uri("/genesis/data")
-    //         .body(Body::empty())
-    //         .unwrap();
-    //     let res: Response<Body> = genesis_get_data_handler(req).await.unwrap();
-    //     assert_eq!(res.status(), StatusCode::OK);
-    //     let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-    //     let genesis_data_response: GenesisDataResponse =
-    //         serde_json::from_slice(&body_bytes).unwrap();
+        // Make a genesis data request
+        let req = Request::builder()
+            .method("GET")
+            .uri("/genesis/data")
+            .body(Body::empty())
+            .unwrap();
+        let res: Response<Body> = genesis_get_data_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let genesis_data_response: GenesisDataResponse =
+            serde_json::from_slice(&body_bytes).unwrap();
 
-    //     // Submit the genesis data to the attestation service
-    //     init_coco_as()
-    //         .await
-    //         .expect("Failed to initialize AttestationService");
+        // Submit the genesis data to the attestation service
+        init_coco_as()
+            .await
+            .expect("Failed to initialize AttestationService");
 
-    //     let tdx_eval_request = AttestationEvalEvidenceRequest {
-    //         evidence: genesis_data_response.evidence,
-    //         tee: Tee::AzTdxVtpm,
-    //         runtime_data: Some(Data::Raw(genesis_data_response.data.to_bytes())),
-    //         runtime_data_hash_algorithm: None, // TODO: actually use this
-    //     };
-    //     let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-    //     let req = Request::builder()
-    //         .method("POST")
-    //         .uri("/attestation/as/eval_evidence")
-    //         .header("Content-Type", "application/json")
-    //         .body(Body::from(payload_json))
-    //         .unwrap();
-    //     let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let genesis_data_hash: [u8; 32] =
+            Sha256::digest(genesis_data_response.data.to_bytes()).into();
 
-    //     // Check that the eval evidence response
-    //     assert_eq!(res.status(), StatusCode::OK);
-    //     // Parse and check the response body
-    //     let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-    //     let eval_evidence_response: AttestationEvalEvidenceResponse =
-    //         serde_json::from_slice(&body).unwrap();
-    //     assert!(eval_evidence_response.eval);
-    //     let claims = eval_evidence_response.claims.unwrap();
-    //     println!("claims: {:?}", claims);
-    // }
+        let tdx_eval_request = AttestationEvalEvidenceRequest {
+            evidence: genesis_data_response.evidence,
+            tee: Tee::AzTdxVtpm,
+            runtime_data: Some(Data::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
+            runtime_data_hash_algorithm: None,
+        };
+        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/as/eval_evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+
+        // Check that the eval evidence response
+        assert_eq!(res.status(), StatusCode::OK);
+        // Parse and check the response body
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let eval_evidence_response: AttestationEvalEvidenceResponse =
+            serde_json::from_slice(&body).unwrap();
+
+        assert!(eval_evidence_response.eval);
+    }
 }

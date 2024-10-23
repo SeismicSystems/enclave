@@ -58,10 +58,10 @@ pub async fn attestation_get_evidence_handler(
 mod tests {
     use super::*;
     use crate::init_coco_aa;
+    use crate::utils::test_utils::is_sudo;
     use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
     use serial_test::serial;
-    use crate::utils::test_utils::is_sudo;
 
     #[tokio::test]
     #[serial(attestation_agent)]
@@ -106,7 +106,7 @@ mod tests {
     #[tokio::test]
     #[serial(attestation_agent)]
     async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data() {
-       // handle set up permissions
+        // handle set up permissions
         if !is_sudo() {
             eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
             return;
@@ -115,12 +115,12 @@ mod tests {
         init_coco_aa().expect("Failed to initialize AttestationAgent");
 
         // Make requests with different runtime data and see they are different
-        let runtime_data_1 = "nonce1".as_bytes(); 
+        let runtime_data_1 = "nonce1".as_bytes();
         let evidence_request_1 = AttestationGetEvidenceRequest {
             runtime_data: runtime_data_1.to_vec(),
         };
-        
-        let runtime_data_2 = "nonce2".as_bytes(); 
+
+        let runtime_data_2 = "nonce2".as_bytes();
         let evidence_request_2 = AttestationGetEvidenceRequest {
             runtime_data: runtime_data_2.to_vec(),
         };
@@ -147,7 +147,6 @@ mod tests {
 
         assert_eq!(res_1.status(), StatusCode::OK);
         assert_eq!(res_2.status(), StatusCode::OK);
-        
 
         // Parse and check the response body
         let body_1 = hyper::body::to_bytes(res_1.into_body()).await.unwrap();
@@ -156,7 +155,7 @@ mod tests {
             serde_json::from_slice(&body_1).unwrap();
         let get_evidence_resp_2: AttestationGetEvidenceResponse =
             serde_json::from_slice(&body_2).unwrap();
-        
+
         assert_ne!(get_evidence_resp_1.evidence, get_evidence_resp_2.evidence);
     }
 
