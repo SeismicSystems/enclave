@@ -61,10 +61,11 @@ mod tests {
     use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
     use serial_test::serial;
+    use crate::utils::test_utils::is_sudo;
 
     #[tokio::test]
     #[serial(attestation_agent)]
-    async fn test_attestation_evidence_handler_valid_request() {
+    async fn test_attestation_evidence_handler_valid_request_sample() {
         // NOTE: This test will run with the Sample TEE Type
         // because it doesn't run with sudo privileges
 
@@ -100,6 +101,63 @@ mod tests {
 
         // Ensure the response is not empty
         assert!(!get_evidence_resp.evidence.is_empty());
+    }
+
+    #[tokio::test]
+    #[serial(attestation_agent)]
+    async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data() {
+       // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+            return;
+        }
+
+        init_coco_aa().expect("Failed to initialize AttestationAgent");
+
+        // Make requests with different runtime data and see they are different
+        let runtime_data_1 = "nonce1".as_bytes(); 
+        let evidence_request_1 = AttestationGetEvidenceRequest {
+            runtime_data: runtime_data_1.to_vec(),
+        };
+        
+        let runtime_data_2 = "nonce2".as_bytes(); 
+        let evidence_request_2 = AttestationGetEvidenceRequest {
+            runtime_data: runtime_data_2.to_vec(),
+        };
+
+        // Serialize the request to JSON
+        let payload_json_1 = serde_json::to_string(&evidence_request_1).unwrap();
+        let payload_json_2 = serde_json::to_string(&evidence_request_2).unwrap();
+
+        // Create a request
+        let req_1 = Request::builder()
+            .method("POST")
+            .uri("/attestation/attester/evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json_1))
+            .unwrap();
+        let res_1: Response<Body> = attestation_get_evidence_handler(req_1).await.unwrap();
+        let req_2 = Request::builder()
+            .method("POST")
+            .uri("/attestation/attester/evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json_2))
+            .unwrap();
+        let res_2: Response<Body> = attestation_get_evidence_handler(req_2).await.unwrap();
+
+        assert_eq!(res_1.status(), StatusCode::OK);
+        assert_eq!(res_2.status(), StatusCode::OK);
+        
+
+        // Parse and check the response body
+        let body_1 = hyper::body::to_bytes(res_1.into_body()).await.unwrap();
+        let body_2 = hyper::body::to_bytes(res_2.into_body()).await.unwrap();
+        let get_evidence_resp_1: AttestationGetEvidenceResponse =
+            serde_json::from_slice(&body_1).unwrap();
+        let get_evidence_resp_2: AttestationGetEvidenceResponse =
+            serde_json::from_slice(&body_2).unwrap();
+        
+        assert_ne!(get_evidence_resp_1.evidence, get_evidence_resp_2.evidence);
     }
 
     #[tokio::test]
