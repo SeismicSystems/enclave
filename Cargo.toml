@@ -33,5 +33,5 @@ attestation-agent = { git = "https://github.com/confidential-containers/guest-co
 attestation-service = { git = "https://github.com/confidential-containers/trustee", optional = true }
 
 [features]
-default = []
+default = ["verifier"]
 verifier = ["attestation-service"]
