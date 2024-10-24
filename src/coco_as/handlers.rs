@@ -1,3 +1,4 @@
+use anyhow::Context;
 use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hyper::{body::to_bytes, Body, Request, Response};
@@ -89,11 +90,23 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     Ok(claims)
 }
 
+pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Error> {
+    let evidence =
+        serde_json::from_slice::<crate::coco_as::tdx_parsing::Evidence>(tdx_evidence.as_slice())
+            .context("Failed to deserialize Azure vTPM TDX evidence")?;
+    let td_quote = crate::coco_as::tdx_parsing::parse_tdx_quote(&evidence.td_quote)?;
+    let claim = super::tdx_parsing::generate_parsed_claim(td_quote)?;
+    let claim = serde_json::to_string_pretty(&claim)?;
+    println!("{claim}");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::init_coco_as;
     use crate::utils::test_utils::is_sudo;
+    use anyhow::Ok;
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
@@ -255,5 +268,19 @@ mod tests {
         assert!(claims.reference_data.is_empty());
         assert_eq!(claims.customized_claims.init_data, Value::Null);
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+    }
+
+    #[test]
+    fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
+        use std::fs::File;
+        use std::io::Read;
+        let file_path = "./src/coco_as/examples/tdx_byte_evidence.txt";
+        let mut file = File::open(file_path)?;
+        let mut tdx_evidence = Vec::new();
+        file.read_to_end(&mut tdx_evidence)?;
+
+        get_tdx_evidence_claims(tdx_evidence)?;
+
+        Ok(())
     }
 }
