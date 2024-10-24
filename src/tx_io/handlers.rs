@@ -6,7 +6,7 @@ use secp256k1::SecretKey;
 
 use super::structs::*;
 use crate::utils::crypto_utils::*;
-use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
+use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
