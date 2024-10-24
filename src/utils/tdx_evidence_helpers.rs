@@ -1,17 +1,27 @@
-// Copyright (c) 2023 Alibaba Cloud
-//
-// SPDX-License-Identifier: Apache-2.0
-
-use anyhow::Result;
-use anyhow::bail;
 use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Context;
+use anyhow::Result;
+use core::fmt;
 use log::debug;
 use serde_json::{Map, Value};
-use core::fmt;
 pub type TeeEvidenceParsedClaim = serde_json::Value;
+use az_tdx_vtpm::vtpm::Quote as TpmQuote;
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
-use az_tdx_vtpm::vtpm::Quote as TpmQuote;
+
+/// Takes in tdx_evidence as a vec<u8>, as it is returned by coco libs,
+/// and prints out the claim as a string
+pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Error> {
+    let evidence = serde_json::from_slice::<Evidence>(tdx_evidence.as_slice())
+        .context("Failed to deserialize Azure vTPM TDX evidence")?;
+    let td_quote = parse_tdx_quote(&evidence.td_quote)?;
+    let mut claim = generate_parsed_claim(td_quote)?;
+    extend_claim_with_tpm_quote(&mut claim, &evidence.tpm_quote)?;
+    let claim = serde_json::to_string_pretty(&claim)?;
+    println!("{claim}");
+    Ok(())
+}
 
 macro_rules! parse_claim {
     ($map_name: ident, $key_name: literal, $field: ident) => {
@@ -32,11 +42,7 @@ pub struct Evidence {
     pub td_quote: Vec<u8>,
 }
 
-
-
-pub fn generate_parsed_claim(
-    quote: Quote,
-) -> Result<TeeEvidenceParsedClaim> {
+pub fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
     let mut quote_map = Map::new();
     let mut quote_body = Map::new();
     let mut quote_header = Map::new();
@@ -522,7 +528,7 @@ pub fn parse_tdx_quote(quote_bin: &[u8]) -> Result<Quote> {
     }
 }
 
-pub(crate) fn extend_claim_with_tpm_quote(
+pub fn extend_claim_with_tpm_quote(
     claim: &mut TeeEvidenceParsedClaim,
     quote: &TpmQuote,
 ) -> Result<()> {
@@ -536,6 +542,17 @@ pub(crate) fn extend_claim_with_tpm_quote(
     }
     debug!("extending claim with TPM quote: {:#?}", tpm_values);
     map.insert("tpm".to_string(), Value::Object(tpm_values));
+
+    Ok(())
+}
+
+#[test]
+#[ignore]
+fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
+    let path = "./src/coco_as/examples/tdx_byte_evidence.txt";
+    let tdx_evidence: Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
+
+    get_tdx_evidence_claims(tdx_evidence)?;
 
     Ok(())
 }

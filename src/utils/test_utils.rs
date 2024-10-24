@@ -33,14 +33,14 @@ pub fn is_sudo() -> bool {
 pub fn read_vector_txt(path: String) -> io::Result<Vec<u8>> {
     // Open the file
     let mut file = File::open(path)?;
-    
+
     // Read the file contents into a string
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    
+
     // Remove the brackets and split the string into individual numbers
     let trimmed = contents.trim_matches(|c| c == '[' || c == ']').trim();
-    
+
     // Convert the split numbers into a vector of u8
     let vec: Vec<u8> = trimmed
         .split(',')

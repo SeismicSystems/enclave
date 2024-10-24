@@ -1,4 +1,3 @@
-use anyhow::Context;
 use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hyper::{body::to_bytes, Body, Request, Response};
@@ -90,39 +89,16 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     Ok(claims)
 }
 
-pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Error> {
-    let evidence =
-        serde_json::from_slice::<crate::coco_as::tdx_parsing::Evidence>(tdx_evidence.as_slice())
-            .context("Failed to deserialize Azure vTPM TDX evidence")?;
-    let td_quote = crate::coco_as::tdx_parsing::parse_tdx_quote(&evidence.td_quote)?;
-    let mut claim = super::tdx_parsing::generate_parsed_claim(td_quote)?;
-    super::tdx_parsing::extend_claim_with_tpm_quote(&mut claim, &evidence.tpm_quote)?;
-    let claim = serde_json::to_string_pretty(&claim)?;
-    println!("{claim}");
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::init_coco_as;
     use crate::utils::test_utils::is_sudo;
-    use anyhow::Ok;
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
-
-    #[test]
-    fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-        let path = "./src/coco_as/examples/tdx_byte_evidence.txt";
-        let tdx_evidence : Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
-
-        get_tdx_evidence_claims(tdx_evidence)?;
-
-        Ok(())
-    }
 
     #[test]
     fn test_parse_as_token() {
