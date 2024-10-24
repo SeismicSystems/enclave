@@ -53,7 +53,8 @@ pub async fn attestation_eval_evidence_handler(
     // Call the evaluate function of the attestation service
     // Gets back a b64 JWT web token of the form "header.claims.signature"
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    let as_token = coco_as
+    let readable_as = coco_as.read().await;
+    let as_token = readable_as
         .evaluate(
             evaluate_request.evidence,
             evaluate_request.tee,
@@ -61,11 +62,13 @@ pub async fn attestation_eval_evidence_handler(
             runtime_data_hash_algorithm,
             None,                  // hardcoded because AzTdxVtpm doesn't support init data
             HashAlgorithm::Sha256, // dummy val to make this compile
-            Vec::new(),            // TODO: replace with the actual policy
+            vec!["allow_any".to_string()],            // TODO: replace with the actual policy
         )
         .await
         .map_err(|e| format!("Error while evaluating evidence: {:?}", e))
         .unwrap();
+
+    println!("as_token: {as_token}");
 
     let claims: ASCoreTokenClaims = parse_as_token(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
@@ -107,7 +110,8 @@ mod tests {
         let claims = parse_as_token(&ex_token).unwrap();
 
         assert_eq!(claims.tee, "aztdxvtpm");
-        assert!(claims.evaluation_reports.is_empty());
+        let evaluation_reports =  serde_json::to_string(&claims.evaluation_reports).unwrap();
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow_any\"}]");
         assert_eq!(
             claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
@@ -163,6 +167,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["allow_any".to_string()],
         };
 
         // Serialize the request to JSON
@@ -219,6 +224,7 @@ mod tests {
             tee: Tee::AzTdxVtpm,
             runtime_data: Some(Data::Raw("".into())),
             runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow_any".to_string()],
         };
 
         // Serialize the request to JSON

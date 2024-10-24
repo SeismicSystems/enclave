@@ -12,6 +12,7 @@ use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use coco_aa::handlers::*;
 use coco_as::handlers::*;
@@ -21,8 +22,9 @@ use tx_io::handlers::*;
 
 use attestation_agent::AttestationAgent;
 use attestation_service::{config::Config, AttestationService};
+use base64::Engine;
 
-static ATTESTATION_SERVICE: OnceCell<Arc<AttestationService>> = OnceCell::new();
+static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
 #[tokio::main]
@@ -33,6 +35,7 @@ async fn main() -> Result<()> {
     // Initialize the Attestation Agent and Attestation Service
     init_coco_aa()?;
     init_coco_as(None).await?;
+    // init_as_policies().await?;
 
     // create the server
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
@@ -127,9 +130,47 @@ async fn init_coco_as(config: Option<Config>) -> Result<()> {
     let coco_as = AttestationService::new(config)
         .await
         .expect("Failed to create an AttestationService");
+    let lock = tokio::sync::RwLock::new(coco_as);
     ATTESTATION_SERVICE
-        .set(Arc::new(coco_as))
+        .set(Arc::new(lock))
         .map_err(|_| anyhow::anyhow!("Failed to set AttestationService"))?;
 
+    // initialize the policies
+    init_as_policies().await?;
     Ok(())
+}
+
+pub async fn init_as_policies() -> Result<()> {
+    let policy = std::fs::read_to_string("./src/coco_as/examples/allow_policy.rego")?;
+    let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
+    let coco_as = ATTESTATION_SERVICE.get().unwrap();
+    let mut writeable_as = coco_as.write().await; 
+    writeable_as.set_policy("allow_any".to_string(), policy_encoded).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use anyhow::Ok;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+
+    #[tokio::test]
+    async fn test() {
+        let config = Config::default();
+        println!("{:?}", config);
+    }
+
+    #[test]
+    fn see_as_token() -> Result<()> {
+        let as_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
+        let parts: Vec<&str> = as_token.splitn(3, '.').collect();
+        let claims_b64 = parts[1];
+        let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
+        let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
+        let claims_pretty_str = serde_json::to_string_pretty(&claims_decoded_string)?;
+        println!("{claims_pretty_str}");
+        Ok(())
+    }
 }
