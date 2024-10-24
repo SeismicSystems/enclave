@@ -521,3 +521,21 @@ pub fn parse_tdx_quote(quote_bin: &[u8]) -> Result<Quote> {
         _ => Err(anyhow!("Quote version not defined.")),
     }
 }
+
+pub(crate) fn extend_claim_with_tpm_quote(
+    claim: &mut TeeEvidenceParsedClaim,
+    quote: &TpmQuote,
+) -> Result<()> {
+    let Value::Object(ref mut map) = claim else {
+        bail!("failed to extend the claim, not an object");
+    };
+
+    let mut tpm_values = serde_json::Map::new();
+    for (i, pcr) in quote.pcrs_sha256().enumerate() {
+        tpm_values.insert(format!("pcr{:02}", i), Value::String(hex::encode(pcr)));
+    }
+    debug!("extending claim with TPM quote: {:#?}", tpm_values);
+    map.insert("tpm".to_string(), Value::Object(tpm_values));
+
+    Ok(())
+}

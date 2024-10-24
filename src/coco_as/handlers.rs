@@ -95,7 +95,8 @@ pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Erro
         serde_json::from_slice::<crate::coco_as::tdx_parsing::Evidence>(tdx_evidence.as_slice())
             .context("Failed to deserialize Azure vTPM TDX evidence")?;
     let td_quote = crate::coco_as::tdx_parsing::parse_tdx_quote(&evidence.td_quote)?;
-    let claim = super::tdx_parsing::generate_parsed_claim(td_quote)?;
+    let mut claim = super::tdx_parsing::generate_parsed_claim(td_quote)?;
+    super::tdx_parsing::extend_claim_with_tpm_quote(&mut claim, &evidence.tpm_quote)?;
     let claim = serde_json::to_string_pretty(&claim)?;
     println!("{claim}");
     Ok(())
