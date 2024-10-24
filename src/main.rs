@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
 
     // Initialize the Attestation Agent and Attestation Service
     init_coco_aa()?;
-    init_coco_as().await?;
+    init_coco_as(None).await?;
 
     // create the server
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
@@ -105,7 +105,7 @@ fn init_coco_aa() -> Result<()> {
     Ok(())
 }
 
-async fn init_coco_as() -> Result<()> {
+async fn init_coco_as(config: Option<Config>) -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
     if ATTESTATION_SERVICE.get().is_some() {
@@ -118,8 +118,12 @@ async fn init_coco_as() -> Result<()> {
     // let config_path = std::path::Path::new(config_path_str);
     // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
 
+    let config = match config {
+        Some(config) => config,
+        None => Config::default(),
+    };
+
     // Initialize the AttestationService
-    let config = Config::default();
     let coco_as = AttestationService::new(config)
         .await
         .expect("Failed to create an AttestationService");

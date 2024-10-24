@@ -111,7 +111,7 @@ mod tests {
             serde_json::from_slice(&body_bytes).unwrap();
 
         // Submit the genesis data to the attestation service
-        init_coco_as()
+        init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
 

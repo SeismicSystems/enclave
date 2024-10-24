@@ -150,7 +150,7 @@ mod tests {
         }
 
         // Initialize ATTESTATION_SERVICE
-        init_coco_as()
+        init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
 
@@ -203,7 +203,7 @@ mod tests {
         }
 
         // Initialize ATTESTATION_SERVICE
-        init_coco_as()
+        init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
 
