@@ -83,7 +83,7 @@ mod tests {
         // Create a request
         let req = Request::builder()
             .method("POST")
-            .uri("/attestation/attester/evidence")
+            .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json))
             .unwrap();
@@ -132,14 +132,17 @@ mod tests {
         // Create a request
         let req_1 = Request::builder()
             .method("POST")
-            .uri("/attestation/attester/evidence")
+            .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json_1))
             .unwrap();
+
+        println!("req_1: {:?}", req_1);
+
         let res_1: Response<Body> = attestation_get_evidence_handler(req_1).await.unwrap();
         let req_2 = Request::builder()
             .method("POST")
-            .uri("/attestation/attester/evidence")
+            .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json_2))
             .unwrap();
@@ -164,7 +167,7 @@ mod tests {
         // Create a request with invalid JSON body
         let req = Request::builder()
             .method("POST")
-            .uri("/attestation/attester/evidence")
+            .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
             .body(Body::from("Invalid JSON"))
             .unwrap();
