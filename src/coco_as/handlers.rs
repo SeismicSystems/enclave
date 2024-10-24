@@ -272,12 +272,8 @@ mod tests {
 
     #[test]
     fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-        use std::fs::File;
-        use std::io::Read;
-        let file_path = "./src/coco_as/examples/tdx_byte_evidence.txt";
-        let mut file = File::open(file_path)?;
-        let mut tdx_evidence = Vec::new();
-        file.read_to_end(&mut tdx_evidence)?;
+        let path = "./src/coco_as/examples/tdx_byte_evidence.txt";
+        let tdx_evidence : Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
 
         get_tdx_evidence_claims(tdx_evidence)?;
 
