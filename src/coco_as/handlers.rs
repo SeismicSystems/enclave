@@ -114,6 +114,16 @@ mod tests {
     use serial_test::serial;
 
     #[test]
+    fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
+        let path = "./src/coco_as/examples/tdx_byte_evidence.txt";
+        let tdx_evidence : Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
+
+        get_tdx_evidence_claims(tdx_evidence)?;
+
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_as_token() {
         let ex_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
 
@@ -268,15 +278,5 @@ mod tests {
         assert!(claims.reference_data.is_empty());
         assert_eq!(claims.customized_claims.init_data, Value::Null);
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
-    }
-
-    #[test]
-    fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-        let path = "./src/coco_as/examples/tdx_byte_evidence.txt";
-        let tdx_evidence : Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
-
-        get_tdx_evidence_claims(tdx_evidence)?;
-
-        Ok(())
     }
 }
