@@ -4,7 +4,7 @@ use std::convert::Infallible;
 
 use super::structs::*;
 use crate::utils::crypto_utils::*;
-use crate::utils::respone_utils::{invalid_json_body_resp, invalid_req_body_resp};
+use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
 
 /// Handles request to sign a message using secp256k1.
 ///
