@@ -85,7 +85,11 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let aes_key = derive_aes_key(&shared_secret)
         .map_err(|e| format!("Error while deriving AES key: {:?}", e))
         .unwrap();
-    let decrypted_data = aes_decrypt(&aes_key, &decryption_request.data, decryption_request.nonce);
+    let decrypted_data = aes_decrypt(
+        &aes_key, 
+        &decryption_request.data, 
+        decryption_request.nonce
+    ).expect("Failed to AES decrypt data");
 
     let response_body = IoDecryptionResponse { decrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();

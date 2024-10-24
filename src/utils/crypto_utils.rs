@@ -10,6 +10,7 @@ use serde_json;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, BufReader};
+use anyhow::anyhow;
 
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
@@ -80,7 +81,7 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
 ///
 /// # Panics
 /// This function will panic if decryption or decoding fails.
-pub fn aes_decrypt<T>(key: &Key<Aes256Gcm>, ciphertext: &[u8], nonce: u64) -> T
+pub fn aes_decrypt<T>(key: &Key<Aes256Gcm>, ciphertext: &[u8], nonce: u64) -> Result<T, anyhow::Error>
 where
     T: Decodable,
 {
@@ -90,10 +91,12 @@ where
     // recover the plaintext byte encoding of the object
     let buf = cipher
         .decrypt(&nonce, ciphertext.as_ref())
-        .expect("AES decryption failed");
+        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))?;
 
     // recover the object from the byte encoding
-    T::decode(&mut &buf[..]).unwrap_or_else(|err| panic!("Failed to decode: {:?}", err))
+    let plaintext = T::decode(&mut &buf[..]).map_err(|e| anyhow!("Failed to decode plaintext: {:?}", e))?;
+
+    Ok(plaintext)
 }
 
 /// Derives an AES key from a shared secret using HKDF and SHA-256.
