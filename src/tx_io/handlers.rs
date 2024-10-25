@@ -6,7 +6,9 @@ use secp256k1::SecretKey;
 
 use super::structs::*;
 use crate::utils::crypto_utils::*;
-use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
+use crate::utils::response_utils::{
+    invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
+};
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
@@ -85,11 +87,14 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let aes_key = derive_aes_key(&shared_secret)
         .map_err(|e| format!("Error while deriving AES key: {:?}", e))
         .unwrap();
-    let decrypted_data = aes_decrypt(
-        &aes_key, 
-        &decryption_request.data, 
-        decryption_request.nonce
-    ).expect("Failed to AES decrypt data");
+    let decrypted_data = aes_decrypt(&aes_key, &decryption_request.data, decryption_request.nonce);
+
+    let decrypted_data = match decrypted_data {
+        Ok(data) => data,
+        Err(e) => {
+            return Ok(invalid_ciphertext_resp(e));
+        }
+    };
 
     let response_body = IoDecryptionResponse { decrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
@@ -186,6 +191,8 @@ mod tests {
         let enc_response: IoEncryptionResponse = serde_json::from_slice(&body).unwrap();
         assert!(!enc_response.encrypted_data.is_empty());
 
+        println!("Encrypted data: {:?}", enc_response.encrypted_data);
+
         // check that decryption returns the original data
         // Prepare decrypt request body
         let decryption_request = IoDecryptionRequest {
@@ -210,5 +217,29 @@ mod tests {
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let dec_response: IoDecryptionResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(dec_response.decrypted_data, data_to_encrypt);
+    }
+
+    #[tokio::test]
+    async fn test_decrypt_invalid_ciphertext() {
+        let base_url = "http://localhost:7878";
+        let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let decryption_request = IoDecryptionRequest {
+            msg_sender: PublicKey::from_str(
+                "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
+            )
+            .unwrap(),
+            data: bad_ciphertext,
+            nonce: 12345678,
+        };
+        let payload_json = serde_json::to_string(&decryption_request).unwrap();
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("{}/tx_io/decrypt", base_url))
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        let res = tx_io_decrypt_handler(req).await.unwrap();
+        assert_eq!(res.status(), 422);
     }
 }

@@ -3,6 +3,7 @@ use aes_gcm::{
     Aes256Gcm, Key,
 };
 use alloy_rlp::{Decodable, Encodable};
+use anyhow::anyhow;
 use hkdf::Hkdf;
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,6 @@ use serde_json;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, BufReader};
-use anyhow::anyhow;
 
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
@@ -81,7 +81,11 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
 ///
 /// # Panics
 /// This function will panic if decryption or decoding fails.
-pub fn aes_decrypt<T>(key: &Key<Aes256Gcm>, ciphertext: &[u8], nonce: u64) -> Result<T, anyhow::Error>
+pub fn aes_decrypt<T>(
+    key: &Key<Aes256Gcm>,
+    ciphertext: &[u8],
+    nonce: u64,
+) -> Result<T, anyhow::Error>
 where
     T: Decodable,
 {
@@ -94,7 +98,8 @@ where
         .map_err(|e| anyhow!("AES decryption failed: {:?}", e))?;
 
     // recover the object from the byte encoding
-    let plaintext = T::decode(&mut &buf[..]).map_err(|e| anyhow!("Failed to decode plaintext: {:?}", e))?;
+    let plaintext =
+        T::decode(&mut &buf[..]).map_err(|e| anyhow!("Failed to decode plaintext: {:?}", e))?;
 
     Ok(plaintext)
 }
