@@ -33,6 +33,7 @@ pub struct AttestationEvalEvidenceRequest {
     pub tee: Tee,
     pub runtime_data: Option<Data>,
     pub runtime_data_hash_algorithm: Option<HashAlgorithm>,
+    pub policy_ids: Vec<String>,
 }
 
 /// Represents the response to an attestation evidence evaluation request.
@@ -108,6 +109,7 @@ impl fmt::Debug for AttestationEvalEvidenceRequest {
                     None => "None".to_string(),
                 },
             )
+            .field("policy_ids", &self.policy_ids)
             .finish()
     }
 }
@@ -117,7 +119,7 @@ impl Serialize for AttestationEvalEvidenceRequest {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("AttestationEvalEvidenceRequest", 4)?;
+        let mut state = serializer.serialize_struct("AttestationEvalEvidenceRequest", 5)?; // Adjust the number of fields
         state.serialize_field("evidence", &self.evidence)?;
         state.serialize_field("tee", &self.tee)?;
 
@@ -127,12 +129,13 @@ impl Serialize for AttestationEvalEvidenceRequest {
             None => state.serialize_field("runtime_data", &Option::<()>::None)?,
         };
 
-        // Use Option<String> to properly serialize None as null
         let runtime_data_hash_algorithm = self
             .runtime_data_hash_algorithm
             .as_ref()
             .map(ToString::to_string);
         state.serialize_field("runtime_data_hash_algorithm", &runtime_data_hash_algorithm)?;
+        
+        state.serialize_field("policy_ids", &self.policy_ids)?;
 
         state.end()
     }
@@ -150,6 +153,7 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
             Tee,
             RuntimeData,
             RuntimeDataHashAlgorithm,
+            PolicyIds, // New field for deserialization
         }
 
         struct AttestationEvalEvidenceRequestVisitor;
@@ -169,6 +173,7 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                 let mut tee = None;
                 let mut runtime_data = None;
                 let mut runtime_data_hash_algorithm = None;
+                let mut policy_ids = None; // For policy_ids
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -198,24 +203,28 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                             }
                         }
                         Field::RuntimeDataHashAlgorithm => {
-                            // Deserialize as Option<String> and handle conversion
                             let alg_str: Option<String> = map.next_value()?;
                             if alg_str.is_some() {
                                 runtime_data_hash_algorithm =
                                     alg_str.and_then(|alg| HashAlgorithm::from_str(&alg).ok());
                             }
                         }
+                        Field::PolicyIds => { // Deserialize policy_ids
+                            policy_ids = Some(map.next_value()?);
+                        }
                     }
                 }
 
                 let evidence = evidence.ok_or_else(|| de::Error::missing_field("evidence"))?;
                 let tee = tee.ok_or_else(|| de::Error::missing_field("tee"))?;
+                let policy_ids = policy_ids.ok_or_else(|| de::Error::missing_field("policy_ids"))?;
 
                 Ok(AttestationEvalEvidenceRequest {
                     evidence,
                     tee,
                     runtime_data,
                     runtime_data_hash_algorithm,
+                    policy_ids,
                 })
             }
         }
@@ -225,6 +234,7 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
             "tee",
             "runtime_data",
             "runtime_data_hash_algorithm",
+            "policy_ids",
         ];
         deserializer.deserialize_struct(
             "AttestationEvalEvidenceRequest",
@@ -233,6 +243,7 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
         )
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -246,6 +257,7 @@ mod tests {
             tee: Tee::Sgx,
             runtime_data: Some(Data::Raw(vec![7, 8, 9])),
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["allow_any".to_string()],
         };
 
         let debug_output = format!("{:?}", request);
@@ -255,7 +267,8 @@ mod tests {
         evidence: [1, 2, 3], \
         tee: Sgx, \
         runtime_data: \"Raw([7, 8, 9])\", \
-        runtime_data_hash_algorithm: \"Sha256\" }";
+        runtime_data_hash_algorithm: \"Sha256\", \
+        policy_ids: [\"allow_any\"] }";
 
         assert_eq!(
             debug_output.trim(),
@@ -269,6 +282,7 @@ mod tests {
         assert!(debug_output.contains("tee: Sgx"));
         assert!(debug_output.contains("runtime_data: \"Raw([7, 8, 9])\""));
         assert!(debug_output.contains("runtime_data_hash_algorithm: \"Sha256\""));
+        assert!(debug_output.contains("policy_ids: [\"allow_any\"]"));
     }
 
     #[test]
@@ -281,6 +295,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["allow_any".to_string()],
         };
 
         // Serialize the request to a JSON string
@@ -311,6 +326,7 @@ mod tests {
                 .unwrap()
                 .to_string()
         );
+        assert_eq!(original_request.policy_ids, deserialized.policy_ids);
     }
 
     #[test]
@@ -323,6 +339,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
             runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow_any".to_string()],
         };
 
         // Serialize the request to a JSON string
@@ -344,6 +361,7 @@ mod tests {
             _ => panic!("Mismatched runtime data types"),
         }
         assert!(deserialized.runtime_data_hash_algorithm.is_none());
+        assert_eq!(original_request.policy_ids, deserialized.policy_ids);
     }
 
     #[test]
@@ -356,6 +374,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: None,
             runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow_any".to_string()],
         };
 
         // Serialize the request to a JSON string
@@ -370,5 +389,6 @@ mod tests {
         assert_eq!(original_request.tee, deserialized.tee);
         assert!(deserialized.runtime_data.is_none());
         assert!(deserialized.runtime_data_hash_algorithm.is_none());
+        assert_eq!(original_request.policy_ids, deserialized.policy_ids);
     }
 }
