@@ -1,3 +1,4 @@
+use anyhow::Error;
 use hyper::{Body, Response, StatusCode};
 use serde_json::json;
 
@@ -17,6 +18,18 @@ pub fn invalid_json_body_resp() -> Response<Body> {
     let error_response = json!({ "error": "Invalid JSON in request body" }).to_string();
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
+        .body(Body::from(error_response))
+        .unwrap()
+}
+
+// Returns 422 Unprocessable Entity
+// Meant to be used if decrypting the ciphertext fails
+pub fn invalid_ciphertext_resp(e: Error) -> Response<Body> {
+    let error_message = format!("Invalid ciphertext: {}", e); // Use error's Display trait
+    let error_response = json!({ "error": error_message }).to_string();
+
+    Response::builder()
+        .status(StatusCode::UNPROCESSABLE_ENTITY)
         .body(Body::from(error_response))
         .unwrap()
 }

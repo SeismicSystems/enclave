@@ -3,6 +3,7 @@ use aes_gcm::{
     Aes256Gcm, Key,
 };
 use alloy_rlp::{Decodable, Encodable};
+use anyhow::anyhow;
 use hkdf::Hkdf;
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,11 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
 ///
 /// # Panics
 /// This function will panic if decryption or decoding fails.
-pub fn aes_decrypt<T>(key: &Key<Aes256Gcm>, ciphertext: &[u8], nonce: u64) -> T
+pub fn aes_decrypt<T>(
+    key: &Key<Aes256Gcm>,
+    ciphertext: &[u8],
+    nonce: u64,
+) -> Result<T, anyhow::Error>
 where
     T: Decodable,
 {
@@ -90,10 +95,13 @@ where
     // recover the plaintext byte encoding of the object
     let buf = cipher
         .decrypt(&nonce, ciphertext.as_ref())
-        .expect("AES decryption failed");
+        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))?;
 
     // recover the object from the byte encoding
-    T::decode(&mut &buf[..]).unwrap_or_else(|err| panic!("Failed to decode: {:?}", err))
+    let plaintext =
+        T::decode(&mut &buf[..]).map_err(|e| anyhow!("Failed to decode plaintext: {:?}", e))?;
+
+    Ok(plaintext)
 }
 
 /// Derives an AES key from a shared secret using HKDF and SHA-256.
