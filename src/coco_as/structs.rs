@@ -257,7 +257,7 @@ mod tests {
             tee: Tee::Sgx,
             runtime_data: Some(Data::Raw(vec![7, 8, 9])),
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["allow_any".to_string()],
+            policy_ids: vec!["allow".to_string()],
         };
 
         let debug_output = format!("{:?}", request);
@@ -268,7 +268,7 @@ mod tests {
         tee: Sgx, \
         runtime_data: \"Raw([7, 8, 9])\", \
         runtime_data_hash_algorithm: \"Sha256\", \
-        policy_ids: [\"allow_any\"] }";
+        policy_ids: [\"allow\"] }";
 
         assert_eq!(
             debug_output.trim(),
@@ -282,7 +282,7 @@ mod tests {
         assert!(debug_output.contains("tee: Sgx"));
         assert!(debug_output.contains("runtime_data: \"Raw([7, 8, 9])\""));
         assert!(debug_output.contains("runtime_data_hash_algorithm: \"Sha256\""));
-        assert!(debug_output.contains("policy_ids: [\"allow_any\"]"));
+        assert!(debug_output.contains("policy_ids: [\"allow\"]"));
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["allow_any".to_string()],
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to a JSON string
@@ -339,7 +339,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
             runtime_data_hash_algorithm: None,
-            policy_ids: vec!["allow_any".to_string()],
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to a JSON string
@@ -374,7 +374,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: None,
             runtime_data_hash_algorithm: None,
-            policy_ids: vec!["allow_any".to_string()],
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to a JSON string

@@ -164,6 +164,8 @@ pub async fn init_as_policies() -> Result<()> {
         }
     }
     
+    println!("policies: {:?}", writeable_as.list_policies().await?);
+
     Ok(())
 }
 

@@ -1,7 +1,8 @@
 use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use hyper::{body::to_bytes, Body, Request, Response};
+use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use std::convert::Infallible;
+use serde_json::json;
 
 use super::structs::*;
 use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
@@ -54,7 +55,7 @@ pub async fn attestation_eval_evidence_handler(
     // Gets back a b64 JWT web token of the form "header.claims.signature"
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let readable_as = coco_as.read().await;
-    let as_token = readable_as
+    let eval = readable_as
         .evaluate(
             evaluate_request.evidence,
             evaluate_request.tee,
@@ -62,11 +63,17 @@ pub async fn attestation_eval_evidence_handler(
             runtime_data_hash_algorithm,
             None,                  // hardcoded because AzTdxVtpm doesn't support init data
             HashAlgorithm::Sha256, // dummy val to make this compile
-            vec!["allow_any".to_string()],            // TODO: replace with the actual policy
+            evaluate_request.policy_ids,           
         )
-        .await
-        .map_err(|e| format!("Error while evaluating evidence: {:?}", e))
-        .unwrap();
+        .await;
+
+    let as_token = match eval {
+        Ok(as_token) => as_token,
+        Err(e) => {
+            return Ok(bad_evidence_response(e));
+        }
+    };
+        
 
     let claims: ASCoreTokenClaims = parse_as_token(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
@@ -88,6 +95,19 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string)?;
 
     Ok(claims)
+}
+
+/// Returns a 400 Bad Request response with the error message
+/// describing why the evaluation failed,
+/// Ex the evidence is invalid, doesn't match the request policy, etc
+fn bad_evidence_response(e: anyhow::Error) -> Response<Body> {
+    let error_message = format!("Error while evaluating evidence: {:?}", e);
+    let error_response = json!({ "error": error_message }).to_string();
+
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(Body::from(error_response))
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -165,7 +185,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["allow_any".to_string()],
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to JSON
@@ -222,7 +242,7 @@ mod tests {
             tee: Tee::AzTdxVtpm,
             runtime_data: Some(Data::Raw("".into())),
             runtime_data_hash_algorithm: None,
-            policy_ids: vec!["allow_any".to_string()],
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to JSON
@@ -252,7 +272,7 @@ mod tests {
 
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports =  serde_json::to_string(&claims.evaluation_reports).unwrap();
-        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow_any\"}]");
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow\"}]");
         assert_eq!(
             claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
@@ -285,7 +305,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["deny_all".to_string()],
+            policy_ids: vec!["deny".to_string()],
         };
 
         // Serialize the request to JSON
@@ -303,25 +323,6 @@ mod tests {
         let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK);
-
-        // Parse and check the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let eval_evidence_response: AttestationEvalEvidenceResponse =
-            serde_json::from_slice(&body).unwrap();
-
-        assert!(eval_evidence_response.eval);
-        let claims = eval_evidence_response.claims.unwrap();
-
-        assert_eq!(claims.tee, "aztdxvtpm");
-        let evaluation_reports =  serde_json::to_string(&claims.evaluation_reports).unwrap();
-        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow_any\"}]");
-        assert_eq!(
-            claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
-            Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
-        );
-        assert!(claims.reference_data.is_empty());
-        assert_eq!(claims.customized_claims.init_data, Value::Null);
-        assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }
