@@ -141,6 +141,12 @@ async fn init_coco_as(config: Option<Config>) -> Result<()> {
     Ok(())
 }
 
+/// Initializes the AS policies from the policies directory
+/// While every AS eval request checks that the evidence was created by a real enclave
+/// A policy defines the expected values of that enclave. 
+/// 
+/// For example, the important values for AxTdxVtpm are the MRSEAM and MRTD values,
+/// which respectively fingerprint the TDX module and the guest firmware that are running
 pub async fn init_as_policies() -> Result<()> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let mut writeable_as = coco_as.write().await; 
@@ -151,9 +157,10 @@ pub async fn init_as_policies() -> Result<()> {
         let path = entry.path();
 
         if path.is_file() {
+            let policy_name = path.file_stem().unwrap().to_str().unwrap();
             let policy = fs::read_to_string(&path)?;
             let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
-            writeable_as.set_policy("allow_any".to_string(), policy_encoded).await?;
+            writeable_as.set_policy(policy_name.to_string(), policy_encoded).await?;
         }
     }
     

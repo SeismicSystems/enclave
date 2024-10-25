@@ -261,4 +261,67 @@ mod tests {
         assert_eq!(claims.customized_claims.init_data, Value::Null);
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
     }
+
+    #[tokio::test]
+    #[serial(attestation_service)]
+    async fn test_eval_policy_deny() {
+        // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+            return;
+        }
+
+        // Initialize ATTESTATION_SERVICE
+        init_coco_as(None)
+            .await
+            .expect("Failed to initialize AttestationService");
+
+        // Mock a valid AttestationEvalEvidenceRequest
+        let eval_request = AttestationEvalEvidenceRequest {
+            evidence: vec![
+                123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
+                95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+            ], // Example evidence data
+            tee: Tee::Sample,
+            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
+            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["deny_all".to_string()],
+        };
+
+        // Serialize the request to JSON
+        let payload_json = serde_json::to_string(&eval_request).unwrap();
+
+        // Create a request
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/as/eval_evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        // Call the handler
+        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+
+        // Check that the response status is 200 OK
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // Parse and check the response body
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let eval_evidence_response: AttestationEvalEvidenceResponse =
+            serde_json::from_slice(&body).unwrap();
+
+        assert!(eval_evidence_response.eval);
+        let claims = eval_evidence_response.claims.unwrap();
+
+        assert_eq!(claims.tee, "aztdxvtpm");
+        let evaluation_reports =  serde_json::to_string(&claims.evaluation_reports).unwrap();
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow_any\"}]");
+        assert_eq!(
+            claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
+            Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
+        );
+        assert!(claims.reference_data.is_empty());
+        assert_eq!(claims.customized_claims.init_data, Value::Null);
+        assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+    }
 }

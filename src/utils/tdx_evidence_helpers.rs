@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 
 /// Takes in tdx_evidence as a vec<u8>, as it is returned by coco libs,
 /// and prints out the claim as a string
+/// Currrently this does not check the cc_eventlog or the aa_eventlog
+/// because I don't think AxTdxVtpm uses them
 pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Error> {
     let evidence = serde_json::from_slice::<Evidence>(tdx_evidence.as_slice())
         .context("Failed to deserialize Azure vTPM TDX evidence")?;
