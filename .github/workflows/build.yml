@@ -24,18 +24,18 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
-#   build:
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 30
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: dtolnay/rust-toolchain@stable
-#       - uses: Swatinem/rust-cache@v2
-#         with:
-#           shared-key: "build-cache"
-#       - name: cargo build without flags
-#         run: cargo build
-#       - name: cargo check warnings
-#         run: RUSTFLAGS="-D warnings" cargo check
-#       - name: cargo test
-#         run: cargo test
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "build-cache"
+      - name: cargo build without flags
+        run: cargo build
+      - name: cargo check warnings
+        run: RUSTFLAGS="-D warnings" cargo check
+      - name: cargo test
+        run: cargo test
