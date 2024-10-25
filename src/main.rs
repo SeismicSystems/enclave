@@ -12,6 +12,7 @@ use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::fs;
 use tokio::sync::RwLock;
 
 use coco_aa::handlers::*;
@@ -141,11 +142,21 @@ async fn init_coco_as(config: Option<Config>) -> Result<()> {
 }
 
 pub async fn init_as_policies() -> Result<()> {
-    let policy = std::fs::read_to_string("./src/coco_as/examples/allow_policy.rego")?;
-    let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let mut writeable_as = coco_as.write().await; 
-    writeable_as.set_policy("allow_any".to_string(), policy_encoded).await?;
+    
+    let policy_dir = std::path::Path::new("./src/coco_as/examples/policies");
+    for entry in fs::read_dir(policy_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            let policy = fs::read_to_string(&path)?;
+            let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
+            writeable_as.set_policy("allow_any".to_string(), policy_encoded).await?;
+        }
+    }
+    
     Ok(())
 }
 
