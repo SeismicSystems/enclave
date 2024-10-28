@@ -342,18 +342,19 @@ mod tests {
         // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
             read_vector_txt("./src/coco_as/examples/yocto_20241023223507.txt".to_string()).unwrap();
+        let runtime_data_bytes = vec![
+            240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
+            221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
+        ];
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: az_tdx_evidence,
             tee: Tee::AzTdxVtpm,
-            runtime_data: Some(Data::Raw("nonce".into())),
+            runtime_data: Some(Data::Raw(runtime_data_bytes)),
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["yocto".to_string()],
         };
 
-        // Serialize the request to JSON
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-
-        // Create a request
         let req = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
@@ -361,17 +362,36 @@ mod tests {
             .body(Body::from(payload_json))
             .unwrap();
 
-        // Call the handler
         let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
-        // Parse and check the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let eval_evidence_response: AttestationEvalEvidenceResponse =
-            serde_json::from_slice(&body).unwrap();
+        // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
+        let az_tdx_evidence: Vec<u8> =
+            read_vector_txt("./src/coco_as/examples/yocto_20241025193121.txt".to_string()).unwrap();
+        let runtime_data_bytes = vec![
+            240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
+            221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
+        ];
+        let tdx_eval_request = AttestationEvalEvidenceRequest {
+            evidence: az_tdx_evidence,
+            tee: Tee::AzTdxVtpm,
+            runtime_data: Some(Data::Raw(runtime_data_bytes)),
+            runtime_data_hash_algorithm: None,
+            policy_ids: vec!["yocto".to_string()],
+        };
 
-        assert!(eval_evidence_response.eval);
+        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/as/eval_evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{res:?}");
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(body_str.contains("Policy evaluation denied"));
     }
 }
