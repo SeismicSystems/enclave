@@ -19,25 +19,57 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
-      - run: cargo fmt --all --check
+          
+      - name: Check formatting
+        run: cargo fmt --all --check
 
   build:
     runs-on: self-hosted
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      
       - uses: dtolnay/rust-toolchain@stable
+      
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-cache"
+          
       - name: cargo build without flags
         run: cargo build
+        
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
-      - name: cargo test
+        
+      - name: Configure sudo for TEEService
         run: |
+          echo "$USER ALL=(ALL) NOPASSWD: $GITHUB_WORKSPACE/target/debug/deps/TEEService-*" | sudo tee /etc/sudoers.d/teeservice
+        
+      - name: Run tests
+        run: |
+          # Compile tests but don't run them yet
           cargo test --no-run
-          sudo $(find target/debug/deps -type f -name 'TEEService-*' ! -name '*.d')
+          
+          # Find and run the TEEService binary
+          BINARY_PATH=$(find target/debug/deps -type f -name 'TEEService-*' ! -name '*.d' -print -quit)
+          
+          if [ -z "$BINARY_PATH" ]; then
+            echo "Error: TEEService binary not found"
+            exit 1
+          fi
+          
+          if [ -x "$BINARY_PATH" ]; then
+            sudo "$BINARY_PATH"
+          else
+            echo "Error: Binary is not executable: $BINARY_PATH"
+            chmod +x "$BINARY_PATH"
+            sudo "$BINARY_PATH"
+          fi
+          
+      - name: Cleanup sudo configuration
+        if: always()
+        run: sudo rm -f /etc/sudoers.d/teeservice
