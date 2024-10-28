@@ -10,13 +10,12 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use once_cell::sync::OnceCell;
 use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
-use std::fs;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use coco_aa::handlers::*;
-use coco_as::handlers::*;
+use coco_as::{handlers::*, policies};
 use genesis::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
@@ -152,20 +151,20 @@ pub async fn init_as_policies() -> Result<()> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let mut writeable_as = coco_as.write().await;
 
-    let policy_dir = std::path::Path::new("./src/coco_as/examples/policies");
-    for entry in fs::read_dir(policy_dir)? {
-        let entry = entry?;
-        let path = entry.path();
+    let policies = vec![
+        (policies::ALLOW_POLICY.to_string(), "allow".to_string()),
+        (policies::DENY_POLICY.to_string(), "deny".to_string()),
+        (policies::YOCTO_POLICY.to_string(), "yocto".to_string()),
+    ];
 
-        if path.is_file() {
-            let policy_name = path.file_stem().unwrap().to_str().unwrap();
-            let policy = fs::read_to_string(&path)?;
-            let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
-            writeable_as
-                .set_policy(policy_name.to_string(), policy_encoded)
-                .await?;
-        }
+    for (policy, policy_id) in policies {
+        let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
+        writeable_as
+            .set_policy(policy_id.to_string(), policy_encoded)
+            .await?;
     }
+
+    println!("policies: {:?}", writeable_as.list_policies().await?);
 
     Ok(())
 }

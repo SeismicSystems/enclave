@@ -272,7 +272,7 @@ mod tests {
 
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
-        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow\"}]");
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"fbb1cf91bb453d7c89b04cbc8d727dc142c47d84c5c9c2012b8c86d4d1892874743a63f7448e592ca6bee9cfeb286732\",\"policy-id\":\"allow\"}]");
         assert_eq!(
             claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
