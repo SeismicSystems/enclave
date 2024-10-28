@@ -12,17 +12,19 @@ use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use coco_aa::handlers::*;
-use coco_as::handlers::*;
+use coco_as::{handlers::*, policies};
 use genesis::handlers::*;
 use signing::handlers::*;
 use tx_io::handlers::*;
 
 use attestation_agent::AttestationAgent;
 use attestation_service::{config::Config, AttestationService};
+use base64::Engine;
 
-static ATTESTATION_SERVICE: OnceCell<Arc<AttestationService>> = OnceCell::new();
+static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
 #[tokio::main]
@@ -32,7 +34,8 @@ async fn main() -> Result<()> {
 
     // Initialize the Attestation Agent and Attestation Service
     init_coco_aa()?;
-    init_coco_as().await?;
+    init_coco_as(None).await?;
+    // init_as_policies().await?;
 
     // create the server
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
@@ -88,6 +91,8 @@ async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<B
         .unwrap()
 }
 
+// initializes the AttestationAgent
+// which is reponsible for generating attestations
 fn init_coco_aa() -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
@@ -105,7 +110,9 @@ fn init_coco_aa() -> Result<()> {
     Ok(())
 }
 
-async fn init_coco_as() -> Result<()> {
+// initializes the AttestationService
+// which is reponsible for evaluating attestations
+async fn init_coco_as(config: Option<Config>) -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
     if ATTESTATION_SERVICE.get().is_some() {
@@ -118,14 +125,46 @@ async fn init_coco_as() -> Result<()> {
     // let config_path = std::path::Path::new(config_path_str);
     // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
 
+    let config = config.unwrap_or_default();
+
     // Initialize the AttestationService
-    let config = Config::default();
     let coco_as = AttestationService::new(config)
         .await
         .expect("Failed to create an AttestationService");
+    let lock = tokio::sync::RwLock::new(coco_as);
     ATTESTATION_SERVICE
-        .set(Arc::new(coco_as))
+        .set(Arc::new(lock))
         .map_err(|_| anyhow::anyhow!("Failed to set AttestationService"))?;
+
+    // initialize the policies
+    init_as_policies().await?;
+    Ok(())
+}
+
+/// Initializes the AS policies from the policies directory
+/// While every AS eval request checks that the evidence was created by a real enclave
+/// A policy defines the expected values of that enclave.
+///
+/// For example, the important values for AxTdxVtpm are the MRSEAM and MRTD values,
+/// which respectively fingerprint the TDX module and the guest firmware that are running
+pub async fn init_as_policies() -> Result<()> {
+    let coco_as = ATTESTATION_SERVICE.get().unwrap();
+    let mut writeable_as = coco_as.write().await;
+
+    let policies = vec![
+        (policies::ALLOW_POLICY.to_string(), "allow".to_string()),
+        (policies::DENY_POLICY.to_string(), "deny".to_string()),
+        (policies::YOCTO_POLICY.to_string(), "yocto".to_string()),
+    ];
+
+    for (policy, policy_id) in policies {
+        let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
+        writeable_as
+            .set_policy(policy_id.to_string(), policy_encoded)
+            .await?;
+    }
+
+    println!("policies: {:?}", writeable_as.list_policies().await?);
 
     Ok(())
 }

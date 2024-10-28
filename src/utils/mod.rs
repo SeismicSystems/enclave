@@ -13,3 +13,10 @@ pub mod test_utils;
 /// the logic is mostly copied and pasted from https://github.com/confidential-containers/trustee/tree/main/deps/verifier/src/tdx
 #[allow(dead_code)]
 pub mod tdx_evidence_helpers;
+
+/// runners has cargo tests so I can
+/// one click run them and see the output
+/// They are for dev convenience only
+/// test runners are for dev convenience only
+#[allow(unused_imports)]
+pub mod runners;
