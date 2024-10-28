@@ -50,7 +50,7 @@ jobs:
           # Compile tests but don't run them yet
           cargo test --no-run
           # Find the binary with the correct pattern, excluding .d files
-          BINARY_PATH=$(find target/debug/deps -type f -name 'TEEService-*' ! -name '*.d' -print -quit)
+          BINARY_PATH=$(find ./target/debug/deps -type f -name 'TEEService-*' ! -name '*.d' -print -quit)
 
           if [ ! -f "$BINARY_PATH"]; then
             echo "Unit test binary not found"
