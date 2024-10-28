@@ -168,29 +168,3 @@ pub async fn init_as_policies() -> Result<()> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use anyhow::Ok;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use base64::Engine;
-
-    #[tokio::test]
-    async fn test() {
-        let config = Config::default();
-        println!("{:?}", config);
-    }
-
-    #[test]
-    fn see_as_token() -> Result<()> {
-        let as_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
-        let parts: Vec<&str> = as_token.splitn(3, '.').collect();
-        let claims_b64 = parts[1];
-        let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
-        let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
-        let claims_pretty_str = serde_json::to_string_pretty(&claims_decoded_string)?;
-        println!("{claims_pretty_str}");
-        Ok(())
-    }
-}

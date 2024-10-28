@@ -1,14 +1,21 @@
-use crate::genesis::structs::GenesisData;
-use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
-use sha2::Digest;
-use sha2::Sha256;
-#[allow(dead_code)]
-#[allow(unused_imports)]
-
 /// This file has cargo tests so I can
 /// one click run them and see the output
 /// They are for dev convenience only
+
+#[allow(dead_code)]
+#[allow(unused_imports)]
+
+use crate::genesis::structs::GenesisData;
+use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
+use anyhow::Ok;
+use attestation_service::config::Config;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use sha2::Digest;
+use sha2::Sha256;
 use std::str::FromStr;
+
+
 
 #[test]
 #[ignore]
@@ -37,4 +44,24 @@ fn run_hash_genesis_data() -> Result<(), anyhow::Error> {
     println!("{:?}", hash_bytes);
 
     Ok(())
+}
+
+#[test]
+#[ignore]
+fn see_as_token() -> Result<(), anyhow::Error> {
+    let as_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
+    let parts: Vec<&str> = as_token.splitn(3, '.').collect();
+    let claims_b64 = parts[1];
+    let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
+    let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
+    let claims_pretty_str = serde_json::to_string_pretty(&claims_decoded_string)?;
+    println!("{claims_pretty_str}");
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore]
+async fn see_default_config() {
+    let config = Config::default();
+    println!("{:?}", config);
 }
