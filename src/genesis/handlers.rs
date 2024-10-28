@@ -51,6 +51,7 @@ mod tests {
     use crate::attestation_eval_evidence_handler;
     use crate::coco_as::structs::AttestationEvalEvidenceRequest;
     use crate::coco_as::structs::AttestationEvalEvidenceResponse;
+    use crate::init_as_policies;
     use crate::utils::test_utils::is_sudo;
     use crate::{init_coco_aa, init_coco_as};
     use attestation_service::Data;
@@ -111,9 +112,12 @@ mod tests {
             serde_json::from_slice(&body_bytes).unwrap();
 
         // Submit the genesis data to the attestation service
-        init_coco_as()
+        init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
+        init_as_policies()
+            .await
+            .expect("Failed to initialize AS policies");
 
         let genesis_data_hash: [u8; 32] =
             Sha256::digest(genesis_data_response.data.to_bytes()).into();
@@ -123,6 +127,7 @@ mod tests {
             tee: Tee::AzTdxVtpm,
             runtime_data: Some(Data::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
             runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow".to_string()],
         };
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
         let req = Request::builder()

@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 
 /// Takes in tdx_evidence as a vec<u8>, as it is returned by coco libs,
 /// and prints out the claim as a string
+/// Currrently this does not check the cc_eventlog or the aa_eventlog
+/// because I don't think AxTdxVtpm uses them
 pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Error> {
     let evidence = serde_json::from_slice::<Evidence>(tdx_evidence.as_slice())
         .context("Failed to deserialize Azure vTPM TDX evidence")?;
@@ -542,17 +544,6 @@ pub fn extend_claim_with_tpm_quote(
     }
     debug!("extending claim with TPM quote: {:#?}", tpm_values);
     map.insert("tpm".to_string(), Value::Object(tpm_values));
-
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-    let path = "./src/coco_as/examples/tdx_byte_evidence.txt";
-    let tdx_evidence: Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
-
-    get_tdx_evidence_claims(tdx_evidence)?;
 
     Ok(())
 }
