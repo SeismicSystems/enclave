@@ -47,6 +47,21 @@ jobs:
    
       - name: Run tests
         run: |
-          # Compile tests but don't run them yet
+          # Compile tests
+          echo "Compiling tests..."
           cargo test --no-run
-          sudo target/debug/deps/TeeService-* !(*.d)
+          
+          # Get binary path
+          BINARY_PATH=$(cargo test --no-run 2>&1 | grep -oP "target/debug/deps/TeeService-[a-z0-9]+(?!\.d)" | head -n1)
+          
+          # Debug output
+          echo "Found binary path: $BINARY_PATH"
+          
+          # Check if binary was found
+          if [ -n "$BINARY_PATH" ]; then
+            echo "Running binary with sudo..."
+            sudo ./"$BINARY_PATH"
+          else
+            echo "Error: Binary not found in cargo output"
+            exit 1
+          fi
