@@ -38,4 +38,7 @@ jobs:
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
       - name: cargo test
-        run: cargo test --no-run && sudo target/debug/deps/TeeService-* ## wildcard for the test binary
+        run: |
+  cargo test --no-run
+  sudo $(find target/debug/deps -type f -name 'TeeService-*' ! -name '*.d')
+
