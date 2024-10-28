@@ -1,6 +1,7 @@
 use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use hyper::{body::to_bytes, Body, Request, Response};
+use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
+use serde_json::json;
 use std::convert::Infallible;
 
 use super::structs::*;
@@ -53,7 +54,8 @@ pub async fn attestation_eval_evidence_handler(
     // Call the evaluate function of the attestation service
     // Gets back a b64 JWT web token of the form "header.claims.signature"
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    let as_token = coco_as
+    let readable_as = coco_as.read().await;
+    let eval = readable_as
         .evaluate(
             evaluate_request.evidence,
             evaluate_request.tee,
@@ -61,11 +63,16 @@ pub async fn attestation_eval_evidence_handler(
             runtime_data_hash_algorithm,
             None,                  // hardcoded because AzTdxVtpm doesn't support init data
             HashAlgorithm::Sha256, // dummy val to make this compile
-            Vec::new(),            // TODO: replace with the actual policy
+            evaluate_request.policy_ids,
         )
-        .await
-        .map_err(|e| format!("Error while evaluating evidence: {:?}", e))
-        .unwrap();
+        .await;
+
+    let as_token = match eval {
+        Ok(as_token) => as_token,
+        Err(e) => {
+            return Ok(bad_evidence_response(e));
+        }
+    };
 
     let claims: ASCoreTokenClaims = parse_as_token(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
@@ -89,11 +96,25 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     Ok(claims)
 }
 
+/// Returns a 400 Bad Request response with the error message
+/// describing why the evaluation failed,
+/// Ex the evidence is invalid, doesn't match the request policy, etc
+fn bad_evidence_response(e: anyhow::Error) -> Response<Body> {
+    let error_message = format!("Error while evaluating evidence: {:?}", e);
+    let error_response = json!({ "error": error_message }).to_string();
+
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(Body::from(error_response))
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::init_coco_as;
     use crate::utils::test_utils::is_sudo;
+    use crate::utils::test_utils::read_vector_txt;
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
@@ -107,7 +128,8 @@ mod tests {
         let claims = parse_as_token(&ex_token).unwrap();
 
         assert_eq!(claims.tee, "aztdxvtpm");
-        assert!(claims.evaluation_reports.is_empty());
+        let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow_any\"}]");
         assert_eq!(
             claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
@@ -150,7 +172,7 @@ mod tests {
         }
 
         // Initialize ATTESTATION_SERVICE
-        init_coco_as()
+        init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
 
@@ -163,6 +185,7 @@ mod tests {
             tee: Tee::Sample,
             runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to JSON
@@ -203,7 +226,7 @@ mod tests {
         }
 
         // Initialize ATTESTATION_SERVICE
-        init_coco_as()
+        init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
 
@@ -219,6 +242,7 @@ mod tests {
             tee: Tee::AzTdxVtpm,
             runtime_data: Some(Data::Raw("".into())),
             runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow".to_string()],
         };
 
         // Serialize the request to JSON
@@ -247,7 +271,8 @@ mod tests {
         let claims = eval_evidence_response.claims.unwrap();
 
         assert_eq!(claims.tee, "aztdxvtpm");
-        assert!(claims.evaluation_reports.is_empty());
+        let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"fbb1cf91bb453d7c89b04cbc8d727dc142c47d84c5c9c2012b8c86d4d1892874743a63f7448e592ca6bee9cfeb286732\",\"policy-id\":\"allow\"}]");
         assert_eq!(
             claims.tcb_status.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
@@ -255,5 +280,118 @@ mod tests {
         assert!(claims.reference_data.is_empty());
         assert_eq!(claims.customized_claims.init_data, Value::Null);
         assert_eq!(claims.customized_claims.runtime_data, Value::Null);
+    }
+
+    #[tokio::test]
+    #[serial(attestation_service)]
+    async fn test_eval_policy_deny() {
+        // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+            return;
+        }
+
+        // Initialize ATTESTATION_SERVICE
+        init_coco_as(None)
+            .await
+            .expect("Failed to initialize AttestationService");
+
+        // Mock a valid AttestationEvalEvidenceRequest
+        let eval_request = AttestationEvalEvidenceRequest {
+            evidence: vec![
+                123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
+                95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+            ], // Example evidence data
+            tee: Tee::Sample,
+            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
+            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["deny".to_string()],
+        };
+
+        // Serialize the request to JSON
+        let payload_json = serde_json::to_string(&eval_request).unwrap();
+
+        // Create a request
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/as/eval_evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        // Call the handler
+        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+
+        // Check that the response status is 200 OK
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    #[serial(attestation_service)]
+    async fn test_eval_evidence_az_tdx_tpm_pcr04() {
+        // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_eval_evidence_az_tdx_tpm_pcr04: skipped (requires sudo privileges)");
+            return;
+        }
+
+        init_coco_as(None)
+            .await
+            .expect("Failed to initialize AttestationService");
+
+        // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
+        let az_tdx_evidence: Vec<u8> =
+            read_vector_txt("./src/coco_as/examples/yocto_20241023223507.txt".to_string()).unwrap();
+        let runtime_data_bytes = vec![
+            240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
+            221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
+        ];
+        let tdx_eval_request = AttestationEvalEvidenceRequest {
+            evidence: az_tdx_evidence,
+            tee: Tee::AzTdxVtpm,
+            runtime_data: Some(Data::Raw(runtime_data_bytes)),
+            runtime_data_hash_algorithm: None,
+            policy_ids: vec!["yocto".to_string()],
+        };
+
+        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/as/eval_evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
+
+        // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
+        let az_tdx_evidence: Vec<u8> =
+            read_vector_txt("./src/coco_as/examples/yocto_20241025193121.txt".to_string()).unwrap();
+        let runtime_data_bytes = vec![
+            240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
+            221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
+        ];
+        let tdx_eval_request = AttestationEvalEvidenceRequest {
+            evidence: az_tdx_evidence,
+            tee: Tee::AzTdxVtpm,
+            runtime_data: Some(Data::Raw(runtime_data_bytes)),
+            runtime_data_hash_algorithm: None,
+            policy_ids: vec!["yocto".to_string()],
+        };
+
+        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/attestation/as/eval_evidence")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload_json))
+            .unwrap();
+
+        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{res:?}");
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(body_str.contains("Policy evaluation denied"));
     }
 }
