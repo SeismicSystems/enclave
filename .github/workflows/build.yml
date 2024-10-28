@@ -49,18 +49,4 @@ jobs:
         run: |
           # Compile tests but don't run them yet
           cargo test --no-run
-          # Find the binary with the correct pattern, excluding .d files
-          BINARY_PATH=$(find ./target/debug/deps -type f -name 'TEEService-*' ! -name '*.d' -print -quit)
-
-          if [ ! -f "$BINARY_PATH"]; then
-            echo "Unit test binary not found"
-            exit 1
-          fi
-
-          if [ ! -x "$BINARY_PATH"]; then
-            echo "Making binary executable"
-            chmod +x "$BINARY_PATH"
-          fi
-
-          echo "Running binary at $BINARY_PATH"
-          sudo "$BINARY_PATH"
+          sudo target/debug/deps/TeeService-* !(*.d)
