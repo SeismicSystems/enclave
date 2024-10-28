@@ -44,32 +44,23 @@ jobs:
         
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
-        
-      - name: Configure sudo for TEEService
-        run: |
-          echo "$USER ALL=(ALL) NOPASSWD: $GITHUB_WORKSPACE/target/debug/deps/TEEService-*" | sudo tee /etc/sudoers.d/teeservice
-        
+   
       - name: Run tests
         run: |
           # Compile tests but don't run them yet
           cargo test --no-run
-          
-          # Find and run the TEEService binary
+          # Find the binary with the correct pattern, excluding .d files
           BINARY_PATH=$(find target/debug/deps -type f -name 'TEEService-*' ! -name '*.d' -print -quit)
-          
-          if [ -z "$BINARY_PATH" ]; then
-            echo "Error: TEEService binary not found"
+
+          if [ ! -f "$BINARY_PATH"]; then
+            echo "Unit test binary not found"
             exit 1
           fi
-          
-          if [ -x "$BINARY_PATH" ]; then
-            sudo "$BINARY_PATH"
-          else
-            echo "Error: Binary is not executable: $BINARY_PATH"
+
+          if [ ! -x "$BINARY_PATH"]; then
+            echo "Making binary executable"
             chmod +x "$BINARY_PATH"
-            sudo "$BINARY_PATH"
           fi
-          
-      - name: Cleanup sudo configuration
-        if: always()
-        run: sudo rm -f /etc/sudoers.d/teeservice
+
+          echo "Running binary at $BINARY_PATH"
+          sudo "$BINARY_PATH"
