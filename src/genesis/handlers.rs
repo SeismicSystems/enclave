@@ -115,7 +115,9 @@ mod tests {
         init_coco_as(None)
             .await
             .expect("Failed to initialize AttestationService");
-        init_as_policies().await.expect("Failed to initialize AS policies");
+        init_as_policies()
+            .await
+            .expect("Failed to initialize AS policies");
 
         let genesis_data_hash: [u8; 32] =
             Sha256::digest(genesis_data_response.data.to_bytes()).into();

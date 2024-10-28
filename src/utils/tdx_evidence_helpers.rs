@@ -547,15 +547,3 @@ pub fn extend_claim_with_tpm_quote(
 
     Ok(())
 }
-
-#[test]
-#[ignore]
-fn test_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-    let path = "./src/coco_as/examples/yocto_20241023223507.txt";
-    // let path = "./src/coco_as/examples/yocto_20241025193121.txt";
-    let tdx_evidence: Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
-
-    get_tdx_evidence_claims(tdx_evidence)?;
-
-    Ok(())
-}

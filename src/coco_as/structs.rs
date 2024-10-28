@@ -134,7 +134,7 @@ impl Serialize for AttestationEvalEvidenceRequest {
             .as_ref()
             .map(ToString::to_string);
         state.serialize_field("runtime_data_hash_algorithm", &runtime_data_hash_algorithm)?;
-        
+
         state.serialize_field("policy_ids", &self.policy_ids)?;
 
         state.end()
@@ -209,7 +209,8 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
                                     alg_str.and_then(|alg| HashAlgorithm::from_str(&alg).ok());
                             }
                         }
-                        Field::PolicyIds => { // Deserialize policy_ids
+                        Field::PolicyIds => {
+                            // Deserialize policy_ids
                             policy_ids = Some(map.next_value()?);
                         }
                     }
@@ -217,7 +218,8 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
 
                 let evidence = evidence.ok_or_else(|| de::Error::missing_field("evidence"))?;
                 let tee = tee.ok_or_else(|| de::Error::missing_field("tee"))?;
-                let policy_ids = policy_ids.ok_or_else(|| de::Error::missing_field("policy_ids"))?;
+                let policy_ids =
+                    policy_ids.ok_or_else(|| de::Error::missing_field("policy_ids"))?;
 
                 Ok(AttestationEvalEvidenceRequest {
                     evidence,
@@ -243,7 +245,6 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
         )
     }
 }
-
 
 #[cfg(test)]
 mod tests {

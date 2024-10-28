@@ -10,9 +10,9 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use once_cell::sync::OnceCell;
 use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
 use std::convert::Infallible;
+use std::fs;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::fs;
 use tokio::sync::RwLock;
 
 use coco_aa::handlers::*;
@@ -143,14 +143,14 @@ async fn init_coco_as(config: Option<Config>) -> Result<()> {
 
 /// Initializes the AS policies from the policies directory
 /// While every AS eval request checks that the evidence was created by a real enclave
-/// A policy defines the expected values of that enclave. 
-/// 
+/// A policy defines the expected values of that enclave.
+///
 /// For example, the important values for AxTdxVtpm are the MRSEAM and MRTD values,
 /// which respectively fingerprint the TDX module and the guest firmware that are running
 pub async fn init_as_policies() -> Result<()> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    let mut writeable_as = coco_as.write().await; 
-    
+    let mut writeable_as = coco_as.write().await;
+
     let policy_dir = std::path::Path::new("./src/coco_as/examples/policies");
     for entry in fs::read_dir(policy_dir)? {
         let entry = entry?;
@@ -160,10 +160,12 @@ pub async fn init_as_policies() -> Result<()> {
             let policy_name = path.file_stem().unwrap().to_str().unwrap();
             let policy = fs::read_to_string(&path)?;
             let policy_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy);
-            writeable_as.set_policy(policy_name.to_string(), policy_encoded).await?;
+            writeable_as
+                .set_policy(policy_name.to_string(), policy_encoded)
+                .await?;
         }
     }
-    
+
     println!("policies: {:?}", writeable_as.list_policies().await?);
 
     Ok(())
