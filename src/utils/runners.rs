@@ -4,7 +4,6 @@
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
-
 use crate::genesis::structs::GenesisData;
 use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
@@ -14,8 +13,6 @@ use base64::Engine;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
-
-
 
 #[test]
 #[ignore]
