@@ -39,6 +39,5 @@ jobs:
         run: RUSTFLAGS="-D warnings" cargo check
       - name: cargo test
         run: |
-  cargo test --no-run
-  sudo $(find target/debug/deps -type f -name 'TeeService-*' ! -name '*.d')
-
+          cargo test --no-run
+          sudo $(find target/debug/deps -type f -name 'TEEService-*' ! -name '*.d')
