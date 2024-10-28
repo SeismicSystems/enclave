@@ -92,6 +92,8 @@ async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<B
         .unwrap()
 }
 
+// initializes the AttestationAgent
+// which is reponsible for generating attestations
 fn init_coco_aa() -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
@@ -109,6 +111,8 @@ fn init_coco_aa() -> Result<()> {
     Ok(())
 }
 
+// initializes the AttestationService
+// which is reponsible for evaluating attestations
 async fn init_coco_as(config: Option<Config>) -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
