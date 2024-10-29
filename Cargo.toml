@@ -2,6 +2,7 @@
 name = "TeeService"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/SeismicSystems/TEEService"
 
 # Instead of getting csv-rs from github, use the forked version from Seismic's very own cdrappi
 [patch.'https://github.com/openanolis/csv-rs']
@@ -30,8 +31,8 @@ serial_test = "3.1.0"
 bincode = "1.3.3"
 
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee", optional = true }
+attestation-service = { git = "https://github.com/confidential-containers/trustee", optional = true, default-features = false, features = [ "restful-bin", "rvps-grpc"] }
 
 [features]
-default = ["verifier"]
+default = []
 verifier = ["attestation-service"]
