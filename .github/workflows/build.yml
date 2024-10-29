@@ -60,6 +60,7 @@ jobs:
           # Check if binary was found
           if [ -n "$BINARY_PATH" ]; then
             echo "Running binary with sudo..."
+            # Run binary with sudo
             sudo ./"$BINARY_PATH"
           # else output error
           else
