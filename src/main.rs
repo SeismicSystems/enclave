@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
 
     // create the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 7878));
-    let builder = Router::builder()
+    let router = Router::builder()
         .middleware(Middleware::pre(logger))
         .get("/genesis/data", genesis_get_data_handler)
         .post(
@@ -53,9 +53,10 @@ async fn main() -> Result<()> {
             "/attestation/as/eval_evidence",
             attestation_eval_evidence_handler,
         )
-        .err_handler_with_info(error_handler);
+        .err_handler_with_info(error_handler)
+        .build()
+        .unwrap();
 
-    let router = builder.build().unwrap();
     let service = RouterService::new(router).unwrap();
     let server = Server::bind(&addr).serve(service);
 
