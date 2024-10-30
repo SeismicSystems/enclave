@@ -38,24 +38,24 @@ async fn main() -> Result<()> {
 
     // create the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 7878));
-    let builder = Router::builder()
+    let router = Router::builder()
         .middleware(Middleware::pre(logger))
         .get("/genesis/data", genesis_get_data_handler)
         .post(
             "/attestation/aa/get_evidence",
             attestation_get_evidence_handler,
         )
-        .post("/signing/sign", secp256k1_sign_handler)
-        .post("/signing/verify", secp256k1_verify_handler)
-        .post("/tx_io/encrypt", tx_io_encrypt_handler)
-        .post("/tx_io/decrypt", tx_io_decrypt_handler)
         .post(
             "/attestation/as/eval_evidence",
             attestation_eval_evidence_handler,
         )
-        .err_handler_with_info(error_handler);
-
-    let router = builder.build().unwrap();
+        .post("/signing/sign", secp256k1_sign_handler)
+        .post("/signing/verify", secp256k1_verify_handler)
+        .post("/tx_io/encrypt", tx_io_encrypt_handler)
+        .post("/tx_io/decrypt", tx_io_decrypt_handler)
+        .err_handler_with_info(error_handler)
+        .build()
+        .unwrap();
     let service = RouterService::new(router).unwrap();
     let server = Server::bind(&addr).serve(service);
 
