@@ -1,4 +1,3 @@
-#[cfg(feature = "verifier")]
 use attestation_service::{Data, HashAlgorithm};
 use kbs_types::Tee;
 use serde::de::{self, MapAccess, Visitor};
@@ -29,7 +28,6 @@ use std::str::FromStr;
 /// - For empty data in `AzTdxVtpm`, set the following:
 ///   - `runtime_data = Some(Data::Raw("".into()))`
 ///   - `runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)`
-#[cfg(feature = "verifier")]
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
@@ -89,7 +87,6 @@ pub struct ASCustomizedClaims {
     pub runtime_data: Value,
 }
 
-#[cfg(feature = "verifier")]
 impl fmt::Debug for AttestationEvalEvidenceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AttestationEvalEvidenceRequest")
@@ -117,7 +114,6 @@ impl fmt::Debug for AttestationEvalEvidenceRequest {
     }
 }
 
-#[cfg(feature = "verifier")]
 impl Serialize for AttestationEvalEvidenceRequest {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -145,7 +141,6 @@ impl Serialize for AttestationEvalEvidenceRequest {
     }
 }
 
-#[cfg(feature = "verifier")]
 impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -256,7 +251,6 @@ mod tests {
     use super::*;
     use serde_json;
 
-    #[cfg(feature = "verifier")]
     #[test]
     fn test_debug() {
         let request = AttestationEvalEvidenceRequest {
@@ -292,7 +286,6 @@ mod tests {
         assert!(debug_output.contains("policy_ids: [\"allow\"]"));
     }
 
-    #[cfg(feature = "verifier")]
     #[test]
     fn test_serialize_some_data() {
         let original_request = AttestationEvalEvidenceRequest {
@@ -337,7 +330,6 @@ mod tests {
         assert_eq!(original_request.policy_ids, deserialized.policy_ids);
     }
 
-    #[cfg(feature = "verifier")]
     #[test]
     fn test_serialize_none_hash_algorithm() {
         let original_request = AttestationEvalEvidenceRequest {
@@ -373,7 +365,6 @@ mod tests {
         assert_eq!(original_request.policy_ids, deserialized.policy_ids);
     }
 
-    #[cfg(feature = "verifier")]
     #[test]
     fn test_serialize_none_data() {
         let original_request = AttestationEvalEvidenceRequest {
