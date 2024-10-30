@@ -45,14 +45,14 @@ async fn main() -> Result<()> {
             "/attestation/aa/get_evidence",
             attestation_get_evidence_handler,
         )
-        .post("/signing/sign", secp256k1_sign_handler)
-        .post("/signing/verify", secp256k1_verify_handler)
-        .post("/tx_io/encrypt", tx_io_encrypt_handler)
-        .post("/tx_io/decrypt", tx_io_decrypt_handler)
         .post(
             "/attestation/as/eval_evidence",
             attestation_eval_evidence_handler,
         )
+        .post("/signing/sign", secp256k1_sign_handler)
+        .post("/signing/verify", secp256k1_verify_handler)
+        .post("/tx_io/encrypt", tx_io_encrypt_handler)
+        .post("/tx_io/decrypt", tx_io_decrypt_handler)
         .err_handler_with_info(error_handler)
         .build()
         .unwrap();
