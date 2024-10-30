@@ -53,8 +53,7 @@ mod tests {
     use crate::coco_as::structs::AttestationEvalEvidenceResponse;
     use crate::init_as_policies;
     use crate::utils::test_utils::is_sudo;
-    use crate::{init_coco_aa};
-    use crate::init_coco_as;
+    use crate::{init_coco_aa, init_coco_as};
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
