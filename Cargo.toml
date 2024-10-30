@@ -29,10 +29,9 @@ once_cell = "1.20.2"
 kbs-types = "0.7.0"
 serial_test = "3.1.0"
 bincode = "1.3.3"
+hex = "0.4.3"
+byteorder = "1"
+scroll = { version = "0.11.0", default-features = false, features = ["derive"]}
 
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee", optional = true, default-features = false, features = [ "restful-bin", "rvps-grpc"] }
-
-[features]
-default = []
-verifier = ["attestation-service"]
+attestation-service = { git = "https://github.com/confidential-containers/trustee", default-features = false, features = [ "restful-bin", "rvps-grpc"] }
