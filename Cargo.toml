@@ -34,4 +34,4 @@ byteorder = "1"
 scroll = { version = "0.11.0", default-features = false, features = ["derive"]}
 
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee", default-features = false, features = [ "restful-bin", "rvps-grpc"] }
+attestation-service = { git = "https://github.com/cdrappi/trustee", branch = "rvps-builtin_feature_flag", default-features = false, features = ["restful-bin", "rvps-grpc"] }
