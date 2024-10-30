@@ -37,4 +37,4 @@ attestation-agent = { git = "https://github.com/confidential-containers/guest-co
 attestation-service = { git = "https://github.com/cdrappi/trustee", branch = "rvps-builtin_feature_flag", default-features = false, features = ["restful-bin", "rvps-grpc"] }
 
 [dev-dependencies]
-attestation-service = { git = "https://github.com/confidential-containers/trustee" }
+attestation-service = { git = "https://github.com/cdrappi/trustee", branch = "rvps-builtin_feature_flag" }
