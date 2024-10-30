@@ -207,7 +207,7 @@ pub fn read_secp256k1_keypair(path: &str) -> io::Result<Secp256k1KeyPair> {
 
 /// Returns a sample Secp256k1 key pair for testing purposes.
 pub fn get_sample_secp256k1_keypair() -> Secp256k1KeyPair {
-    read_secp256k1_keypair("./src/utils/ex_keypair.json").unwrap()
+    read_secp256k1_keypair("/persistent/attester/ex_keypair.json").unwrap()
 }
 
 /// Returns a sample Secp256k1 secret key for testing purposes.
