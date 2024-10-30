@@ -26,7 +26,6 @@ use crate::ATTESTATION_SERVICE;
 /// 3. **TEE State Compliance with Attestation Service (AS) Policy:**
 ///    - Ensures that the TEE state aligns with the security policies defined by the attestation service.
 ///    - This includes confirming that the correct software is running within the TEE
-
 pub async fn attestation_eval_evidence_handler(
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
