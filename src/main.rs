@@ -56,7 +56,6 @@ async fn main() -> Result<()> {
         .err_handler_with_info(error_handler)
         .build()
         .unwrap();
-
     let service = RouterService::new(router).unwrap();
     let server = Server::bind(&addr).serve(service);
 
