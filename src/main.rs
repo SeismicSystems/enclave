@@ -49,9 +49,12 @@ async fn main() -> Result<()> {
         .post("/signing/verify", secp256k1_verify_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
         .post("/tx_io/decrypt", tx_io_decrypt_handler)
-        .post("/attestation/as/eval_evidence", attestation_eval_evidence_handler)
+        .post(
+            "/attestation/as/eval_evidence",
+            attestation_eval_evidence_handler,
+        )
         .err_handler_with_info(error_handler);
-    
+
     let router = builder.build().unwrap();
     let service = RouterService::new(router).unwrap();
     let server = Server::bind(&addr).serve(service);
