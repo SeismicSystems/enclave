@@ -16,6 +16,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "bytes",
+ "curl-sys",
  "env_logger 0.11.5",
  "hex",
  "hkdf",
@@ -1357,7 +1358,8 @@ dependencies = [
 [[package]]
 name = "curl-sys"
 version = "0.4.77+curl-8.10.1"
-source = "git+https://github.com/cdrappi/curl-rust?branch=debug-pkgconfig#b446af33d391f5f8561b90478af102f337b270c5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f469e8a5991f277a208224f6c7ad72ecb5f986e36d09ae1f2c1bb9259478a480"
 dependencies = [
  "cc",
  "libc",
