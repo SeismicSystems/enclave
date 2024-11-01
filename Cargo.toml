@@ -32,7 +32,7 @@ bincode = "1.3.3"
 hex = "0.4.3"
 byteorder = "1"
 scroll = { version = "0.11.0", default-features = false, features = ["derive"]}
-curl-sys = { version = "0.4.77+curl-8.10.1", features = ["static-curl"] }
+# curl-sys = { version = "0.4.77+curl-8.10.1", features = ["static-curl"] }
 
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
 attestation-service = { git = "https://github.com/cdrappi/trustee", branch = "rvps-builtin_feature_flag", default-features = false, features = ["restful-bin", "rvps-grpc"] }
