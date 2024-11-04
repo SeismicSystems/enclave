@@ -6,3 +6,32 @@ edition = "2021"
 [lib]
 name = "tee_service_api"
 path = "src/lib.rs"
+
+[dependencies]
+
+aes-gcm = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+hyper = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }
+az-tdx-vtpm = { workspace = true }
+alloy-rlp = { workspace = true, default-features = false }
+routerify = { workspace = true }
+secp256k1 = { workspace = true, features = ["rand", "recovery", "std", "serde"] }
+sha2 = { workspace = true }
+hkdf = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+once_cell = { workspace = true }
+kbs-types = { workspace = true }
+serial_test = { workspace = true }
+bincode = { workspace = true }
+hex = { workspace = true }
+byteorder = { workspace = true }
+scroll = { workspace = true, default-features = false, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+
+
+attestation-service = { git = "https://github.com/confidential-containers/trustee"}

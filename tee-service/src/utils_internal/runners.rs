@@ -5,7 +5,8 @@ use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
-use crate::genesis::structs::GenesisData;
+use tee_service_api::request_types::*;
+use tee_service_api::request_types::genesis::GenesisData;
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;

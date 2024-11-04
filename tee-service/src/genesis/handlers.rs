@@ -3,7 +3,8 @@ use hyper::{Body, Request, Response};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
-use super::structs::*;
+// use super::structs::*;
+use tee_service_api::request_types::genesis::*;
 use crate::utils::crypto_utils::get_sample_secp256k1_pk;
 use crate::ATTESTATION_AGENT;
 
@@ -48,11 +49,9 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tee_service_api::request_types::coco_as::*;
     use crate::{
-        coco_as::{
-            handlers::attestation_eval_evidence_handler,
-            structs::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
-        },
+        coco_as::handlers::attestation_eval_evidence_handler,
         init_as_policies, init_coco_aa, init_coco_as,
         utils_internal::test_utils::is_sudo,
     };

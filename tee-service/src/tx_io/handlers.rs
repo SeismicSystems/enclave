@@ -4,7 +4,7 @@ use std::convert::Infallible;
 use secp256k1::ecdh::SharedSecret;
 use secp256k1::SecretKey;
 
-use super::structs::*;
+use tee_service_api::request_types::tx_io::*;
 use crate::utils::crypto_utils::*;
 use crate::utils::response_utils::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,

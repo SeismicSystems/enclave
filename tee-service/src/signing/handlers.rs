@@ -2,7 +2,7 @@ use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use serde_json::json;
 use std::convert::Infallible;
 
-use super::structs::*;
+use tee_service_api::request_types::signing::*;
 use crate::utils::crypto_utils::*;
 use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
 
