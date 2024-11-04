@@ -122,7 +122,8 @@ mod tests {
 
     #[test]
     fn test_parse_as_token() {
-        let ex_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
+        let ex_token_path = "./tee-service/src/coco_as/examples/as_token.txt";
+        let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
 
         let claims = parse_as_token(&ex_token).unwrap();
 
@@ -231,7 +232,7 @@ mod tests {
 
         // Mock a valid AttestationEvalEvidenceRequest
         let tdx_evidence_encoded =
-            std::fs::read_to_string("./src/coco_as/examples/tdx_encoded_evidence.txt").unwrap();
+            std::fs::read_to_string("./tee-service/src/coco_as/examples/tdx_encoded_evidence.txt").unwrap();
         let tdx_evidence = URL_SAFE_NO_PAD
             .decode(tdx_evidence_encoded.as_str())
             .unwrap();
@@ -340,7 +341,7 @@ mod tests {
 
         // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
-            read_vector_txt("./src/coco_as/examples/yocto_20241023223507.txt".to_string()).unwrap();
+            read_vector_txt("./tee-service/src/coco_as/examples/yocto_20241023223507.txt".to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
@@ -366,7 +367,7 @@ mod tests {
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
-            read_vector_txt("./src/coco_as/examples/yocto_20241025193121.txt".to_string()).unwrap();
+            read_vector_txt("./tee-service/src/coco_as/examples/yocto_20241025193121.txt".to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
