@@ -1,3 +1,4 @@
+use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 /// This file has cargo tests so I can
 /// one click run them and see the output
 /// They are for dev convenience only
@@ -5,7 +6,6 @@
 #[allow(dead_code)]
 #[allow(unused_imports)]
 use crate::genesis::structs::GenesisData;
-use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;

@@ -10,5 +10,3 @@ async fn main() -> Result<()> {
     start_server(addr).await?;
     Ok(())
 }
-
-
