@@ -32,6 +32,4 @@ hex = { workspace = true }
 byteorder = { workspace = true }
 scroll = { workspace = true, default-features = false, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
-
-
-attestation-service = { git = "https://github.com/confidential-containers/trustee"}
+strum = { version = "0.25", features = ["derive"] }

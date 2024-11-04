@@ -4,7 +4,7 @@ mod genesis;
 pub mod server;
 mod signing;
 mod tx_io;
-mod utils_internal;
+mod utils;
 
 use anyhow::Result;
 use attestation_agent::AttestationAgent;

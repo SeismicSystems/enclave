@@ -45,6 +45,8 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
     Ok(Response::new(Body::from(response_json)))
 }
 
+
+
 #[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
@@ -52,14 +54,19 @@ mod tests {
     use tee_service_api::request_types::coco_as::*;
     use crate::{
         coco_as::handlers::attestation_eval_evidence_handler,
+        coco_as::into_original::*,
         init_as_policies, init_coco_aa, init_coco_as,
-        utils_internal::test_utils::is_sudo,
+        utils::test_utils::is_sudo,
     };
-    use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
+
+    use attestation_service::Data as OriginalData;
+    use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+    use tee_service_api::request_types::coco_as::Data as ApiData;
+    use tee_service_api::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
 
     #[tokio::test]
     #[serial(attestation_agent)]
@@ -126,7 +133,7 @@ mod tests {
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: genesis_data_response.evidence,
             tee: Tee::AzTdxVtpm,
-            runtime_data: Some(Data::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
+            runtime_data: Some(ApiData::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["allow".to_string()],
         };
