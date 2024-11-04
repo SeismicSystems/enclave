@@ -5,6 +5,7 @@
 //! traits define the API and implementation for the TEE client.
 #![allow(async_fn_in_trait)]
 pub mod http_client;
+pub mod mock_server;
 
 use crate::request_types::{
     coco_aa::*,
