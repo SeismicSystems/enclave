@@ -3,8 +3,8 @@ use serde_json::json;
 use std::convert::Infallible;
 
 use tee_service_api::request_types::signing::*;
-use crate::utils::crypto_utils::*;
-use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
+use tee_service_api::crypto::*;
+use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
 
 /// Handles request to sign a message using secp256k1.
 ///

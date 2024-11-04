@@ -5,7 +5,7 @@ use serde_json::json;
 use std::convert::Infallible;
 
 use tee_service_api::request_types::coco_as::*;
-use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
+use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use crate::ATTESTATION_SERVICE;
 
 /// Handles attestation evidence verification.

@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 // use super::structs::*;
 use tee_service_api::request_types::genesis::*;
-use crate::utils::crypto_utils::get_sample_secp256k1_pk;
+use tee_service_api::crypto::get_sample_secp256k1_pk;
 use crate::ATTESTATION_AGENT;
 
 /// Handles request to get genesis data.

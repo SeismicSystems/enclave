@@ -4,7 +4,6 @@ mod genesis;
 pub mod server;
 mod signing;
 mod tx_io;
-pub mod utils;
 mod utils_internal;
 
 use anyhow::Result;
