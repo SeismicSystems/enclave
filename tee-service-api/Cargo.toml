@@ -25,3 +25,4 @@ byteorder = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { version = "0.25", features = ["derive"] }
 bincode = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = ["blocking"]}

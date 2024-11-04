@@ -1,28 +1,16 @@
-//! This module provides functionality for encryption and decryption
-//! using a Trusted Execution Environment (TEE) client.
+//! This module provides a client for interacting with a TEE Service server.
 //!
 //! The TEE client makes HTTP requests to a TEE server to perform
-//! encryption and decryption operations. The main structures and
+//! operations, e.g. encryption and decryption operations. The main structures and
 //! traits define the API and implementation for the TEE client.
 #![allow(async_fn_in_trait)]
 
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    str::FromStr,
-};
-
-use crate::types::{
-    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
-};
-
-use aes_gcm::{Aes256Gcm, Key};
-use alloy_rlp::{Decodable, Encodable, Error};
-use hkdf::Hkdf;
-use hyper::Response;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use alloy_rlp::{Decodable, Encodable};
 use reqwest::Client;
-use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
-use sha2::{Digest, Sha256};
-use tokio::task;
+use secp256k1::PublicKey;
+
+use crate::request_types::tx_io::*;
 
 pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
