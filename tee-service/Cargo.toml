@@ -30,9 +30,14 @@ log = { workspace = true }
 env_logger = { workspace = true }
 once_cell = { workspace = true }
 kbs-types = { workspace = true }
-serial_test = { workspace = true }
 bincode = { workspace = true }
 hex = { workspace = true }
 byteorder = { workspace = true }
 scroll = { workspace = true, default-features = false, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
+
+serial_test = "3.1.0"
+
+
+[package.metadata.cargo-udeps]
+ignore = ["serial_test"]
