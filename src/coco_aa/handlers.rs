@@ -58,7 +58,7 @@ pub async fn attestation_get_evidence_handler(
 mod tests {
     use super::*;
     use crate::init_coco_aa;
-    use crate::utils::test_utils::is_sudo;
+    use crate::utils_internal::test_utils::is_sudo;
     use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
     use serial_test::serial;

@@ -54,7 +54,7 @@ mod tests {
             structs::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
         },
         init_as_policies, init_coco_aa, init_coco_as,
-        utils::test_utils::is_sudo,
+        utils_internal::test_utils::is_sudo,
     };
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};

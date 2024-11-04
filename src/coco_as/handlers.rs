@@ -113,8 +113,7 @@ fn bad_evidence_response(e: anyhow::Error) -> Response<Body> {
 mod tests {
     use super::*;
     use crate::init_coco_as;
-    use crate::utils::test_utils::is_sudo;
-    use crate::utils::test_utils::read_vector_txt;
+    use crate::utils_internal::test_utils::{is_sudo, read_vector_txt};
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;

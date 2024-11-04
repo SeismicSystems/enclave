@@ -5,7 +5,7 @@
 #[allow(dead_code)]
 #[allow(unused_imports)]
 use crate::genesis::structs::GenesisData;
-use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
+use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -19,7 +19,7 @@ use std::str::FromStr;
 fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
     // let path = "./src/coco_as/examples/yocto_20241023223507.txt";
     let path = "./src/coco_as/examples/yocto_20241025193121.txt";
-    let tdx_evidence: Vec<u8> = crate::utils::test_utils::read_vector_txt(path.to_string())?;
+    let tdx_evidence: Vec<u8> = super::test_utils::read_vector_txt(path.to_string())?;
 
     get_tdx_evidence_claims(tdx_evidence)?;
 
