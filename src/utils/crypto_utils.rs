@@ -7,10 +7,8 @@ use anyhow::anyhow;
 use hkdf::Hkdf;
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sha2::{Digest, Sha256};
-use std::fs::File;
-use std::io::{self, BufReader};
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
@@ -197,35 +195,18 @@ pub fn secp256k1_verify(
     }
 }
 
-/// Reads a secp256k1 keypair from a JSON file.
-///
-/// This function reads a secp256k1 keypair from a file in JSON format.
-/// It returns a `Secp256k1KeyPair` containing the public and private keys.
-///
-/// # Arguments
-/// * `path` - The file path to the keypair JSON file.
-///
-/// # Returns
-/// A `Result` containing the `Secp256k1KeyPair`, or an I/O error if the file could not be read or parsed.
-pub fn read_secp256k1_keypair(path: &str) -> io::Result<Secp256k1KeyPair> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    serde_json::from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-}
-
-/// Returns a sample Secp256k1 key pair for testing purposes.
-pub fn get_sample_secp256k1_keypair() -> Secp256k1KeyPair {
-    read_secp256k1_keypair("./src/utils/ex_keypair.json").unwrap()
-}
-
 /// Returns a sample Secp256k1 secret key for testing purposes.
 pub fn get_sample_secp256k1_sk() -> secp256k1::SecretKey {
-    let keypair = get_sample_secp256k1_keypair();
-    keypair.secret_key
+    secp256k1::SecretKey::from_str(
+        "311d54d3bf8359c70827122a44a7b4458733adce3c51c6b59d9acfce85e07505",
+    )
+    .unwrap()
 }
 
 /// Returns a sample Secp256k1 public key for testing purposes.
 pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
-    let keypair = get_sample_secp256k1_keypair();
-    keypair.public_key
+    secp256k1::PublicKey::from_str(
+        "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
+    )
+    .unwrap()
 }

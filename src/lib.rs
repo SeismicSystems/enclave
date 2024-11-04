@@ -4,7 +4,7 @@ mod genesis;
 pub mod server;
 mod signing;
 mod tx_io;
-pub mod utils;
+mod utils;
 
 /// Re-export the request and response structs
 /// so that they can be used in other crates
