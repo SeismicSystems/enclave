@@ -52,10 +52,9 @@ pub async fn attestation_eval_evidence_handler(
     };
 
     // Convert the request's runtime data hash algorithm to the original enum
-    let runtime_data: Option<OriginalData> = match evaluate_request.runtime_data {
-        Some(data) => Some(data.into_original()),
-        None => None,
-    };
+    let runtime_data: Option<OriginalData> = evaluate_request
+        .runtime_data
+        .map(|data| data.into_original());
     let runtime_data_hash_algorithm: OriginalHashAlgorithm =
         match evaluate_request.runtime_data_hash_algorithm {
             Some(alg) => alg.into_original(),
@@ -235,8 +234,7 @@ mod tests {
 
         // Mock a valid AttestationEvalEvidenceRequest
         let tdx_evidence_encoded =
-            std::fs::read_to_string("../examples/tdx_encoded_evidence.txt")
-                .unwrap();
+            std::fs::read_to_string("../examples/tdx_encoded_evidence.txt").unwrap();
         let tdx_evidence = URL_SAFE_NO_PAD
             .decode(tdx_evidence_encoded.as_str())
             .unwrap();
@@ -344,10 +342,8 @@ mod tests {
             .expect("Failed to initialize AttestationService");
 
         // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
-        let az_tdx_evidence: Vec<u8> = read_vector_txt(
-            "../examples/yocto_20241023223507.txt".to_string(),
-        )
-        .unwrap();
+        let az_tdx_evidence: Vec<u8> =
+            read_vector_txt("../examples/yocto_20241023223507.txt".to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
@@ -372,10 +368,8 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
-        let az_tdx_evidence: Vec<u8> = read_vector_txt(
-            "../examples/yocto_20241025193121.txt".to_string(),
-        )
-        .unwrap();
+        let az_tdx_evidence: Vec<u8> =
+            read_vector_txt("../examples/yocto_20241025193121.txt".to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,

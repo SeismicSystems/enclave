@@ -2,10 +2,9 @@ use attestation_agent::AttestationAPIs;
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
-
-use tee_service_api::request_types::coco_aa::*;
-use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use crate::ATTESTATION_AGENT;
+use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
+use tee_service_api::request_types::coco_aa::*;
 
 /// Handles attestation evidence request.
 ///

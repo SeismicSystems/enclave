@@ -9,7 +9,6 @@ use std::fmt;
 use std::str::FromStr;
 use strum::{AsRefStr, Display, EnumString};
 
-
 /// Hash algorithms used to calculate runtime/init data binding
 #[derive(Debug, Display, EnumString, AsRefStr)]
 pub enum HashAlgorithm {

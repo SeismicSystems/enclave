@@ -4,9 +4,9 @@ use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
 // use super::structs::*;
-use tee_service_api::request_types::genesis::*;
-use tee_service_api::crypto::get_sample_secp256k1_pk;
 use crate::ATTESTATION_AGENT;
+use tee_service_api::crypto::get_sample_secp256k1_pk;
+use tee_service_api::request_types::genesis::*;
 
 /// Handles request to get genesis data.
 ///
@@ -45,23 +45,19 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
     Ok(Response::new(Body::from(response_json)))
 }
 
-
-
 #[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tee_service_api::request_types::coco_as::*;
     use crate::{
-        coco_as::handlers::attestation_eval_evidence_handler,
-        coco_as::into_original::*,
-        init_as_policies, init_coco_aa, init_coco_as,
-        utils::test_utils::is_sudo,
+        coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
+        init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
     };
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
+    use tee_service_api::request_types::coco_as::*;
 
     use attestation_service::Data as OriginalData;
     use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
