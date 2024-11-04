@@ -4606,7 +4606,6 @@ dependencies = [
  "aes-gcm",
  "alloy-rlp",
  "anyhow",
- "az-tdx-vtpm",
  "base64 0.22.1",
  "bincode",
  "byteorder",
