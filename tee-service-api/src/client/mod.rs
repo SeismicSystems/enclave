@@ -15,53 +15,55 @@ use crate::request_types::{
     tx_io::*
 };
 
-/// Trait for the API of the TEE client
 pub trait TeeAPI {
-    // Gets the genesis data for the chain
     async fn genesis_data(
         &self,
-        payload: GenesisData,
-    ) -> Result<GenesisDataResponse, anyhow::Error>;
+        _payload: GenesisData,
+    ) -> Result<GenesisDataResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
     
-    // Gets an attestation for the requested data
     async fn attestation_get_evidence(
         &self,
-        payload: AttestationGetEvidenceRequest,
-    ) -> Result<AttestationGetEvidenceResponse, anyhow::Error>;
+        _payload: AttestationGetEvidenceRequest,
+    ) -> Result<AttestationGetEvidenceResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 
-    // Evaluates an attestation evidence
     async fn attestation_eval_evidence(
         &self,
-        payload: AttestationEvalEvidenceRequest,
-    ) -> Result<AttestationEvalEvidenceResponse, anyhow::Error>;
+        _payload: AttestationEvalEvidenceRequest,
+    ) -> Result<AttestationEvalEvidenceResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 
-    // signs the requested data with a secp256k1 key
     async fn signing_sign(
         &self,
-        payload: Secp256k1SignRequest,
-    ) -> Result<Secp256k1SignResponse, anyhow::Error>;
+        _payload: Secp256k1SignRequest,
+    ) -> Result<Secp256k1SignResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 
-    // verifies the signed data with a secp256k1 key
     async fn signing_verify(
         &self,
-        payload: Secp256k1VerifyRequest,
-    ) -> Result<Secp256k1VerifyResponse, anyhow::Error>;
+        _payload: Secp256k1VerifyRequest,
+    ) -> Result<Secp256k1VerifyResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 
-    /// Encrypts the given data using the public key included in the request
-    /// and the private key of the TEE server
     async fn tx_io_encrypt(
         &self,
-        payload: IoEncryptionRequest,
-    ) -> Result<IoEncryptionResponse, anyhow::Error>;
+        _payload: IoEncryptionRequest,
+    ) -> Result<IoEncryptionResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 
-    /// Decrypts the given data using the public key included in the request
-    /// and the private key of the TEE server
     async fn tx_io_decrypt(
         &self,
-        payload: IoDecryptionRequest,
-    ) -> Result<IoDecryptionResponse, anyhow::Error>;
-
-
+        _payload: IoDecryptionRequest,
+    ) -> Result<IoDecryptionResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 }
 
 pub trait WalletAPI {
