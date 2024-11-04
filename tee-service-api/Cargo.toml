@@ -1,0 +1,8 @@
+[package]
+name = "tee_service_api"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "tee_service_api"
+path = "src/lib.rs"
