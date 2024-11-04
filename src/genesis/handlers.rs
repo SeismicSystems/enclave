@@ -48,7 +48,7 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::attestation_eval_evidence_handler;
+    use crate::coco_as::handlers::attestation_eval_evidence_handler;
     use crate::coco_as::structs::AttestationEvalEvidenceRequest;
     use crate::coco_as::structs::AttestationEvalEvidenceResponse;
     use crate::init_as_policies;

@@ -1,7 +1,11 @@
 [package]
-name = "TeeService"
+name = "tee_service"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+name = "tee_service"
+path = "src/lib.rs"
 
 # Instead of getting csv-rs from github, use the forked version from Seismic's very own cdrappi
 [patch.'https://github.com/openanolis/csv-rs']
