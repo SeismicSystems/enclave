@@ -126,6 +126,7 @@ async fn init_coco_as(config: Option<Config>) -> Result<()> {
 
     let config = config.unwrap_or_default();
 
+    println!("AS_WORK_DIR = {}", std::env::var("AS_WORK_DIR").unwrap_or("no value for AS_WORK_DIR".into()));
     // Initialize the AttestationService
     let coco_as = AttestationService::new(config)
         .await
