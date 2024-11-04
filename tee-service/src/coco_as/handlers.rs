@@ -125,7 +125,7 @@ mod tests {
             Ok(path) => println!("Current directory: {}", path.display()),
             Err(e) => eprintln!("Error getting current directory: {}", e),
         }
-        let ex_token_path = "./src/coco_as/examples/as_token.txt";
+        let ex_token_path = "../examples/as_token.txt";
         let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
 
         let claims = parse_as_token(&ex_token).unwrap();
@@ -235,7 +235,7 @@ mod tests {
 
         // Mock a valid AttestationEvalEvidenceRequest
         let tdx_evidence_encoded =
-            std::fs::read_to_string("./tee-service/src/coco_as/examples/tdx_encoded_evidence.txt")
+            std::fs::read_to_string("../examples/tdx_encoded_evidence.txt")
                 .unwrap();
         let tdx_evidence = URL_SAFE_NO_PAD
             .decode(tdx_evidence_encoded.as_str())
@@ -345,7 +345,7 @@ mod tests {
 
         // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> = read_vector_txt(
-            "./tee-service/src/coco_as/examples/yocto_20241023223507.txt".to_string(),
+            "../examples/yocto_20241023223507.txt".to_string(),
         )
         .unwrap();
         let runtime_data_bytes = vec![
@@ -373,7 +373,7 @@ mod tests {
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> = read_vector_txt(
-            "./tee-service/src/coco_as/examples/yocto_20241025193121.txt".to_string(),
+            "../examples/yocto_20241025193121.txt".to_string(),
         )
         .unwrap();
         let runtime_data_bytes = vec![
