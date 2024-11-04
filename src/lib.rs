@@ -5,15 +5,15 @@ pub mod signing;
 pub mod tx_io;
 pub mod utils;
 
+use anyhow::Result;
+use attestation_agent::AttestationAgent;
+use attestation_service::config::Config;
+use attestation_service::AttestationService;
+use base64::Engine;
+use coco_as::policies;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use attestation_agent::AttestationAgent;
-use attestation_service::AttestationService;
-use attestation_service::config::Config;
-use coco_as::policies;
-use anyhow::Result;
-use base64::Engine;
 
 pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();

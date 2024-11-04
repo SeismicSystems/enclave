@@ -48,12 +48,14 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::coco_as::handlers::attestation_eval_evidence_handler;
-    use crate::coco_as::structs::AttestationEvalEvidenceRequest;
-    use crate::coco_as::structs::AttestationEvalEvidenceResponse;
-    use crate::init_as_policies;
-    use crate::utils::test_utils::is_sudo;
-    use crate::{init_coco_aa, init_coco_as};
+    use crate::{
+        coco_as::{
+            handlers::attestation_eval_evidence_handler,
+            structs::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
+        },
+        init_as_policies, init_coco_aa, init_coco_as,
+        utils::test_utils::is_sudo,
+    };
     use attestation_service::Data;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;

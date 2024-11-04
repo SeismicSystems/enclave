@@ -5,9 +5,9 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 
 use tee_service::{
-    coco_aa::handlers::*,
-    coco_as::handlers::*,
-    genesis::handlers::*,
+    coco_aa::handlers::*, 
+    coco_as::handlers::*, 
+    genesis::handlers::*, 
     signing::handlers::*,
     tx_io::handlers::*,
 };
@@ -75,4 +75,3 @@ async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<B
         .body(Body::from(format!("Something went wrong: {}", err)))
         .unwrap()
 }
-
