@@ -526,7 +526,7 @@ dependencies = [
 [[package]]
 name = "attestation-service"
 version = "0.1.0"
-source = "git+https://github.com/cdrappi/trustee?branch=rvps-builtin_feature_flag#0d70d5d53a51f523076b20722a06f787514f28af"
+source = "git+https://github.com/confidential-containers/trustee#aec929617fa383f75723499b2e02bfd288ee82bf"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -3586,7 +3586,7 @@ dependencies = [
 [[package]]
 name = "reference-value-provider-service"
 version = "0.1.0"
-source = "git+https://github.com/cdrappi/trustee?branch=rvps-builtin_feature_flag#0d70d5d53a51f523076b20722a06f787514f28af"
+source = "git+https://github.com/confidential-containers/trustee#aec929617fa383f75723499b2e02bfd288ee82bf"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5151,7 +5151,7 @@ dependencies = [
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/cdrappi/trustee?branch=rvps-builtin_feature_flag#0d70d5d53a51f523076b20722a06f787514f28af"
+source = "git+https://github.com/confidential-containers/trustee#aec929617fa383f75723499b2e02bfd288ee82bf"
 dependencies = [
  "anyhow",
  "asn1-rs",
