@@ -13,7 +13,7 @@ csv-rs = { git = "https://github.com/cdrappi/csv-rs.git", branch = "bump-openssl
 
 [dependencies]
 aes-gcm = "0.10"
-tokio = { version = "1.41", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 base64 = "0.22"
