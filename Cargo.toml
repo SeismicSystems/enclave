@@ -35,7 +35,7 @@ scroll = { version = "0.11.0", default-features = false, features = ["derive"]}
 # curl-sys = { version = "0.4.77+curl-8.10.1", features = ["static-curl"] }
 
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["tdx-verifier"] }
+attestation-service = { git = "https://github.com/confidential-containers/trustee" }
 
 # [patch.crates-io]
 # curl-sys = { git = "https://github.com/cdrappi/curl-rust", branch = "debug-pkgconfig" }
