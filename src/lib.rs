@@ -1,9 +1,20 @@
-pub mod coco_aa;
-pub mod coco_as;
-pub mod genesis;
-pub mod signing;
-pub mod tx_io;
+mod coco_aa;
+mod coco_as;
+mod genesis;
+pub mod server;
+mod signing;
+mod tx_io;
 pub mod utils;
+
+/// Re-export the request and response structs
+/// so that they can be used in other crates
+pub mod request_types {
+    pub use crate::coco_aa::structs::*;
+    pub use crate::coco_as::structs::*;
+    pub use crate::genesis::structs::*;
+    pub use crate::signing::structs::*;
+    pub use crate::tx_io::structs::*;
+}
 
 use anyhow::Result;
 use attestation_agent::AttestationAgent;
