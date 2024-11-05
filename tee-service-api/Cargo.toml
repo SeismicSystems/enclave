@@ -2,6 +2,7 @@
 name = "tee_service_api"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/SeismicSystems/TEEService"
 
 [lib]
 name = "tee_service_api"
