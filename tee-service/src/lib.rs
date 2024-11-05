@@ -3,6 +3,7 @@ mod coco_as;
 mod genesis;
 pub mod server;
 mod signing;
+mod snapsync;
 mod tx_io;
 mod utils;
 
