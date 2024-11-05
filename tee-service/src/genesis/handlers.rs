@@ -1,11 +1,7 @@
-use attestation_agent::AttestationAPIs;
 use hyper::{Body, Request, Response};
-use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
-// use super::structs::*;
-use crate::ATTESTATION_AGENT;
-use tee_service_api::crypto::get_sample_secp256k1_pk;
+use super::att_genesis_data;
 use tee_service_api::request_types::genesis::*;
 
 /// Handles request to get genesis data.
@@ -16,25 +12,7 @@ use tee_service_api::request_types::genesis::*;
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
 pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>, Infallible> {
-    // For now, we load the keypair from a file
-    let io_pk = get_sample_secp256k1_pk();
-
-    // For now the genesis data is just the public key of the IO encryption keypair
-    // But this is expected to change in the future
-    let genesis_data = GenesisData { io_pk };
-
-    // hash the genesis data and attest to it
-    let genesis_data_bytes = genesis_data.to_bytes();
-    let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
-
-    // Get the evidence from the attestation agent
-    let aa_clone = ATTESTATION_AGENT.clone();
-    let coco_aa = aa_clone.get().unwrap();
-    let evidence = coco_aa
-        .get_evidence(&hash_bytes)
-        .await
-        .map_err(|e| format!("Error while getting evidence: {:?}", e))
-        .unwrap();
+    let (genesis_data, evidence) = att_genesis_data().await.unwrap();
 
     // Return the evidence as a response
     let response_body = GenesisDataResponse {
@@ -57,6 +35,7 @@ mod tests {
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
+    use sha2::{Digest, Sha256};
     use tee_service_api::request_types::coco_as::*;
 
     use attestation_service::Data as OriginalData;
