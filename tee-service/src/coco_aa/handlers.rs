@@ -1,8 +1,7 @@
-use attestation_agent::AttestationAPIs;
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
-use crate::ATTESTATION_AGENT;
+use super::attest;
 use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use tee_service_api::request_types::coco_aa::*;
 
@@ -41,11 +40,8 @@ pub async fn attestation_get_evidence_handler(
     };
 
     // Get the evidence from the attestation agent
-    let coco_aa = ATTESTATION_AGENT.get().unwrap();
-    let evidence = coco_aa
-        .get_evidence(evidence_request.runtime_data.as_slice())
+    let evidence = attest(evidence_request.runtime_data.as_slice())
         .await
-        .map_err(|e| format!("Error while getting evidence: {:?}", e))
         .unwrap();
 
     // Return the evidence as a response
