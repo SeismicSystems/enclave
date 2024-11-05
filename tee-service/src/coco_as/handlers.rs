@@ -1,8 +1,8 @@
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
-use super::{eval_att_evidence, parse_as_token_claims};
 use super::into_original::*;
+use super::{eval_att_evidence, parse_as_token_claims};
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use tee_service_api::errors::{

@@ -7,7 +7,7 @@ pub trait MockServer {
         &self,
         _req: Request<Body>,
     ) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
@@ -15,32 +15,32 @@ pub trait MockServer {
         &self,
         _req: Request<Body>,
     ) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
     fn genesis_get_data_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
     fn secp256k1_sign_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
     fn secp256k1_verify_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
     fn tx_io_encrypt_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
     fn tx_io_decrypt_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let body = Body::from(format!("Error: Mock Unimplimented"));
+        let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 }

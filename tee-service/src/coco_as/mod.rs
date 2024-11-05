@@ -22,7 +22,8 @@ pub async fn eval_att_evidence(
 ) -> Result<String, anyhow::Error> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let readable_as = coco_as.read().await;
-    let eval_result = readable_as
+
+    readable_as
         .evaluate(
             evidence,
             tee,
@@ -32,8 +33,7 @@ pub async fn eval_att_evidence(
             init_data_hash_algorithm,
             policy_ids,
         )
-        .await;
-    eval_result
+        .await
 }
 
 // parses the b64 JWT token retuned by the attestation service
