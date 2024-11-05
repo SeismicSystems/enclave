@@ -1,99 +1,27 @@
 mod coco_aa;
 mod coco_as;
 mod genesis;
+pub mod server;
 mod signing;
 mod tx_io;
 mod utils;
 
 use anyhow::Result;
-use hyper::{Body, Request, Response, Server, StatusCode};
+use attestation_agent::AttestationAgent;
+use attestation_service::config::Config;
+use attestation_service::AttestationService;
+use base64::Engine;
+use coco_as::policies;
 use once_cell::sync::OnceCell;
-use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
-use std::convert::Infallible;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use coco_aa::handlers::*;
-use coco_as::{handlers::*, policies};
-use genesis::handlers::*;
-use signing::handlers::*;
-use tx_io::handlers::*;
-
-use attestation_agent::AttestationAgent;
-use attestation_service::{config::Config, AttestationService};
-use base64::Engine;
-
-static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
-static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    // Initialize the logger
-    env_logger::init();
-
-    // Initialize the Attestation Agent and Attestation Service
-    init_coco_aa()?;
-    init_coco_as(None).await?;
-    // init_as_policies().await?;
-
-    // create the server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
-    let router = Router::builder()
-        .middleware(Middleware::pre(logger))
-        .get("/genesis/data", genesis_get_data_handler)
-        .post(
-            "/attestation/aa/get_evidence",
-            attestation_get_evidence_handler,
-        )
-        .post(
-            "/attestation/as/eval_evidence",
-            attestation_eval_evidence_handler,
-        )
-        .post("/signing/sign", secp256k1_sign_handler)
-        .post("/signing/verify", secp256k1_verify_handler)
-        .post("/tx_io/encrypt", tx_io_encrypt_handler)
-        .post("/tx_io/decrypt", tx_io_decrypt_handler)
-        .err_handler_with_info(error_handler)
-        .build()
-        .unwrap();
-    let service = RouterService::new(router).unwrap();
-    let server = Server::bind(&addr).serve(service);
-
-    println!("Listening on http://{}\n", addr);
-
-    if let Err(e) = server.await {
-        eprintln!("Server error: {}", e);
-    }
-
-    Ok(())
-}
-
-// A middleware which logs an http request.
-async fn logger(req: Request<Body>) -> Result<Request<Body>, Infallible> {
-    println!(
-        "{} {} {}",
-        req.remote_addr(),
-        req.method(),
-        req.uri().path()
-    );
-    Ok(req)
-}
-
-// Define an error handler function which will accept the `routerify::Error`
-// and the request information and generates an appropriate response.
-async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<Body> {
-    println!("\n\nError: {:?}\n\n", err);
-    eprintln!("{}", err);
-    Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Body::from(format!("Something went wrong: {}", err)))
-        .unwrap()
-}
+pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
+pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
 // initializes the AttestationAgent
 // which is reponsible for generating attestations
-fn init_coco_aa() -> Result<()> {
+pub fn init_coco_aa() -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
     if ATTESTATION_AGENT.get().is_some() {
@@ -112,7 +40,7 @@ fn init_coco_aa() -> Result<()> {
 
 // initializes the AttestationService
 // which is reponsible for evaluating attestations
-async fn init_coco_as(config: Option<Config>) -> Result<()> {
+pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
     // Check if the service is already initialized
     // This helps with multithreaded testing
     if ATTESTATION_SERVICE.get().is_some() {

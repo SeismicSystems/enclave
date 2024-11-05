@@ -1,18 +1,14 @@
 name: CI
-
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   rustfmt:
     runs-on: ubuntu-latest
@@ -26,7 +22,6 @@ jobs:
           
       - name: Check formatting
         run: cargo fmt --all --check
-
   build:
     runs-on: self-hosted
     timeout-minutes: 30
@@ -45,25 +40,24 @@ jobs:
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
    
-      - name: Run tests
+      - name: Run tests for tee-service
         run: |
-          # Compile tests
-          echo "Compiling tests..."
-          cargo test --no-run
-          
-          # Get binary path
-          BINARY_PATH=$(cargo test --no-run 2>&1 | grep -oP "target/debug/deps/TeeService-[a-z0-9]+(?!\.d)" | head -n1)
-          
-          # Debug output
-          echo "Found binary path: $BINARY_PATH"
-          
-          # Check if binary was found
-          if [ -n "$BINARY_PATH" ]; then
-            echo "Running binary with sudo..."
-            # Run binary with sudo
-            sudo ./"$BINARY_PATH"
-          # else output error
-          else
-            echo "Error: Binary not found in cargo output"
-            exit 1
-          fi
+          cd tee-service
+          OUTPUT=$(cargo test --no-run 2>&1)
+          echo "$OUTPUT"
+          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*tee_service-[a-z0-9]*')
+          for binary in "${binaries[@]}"; do
+            echo "Running binary: $binary"
+            sudo "$binary"
+          done
+
+      - name: Run tests for tee-service-api
+        run: |
+          cd tee-service-api
+          OUTPUT=$(cargo test --no-run 2>&1)
+          echo "$OUTPUT"
+          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*tee_service_api-[a-z0-9]*')
+          for binary in "${binaries[@]}"; do
+            echo "Running binary: $binary"
+            sudo "$binary"
+          done
