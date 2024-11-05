@@ -51,7 +51,9 @@ jobs:
       - name: Run tests for tee-service
         run: |
           cd tee-service
-          for binary in $(find ../target/debug/deps/ -type f -executable -name "tee_service-[a-z0-9]*" ! -name "*.d"); do
+          # Capture the output of cargo test --no-run and filter for relevant binaries
+          binaries=$(cargo test --no-run 2>&1 | grep -oP "../target/debug/deps/tee_service-[a-z0-9]+(?!\.d)")
+          for binary in $binaries; do
             echo "Running binary: $binary"
             sudo "$binary"
           done
@@ -59,9 +61,10 @@ jobs:
       - name: Run tests for tee-service-api
         run: |
           cd tee-service-api
-          for binary in $(find ../target/debug/deps/ -type f -executable -name "tee_service_api-[a-z0-9]*" ! -name "*.d"); do
+          # Capture the output of cargo test --no-run and filter for relevant binaries
+          binaries=$(cargo test --no-run 2>&1 | grep -oP "../target/debug/deps/tee_service_api-[a-z0-9]+(?!\.d)")
+          for binary in $binaries; do
             echo "Running binary: $binary"
             sudo "$binary"
           done
-
 
