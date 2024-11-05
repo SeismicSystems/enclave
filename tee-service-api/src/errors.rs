@@ -22,6 +22,19 @@ pub fn invalid_json_body_resp() -> Response<Body> {
         .unwrap()
 }
 
+/// Returns a 400 Bad Request response with the error message
+/// describing why the evaluation failed,
+/// Ex the evidence is invalid, doesn't match the request policy, etc
+pub fn bad_evidence_response(e: anyhow::Error) -> Response<Body> {
+    let error_message = format!("Error while evaluating evidence: {:?}", e);
+    let error_response = json!({ "error": error_message }).to_string();
+
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(Body::from(error_response))
+        .unwrap()
+}
+
 // Returns 422 Unprocessable Entity
 // Meant to be used if decrypting the ciphertext fails
 pub fn invalid_ciphertext_resp(e: Error) -> Response<Body> {

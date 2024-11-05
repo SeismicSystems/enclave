@@ -1,12 +1,17 @@
-use attestation_service::HashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
-use serde_json::json;
+use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
-use super::structs::*;
-use crate::utils::response_utils::{invalid_json_body_resp, invalid_req_body_resp};
+use super::into_original::*;
 use crate::ATTESTATION_SERVICE;
+use attestation_service::Data as OriginalData;
+use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+use tee_service_api::errors::{
+    bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
+};
+use tee_service_api::request_types::coco_as::*;
+
+use super::into_original::IntoOriginalHashAlgorithm;
 
 /// Handles attestation evidence verification.
 ///
@@ -46,10 +51,15 @@ pub async fn attestation_eval_evidence_handler(
         }
     };
 
-    let runtime_data_hash_algorithm = match evaluate_request.runtime_data_hash_algorithm {
-        Some(alg) => alg,
-        None => HashAlgorithm::Sha256,
-    };
+    // Convert the request's runtime data hash algorithm to the original enum
+    let runtime_data: Option<OriginalData> = evaluate_request
+        .runtime_data
+        .map(|data| data.into_original());
+    let runtime_data_hash_algorithm: OriginalHashAlgorithm =
+        match evaluate_request.runtime_data_hash_algorithm {
+            Some(alg) => alg.into_original(),
+            None => OriginalHashAlgorithm::Sha256,
+        };
 
     // Call the evaluate function of the attestation service
     // Gets back a b64 JWT web token of the form "header.claims.signature"
@@ -59,10 +69,10 @@ pub async fn attestation_eval_evidence_handler(
         .evaluate(
             evaluate_request.evidence,
             evaluate_request.tee,
-            evaluate_request.runtime_data,
+            runtime_data,
             runtime_data_hash_algorithm,
-            None,                  // hardcoded because AzTdxVtpm doesn't support init data
-            HashAlgorithm::Sha256, // dummy val to make this compile
+            None, // hardcoded because AzTdxVtpm doesn't support init data
+            OriginalHashAlgorithm::Sha256, // dummy val to make this compile
             evaluate_request.policy_ids,
         )
         .await;
@@ -96,34 +106,26 @@ fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     Ok(claims)
 }
 
-/// Returns a 400 Bad Request response with the error message
-/// describing why the evaluation failed,
-/// Ex the evidence is invalid, doesn't match the request policy, etc
-fn bad_evidence_response(e: anyhow::Error) -> Response<Body> {
-    let error_message = format!("Error while evaluating evidence: {:?}", e);
-    let error_response = json!({ "error": error_message }).to_string();
-
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Body::from(error_response))
-        .unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::init_coco_as;
-    use crate::utils::test_utils::is_sudo;
-    use crate::utils::test_utils::read_vector_txt;
-    use attestation_service::Data;
+    use crate::utils::test_utils::{is_sudo, read_vector_txt};
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
 
+    use std::env;
+
     #[test]
     fn test_parse_as_token() {
-        let ex_token = std::fs::read_to_string("./src/coco_as/examples/as_token.txt").unwrap();
+        match env::current_dir() {
+            Ok(path) => println!("Current directory: {}", path.display()),
+            Err(e) => eprintln!("Error getting current directory: {}", e),
+        }
+        let ex_token_path = "../examples/as_token.txt";
+        let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
 
         let claims = parse_as_token(&ex_token).unwrap();
 
@@ -232,7 +234,7 @@ mod tests {
 
         // Mock a valid AttestationEvalEvidenceRequest
         let tdx_evidence_encoded =
-            std::fs::read_to_string("./src/coco_as/examples/tdx_encoded_evidence.txt").unwrap();
+            std::fs::read_to_string("../examples/tdx_encoded_evidence.txt").unwrap();
         let tdx_evidence = URL_SAFE_NO_PAD
             .decode(tdx_evidence_encoded.as_str())
             .unwrap();
@@ -341,7 +343,7 @@ mod tests {
 
         // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
-            read_vector_txt("./src/coco_as/examples/yocto_20241023223507.txt".to_string()).unwrap();
+            read_vector_txt("../examples/yocto_20241023223507.txt".to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
@@ -367,7 +369,7 @@ mod tests {
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
-            read_vector_txt("./src/coco_as/examples/yocto_20241025193121.txt".to_string()).unwrap();
+            read_vector_txt("../examples/yocto_20241025193121.txt".to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,

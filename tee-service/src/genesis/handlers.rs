@@ -3,9 +3,10 @@ use hyper::{Body, Request, Response};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
-use super::structs::*;
-use crate::utils::crypto_utils::get_sample_secp256k1_pk;
+// use super::structs::*;
 use crate::ATTESTATION_AGENT;
+use tee_service_api::crypto::get_sample_secp256k1_pk;
+use tee_service_api::request_types::genesis::*;
 
 /// Handles request to get genesis data.
 ///
@@ -48,17 +49,20 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::attestation_eval_evidence_handler;
-    use crate::coco_as::structs::AttestationEvalEvidenceRequest;
-    use crate::coco_as::structs::AttestationEvalEvidenceResponse;
-    use crate::init_as_policies;
-    use crate::utils::test_utils::is_sudo;
-    use crate::{init_coco_aa, init_coco_as};
-    use attestation_service::Data;
+    use crate::{
+        coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
+        init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
+    };
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
+    use tee_service_api::request_types::coco_as::*;
+
+    use attestation_service::Data as OriginalData;
+    use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+    use tee_service_api::request_types::coco_as::Data as ApiData;
+    use tee_service_api::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
 
     #[tokio::test]
     #[serial(attestation_agent)]
@@ -125,7 +129,7 @@ mod tests {
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: genesis_data_response.evidence,
             tee: Tee::AzTdxVtpm,
-            runtime_data: Some(Data::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
+            runtime_data: Some(ApiData::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["allow".to_string()],
         };
