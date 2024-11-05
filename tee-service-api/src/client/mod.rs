@@ -63,7 +63,7 @@ pub trait TeeAPI {
 pub trait WalletAPI {
     fn encrypt(
         &self,
-        data: &Vec<u8>,
+        data: Vec<u8>,
         nonce: u64,
         private_key: &secp256k1::SecretKey,
     ) -> Result<Vec<u8>, anyhow::Error>;

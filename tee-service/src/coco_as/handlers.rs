@@ -1,9 +1,8 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 
 use super::into_original::*;
-use crate::ATTESTATION_SERVICE;
+use super::{eval_att_evidence, parse_as_token_claims};
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use tee_service_api::errors::{
@@ -63,28 +62,25 @@ pub async fn attestation_eval_evidence_handler(
 
     // Call the evaluate function of the attestation service
     // Gets back a b64 JWT web token of the form "header.claims.signature"
-    let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    let readable_as = coco_as.read().await;
-    let eval = readable_as
-        .evaluate(
-            evaluate_request.evidence,
-            evaluate_request.tee,
-            runtime_data,
-            runtime_data_hash_algorithm,
-            None, // hardcoded because AzTdxVtpm doesn't support init data
-            OriginalHashAlgorithm::Sha256, // dummy val to make this compile
-            evaluate_request.policy_ids,
-        )
-        .await;
+    let eval_result = eval_att_evidence(
+        evaluate_request.evidence,
+        evaluate_request.tee,
+        runtime_data,
+        runtime_data_hash_algorithm,
+        None,                          // hardcoded because AzTdxVtpm doesn't support init data
+        OriginalHashAlgorithm::Sha256, // dummy val to make this compile
+        evaluate_request.policy_ids,
+    )
+    .await;
 
-    let as_token = match eval {
+    let as_token: String = match eval_result {
         Ok(as_token) => as_token,
         Err(e) => {
             return Ok(bad_evidence_response(e));
         }
     };
 
-    let claims: ASCoreTokenClaims = parse_as_token(&as_token)
+    let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
         .unwrap();
 
@@ -96,26 +92,16 @@ pub async fn attestation_eval_evidence_handler(
     Ok(Response::new(Body::from(response_json)))
 }
 
-fn parse_as_token(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
-    let parts: Vec<&str> = as_token.splitn(3, '.').collect();
-    let claims_b64 = parts[1];
-    let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
-    let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
-    let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string)?;
-
-    Ok(claims)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::init_coco_as;
     use crate::utils::test_utils::{is_sudo, read_vector_txt};
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
-
     use std::env;
 
     #[test]
@@ -127,7 +113,7 @@ mod tests {
         let ex_token_path = "../examples/as_token.txt";
         let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
 
-        let claims = parse_as_token(&ex_token).unwrap();
+        let claims = parse_as_token_claims(&ex_token).unwrap();
 
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();

@@ -1,7 +1,13 @@
+//! Handles converting between the API and the original enums
+//! This is necessary because if you import the original enums directly
+//! in the API crate, it tries to build the entire attestation service crate,
+//! which can break external projects
+
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use tee_service_api::request_types::coco_as::Data as ApiData;
 use tee_service_api::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
+
 pub trait IntoOriginalData {
     fn into_original(self) -> OriginalData;
 }
