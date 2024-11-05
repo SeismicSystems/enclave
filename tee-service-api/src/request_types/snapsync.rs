@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use kbs_types::Tee;
 
 /// Struct representing the request to SnapSync
 ///
@@ -9,6 +10,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SnapSyncRequest {
     pub client_attestation: Vec<u8>,
+    pub tee: Tee,
+    pub rsa_pk_pem: Vec<u8>,
+    pub policy_ids: Vec<String>,
 }
 /// Struct representing the response from SnapSync
 ///

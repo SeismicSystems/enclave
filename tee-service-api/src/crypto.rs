@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
+use openssl::encrypt::{Decrypter, Encrypter};
+use openssl::pkey::PKey;
+use openssl::rsa::{Padding, Rsa};
+
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
     pub secret_key: SecretKey,
@@ -209,4 +213,28 @@ pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
         "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
     )
     .unwrap()
+}
+
+pub fn rsa_encrypt(plaintext: &[u8], public_key: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+    let rsa = Rsa::public_key_from_pem(public_key)?;
+    let key = PKey::from_rsa(rsa)?;
+    let mut encrypter = Encrypter::new(&key)?;
+    encrypter.set_rsa_padding(Padding::PKCS1).unwrap();
+    let buffer_len = encrypter.encrypt_len(plaintext).unwrap();
+    let mut ciphertext: Vec<u8> = vec![0; buffer_len];
+    let encrypted_len = encrypter.encrypt(plaintext, &mut ciphertext).unwrap();
+    ciphertext.truncate(encrypted_len);
+    Ok(ciphertext)
+}
+
+pub fn rsa_decrypt(ciphertext: &[u8], private_key: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+    let rsa = Rsa::private_key_from_pem(private_key)?;
+    let key = PKey::from_rsa(rsa)?;
+    let mut decrypter = Decrypter::new(&key)?;
+    decrypter.set_rsa_padding(Padding::PKCS1).unwrap();
+    let buffer_len = decrypter.decrypt_len(ciphertext).unwrap();
+    let mut plaintext: Vec<u8> = vec![0; buffer_len];
+    let decrypted_len = decrypter.decrypt(ciphertext, &mut plaintext).unwrap();
+    plaintext.truncate(decrypted_len);
+    Ok(plaintext)
 }
