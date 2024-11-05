@@ -18,7 +18,10 @@ pub struct TeeHttpClient {
 impl Default for TeeHttpClient {
     fn default() -> Self {
         Self {
-            base_url: format!("http://{}:{}", TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT),
+            base_url: format!(
+                "http://{}:{}",
+                TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT
+            ),
             client: Client::new(),
         }
     }
@@ -28,18 +31,27 @@ impl TeeHttpClient {
     /// Creates a new instance of the TEE client
     pub fn new(base_url: String) -> Self {
         println!("Base URL: {}", base_url);
-        Self { base_url, client: Client::new() }
+        Self {
+            base_url,
+            client: Client::new(),
+        }
     }
 
     /// Creates a new instance of the TEE client
     pub fn new_from_addr_port(addr: IpAddr, port: u16) -> Self {
-        Self { base_url: format!("http://{}:{}", addr, port), client: Client::new() }
+        Self {
+            base_url: format!("http://{}:{}", addr, port),
+            client: Client::new(),
+        }
     }
 
     pub fn new_from_addr(addr: &SocketAddr) -> Self {
         let base_url = format!("http://{}", addr);
         println!("Base URL: {}", base_url);
-        Self { base_url, client: Client::new() }
+        Self {
+            base_url,
+            client: Client::new(),
+        }
     }
 }
 

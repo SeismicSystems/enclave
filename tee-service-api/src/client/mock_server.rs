@@ -1,14 +1,20 @@
+use anyhow::Result;
 use hyper::{Body, Request, Response};
 use std::convert::Infallible;
-use anyhow::Result;
 
 pub trait MockServer {
-    fn attestation_get_evidence_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn attestation_get_evidence_handler(
+        &self,
+        _req: Request<Body>,
+    ) -> Result<Response<Body>, Infallible> {
         let body = Body::from(format!("Error: Mock Unimplimented"));
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
-    fn attestation_eval_evidence_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn attestation_eval_evidence_handler(
+        &self,
+        _req: Request<Body>,
+    ) -> Result<Response<Body>, Infallible> {
         let body = Body::from(format!("Error: Mock Unimplimented"));
         Ok(Response::builder().status(500).body(body).unwrap())
     }

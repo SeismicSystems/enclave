@@ -7,13 +7,7 @@
 pub mod http_client;
 pub mod mock_server;
 
-use crate::request_types::{
-    coco_aa::*,
-    coco_as::*,
-    genesis::*,
-    signing::*,
-    tx_io::*
-};
+use crate::request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*};
 
 pub trait TeeAPI {
     async fn genesis_data(
@@ -22,7 +16,7 @@ pub trait TeeAPI {
     ) -> Result<GenesisDataResponse, anyhow::Error> {
         Err(anyhow::Error::msg("Unimplemented"))
     }
-    
+
     async fn attestation_get_evidence(
         &self,
         _payload: AttestationGetEvidenceRequest,
