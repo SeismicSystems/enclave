@@ -4563,6 +4563,7 @@ dependencies = [
  "kbs-types",
  "log",
  "once_cell",
+ "openssl",
  "routerify",
  "scroll",
  "secp256k1",

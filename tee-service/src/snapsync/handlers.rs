@@ -2,9 +2,11 @@ use attestation_service::HashAlgorithm;
 use hyper::{body::to_bytes, Body, Request, Response};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
+use openssl::pkey::Public;
+use openssl::rsa::Rsa;
 
-use crate::coco_as::{eval_att_evidence, parse_as_token_claims};
-use tee_service_api::coco_as::ASCoreTokenClaims;
+use super::build_snapsync_response;
+use crate::coco_as::eval_att_evidence;
 use tee_service_api::errors::{
     bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
 };
@@ -40,26 +42,20 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
     )
     .await;
 
-    let as_token: String = match eval_result {
-        Ok(as_token) => as_token,
+    match eval_result {
+        Ok(_) => (),
         Err(e) => {
             return Ok(bad_evidence_response(e));
         }
     };
 
-    let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
-        .map_err(|e| format!("Error while parsing AS token: {:?}", e))
-        .unwrap();
-
-    println!("claims: {:?}", claims);
-    // extract the request encryption key
-    let req_enc_key = todo!("extract encryption key");
+    let rsa: Rsa<Public> = Rsa::public_key_from_pem(snapsync_request.rsa_pk_pem.as_slice()).unwrap();
 
     // // actually get the SnapSync data
-    // let response_body: SnapSyncResponse = build_snapsync_response(req_enc_key);
+    let response_body: SnapSyncResponse = build_snapsync_response(rsa);
 
     // return the response
-    let response_json = serde_json::to_string("&response_body").unwrap();
+    let response_json = serde_json::to_string(&response_body).unwrap();
     // let response_json = serde_json::to_string(&response_body).unwrap();
     Ok(Response::new(Body::from(response_json)))
 }
@@ -67,14 +63,14 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::test_utils::attest_signing_key;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serial_test::serial;
 
     use crate::{
-        coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
+        // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
         init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
+        coco_aa::attest_signing_key,
     };
 
     #[serial(attestation_agent)]

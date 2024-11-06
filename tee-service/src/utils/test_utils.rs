@@ -1,9 +1,6 @@
-use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, Read};
 
-use crate::coco_aa::attest;
-use tee_service_api::get_sample_rsa;
 
 /// Checks if the current user has root (sudo) privileges.
 ///
@@ -55,13 +52,4 @@ pub fn read_vector_txt(path: String) -> io::Result<Vec<u8>> {
     Ok(vec)
 }
 
-/// Makes a sample attestation with a hash of a rsa public key as the runtime data
-/// returns (attestation, public key pem)
-pub async fn attest_signing_key() -> Result<(Vec<u8>, Vec<u8>), anyhow::Error> {
-    let public_key_pem = get_sample_rsa().public_key_to_pem().unwrap();
-    let pk_hash: [u8; 32] = Sha256::digest(public_key_pem.as_slice()).into();
 
-    let att = attest(pk_hash.as_slice()).await?;
-
-    Ok((att, public_key_pem))
-}
