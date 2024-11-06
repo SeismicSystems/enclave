@@ -26,7 +26,7 @@ pub struct Secp256k1KeyPair {
 ///
 /// # Returns
 /// A `GenericArray<u8, N>` where `N` is the expected nonce size for AES-GCM encryption.
-fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as AeadCore>::NonceSize> {
+pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as AeadCore>::NonceSize> {
     let mut nonce_bytes = nonce.to_be_bytes().to_vec();
     let crypto_nonce_size = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::default().len();
     nonce_bytes.resize(crypto_nonce_size, 0); // pad to the expected size
