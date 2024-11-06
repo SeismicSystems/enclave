@@ -2,8 +2,10 @@ use super::*;
 use reqwest::Client;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+// Unspecified (0.0.0.0) exposes to public internet
+// Localhost (127.0.0.1) will only allow other processes on machine to ping
+pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
-pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
 /// An implementation of the TEE client API that
 /// makes HTTP requests to the TEE server

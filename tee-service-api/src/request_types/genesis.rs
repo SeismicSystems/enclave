@@ -1,7 +1,7 @@
 use bincode;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GenesisData {
     pub io_pk: secp256k1::PublicKey,
 }
@@ -19,7 +19,7 @@ impl GenesisData {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GenesisDataResponse {
     pub data: GenesisData,
     pub evidence: Vec<u8>,

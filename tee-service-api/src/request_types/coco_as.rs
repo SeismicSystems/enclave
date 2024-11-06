@@ -24,7 +24,7 @@ pub enum HashAlgorithm {
 
 /// Runtime/Init Data used to check the binding relationship with report data
 /// in Evidence
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Data {
     /// This will be used as the expected runtime/init data to check against
     /// the one inside evidence.
@@ -73,7 +73,7 @@ pub struct AttestationEvalEvidenceRequest {
 ///
 /// - `eval`: A boolean indicating whether the attestation service deemed the evidence valid (`true`) or invalid (`false`).
 /// - `claims`: A summary of the claims included in the attestation evidence. This may be `None` if there are no claims.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AttestationEvalEvidenceResponse {
     pub eval: bool,
     pub claims: Option<ASCoreTokenClaims>,
@@ -94,7 +94,7 @@ pub struct AttestationEvalEvidenceResponse {
 /// - `reference_data` - Reference values provided by the Reference Value Provider Service (RVPS)  
 ///   to check against the attestation evidence.
 /// - `customized_claims` - The initialization and runtime data that were enforced to match the evidence.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ASCoreTokenClaims {
     pub tee: String,
     #[serde(rename = "evaluation-reports")]
@@ -109,7 +109,7 @@ pub struct ASCoreTokenClaims {
     pub customized_claims: ASCustomizedClaims,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ASCustomizedClaims {
     pub init_data: Value,
     pub runtime_data: Value,
