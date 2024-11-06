@@ -16,7 +16,7 @@ pub async fn build_snapsync_response(rsa: Rsa<Public>) -> Result<SnapSyncRespons
     let server_signing_pk = signing_pk.serialize().to_vec();
     
     // Gather the snapsync data
-    let snapsync_data = gather_snapsync_data().await?;
+    let snapsync_data: SnapSyncData = gather_snapsync_data().await?;
     let snapsync_bytes = snapsync_data.to_bytes();
 
     // encrypt the snapsync data
@@ -36,6 +36,14 @@ pub async fn build_snapsync_response(rsa: Rsa<Public>) -> Result<SnapSyncRespons
     })
 }
 
+/// Gathers the snapsync data
+/// Currently the snapsync data has the io private key and the private state
+/// 
+/// TODO: get real private state data from [location TBD]
 async fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
-    todo!()
+    let sample_private_state = format!("private state @ %{}", DB_PATH).as_bytes().to_vec();
+    Ok(SnapSyncData {
+        io_sk: "io sk".as_bytes().to_vec(),
+        state: sample_private_state,
+    })
 }

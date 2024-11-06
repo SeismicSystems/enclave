@@ -30,7 +30,7 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
     };
 
     // verify the request attestation
-    let signing_pk_hash: [u8; 32] = Sha256::digest(snapsync_request.rsa_pk_pem.as_slice()).into();
+    let signing_pk_hash: [u8; 32] = Sha256::digest(snapsync_request.client_signing_pk.as_slice()).into();
     let eval_result = eval_att_evidence(
         snapsync_request.client_attestation,
         snapsync_request.tee,
