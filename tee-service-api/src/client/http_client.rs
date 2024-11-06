@@ -2,7 +2,7 @@ use super::*;
 use reqwest::Client;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 /// An implementation of the TEE client API that
