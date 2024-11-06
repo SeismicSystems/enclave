@@ -1,3 +1,7 @@
+//! This file has cargo tests so I can
+//! one click run them and see the output
+//! They are for dev convenience only
+
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
 use attestation_service::config::Config;
@@ -6,10 +10,8 @@ use base64::Engine;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
+use tee_service_api::get_sample_rsa;
 use tee_service_api::request_types::genesis::GenesisData;
-/// This file has cargo tests so I can
-/// one click run them and see the output
-/// They are for dev convenience only
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
@@ -62,4 +64,20 @@ fn see_as_token() -> Result<(), anyhow::Error> {
 async fn see_default_config() {
     let config = Config::default();
     println!("{:?}", config);
+}
+
+#[test]
+#[ignore]
+fn see_rsa_keypair() -> Result<(), anyhow::Error> {
+    let rsa = get_sample_rsa();
+    let public_key_pem = rsa.public_key_to_pem().unwrap();
+    let pk_hash: [u8; 32] = Sha256::digest(public_key_pem.as_slice()).into();
+
+    println!("public key: {:?}", public_key_pem);
+    println!("public key len: {:?}", public_key_pem.len());
+    println!("pk hash{:?}", pk_hash);
+
+    // let private_key_pem = rsa.private_key_to_pem().unwrap();
+    // println!("{:?}", private_key_pem);
+    Ok(())
 }

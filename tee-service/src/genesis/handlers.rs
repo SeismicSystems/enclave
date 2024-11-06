@@ -79,8 +79,14 @@ mod tests {
             return;
         }
 
-        // Initialize ATTESTATION_AGENT
+        // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
         init_coco_aa().expect("Failed to initialize AttestationAgent");
+        init_coco_as(None)
+            .await
+            .expect("Failed to initialize AttestationService");
+        init_as_policies()
+            .await
+            .expect("Failed to initialize AS policies");
 
         // Make a genesis data request
         let req = Request::builder()
@@ -95,13 +101,6 @@ mod tests {
             serde_json::from_slice(&body_bytes).unwrap();
 
         // Submit the genesis data to the attestation service
-        init_coco_as(None)
-            .await
-            .expect("Failed to initialize AttestationService");
-        init_as_policies()
-            .await
-            .expect("Failed to initialize AS policies");
-
         let genesis_data_hash: [u8; 32] =
             Sha256::digest(genesis_data_response.data.to_bytes()).into();
 
