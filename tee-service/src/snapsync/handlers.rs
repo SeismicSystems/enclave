@@ -7,7 +7,7 @@ use tee_service_api::request_types::snapsync::*;
 use tee_service_api::coco_as::ASCoreTokenClaims;
 use crate::coco_as::{eval_att_evidence, parse_as_token_claims};
 
-pub async fn snapsync_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
