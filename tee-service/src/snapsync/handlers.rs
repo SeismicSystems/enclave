@@ -30,11 +30,11 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
     };
 
     // verify the request attestation
-    let pk_hash: [u8; 32] = Sha256::digest(snapsync_request.rsa_pk_pem.as_slice()).into();
+    let signing_pk_hash: [u8; 32] = Sha256::digest(snapsync_request.rsa_pk_pem.as_slice()).into();
     let eval_result = eval_att_evidence(
         snapsync_request.client_attestation,
         snapsync_request.tee,
-        Some(attestation_service::Data::Raw(pk_hash.to_vec())),
+        Some(attestation_service::Data::Raw(signing_pk_hash.to_vec())),
         HashAlgorithm::Sha256,
         None,
         HashAlgorithm::Sha256,
@@ -49,10 +49,14 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
         }
     };
 
-    let rsa: Rsa<Public> = Rsa::public_key_from_pem(snapsync_request.rsa_pk_pem.as_slice()).unwrap();
+    // verify the rsa_pk_pem signature
+    todo!("verify the rsa_pk_pem signature");
 
-    // // actually get the SnapSync data
-    let response_body: SnapSyncResponse = build_snapsync_response(rsa);
+   
+
+    // actually get the SnapSync data
+    let rsa: Rsa<Public> = Rsa::public_key_from_pem(snapsync_request.rsa_pk_pem.as_slice()).unwrap();
+    let response_body: SnapSyncResponse = build_snapsync_response(rsa).await.unwrap();
 
     // return the response
     let response_json = serde_json::to_string(&response_body).unwrap();
@@ -66,11 +70,14 @@ mod tests {
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use serial_test::serial;
+    use tee_service_api::get_sample_rsa;
+    use tee_service_api::get_sample_secp256k1_sk;
+    use tee_service_api::secp256k1_sign_digest;
 
     use crate::{
         // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
         init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
-        coco_aa::attest_signing_key,
+        coco_aa::attest_signing_pk,
     };
 
     #[serial(attestation_agent)]
@@ -91,14 +98,21 @@ mod tests {
             .await
             .expect("Failed to initialize AS policies");
 
-        // Get a sample attestation
-        let (attestation, rsa_pk_pem) = attest_signing_key().await.unwrap();
+        // Get sample attestation and keys to make the test request
+        let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
+        let client_signing_pk = signing_pk.serialize().to_vec();
+        let sample_rsa = get_sample_rsa();
+        let rsa_pk_pem = sample_rsa.public_key_to_pem().unwrap();
+        let rsa_pk_pem_sig = secp256k1_sign_digest(&rsa_pk_pem, get_sample_secp256k1_sk()).expect("Internal Error while signing the message");
+
 
         // Make the request
         let snap_sync_request = SnapSyncRequest {
             client_attestation: attestation,
+            client_signing_pk,
             tee: Tee::AzTdxVtpm,
-            rsa_pk_pem: rsa_pk_pem,
+            rsa_pk_pem,
+            rsa_pk_pem_sig,
             policy_ids: vec!["allow".to_string()],
         };
 

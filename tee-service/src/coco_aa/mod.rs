@@ -16,16 +16,16 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
     Ok(evidence)
 }
 
-/// Makes an attestation with a hash of a rsa public key as the runtime data
-/// returns (attestation, public key pem)
+/// Makes an attestation with a hash of a Secp256k1 public key as the runtime data
+/// returns (attestation, signing_pk)
 /// 
 /// UNSAFE: Currently this is using a sample key for testing purposes
-pub async fn attest_signing_key() -> Result<(Vec<u8>, Vec<u8>), anyhow::Error> {
-    let rsa = tee_service_api::get_sample_rsa();
-    let public_key_pem = rsa.public_key_to_pem().unwrap();
-    let pk_hash: [u8; 32] = Sha256::digest(public_key_pem.as_slice()).into();
+pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
+    let signing_pk = tee_service_api::get_sample_secp256k1_pk();
+    let signing_pk_bytes = signing_pk.serialize();
+    let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
 
     let att = attest(pk_hash.as_slice()).await?;
 
-    Ok((att, public_key_pem))
+    Ok((att, signing_pk))
 }

@@ -9,10 +9,12 @@ use kbs_types::Tee;
 ///                          encryption key as its runtime data.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SnapSyncRequest {
-    pub client_attestation: Vec<u8>,
     pub tee: Tee,
-    pub rsa_pk_pem: Vec<u8>,
+    pub client_attestation: Vec<u8>,
+    pub client_signing_pk: Vec<u8>,
     pub policy_ids: Vec<String>,
+    pub rsa_pk_pem: Vec<u8>,
+    pub rsa_pk_pem_sig: Vec<u8>,
 }
 /// Struct representing the response from SnapSync
 ///
@@ -24,6 +26,7 @@ pub struct SnapSyncRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SnapSyncResponse {
     pub server_attestation: Vec<u8>,
+    pub server_signing_pk: Vec<u8>,
     pub encrypted_data: Vec<u8>,
     pub signature: Vec<u8>,
 }
@@ -37,4 +40,17 @@ pub struct SnapSyncResponse {
 pub struct SnapSyncData {
     pub io_sk: Vec<u8>,
     pub state: Vec<u8>, 
+}
+
+#[allow(dead_code)]
+impl SnapSyncData {
+    // Serialize the struct to bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("Failed to serialize")
+    }
+
+    // Deserialize the struct from bytes
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        bincode::deserialize(bytes).expect("Failed to deserialize")
+    }
 }

@@ -51,5 +51,3 @@ pub fn read_vector_txt(path: String) -> io::Result<Vec<u8>> {
     // Return the vector
     Ok(vec)
 }
-
-
