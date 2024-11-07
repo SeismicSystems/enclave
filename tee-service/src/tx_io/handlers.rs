@@ -1,9 +1,8 @@
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
-
-use secp256k1::ecdh::SharedSecret;
 use secp256k1::SecretKey;
 
+use super::{ecdh_decrypt, ecdh_encrypt};
 use tee_service_api::crypto::*;
 use tee_service_api::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
@@ -41,11 +40,12 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 
     // load key and encrypt data
     let ecdh_sk = get_secp256k1_sk();
-    let shared_secret = SharedSecret::new(&encryption_request.msg_sender, &ecdh_sk);
-    let aes_key = derive_aes_key(&shared_secret)
-        .map_err(|e| format!("Error while deriving AES key: {:?}", e))
-        .unwrap();
-    let encrypted_data = aes_encrypt(&aes_key, &encryption_request.data, encryption_request.nonce);
+    let encrypted_data = ecdh_encrypt(
+        &encryption_request.msg_sender, 
+        &ecdh_sk, 
+        encryption_request.data, 
+        encryption_request.nonce
+    ).unwrap();
 
     let response_body = IoEncryptionResponse { encrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
@@ -83,11 +83,12 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     };
     // load key and decrypt data
     let ecdh_sk = get_secp256k1_sk();
-    let shared_secret = SharedSecret::new(&decryption_request.msg_sender, &ecdh_sk);
-    let aes_key = derive_aes_key(&shared_secret)
-        .map_err(|e| format!("Error while deriving AES key: {:?}", e))
-        .unwrap();
-    let decrypted_data = aes_decrypt(&aes_key, &decryption_request.data, decryption_request.nonce);
+    let decrypted_data = ecdh_decrypt(
+        &decryption_request.msg_sender, 
+        &ecdh_sk, 
+        decryption_request.data, 
+        decryption_request.nonce
+    );
 
     let decrypted_data = match decrypted_data {
         Ok(data) => data,
