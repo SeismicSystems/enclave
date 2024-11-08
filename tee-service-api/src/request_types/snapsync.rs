@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
 use kbs_types::Tee;
+use serde::{Deserialize, Serialize};
 
 /// Struct representing the request to SnapSync
 ///
 /// # Fields
-/// * `client_attestation` - The attestation of the enclave that is running 
+/// * `client_attestation` - The attestation of the enclave that is running
 ///                          the client's node. This attestation must contain an
 ///                          encryption key as its runtime data.
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ pub struct SnapSyncResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SnapSyncData {
     pub io_sk: Vec<u8>,
-    pub state: Vec<u8>, 
+    pub state: Vec<u8>,
 }
 
 #[allow(dead_code)]

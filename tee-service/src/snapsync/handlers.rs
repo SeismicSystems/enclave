@@ -11,7 +11,7 @@ use tee_service_api::errors::{
 use tee_service_api::request_types::snapsync::*;
 
 /// handles a request to provide private information required for SnapSync
-/// 
+///
 /// /// # Arguments
 /// * `req` - The incoming HTTP request containing the message to be signed. The body of the request
 ///   Should be a JSON-encoded `SnapSyncRequest`.
