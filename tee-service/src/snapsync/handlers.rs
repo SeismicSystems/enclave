@@ -6,7 +6,10 @@ use std::convert::Infallible;
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
 use tee_service_api::errors::{
-    bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
+    bad_evidence_response, 
+    invalid_json_body_resp, 
+    invalid_req_body_resp,
+    bad_argument_response,
 };
 use tee_service_api::request_types::snapsync::*;
 
@@ -48,9 +51,12 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
     };
 
     // Get the SnapSync data
-    let client_signing_pk = secp256k1::PublicKey::from_slice(
+    let client_signing_pk = match secp256k1::PublicKey::from_slice(
         &snapsync_request.client_signing_pk
-    ).expect("Internal error while deserializing the public key");
+    ) {
+        Ok(pk) => pk,
+        Err(_) => return Ok(bad_argument_response(anyhow::anyhow!("Unable to deserialize the client signing public key"))),
+    };
     let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();
 
     // return the response
@@ -76,7 +82,7 @@ mod tests {
         coco_aa::attest_signing_pk,
     };
 
-    #[serial(attestation_agent)]
+    #[serial(attestation_agent, attestation_service)]
     #[tokio::test]
     async fn test_snapsync_handler() {
         // handle set up permissions
@@ -116,7 +122,6 @@ mod tests {
             .unwrap();
         let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
-        println!("response returned success");
 
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let snapsync_response: SnapSyncResponse =
@@ -133,5 +138,48 @@ mod tests {
         let verified = secp256k1_verify(&snapsync_response.encrypted_data, &snapsync_response.signature, server_pk)
             .expect("Internal error while verifying the signature");
         assert!(verified);
+    }
+
+    // test that it rejects a bad attestation (ex wrong public key)
+    #[tokio::test]
+    #[serial(attestation_service, attestation_agent)]
+    async fn test_snapsync_handler_pk_mismatch() {
+        // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+            return;
+        }
+
+        // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
+        init_coco_aa().expect("Failed to initialize AttestationAgent");
+        init_coco_as(None)
+            .await
+            .expect("Failed to initialize AttestationService");
+        init_as_policies()
+            .await
+            .expect("Failed to initialize AS policies");
+
+        // Get sample attestation and keys to make the test request
+        let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
+        let client_signing_pk = signing_pk.serialize().to_vec();
+        let mut wrong_pk = client_signing_pk.clone();
+        wrong_pk[0] = !wrong_pk[0];
+
+        // Make the request
+        let snap_sync_request = SnapSyncRequest {
+            client_attestation: attestation,
+            client_signing_pk: wrong_pk,
+            tee: Tee::AzTdxVtpm,
+            policy_ids: vec!["allow".to_string()],
+        };
+
+        let payload_json = serde_json::to_string(&snap_sync_request).unwrap();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/")
+            .body(Body::from(payload_json))
+            .unwrap();
+        let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }
