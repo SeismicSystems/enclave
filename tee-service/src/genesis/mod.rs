@@ -16,7 +16,7 @@ async fn att_genesis_data() -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
     let genesis_data = GenesisData { io_pk };
 
     // hash the genesis data and attest to it
-    let genesis_data_bytes = genesis_data.to_bytes();
+    let genesis_data_bytes = genesis_data.to_bytes()?;
     let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
 
     // Get the evidence from the attestation agent

@@ -3,6 +3,7 @@ mod coco_as;
 mod genesis;
 pub mod server;
 mod signing;
+mod snapsync;
 mod tx_io;
 mod utils;
 
@@ -15,6 +16,8 @@ use coco_as::policies;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+use tee_service_api::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 
 pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
@@ -48,11 +51,6 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
         return Ok(());
     }
 
-    // TODO: load a real config with a policy once we have one
-    // let config_path_str = "path/to/config.json";
-    // let config_path = std::path::Path::new(config_path_str);
-    // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
-
     let config = config.unwrap_or_default();
 
     // Initialize the AttestationService
@@ -75,6 +73,8 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
 ///
 /// For example, the important values for AxTdxVtpm are the MRSEAM and MRTD values,
 /// which respectively fingerprint the TDX module and the guest firmware that are running
+///
+/// TODO: replace policies, particularly the Yocto policy, with finalized policies before mainnet
 pub async fn init_as_policies() -> Result<()> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let mut writeable_as = coco_as.write().await;
@@ -92,7 +92,37 @@ pub async fn init_as_policies() -> Result<()> {
             .await?;
     }
 
-    println!("policies: {:?}", writeable_as.list_policies().await?);
-
     Ok(())
+}
+
+/// Loads a secp256k1 private key from a file.
+///
+/// This function reads the keypair from a JSON file for testing purposes. Eventually, it should
+/// be replaced with a more secure solution, such as requesting a key from a KMS service.
+///
+/// # Returns
+/// A secp256k1 `SecretKey` loaded from the keypair file.
+///
+/// # Panics
+/// The function may panic if the file is missing or if it cannot deserialize the keypair.
+///
+/// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
+fn get_secp256k1_sk() -> secp256k1::SecretKey {
+    get_sample_secp256k1_sk()
+}
+
+/// Loads a secp256k1 public key from a file.
+///
+/// This function reads the keypair from a JSON file for testing purposes. Eventually, it should
+/// be replaced with a more secure solution, such as requesting a key from a KMS service.
+///
+/// # Returns
+/// A secp256k1 `PublicKey` loaded from the keypair file.
+///
+/// # Panics
+/// The function may panic if the file is missing or if it cannot deserialize the keypair.
+///
+/// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
+fn get_secp256k1_pk() -> secp256k1::PublicKey {
+    get_sample_secp256k1_pk()
 }

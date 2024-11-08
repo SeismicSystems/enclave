@@ -35,6 +35,18 @@ pub fn bad_evidence_response(e: anyhow::Error) -> Response<Body> {
         .unwrap()
 }
 
+/// Returns a 400 Bad Request response with the error message
+/// explaining why the arugment is invalid.
+pub fn bad_argument_response(e: anyhow::Error) -> Response<Body> {
+    let error_message = format!("Invalid Argument: {:?}", e);
+    let error_response = json!({ "error": error_message }).to_string();
+
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(Body::from(error_response))
+        .unwrap()
+}
+
 // Returns 422 Unprocessable Entity
 // Meant to be used if decrypting the ciphertext fails
 pub fn invalid_ciphertext_resp(e: Error) -> Response<Body> {

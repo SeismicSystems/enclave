@@ -2,6 +2,7 @@ use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use serde_json::json;
 use std::convert::Infallible;
 
+use super::{enclave_sign, get_secp256k1_pk};
 use tee_service_api::crypto::*;
 use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use tee_service_api::request_types::signing::*;
@@ -36,9 +37,7 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
     };
 
     // sign the message
-    let sk = get_secp256k1_sk();
-    let signature = secp256k1_sign_digest(&sign_request.msg, sk)
-        .expect("Internal Error while signing the message");
+    let signature = enclave_sign(&sign_request.msg).unwrap();
 
     let response_body = Secp256k1SignResponse { sig: signature };
     let response_json = serde_json::to_string(&response_body).unwrap();
@@ -90,34 +89,6 @@ pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Bod
     let response_json = serde_json::to_string(&response_body).unwrap();
 
     Ok(Response::new(Body::from(response_json)))
-}
-
-/// Loads a secp256k1 private key from a file.
-///
-/// This function reads the keypair from a JSON file for testing purposes. Eventually, it should
-/// be replaced with a more secure solution, such as requesting a key from a KMS service.
-///
-/// # Returns
-/// A secp256k1 `SecretKey` loaded from the keypair file.
-///
-/// # Panics
-/// The function may panic if the file is missing or if it cannot deserialize the keypair.
-fn get_secp256k1_sk() -> secp256k1::SecretKey {
-    get_sample_secp256k1_sk()
-}
-
-/// Loads a secp256k1 public key from a file.
-///
-/// This function reads the keypair from a JSON file for testing purposes. Eventually, it should
-/// be replaced with a more secure solution, such as requesting a key from a KMS service.
-///
-/// # Returns
-/// A secp256k1 `PublicKey` loaded from the keypair file.
-///
-/// # Panics
-/// The function may panic if the file is missing or if it cannot deserialize the keypair.
-fn get_secp256k1_pk() -> secp256k1::PublicKey {
-    get_sample_secp256k1_pk()
 }
 
 #[cfg(test)]
