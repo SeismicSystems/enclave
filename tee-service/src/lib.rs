@@ -121,6 +121,8 @@ fn get_secp256k1_sk() -> secp256k1::SecretKey {
 ///
 /// # Panics
 /// The function may panic if the file is missing or if it cannot deserialize the keypair.
+/// 
+/// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
 fn get_secp256k1_pk() -> secp256k1::PublicKey {
     get_sample_secp256k1_pk()
 }
