@@ -39,7 +39,7 @@ fn run_hash_genesis_data() -> Result<(), anyhow::Error> {
         .unwrap(),
     };
 
-    let genesis_data_bytes = genesis_data.to_bytes();
+    let genesis_data_bytes = genesis_data.to_bytes()?;
     let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
     println!("{:?}", hash_bytes);
 

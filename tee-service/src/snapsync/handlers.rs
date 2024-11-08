@@ -127,7 +127,7 @@ mod tests {
         let shared_secret = SharedSecret::new(&server_pk, &client_sk);
         let aes_key = derive_aes_key(&shared_secret).unwrap();
         let decrypted_bytes: Vec<u8>  = aes_decrypt(&aes_key, &snapsync_response.encrypted_data, snapsync_response.nonce).unwrap();
-        let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes);
+        let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes).unwrap();
         
         // Check that the signature is valid
         let verified = secp256k1_verify(&snapsync_response.encrypted_data, &snapsync_response.signature, server_pk)

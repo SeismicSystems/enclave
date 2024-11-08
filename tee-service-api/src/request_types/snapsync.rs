@@ -44,12 +44,14 @@ pub struct SnapSyncData {
 #[allow(dead_code)]
 impl SnapSyncData {
     // Serialize the struct to bytes
-    pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("Failed to serialize")
+    pub fn to_bytes(&self) -> Result<Vec<u8>, anyhow::Error> {
+        let bytes = bincode::serialize(self)?;
+        Ok(bytes)
     }
 
     // Deserialize the struct from bytes
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        bincode::deserialize(bytes).expect("Failed to deserialize")
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
+        let data = bincode::deserialize(bytes)?;
+        Ok(data)
     }
 }

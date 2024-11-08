@@ -15,7 +15,7 @@ pub async fn build_snapsync_response(client_signing_pk: secp256k1::PublicKey) ->
     
     // Gather the snapsync data
     let snapsync_data: SnapSyncData = gather_snapsync_data().await?;
-    let snapsync_bytes = snapsync_data.to_bytes();
+    let snapsync_bytes = snapsync_data.to_bytes()?;
 
     // encrypt the snapsync data
     let nonce = 65; // TODO: get a nonce more securely. Choose randomly?

@@ -101,9 +101,9 @@ mod tests {
             serde_json::from_slice(&body_bytes).unwrap();
 
         // Submit the genesis data to the attestation service
-        let genesis_data_hash: [u8; 32] =
-            Sha256::digest(genesis_data_response.data.to_bytes()).into();
-
+        let bytes = genesis_data_response.data.to_bytes().unwrap();
+        let genesis_data_hash: [u8; 32] = Sha256::digest(bytes).into();
+        
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: genesis_data_response.evidence,
             tee: Tee::AzTdxVtpm,
