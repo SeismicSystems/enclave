@@ -63,10 +63,12 @@ mod tests {
     use super::*;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
+    use secp256k1::ecdh::SharedSecret;
     use serial_test::serial;
-    use tee_service_api::get_sample_rsa;
-    use tee_service_api::get_sample_secp256k1_sk;
-    use tee_service_api::secp256k1_sign_digest;
+    use crate::get_secp256k1_sk;
+    use tee_service_api::derive_aes_key;
+    use tee_service_api::aes_decrypt;
+    use tee_service_api::secp256k1_verify;
 
     use crate::{
         // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
@@ -93,20 +95,15 @@ mod tests {
             .expect("Failed to initialize AS policies");
 
         // Get sample attestation and keys to make the test request
+        let client_sk = get_secp256k1_sk();
         let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
         let client_signing_pk = signing_pk.serialize().to_vec();
-        let sample_rsa = get_sample_rsa();
-        let rsa_pk_pem = sample_rsa.public_key_to_pem().unwrap();
-        let rsa_pk_pem_sig = secp256k1_sign_digest(&rsa_pk_pem, get_sample_secp256k1_sk()).expect("Internal Error while signing the message");
-
 
         // Make the request
         let snap_sync_request = SnapSyncRequest {
             client_attestation: attestation,
             client_signing_pk,
             tee: Tee::AzTdxVtpm,
-            rsa_pk_pem,
-            rsa_pk_pem_sig,
             policy_ids: vec!["allow".to_string()],
         };
 
@@ -122,12 +119,19 @@ mod tests {
         println!("response returned success");
 
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let body_str = String::from_utf8_lossy(&body_bytes);
-        println!("{}", body_str);
+        let snapsync_response: SnapSyncResponse =
+            serde_json::from_slice(&body_bytes).unwrap();
 
-
-        // let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        // let genesis_data_response: GenesisDataResponse =
-        //     serde_json::from_slice(&body_bytes).unwrap();
+        // Check that you can decrypt the response successfully
+        let server_pk = secp256k1::PublicKey::from_slice(&snapsync_response.server_signing_pk).unwrap();
+        let shared_secret = SharedSecret::new(&server_pk, &client_sk);
+        let aes_key = derive_aes_key(&shared_secret).unwrap();
+        let decrypted_bytes: Vec<u8>  = aes_decrypt(&aes_key, &snapsync_response.encrypted_data, snapsync_response.nonce).unwrap();
+        let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes);
+        
+        // Check that the signature is valid
+        let verified = secp256k1_verify(&snapsync_response.encrypted_data, &snapsync_response.signature, server_pk)
+            .expect("Internal error while verifying the signature");
+        assert!(verified);
     }
 }

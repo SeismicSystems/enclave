@@ -13,8 +13,6 @@ pub struct SnapSyncRequest {
     pub client_attestation: Vec<u8>,
     pub client_signing_pk: Vec<u8>,
     pub policy_ids: Vec<String>,
-    pub rsa_pk_pem: Vec<u8>,
-    pub rsa_pk_pem_sig: Vec<u8>,
 }
 /// Struct representing the response from SnapSync
 ///
