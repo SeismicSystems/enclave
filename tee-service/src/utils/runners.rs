@@ -1,3 +1,7 @@
+//! This file has cargo tests so I can
+//! one click run them and see the output
+//! They are for dev convenience only
+
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
 use attestation_service::config::Config;
@@ -7,9 +11,6 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
 use tee_service_api::request_types::genesis::GenesisData;
-/// This file has cargo tests so I can
-/// one click run them and see the output
-/// They are for dev convenience only
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
@@ -37,7 +38,7 @@ fn run_hash_genesis_data() -> Result<(), anyhow::Error> {
         .unwrap(),
     };
 
-    let genesis_data_bytes = genesis_data.to_bytes();
+    let genesis_data_bytes = genesis_data.to_bytes()?;
     let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
     println!("{:?}", hash_bytes);
 

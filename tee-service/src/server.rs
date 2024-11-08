@@ -2,6 +2,7 @@ use crate::coco_aa::handlers::*;
 use crate::coco_as::handlers::*;
 use crate::genesis::handlers::*;
 use crate::signing::handlers::*;
+use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
 
 use anyhow::Result;
@@ -32,6 +33,7 @@ pub async fn start_server(addr: SocketAddr) -> Result<()> {
         )
         .post("/signing/sign", secp256k1_sign_handler)
         .post("/signing/verify", secp256k1_verify_handler)
+        .post("/snapsync/provide_backup", provide_snapsync_handler)
         .post("/tx_io/encrypt", tx_io_encrypt_handler)
         .post("/tx_io/decrypt", tx_io_decrypt_handler)
         .err_handler_with_info(error_handler)

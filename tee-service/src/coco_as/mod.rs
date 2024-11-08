@@ -37,7 +37,7 @@ pub async fn eval_att_evidence(
 }
 
 // parses the b64 JWT token retuned by the attestation service
-fn parse_as_token_claims(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
+pub fn parse_as_token_claims(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
     let parts: Vec<&str> = as_token.splitn(3, '.').collect();
     let claims_b64 = parts[1];
     let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
