@@ -6,10 +6,7 @@ use std::convert::Infallible;
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
 use tee_service_api::errors::{
-    bad_evidence_response, 
-    invalid_json_body_resp, 
-    invalid_req_body_resp,
-    bad_argument_response,
+    bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
 };
 use tee_service_api::request_types::snapsync::*;
 
@@ -31,7 +28,8 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
     };
 
     // verify the request attestation
-    let signing_pk_hash: [u8; 32] = Sha256::digest(snapsync_request.client_signing_pk.as_slice()).into();
+    let signing_pk_hash: [u8; 32] =
+        Sha256::digest(snapsync_request.client_signing_pk.as_slice()).into();
     let eval_result = eval_att_evidence(
         snapsync_request.client_attestation,
         snapsync_request.tee,
@@ -51,12 +49,15 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
     };
 
     // Get the SnapSync data
-    let client_signing_pk = match secp256k1::PublicKey::from_slice(
-        &snapsync_request.client_signing_pk
-    ) {
-        Ok(pk) => pk,
-        Err(_) => return Ok(bad_argument_response(anyhow::anyhow!("Unable to deserialize the client signing public key"))),
-    };
+    let client_signing_pk =
+        match secp256k1::PublicKey::from_slice(&snapsync_request.client_signing_pk) {
+            Ok(pk) => pk,
+            Err(_) => {
+                return Ok(bad_argument_response(anyhow::anyhow!(
+                    "Unable to deserialize the client signing public key"
+                )))
+            }
+        };
     let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();
 
     // return the response
@@ -67,19 +68,22 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::get_secp256k1_sk;
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use secp256k1::ecdh::SharedSecret;
     use serial_test::serial;
-    use crate::get_secp256k1_sk;
-    use tee_service_api::derive_aes_key;
     use tee_service_api::aes_decrypt;
+    use tee_service_api::derive_aes_key;
     use tee_service_api::secp256k1_verify;
 
     use crate::{
-        // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
-        init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
         coco_aa::attest_signing_pk,
+        // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
+        init_as_policies,
+        init_coco_aa,
+        init_coco_as,
+        utils::test_utils::is_sudo,
     };
 
     #[serial(attestation_agent, attestation_service)]
@@ -124,19 +128,28 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK);
 
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let snapsync_response: SnapSyncResponse =
-            serde_json::from_slice(&body_bytes).unwrap();
+        let snapsync_response: SnapSyncResponse = serde_json::from_slice(&body_bytes).unwrap();
 
         // Check that you can decrypt the response successfully
-        let server_pk = secp256k1::PublicKey::from_slice(&snapsync_response.server_signing_pk).unwrap();
+        let server_pk =
+            secp256k1::PublicKey::from_slice(&snapsync_response.server_signing_pk).unwrap();
         let shared_secret = SharedSecret::new(&server_pk, &client_sk);
         let aes_key = derive_aes_key(&shared_secret).unwrap();
-        let decrypted_bytes: Vec<u8>  = aes_decrypt(&aes_key, &snapsync_response.encrypted_data, snapsync_response.nonce).unwrap();
+        let decrypted_bytes: Vec<u8> = aes_decrypt(
+            &aes_key,
+            &snapsync_response.encrypted_data,
+            snapsync_response.nonce,
+        )
+        .unwrap();
         let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes).unwrap();
-        
+
         // Check that the signature is valid
-        let verified = secp256k1_verify(&snapsync_response.encrypted_data, &snapsync_response.signature, server_pk)
-            .expect("Internal error while verifying the signature");
+        let verified = secp256k1_verify(
+            &snapsync_response.encrypted_data,
+            &snapsync_response.signature,
+            server_pk,
+        )
+        .expect("Internal error while verifying the signature");
         assert!(verified);
     }
 

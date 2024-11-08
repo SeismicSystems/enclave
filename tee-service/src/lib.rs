@@ -50,7 +50,7 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
         // AttestationService is already initialized, so we skip re-initialization.
         return Ok(());
     }
-    
+
     let config = config.unwrap_or_default();
 
     // Initialize the AttestationService
@@ -73,7 +73,7 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
 ///
 /// For example, the important values for AxTdxVtpm are the MRSEAM and MRTD values,
 /// which respectively fingerprint the TDX module and the guest firmware that are running
-/// 
+///
 /// TODO: replace policies, particularly the Yocto policy, with finalized policies before mainnet
 pub async fn init_as_policies() -> Result<()> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
@@ -105,7 +105,7 @@ pub async fn init_as_policies() -> Result<()> {
 ///
 /// # Panics
 /// The function may panic if the file is missing or if it cannot deserialize the keypair.
-/// 
+///
 /// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
 fn get_secp256k1_sk() -> secp256k1::SecretKey {
     get_sample_secp256k1_sk()
@@ -121,7 +121,7 @@ fn get_secp256k1_sk() -> secp256k1::SecretKey {
 ///
 /// # Panics
 /// The function may panic if the file is missing or if it cannot deserialize the keypair.
-/// 
+///
 /// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
 fn get_secp256k1_pk() -> secp256k1::PublicKey {
     get_sample_secp256k1_pk()

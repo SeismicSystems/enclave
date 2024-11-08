@@ -18,7 +18,7 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 
 /// Makes an attestation with a hash of a Secp256k1 public key as the runtime data
 /// returns (attestation, signing_pk)
-/// 
+///
 /// UNSAFE: Currently this is using a sample key for testing purposes
 pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
     let signing_pk = tee_service_api::get_sample_secp256k1_pk();

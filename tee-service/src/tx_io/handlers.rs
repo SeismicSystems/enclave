@@ -38,10 +38,11 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 
     // load key and encrypt data
     let encrypted_data = enclave_ecdh_encrypt(
-        &encryption_request.msg_sender,  
-        encryption_request.data, 
-        encryption_request.nonce
-    ).unwrap();
+        &encryption_request.msg_sender,
+        encryption_request.data,
+        encryption_request.nonce,
+    )
+    .unwrap();
 
     let response_body = IoEncryptionResponse { encrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
@@ -80,9 +81,9 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 
     // load key and decrypt data
     let decrypted_data = enclave_ecdh_decrypt(
-        &decryption_request.msg_sender, 
-        decryption_request.data, 
-        decryption_request.nonce
+        &decryption_request.msg_sender,
+        decryption_request.data,
+        decryption_request.nonce,
     );
 
     let decrypted_data = match decrypted_data {
@@ -97,7 +98,6 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 
     Ok(Response::new(Body::from(response_json)))
 }
-
 
 #[cfg(test)]
 mod tests {

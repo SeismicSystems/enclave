@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::{self, Read};
 
-
 /// Checks if the current user has root (sudo) privileges.
 ///
 /// This function runs the `id -u` command, which returns the current user's ID.

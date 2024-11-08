@@ -91,8 +91,6 @@ pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Bod
     Ok(Response::new(Body::from(response_json)))
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

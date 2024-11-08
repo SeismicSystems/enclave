@@ -103,7 +103,7 @@ mod tests {
         // Submit the genesis data to the attestation service
         let bytes = genesis_data_response.data.to_bytes().unwrap();
         let genesis_data_hash: [u8; 32] = Sha256::digest(bytes).into();
-        
+
         let tdx_eval_request = AttestationEvalEvidenceRequest {
             evidence: genesis_data_response.evidence,
             tee: Tee::AzTdxVtpm,
