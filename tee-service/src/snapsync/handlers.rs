@@ -10,6 +10,19 @@ use tee_service_api::errors::{
 };
 use tee_service_api::request_types::snapsync::*;
 
+/// handles a request to provide private information required for SnapSync
+/// 
+/// /// # Arguments
+/// * `req` - The incoming HTTP request containing the message to be signed. The body of the request
+///   Should be a JSON-encoded `SnapSyncRequest`.
+///
+/// # Returns
+/// A `Result` containing an HTTP response with the signature, or an error of type `Infallible`.
+/// The response body is JSON-encoded and contains the SnapSyncResponse
+/// holding the encrypted data and signature.
+///
+/// # Errors
+/// The function may panic if parsing the request body or signing the message fails.
 pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
