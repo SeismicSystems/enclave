@@ -1,8 +1,11 @@
+pub mod handlers;
+
 use tee_service_api::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 use crate::{coco_aa::attest_signing_pk, tx_io::enclave_ecdh_encrypt};
 use crate::signing::enclave_sign;
 
-pub mod handlers;
+use secp256k1::rand::RngCore;
+use secp256k1::rand::rngs::OsRng;
 
 const DB_PATH: &str = "./src/snapsync.db";
 
@@ -17,8 +20,12 @@ pub async fn build_snapsync_response(client_signing_pk: secp256k1::PublicKey) ->
     let snapsync_data: SnapSyncData = gather_snapsync_data().await?;
     let snapsync_bytes = snapsync_data.to_bytes()?;
 
+    // generate a random nonce
+    // TODO: evaluate security of this approach
+    let mut rng = OsRng; // Secure randomness source from the OS
+    let nonce = rng.next_u64(); // Generates a random u64
+
     // encrypt the snapsync data
-    let nonce = 65; // TODO: get a nonce more securely. Choose randomly?
     let encrypted_data = enclave_ecdh_encrypt(
         &client_signing_pk, 
         snapsync_bytes, 
