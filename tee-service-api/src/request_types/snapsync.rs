@@ -28,6 +28,7 @@ pub struct SnapSyncResponse {
     pub server_attestation: Vec<u8>,
     pub server_signing_pk: Vec<u8>,
     pub encrypted_data: Vec<u8>,
+    pub nonce: u64,
     pub signature: Vec<u8>,
 }
 

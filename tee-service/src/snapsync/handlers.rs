@@ -2,8 +2,6 @@ use attestation_service::HashAlgorithm;
 use hyper::{body::to_bytes, Body, Request, Response};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
-use openssl::pkey::Public;
-use openssl::rsa::Rsa;
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
@@ -11,7 +9,6 @@ use tee_service_api::errors::{
     bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
 };
 use tee_service_api::request_types::snapsync::*;
-use tee_service_api::secp256k1_verify;
 
 pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     // parse the request body
@@ -50,29 +47,14 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
         }
     };
 
-    // verify the rsa_pk_pem signature
+    // Get the SnapSync data
     let client_signing_pk = secp256k1::PublicKey::from_slice(
         &snapsync_request.client_signing_pk
     ).expect("Internal error while deserializing the public key");
-
-    let verified = secp256k1_verify(
-        &snapsync_request.rsa_pk_pem, 
-        &snapsync_request.rsa_pk_pem_sig, 
-        client_signing_pk,
-    ).expect("Internal error while verifying the signature");
-
-    if !verified {
-        // TODO: return a different error response
-        return Ok(bad_evidence_response(anyhow::anyhow!("Invalid signature")));
-    }
-
-    // Get the SnapSync data
-    let rsa: Rsa<Public> = Rsa::public_key_from_pem(snapsync_request.rsa_pk_pem.as_slice()).unwrap();
-    let response_body: SnapSyncResponse = build_snapsync_response(rsa).await.unwrap();
+    let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();
 
     // return the response
     let response_json = serde_json::to_string(&response_body).unwrap();
-    // let response_json = serde_json::to_string(&response_body).unwrap();
     Ok(Response::new(Body::from(response_json)))
 }
 

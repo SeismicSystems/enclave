@@ -1,9 +1,7 @@
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
-use secp256k1::SecretKey;
 
-use super::{ecdh_decrypt, ecdh_encrypt};
-use tee_service_api::crypto::*;
+use super::{enclave_ecdh_decrypt, enclave_ecdh_encrypt};
 use tee_service_api::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
@@ -39,10 +37,8 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     };
 
     // load key and encrypt data
-    let ecdh_sk = get_secp256k1_sk();
-    let encrypted_data = ecdh_encrypt(
-        &encryption_request.msg_sender, 
-        &ecdh_sk, 
+    let encrypted_data = enclave_ecdh_encrypt(
+        &encryption_request.msg_sender,  
         encryption_request.data, 
         encryption_request.nonce
     ).unwrap();
@@ -81,11 +77,10 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
             return Ok(invalid_json_body_resp());
         }
     };
+
     // load key and decrypt data
-    let ecdh_sk = get_secp256k1_sk();
-    let decrypted_data = ecdh_decrypt(
+    let decrypted_data = enclave_ecdh_decrypt(
         &decryption_request.msg_sender, 
-        &ecdh_sk, 
         decryption_request.data, 
         decryption_request.nonce
     );
@@ -103,19 +98,6 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     Ok(Response::new(Body::from(response_json)))
 }
 
-/// Loads a secp256k1 private key from a file.
-///
-/// This function reads the keypair from a JSON file for testing purposes. Eventually, it should
-/// be replaced with a more secure solution, such as requesting a key from a KMS service.
-///
-/// # Returns
-/// A secp256k1 `SecretKey` loaded from the keypair file.
-///
-/// # Panics
-/// The function may panic if the file is missing or if it cannot deserialize the keypair.
-fn get_secp256k1_sk() -> SecretKey {
-    get_sample_secp256k1_sk()
-}
 
 #[cfg(test)]
 mod tests {

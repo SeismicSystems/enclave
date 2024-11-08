@@ -1,8 +1,6 @@
-use openssl::{pkey::Public, rsa::Rsa};
-use tee_service_api::{get_sample_secp256k1_sk, snapsync::{SnapSyncData, SnapSyncResponse}};
-use crate::coco_aa::attest_signing_pk;
-use tee_service_api::secp256k1_sign_digest;
-use tee_service_api::rsa_encrypt;
+use tee_service_api::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
+use crate::{coco_aa::attest_signing_pk, tx_io::enclave_ecdh_encrypt};
+use crate::signing::enclave_sign;
 
 pub mod handlers;
 
@@ -10,28 +8,31 @@ const DB_PATH: &str = "./src/snapsync.db";
 
 /// Gathers the snapsync data, signs it, and returns a SnapSyncResponse
 /// Currently the snapsync data has the io private key and an encrypted version of the state
-pub async fn build_snapsync_response(rsa: Rsa<Public>) -> Result<SnapSyncResponse, anyhow::Error> {
+pub async fn build_snapsync_response(client_signing_pk: secp256k1::PublicKey) -> Result<SnapSyncResponse, anyhow::Error> {
     // Make an attestation with the signing key
-    let (attestation, signing_pk) = attest_signing_pk().await?;
-    let server_signing_pk = signing_pk.serialize().to_vec();
+    let (attestation, server_signing_pk) = attest_signing_pk().await?;
+    let server_signing_pk_bytes = server_signing_pk.serialize().to_vec();
     
     // Gather the snapsync data
     let snapsync_data: SnapSyncData = gather_snapsync_data().await?;
     let snapsync_bytes = snapsync_data.to_bytes();
 
     // encrypt the snapsync data
-    let rsa_pk_pem = rsa.public_key_to_pem().unwrap();
-    let encrypted_data = rsa_encrypt(snapsync_bytes.as_slice(), rsa_pk_pem.as_slice())?;
+    let nonce = 65; // TODO: get a nonce more securely. Choose randomly?
+    let encrypted_data = enclave_ecdh_encrypt(
+        &client_signing_pk, 
+        snapsync_bytes, 
+        nonce,
+    )?;
 
     // Sign the snapsync data
-    let signing_sk = get_sample_secp256k1_sk();
-    let signature = secp256k1_sign_digest(&snapsync_bytes, signing_sk)
-        .expect("Internal Error while signing the message");
+    let signature = enclave_sign(&encrypted_data)?;
 
     Ok(SnapSyncResponse {
         server_attestation: attestation,
-        server_signing_pk,
+        server_signing_pk: server_signing_pk_bytes,
         encrypted_data,
+        nonce,
         signature,
     })
 }
@@ -47,3 +48,4 @@ async fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
         state: sample_private_state,
     })
 }
+
