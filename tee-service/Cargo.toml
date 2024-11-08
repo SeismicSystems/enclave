@@ -36,7 +36,6 @@ hex = { workspace = true }
 byteorder = { workspace = true }
 scroll = { workspace = true, default-features = false, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
-openssl = { workspace = true}
 
 serial_test = "3.1.0"
 
