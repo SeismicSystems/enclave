@@ -48,4 +48,3 @@ async fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
         state: sample_private_state,
     })
 }
-

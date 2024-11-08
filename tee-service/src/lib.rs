@@ -50,12 +50,7 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
         // AttestationService is already initialized, so we skip re-initialization.
         return Ok(());
     }
-
-    // TODO: load a real config with a policy once we have one
-    // let config_path_str = "path/to/config.json";
-    // let config_path = std::path::Path::new(config_path_str);
-    // let config = Config::try_from(config_path).expect("Failed to load AttestationService config");
-
+    
     let config = config.unwrap_or_default();
 
     // Initialize the AttestationService
@@ -78,6 +73,8 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
 ///
 /// For example, the important values for AxTdxVtpm are the MRSEAM and MRTD values,
 /// which respectively fingerprint the TDX module and the guest firmware that are running
+/// 
+/// TODO: replace policies, particularly the Yocto policy, with finalized policies before mainnet
 pub async fn init_as_policies() -> Result<()> {
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
     let mut writeable_as = coco_as.write().await;
@@ -94,8 +91,6 @@ pub async fn init_as_policies() -> Result<()> {
             .set_policy(policy_id.to_string(), policy_encoded)
             .await?;
     }
-
-    println!("policies: {:?}", writeable_as.list_policies().await?);
 
     Ok(())
 }

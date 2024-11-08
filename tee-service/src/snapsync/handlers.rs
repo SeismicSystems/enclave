@@ -118,12 +118,13 @@ mod tests {
             .body(Body::from(payload_json))
             .unwrap();
         let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        println!("response returned success");
 
-        let status = res.status();
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let body_str = String::from_utf8_lossy(&body_bytes);
         println!("{}", body_str);
-        assert_eq!(status, StatusCode::OK);
+
 
         // let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         // let genesis_data_response: GenesisDataResponse =
