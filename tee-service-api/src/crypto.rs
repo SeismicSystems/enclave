@@ -93,7 +93,7 @@ where
     // recover the plaintext byte encoding of the object
     let buf = cipher
         .decrypt(&nonce, ciphertext.as_ref())
-        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))?;
+        .map_err(|e| anyhow!("AES decryption failed: {:?}", e.to_string()))?;
 
     // recover the object from the byte encoding
     let plaintext =
