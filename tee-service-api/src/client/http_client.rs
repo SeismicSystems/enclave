@@ -60,7 +60,7 @@ impl TeeHttpClient {
 
 #[derive(Deserialize)]
 pub struct TeeErrorResponse {
-    error: String
+    error: String,
 }
 
 impl TeeAPI for TeeHttpClient {
@@ -171,7 +171,7 @@ impl TeeAPI for TeeHttpClient {
 
         if !response.status().is_success() {
             let error: TeeErrorResponse = serde_json::from_str(&response.text().await?)?;
-            return Err(anyhow::anyhow!(error.error))
+            return Err(anyhow::anyhow!(error.error));
         }
 
         // Extract the response body as bytes
@@ -200,7 +200,7 @@ impl TeeAPI for TeeHttpClient {
 
         if !response.status().is_success() {
             let error: TeeErrorResponse = serde_json::from_str(&response.text().await?)?;
-            return Err(anyhow::anyhow!(error.error))
+            return Err(anyhow::anyhow!(error.error));
         }
         // Extract the response body as bytes
         let body: Vec<u8> = response.bytes().await?.to_vec();
