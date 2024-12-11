@@ -17,7 +17,7 @@ pub fn enclave_ecdh_encrypt(
     let shared_secret = SharedSecret::new(pk, &sk);
     let aes_key = derive_aes_key(&shared_secret)
         .map_err(|e| anyhow!("Error while deriving AES key: {:?}", e))?;
-    let encrypted_data = aes_encrypt(&aes_key, &data, nonce);
+    let encrypted_data = aes_encrypt(&aes_key, &data, nonce)?;
     Ok(encrypted_data)
 }
 

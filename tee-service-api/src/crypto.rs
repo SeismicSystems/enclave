@@ -48,8 +48,8 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 /// A `Vec<u8>` containing the encrypted ciphertext.
 ///
 /// # Panics
-/// This function will panic if the encryption fails.
-pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64) -> Vec<u8> {
+/// This function will error if the encryption fails.
+pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64) -> anyhow::Result<Vec<u8>> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
 
@@ -60,7 +60,7 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
     // encrypt the Vec<u8>
     cipher
         .encrypt(&nonce, buf.as_ref())
-        .unwrap_or_else(|err| panic!("Encryption failed: {:?}", err))
+        .map_err(|err| anyhow!("Encryption failed: {:?}", err))
 }
 
 /// Decrypts ciphertext using AES-256 GCM with the provided key and nonce.
@@ -78,7 +78,7 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
 /// The decrypted object of type `T`, where `T` implements the `Decodable` trait.
 ///
 /// # Panics
-/// This function will panic if decryption or decoding fails.
+/// This function will return an error if decryption or decoding fails.
 pub fn aes_decrypt<T>(
     key: &Key<Aes256Gcm>,
     ciphertext: &[u8],
