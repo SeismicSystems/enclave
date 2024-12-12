@@ -51,13 +51,11 @@ fn test_nonce() {
 ///
 /// # Panics
 /// This function will panic if the encryption fails.
-pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &[u8], nonce: u64) -> Vec<u8> {
+pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &[u8], nonce: u64) -> anyhow::Result<Vec<u8>> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
     // encrypt the Vec<u8>
-    cipher
-        .encrypt(&nonce, plaintext)
-        .unwrap_or_else(|err| panic!("Encryption failed: {:?}", err))
+    cipher.encrypt(&nonce, plaintext).map_err(|e| anyhow!("AES encryption failed: {:?}", e))
 }
 
 /// Decrypts ciphertext using AES-256 GCM with the provided key and nonce.
@@ -79,7 +77,7 @@ pub fn aes_decrypt(
     key: &Key<Aes256Gcm>,
     ciphertext: &[u8],
     nonce: u64,
-) -> Result<Vec<u8>, anyhow::Error> {
+) -> anyhow::Result<Vec<u8>> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
 
