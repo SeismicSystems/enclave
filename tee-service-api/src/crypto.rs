@@ -9,6 +9,7 @@ use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp25
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
+use alloy_rlp::Bytes;
 
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
@@ -31,6 +32,11 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
     let crypto_nonce_size = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::default().len();
     nonce_bytes.resize(crypto_nonce_size, 0); // pad to the expected size
     GenericArray::clone_from_slice(&nonce_bytes)
+}
+
+#[test]
+fn test_nonce() {
+    println!("Nonce of 1: {:?}", u64_to_generic_u8_array(1))
 }
 
 /// Encrypts plaintext using AES-256 GCM with the provided key and nonce.
@@ -57,10 +63,33 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
     let mut buf = Vec::new();
     plaintext.encode(&mut buf);
 
+    println!("Encoded buf ({}): {:?}", buf.len(), buf);
     // encrypt the Vec<u8>
     cipher
         .encrypt(&nonce, buf.as_ref())
         .map_err(|err| anyhow!("Encryption failed: {:?}", err))
+}
+
+#[test]
+fn test_encrypt() {
+    let pk = get_sample_secp256k1_pk();
+    let sk = secp256k1::SecretKey::from_str(
+        "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    )
+    .unwrap();
+
+    let shared_secret = SharedSecret::new(&pk, &sk);
+    let aes_key = derive_aes_key(&shared_secret).unwrap();
+    println!("Aes key = {:?}\n", aes_key);
+
+    let nonce = 1;
+    let plaintext: Vec<u8> = vec![36, 167, 240, 183, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3];
+    // let plaintext = Bytes::from(plaintext);
+
+    println!("Len of plaintext = {}", plaintext.len());
+    let ciphertext = aes_encrypt(&aes_key, &plaintext, nonce).unwrap();
+
+    println!("Ciphertext: {:?}\n", ciphertext);
 }
 
 /// Decrypts ciphertext using AES-256 GCM with the provided key and nonce.
