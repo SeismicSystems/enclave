@@ -34,31 +34,31 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 
 /// Encrypts plaintext using AES-256 GCM with the provided key and nonce.
 ///
-/// This function uses AES-GCM to encrypt a u8 array using the provided AES key and nonce
+/// This function uses AES-GCM to encrypt a slice of bytes using the provided AES key and nonce
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
-/// * `plaintext` - The u8 array to encrypt
+/// * `plaintext` - The slice of bytes to encrypt
 /// * `nonce` - A 64-bit unsigned integer used as the nonce for the encryption process.
 ///
 /// # Returns
-/// A `Vec<u8>` containing the encrypted ciphertext.
+/// A `Vec<u8>` containing the bytes of encrypted ciphertext
 ///
 /// # Panics
 /// This function will panic if the encryption fails.
-pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &Vec<u8>, nonce: u64) -> Vec<u8> {
+pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &[u8], nonce: u64) -> Vec<u8> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
     // encrypt the Vec<u8>
     cipher
-        .encrypt(&nonce, plaintext.as_ref())
+        .encrypt(&nonce, plaintext)
         .unwrap_or_else(|err| panic!("Encryption failed: {:?}", err))
 }
 
 /// Decrypts ciphertext using AES-256 GCM with the provided key and nonce.
 ///
-/// This function uses AES-GCM to decrypt a ciphertext into a u8 array.
-/// The function expects the ciphertext to be a u8 array if the decryption is successful.
+/// This function uses AES-GCM to decrypt a ciphertext into a Vec<u8>.
+/// It expects the ciphertext to be a slice of bytes
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
@@ -66,7 +66,7 @@ pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &Vec<u8>, nonce: u64) -> Vec
 /// * `nonce` - A 64-bit unsigned integer used as the nonce for decryption.
 ///
 /// # Returns
-/// A Vec<u8> array
+/// A `Vec<u8>` containing the bytes of the decrypted plaintext
 ///
 /// # Panics
 /// This function will panic if decryption or decoding fails.
