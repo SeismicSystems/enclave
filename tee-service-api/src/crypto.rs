@@ -2,7 +2,6 @@ use aes_gcm::{
     aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit},
     Aes256Gcm, Key,
 };
-use alloy_rlp::{Decodable, Encodable};
 use anyhow::anyhow;
 use hkdf::Hkdf;
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
@@ -35,13 +34,11 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 
 /// Encrypts plaintext using AES-256 GCM with the provided key and nonce.
 ///
-/// This function uses AES-GCM to encrypt a serializable object (of type `Encodable`)
-/// using the provided AES key and nonce. The object is first serialized to a `Vec<u8>`
-/// and then encrypted.
+/// This function uses AES-GCM to encrypt a u8 array using the provided AES key and nonce
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
-/// * `plaintext` - The object to encrypt, which must implement the `Encodable` trait.
+/// * `plaintext` - The u8 array to encrypt
 /// * `nonce` - A 64-bit unsigned integer used as the nonce for the encryption process.
 ///
 /// # Returns
@@ -49,25 +46,19 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 ///
 /// # Panics
 /// This function will panic if the encryption fails.
-pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64) -> Vec<u8> {
+pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &Vec<u8>, nonce: u64) -> Vec<u8> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
-
-    // convert the encodable object to a Vec<u8>
-    let mut buf = Vec::new();
-    plaintext.encode(&mut buf);
-
     // encrypt the Vec<u8>
     cipher
-        .encrypt(&nonce, buf.as_ref())
+        .encrypt(&nonce, plaintext.as_ref())
         .unwrap_or_else(|err| panic!("Encryption failed: {:?}", err))
 }
 
 /// Decrypts ciphertext using AES-256 GCM with the provided key and nonce.
 ///
-/// This function uses AES-GCM to decrypt a ciphertext into an object that implements
-/// the `Decodable` trait. The function expects the ciphertext to be a `Vec<u8>`, and
-/// it will return the deserialized object if the decryption is successful.
+/// This function uses AES-GCM to decrypt a ciphertext into a u8 array.
+/// The function expects the ciphertext to be a u8 array if the decryption is successful.
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
@@ -75,30 +66,21 @@ pub fn aes_encrypt<T: Encodable>(key: &Key<Aes256Gcm>, plaintext: &T, nonce: u64
 /// * `nonce` - A 64-bit unsigned integer used as the nonce for decryption.
 ///
 /// # Returns
-/// The decrypted object of type `T`, where `T` implements the `Decodable` trait.
+/// A Vec<u8> array
 ///
 /// # Panics
 /// This function will panic if decryption or decoding fails.
-pub fn aes_decrypt<T>(
+pub fn aes_decrypt(
     key: &Key<Aes256Gcm>,
     ciphertext: &[u8],
     nonce: u64,
-) -> Result<T, anyhow::Error>
-where
-    T: Decodable,
-{
+) -> Result<Vec<u8>, anyhow::Error> {
     let cipher = Aes256Gcm::new(key);
     let nonce = u64_to_generic_u8_array(nonce);
 
-    // recover the plaintext byte encoding of the object
-    let buf = cipher
-        .decrypt(&nonce, ciphertext.as_ref())
+    let plaintext = cipher
+        .decrypt(&nonce, ciphertext)
         .map_err(|e| anyhow!("AES decryption failed: {:?}", e))?;
-
-    // recover the object from the byte encoding
-    let plaintext =
-        T::decode(&mut &buf[..]).map_err(|e| anyhow!("Failed to decode plaintext: {:?}", e))?;
-
     Ok(plaintext)
 }
 
