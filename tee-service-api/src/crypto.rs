@@ -32,11 +32,6 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
     GenericArray::clone_from_slice(&nonce_bytes)
 }
 
-#[test]
-fn test_nonce() {
-    println!("Nonce of 1: {:?}", u64_to_generic_u8_array(1))
-}
-
 /// Encrypts plaintext using AES-256 GCM with the provided key and nonce.
 ///
 /// This function uses AES-GCM to encrypt a slice of bytes using the provided AES key and nonce
