@@ -22,7 +22,6 @@ bytes = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 az-tdx-vtpm = { workspace = true }
-alloy-rlp = { workspace = true, default-features = false }
 routerify = { workspace = true }
 secp256k1 = { workspace = true, features = ["rand", "recovery", "std", "serde"] }
 sha2 = { workspace = true }

@@ -16,7 +16,6 @@ serde_json = { workspace = true }
 bytes = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
-alloy-rlp = { workspace = true, default-features = false }
 secp256k1 = { workspace = true, features = ["rand", "recovery", "std", "serde"] }
 sha2 = { workspace = true }
 hkdf = { workspace = true }
