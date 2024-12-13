@@ -1,49 +1,67 @@
 name: CI
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
+
 jobs:
   rustfmt:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          components: rustfmt
-          
+          components: rustfmt          
       - name: Check formatting
         run: cargo fmt --all --check
+
   build:
     runs-on: self-hosted
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      
       - uses: dtolnay/rust-toolchain@stable
-      
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-cache"
-          
       - name: cargo build without flags
         run: cargo build
-        
+
+  warnings:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "warnings-cache"
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
-   
+
+  test_service:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "service-cache"
       - name: Run tests for tee-service
         run: |
           cd tee-service
-          OUTPUT=$(cargo test --no-run 2>&1)
+          OUTPUT=$(cargo test -p tee_service --no-run 2>&1)
           echo "$OUTPUT"
           mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*tee_service-[a-z0-9]*')
           for binary in "${binaries[@]}"; do
@@ -51,10 +69,19 @@ jobs:
             sudo "$binary"
           done
 
+  test_client:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "client-cache"
       - name: Run tests for tee-service-api
         run: |
           cd tee-service-api
-          OUTPUT=$(cargo test --no-run 2>&1)
+          OUTPUT=$(cargo test -p tee_service_api --no-run 2>&1)
           echo "$OUTPUT"
           mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*tee_service_api-[a-z0-9]*')
           for binary in "${binaries[@]}"; do
