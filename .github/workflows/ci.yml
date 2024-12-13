@@ -24,7 +24,7 @@ jobs:
           components: rustfmt          
       - name: Check formatting
         run: cargo fmt --all --check
-  
+
   build:
     runs-on: self-hosted
     timeout-minutes: 30
@@ -48,7 +48,7 @@ jobs:
           shared-key: "warnings-cache"
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
-   
+
   test_service:
     runs-on: self-hosted
     timeout-minutes: 30
