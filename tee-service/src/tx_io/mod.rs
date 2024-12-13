@@ -16,7 +16,7 @@ pub fn enclave_ecdh_encrypt(
     let sk = get_secp256k1_sk();
     let shared_secret = SharedSecret::new(pk, &sk);
     let aes_key = derive_aes_key(&shared_secret)
-        .map_err(|e| anyhow!("Error while deriving AES key: {:?}", e))?;
+        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let encrypted_data = aes_encrypt(&aes_key, &data, nonce)?;
     Ok(encrypted_data)
 }
@@ -31,7 +31,7 @@ pub fn enclave_ecdh_decrypt(
     let sk: SecretKey = get_secp256k1_sk();
     let shared_secret = SharedSecret::new(pk, &sk);
     let aes_key = derive_aes_key(&shared_secret)
-        .map_err(|e| anyhow!("Error while deriving AES key: {:?}", e))?;
+        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let decrypted_data = aes_decrypt(&aes_key, &data, nonce)?;
     Ok(decrypted_data)
 }
