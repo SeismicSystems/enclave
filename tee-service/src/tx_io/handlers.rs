@@ -151,7 +151,7 @@ mod tests {
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let encryption_request = IoEncryptionRequest {
             msg_sender: PublicKey::from_str(
-                "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
+                "02aee3783208c3cdba82c65c046dfcfc63810bf15e266979aef88f91572f9f73bc",
             )
             .unwrap(),
             data: data_to_encrypt.clone(),
@@ -180,7 +180,7 @@ mod tests {
         // Prepare decrypt request body
         let decryption_request = IoDecryptionRequest {
             msg_sender: PublicKey::from_str(
-                "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
+                "02aee3783208c3cdba82c65c046dfcfc63810bf15e266979aef88f91572f9f73bc",
             )
             .unwrap(),
             data: enc_response.encrypted_data,
