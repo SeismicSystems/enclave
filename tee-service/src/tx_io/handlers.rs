@@ -38,7 +38,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 
     // load key and encrypt data
     let encrypted_data = enclave_ecdh_encrypt(
-        &encryption_request.msg_sender,
+        &encryption_request.encryption_pubkey,
         encryption_request.data,
         encryption_request.nonce,
     )
@@ -81,7 +81,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 
     // load key and decrypt data
     let decrypted_data = enclave_ecdh_decrypt(
-        &decryption_request.msg_sender,
+        &decryption_request.encryption_pubkey,
         decryption_request.data,
         decryption_request.nonce,
     );
@@ -150,7 +150,7 @@ mod tests {
         let base_url = "http://localhost:7878";
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let encryption_request = IoEncryptionRequest {
-            msg_sender: PublicKey::from_str(
+            encryption_pubkey: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
@@ -179,7 +179,7 @@ mod tests {
         // check that decryption returns the original data
         // Prepare decrypt request body
         let decryption_request = IoDecryptionRequest {
-            msg_sender: PublicKey::from_str(
+            encryption_pubkey: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
@@ -207,7 +207,7 @@ mod tests {
         let base_url = "http://localhost:7878";
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let decryption_request = IoDecryptionRequest {
-            msg_sender: PublicKey::from_str(
+            encryption_pubkey: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
