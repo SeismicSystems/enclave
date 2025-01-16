@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Struct representing the IO encryption request.
 ///
 /// # Fields
-/// * `encryption_pubkey` - The ephemeral secp256k1 public key.
+/// * `key` - The ephemeral secp256k1 public key.
 /// * `data` - The data to be encrypted, represented as a `Vec<u8>`.
 /// * `nonce` - A 64-bit unsigned integer used as a nonce in the encryption process.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -25,7 +25,7 @@ pub struct IoEncryptionResponse {
 /// Struct representing the IO decryption request.
 ///
 /// # Fields
-/// * `encryption_pubkey` - The ephemeral secp256k1 public key.
+/// * `key` - The ephemeral secp256k1 public key.
 /// * `data` - The encrypted data to be decrypted, represented as a `Vec<u8>`.
 /// * `nonce` - A 64-bit unsigned integer used as a nonce in the decryption process.
 #[derive(Debug, Serialize, Deserialize, Clone)]
