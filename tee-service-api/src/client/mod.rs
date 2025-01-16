@@ -67,4 +67,11 @@ pub trait WalletAPI {
         nonce: u64,
         private_key: &secp256k1::SecretKey,
     ) -> Result<Vec<u8>, anyhow::Error>;
+
+    fn decrypt(
+        &self,
+        data: Vec<u8>,
+        nonce: u64,
+        private_key: &secp256k1::SecretKey,
+    ) -> Result<Vec<u8>, anyhow::Error>;
 }
