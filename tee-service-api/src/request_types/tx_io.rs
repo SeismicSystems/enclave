@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// * `nonce` - A 64-bit unsigned integer used as a nonce in the encryption process.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IoEncryptionRequest {
-    pub encryption_pubkey: secp256k1::PublicKey,
+    pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
     pub nonce: u64,
 }
@@ -30,7 +30,7 @@ pub struct IoEncryptionResponse {
 /// * `nonce` - A 64-bit unsigned integer used as a nonce in the decryption process.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IoDecryptionRequest {
-    pub encryption_pubkey: secp256k1::PublicKey,
+    pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
     pub nonce: u64,
 }
