@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 /// Struct representing the IO encryption request.
 ///
 /// # Fields
-/// * `msg_sender` - The secp256k1 public key of the message sender.
+/// * `key` - The ephemeral secp256k1 public key.
 /// * `data` - The data to be encrypted, represented as a `Vec<u8>`.
 /// * `nonce` - A 64-bit unsigned integer used as a nonce in the encryption process.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IoEncryptionRequest {
-    pub msg_sender: secp256k1::PublicKey,
+    pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
     pub nonce: u64,
 }
@@ -25,12 +25,12 @@ pub struct IoEncryptionResponse {
 /// Struct representing the IO decryption request.
 ///
 /// # Fields
-/// * `msg_sender` - The secp256k1 public key of the message sender.
+/// * `key` - The ephemeral secp256k1 public key.
 /// * `data` - The encrypted data to be decrypted, represented as a `Vec<u8>`.
 /// * `nonce` - A 64-bit unsigned integer used as a nonce in the decryption process.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IoDecryptionRequest {
-    pub msg_sender: secp256k1::PublicKey,
+    pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
     pub nonce: u64,
 }
