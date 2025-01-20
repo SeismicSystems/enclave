@@ -50,8 +50,8 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 /// Returns an error if the nonce size is incorrect or if encryption fails.
 pub fn aes_encrypt(
     key: &Key<Aes256Gcm>,
-    nonce: Vec<u8>,
     plaintext: &[u8],
+    nonce: Vec<u8>,
 ) -> anyhow::Result<Vec<u8>> {
     if nonce.len() != 12 {
         return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
@@ -82,8 +82,8 @@ pub fn aes_encrypt(
 /// Returns an error if the nonce size is incorrect or if decryption fails.
 pub fn aes_decrypt(
     key: &Key<Aes256Gcm>,
-    nonce: Vec<u8>,
     ciphertext: &[u8],
+    nonce: Vec<u8>,
 ) -> anyhow::Result<Vec<u8>> {
     if nonce.len() != 12 {
         return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
