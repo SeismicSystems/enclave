@@ -24,7 +24,7 @@ pub async fn build_snapsync_response(
 
     // generate a random nonce
     // TODO: evaluate security of this approach
-    let mut nonce = [0u8;12];
+    let mut nonce = [0u8; 12];
     OsRng.fill_bytes(&mut nonce);
 
     // encrypt the snapsync data

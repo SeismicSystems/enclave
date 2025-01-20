@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct IoEncryptionRequest {
     pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
-    pub nonce: u64,
+    pub nonce: Vec<u8>,
 }
 
 /// Struct representing the IO encryption response.

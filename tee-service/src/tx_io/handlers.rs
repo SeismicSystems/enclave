@@ -157,7 +157,7 @@ mod tests {
             )
             .unwrap(),
             data: data_to_encrypt.clone(),
-            nonce:nonce.to_vec() 
+            nonce: nonce.to_vec(),
         };
         let payload_json = serde_json::to_string(&encryption_request).unwrap();
 
