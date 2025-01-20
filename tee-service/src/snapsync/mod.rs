@@ -24,11 +24,11 @@ pub async fn build_snapsync_response(
 
     // generate a random nonce
     // TODO: evaluate security of this approach
-    let mut rng = OsRng; // Secure randomness source from the OS
-    let nonce = rng.next_u64(); // Generates a random u64
+    let mut nonce = [0u8;12];
+    OsRng.fill_bytes(&mut nonce);
 
     // encrypt the snapsync data
-    let encrypted_data = enclave_ecdh_encrypt(&client_signing_pk, snapsync_bytes, nonce)?;
+    let encrypted_data = enclave_ecdh_encrypt(&client_signing_pk, snapsync_bytes, nonce.to_vec())?;
 
     // Sign the snapsync data
     let signature = enclave_sign(&encrypted_data)?;
@@ -37,7 +37,7 @@ pub async fn build_snapsync_response(
         server_attestation: attestation,
         server_signing_pk: server_signing_pk_bytes,
         encrypted_data,
-        nonce,
+        nonce: nonce.to_vec(),
         signature,
     })
 }

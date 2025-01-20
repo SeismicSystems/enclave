@@ -149,13 +149,15 @@ mod tests {
         // Prepare encryption request body
         let base_url = "http://localhost:7878";
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
+        let mut nonce = vec![0u8; 4]; // 4 leading zeros
+        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
         let encryption_request = IoEncryptionRequest {
             key: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
             data: data_to_encrypt.clone(),
-            nonce: 12345678,
+            nonce:nonce.to_vec() 
         };
         let payload_json = serde_json::to_string(&encryption_request).unwrap();
 
@@ -167,6 +169,7 @@ mod tests {
             .unwrap();
 
         let res = tx_io_encrypt_handler(req).await.unwrap();
+        println!("req sent");
         assert_eq!(res.status(), 200);
 
         // Parse the response body
@@ -184,7 +187,7 @@ mod tests {
             )
             .unwrap(),
             data: enc_response.encrypted_data,
-            nonce: 12345678,
+            nonce: nonce.to_vec(),
         };
         let payload_json = serde_json::to_string(&decryption_request).unwrap();
         let req = Request::builder()
@@ -206,13 +209,15 @@ mod tests {
     async fn test_decrypt_invalid_ciphertext() {
         let base_url = "http://localhost:7878";
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let mut nonce = vec![0u8; 4]; // 4 leading zeros
+        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
         let decryption_request = IoDecryptionRequest {
             key: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
             data: bad_ciphertext,
-            nonce: 12345678,
+            nonce: nonce.to_vec(),
         };
         let payload_json = serde_json::to_string(&decryption_request).unwrap();
         let req = Request::builder()

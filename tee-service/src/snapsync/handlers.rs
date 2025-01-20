@@ -151,7 +151,7 @@ mod tests {
         let decrypted_bytes: Vec<u8> = aes_decrypt(
             &aes_key,
             &snapsync_response.encrypted_data,
-            &snapsync_response.nonce,
+            snapsync_response.nonce,
         )
         .unwrap();
         let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes).unwrap();
