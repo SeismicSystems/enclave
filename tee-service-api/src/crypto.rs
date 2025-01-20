@@ -56,7 +56,8 @@ pub fn aes_encrypt(
     if nonce.len() != 12 {
         return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
     }
-    let nonce_array = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let nonce_array =
+        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
     let cipher = Aes256Gcm::new(key);
     cipher
         .encrypt(&nonce_array, plaintext)
@@ -88,7 +89,8 @@ pub fn aes_decrypt(
         return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
     }
 
-    let nonce_array = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let nonce_array =
+        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
     let cipher = Aes256Gcm::new(key);
 
     cipher
