@@ -169,7 +169,6 @@ mod tests {
             .unwrap();
 
         let res = tx_io_encrypt_handler(req).await.unwrap();
-        println!("req sent");
         assert_eq!(res.status(), 200);
 
         // Parse the response body
