@@ -4,6 +4,8 @@ use aes_gcm::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::u64_to_generic_u8_array;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Nonce {
