@@ -7,7 +7,10 @@
 pub mod http_client;
 pub mod mock_server;
 
-use crate::request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*};
+use crate::{
+    nonce::Nonce,
+    request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*},
+};
 
 pub trait TeeAPI {
     async fn genesis_data(
@@ -64,14 +67,14 @@ pub trait WalletAPI {
     fn encrypt(
         &self,
         data: Vec<u8>,
-        nonce: u64,
+        nonce: impl Into<Nonce>,
         private_key: &secp256k1::SecretKey,
     ) -> Result<Vec<u8>, anyhow::Error>;
 
     fn decrypt(
         &self,
         data: Vec<u8>,
-        nonce: u64,
+        nonce: impl Into<Nonce>,
         private_key: &secp256k1::SecretKey,
     ) -> Result<Vec<u8>, anyhow::Error>;
 }

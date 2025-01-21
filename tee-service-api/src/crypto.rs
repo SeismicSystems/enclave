@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key,
 };
 use anyhow::anyhow;
@@ -9,27 +9,12 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
+use crate::request_types::nonce::Nonce;
+
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
     pub secret_key: SecretKey,
     pub public_key: PublicKey,
-}
-
-/// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
-///
-/// This function takes a `u64` nonce and converts it into a generic byte array
-/// with the appropriate size for AES-GCM encryption.
-///
-/// # Arguments
-/// * `nonce` - A 64-bit unsigned integer representing the nonce.
-///
-/// # Returns
-/// A `GenericArray<u8, N>` where `N` is the expected nonce size for AES-GCM encryption.
-pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as AeadCore>::NonceSize> {
-    let mut nonce_bytes = nonce.to_be_bytes().to_vec();
-    let crypto_nonce_size = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::default().len();
-    nonce_bytes.resize(crypto_nonce_size, 0); // pad to the expected size
-    GenericArray::clone_from_slice(&nonce_bytes)
 }
 
 /// Encrypts plaintext using AES-256 GCM with a 92-bit nonce.
@@ -41,7 +26,7 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
 /// * `plaintext` - The slice of bytes to encrypt.
-/// * `nonce` - A `Vec<u8>` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
 ///
 /// # Returns
 /// A `Vec<u8>` containing the bytes of encrypted ciphertext.
@@ -51,13 +36,9 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 pub fn aes_encrypt(
     key: &Key<Aes256Gcm>,
     plaintext: &[u8],
-    nonce: Vec<u8>,
+    nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    if nonce.len() != 12 {
-        return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
-    }
-    let nonce_array =
-        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let nonce_array = nonce.into().try_into()?;
     let cipher = Aes256Gcm::new(key);
     cipher
         .encrypt(&nonce_array, plaintext)
@@ -73,7 +54,7 @@ pub fn aes_encrypt(
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
 /// * `ciphertext` - A slice of bytes (`&[u8]`) representing the encrypted data.
-/// * `nonce` - A `Vec<u8>` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
 ///
 /// # Returns
 /// A `Vec<u8>` containing the bytes of the decrypted plaintext.
@@ -83,14 +64,9 @@ pub fn aes_encrypt(
 pub fn aes_decrypt(
     key: &Key<Aes256Gcm>,
     ciphertext: &[u8],
-    nonce: Vec<u8>,
+    nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    if nonce.len() != 12 {
-        return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
-    }
-
-    let nonce_array =
-        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let nonce_array = nonce.into().try_into()?;
     let cipher = Aes256Gcm::new(key);
 
     cipher
