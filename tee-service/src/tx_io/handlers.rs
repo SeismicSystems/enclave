@@ -157,7 +157,7 @@ mod tests {
             )
             .unwrap(),
             data: data_to_encrypt.clone(),
-            nonce,
+            nonce: nonce.into(),
         };
         let payload_json = serde_json::to_string(&encryption_request).unwrap();
 
@@ -186,7 +186,7 @@ mod tests {
             )
             .unwrap(),
             data: enc_response.encrypted_data,
-            nonce,
+            nonce: nonce.into(),
         };
         let payload_json = serde_json::to_string(&decryption_request).unwrap();
         let req = Request::builder()
@@ -216,7 +216,7 @@ mod tests {
             )
             .unwrap(),
             data: bad_ciphertext,
-            nonce,
+            nonce: nonce.into(),
         };
         let payload_json = serde_json::to_string(&decryption_request).unwrap();
         let req = Request::builder()
