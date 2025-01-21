@@ -11,6 +11,7 @@ use crate::u64_to_generic_u8_array;
 pub enum Nonce {
     U64(u64),
     Vec(Vec<u8>),
+    Bytes([u8; 12]),
 }
 
 impl From<u64> for Nonce {
@@ -25,11 +26,18 @@ impl From<Vec<u8>> for Nonce {
     }
 }
 
+impl From<[u8; 12]> for Nonce {
+    fn from(value: [u8; 12]) -> Self {
+        Self::Bytes(value)
+    }
+}
+
 impl Into<Vec<u8>> for Nonce {
     fn into(self) -> Vec<u8> {
         match self {
             Self::U64(value) => u64_to_generic_u8_array(value).to_vec(),
             Self::Vec(value) => value,
+            Self::Bytes(value) => value.to_vec(),
         }
     }
 }
