@@ -12,7 +12,7 @@ use tee_service_api::request_types::nonce::Nonce;
 pub fn enclave_ecdh_encrypt(
     pk: &PublicKey,
     data: Vec<u8>,
-    nonce: Nonce,
+    nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let sk = get_secp256k1_sk();
     let shared_secret = SharedSecret::new(pk, &sk);
@@ -27,7 +27,7 @@ pub fn enclave_ecdh_encrypt(
 pub fn enclave_ecdh_decrypt(
     pk: &PublicKey,
     data: Vec<u8>,
-    nonce: Nonce,
+    nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let sk: SecretKey = get_secp256k1_sk();
     let shared_secret = SharedSecret::new(pk, &sk);
