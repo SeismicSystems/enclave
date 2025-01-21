@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit},
+    aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit},
     Aes256Gcm, Key,
 };
 use anyhow::anyhow;
@@ -15,6 +15,23 @@ use crate::request_types::nonce::Nonce;
 pub struct Secp256k1KeyPair {
     pub secret_key: SecretKey,
     pub public_key: PublicKey,
+}
+
+/// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
+///
+/// This function takes a `u64` nonce and converts it into a generic byte array
+/// with the appropriate size for AES-GCM encryption.
+///
+/// # Arguments
+/// * `nonce` - A 64-bit unsigned integer representing the nonce.
+///
+/// # Returns
+/// A `GenericArray<u8, N>` where `N` is the expected nonce size for AES-GCM encryption.
+pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as AeadCore>::NonceSize> {
+    let mut nonce_bytes = nonce.to_be_bytes().to_vec();
+    let crypto_nonce_size = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::default().len();
+    nonce_bytes.resize(crypto_nonce_size, 0); // pad to the expected size
+    GenericArray::clone_from_slice(&nonce_bytes)
 }
 
 /// Encrypts plaintext using AES-256 GCM with a 92-bit nonce.
