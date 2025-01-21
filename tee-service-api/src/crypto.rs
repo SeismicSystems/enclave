@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
+use crate::request_types::nonce::Nonce;
+
 #[derive(Serialize, Deserialize)]
 pub struct Secp256k1KeyPair {
     pub secret_key: SecretKey,
@@ -41,7 +43,7 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
 /// * `plaintext` - The slice of bytes to encrypt.
-/// * `nonce` - A `Vec<u8>` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
 ///
 /// # Returns
 /// A `Vec<u8>` containing the bytes of encrypted ciphertext.
@@ -51,13 +53,9 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
 pub fn aes_encrypt(
     key: &Key<Aes256Gcm>,
     plaintext: &[u8],
-    nonce: Vec<u8>,
+    nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    if nonce.len() != 12 {
-        return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
-    }
-    let nonce_array =
-        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let nonce_array = nonce.into().try_into()?;
     let cipher = Aes256Gcm::new(key);
     cipher
         .encrypt(&nonce_array, plaintext)
@@ -73,7 +71,7 @@ pub fn aes_encrypt(
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
 /// * `ciphertext` - A slice of bytes (`&[u8]`) representing the encrypted data.
-/// * `nonce` - A `Vec<u8>` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
 ///
 /// # Returns
 /// A `Vec<u8>` containing the bytes of the decrypted plaintext.
@@ -83,14 +81,9 @@ pub fn aes_encrypt(
 pub fn aes_decrypt(
     key: &Key<Aes256Gcm>,
     ciphertext: &[u8],
-    nonce: Vec<u8>,
+    nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    if nonce.len() != 12 {
-        return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
-    }
-
-    let nonce_array =
-        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let nonce_array = nonce.into().try_into()?;
     let cipher = Aes256Gcm::new(key);
 
     cipher

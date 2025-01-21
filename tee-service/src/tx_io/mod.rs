@@ -5,13 +5,14 @@ use anyhow::{anyhow, Result};
 use secp256k1::ecdh::SharedSecret;
 use secp256k1::{PublicKey, SecretKey};
 use tee_service_api::crypto::{aes_decrypt, aes_encrypt, derive_aes_key};
+use tee_service_api::request_types::nonce::Nonce;
 
 /// Encrypts the provided data using an AES key derived from
 /// the provided public key and the enclave's private key
 pub fn enclave_ecdh_encrypt(
     pk: &PublicKey,
     data: Vec<u8>,
-    nonce: Vec<u8>,
+    nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let sk = get_secp256k1_sk();
     let shared_secret = SharedSecret::new(pk, &sk);
@@ -26,7 +27,7 @@ pub fn enclave_ecdh_encrypt(
 pub fn enclave_ecdh_decrypt(
     pk: &PublicKey,
     data: Vec<u8>,
-    nonce: Vec<u8>,
+    nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let sk: SecretKey = get_secp256k1_sk();
     let shared_secret = SharedSecret::new(pk, &sk);
