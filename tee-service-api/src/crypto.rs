@@ -32,52 +32,70 @@ pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as Aea
     GenericArray::clone_from_slice(&nonce_bytes)
 }
 
-/// Encrypts plaintext using AES-256 GCM with the provided key and nonce.
+/// Encrypts plaintext using AES-256 GCM with a 92-bit nonce.
 ///
-/// This function uses AES-GCM to encrypt a slice of bytes using the provided AES key and nonce
+/// This function requires the nonce to be exactly 92 bits (12 bytes),
+/// with no padding or truncation. The caller must pass a `Vec<u8>`
+/// containing 12 bytes.
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
-/// * `plaintext` - The slice of bytes to encrypt
-/// * `nonce` - A 64-bit unsigned integer used as the nonce for the encryption process.
+/// * `plaintext` - The slice of bytes to encrypt.
+/// * `nonce` - A `Vec<u8>` containing exactly 12 bytes (92 bits).
 ///
 /// # Returns
-/// A `Vec<u8>` containing the bytes of encrypted ciphertext
+/// A `Vec<u8>` containing the bytes of encrypted ciphertext.
 ///
-/// # Panics
-/// This function will panic if the encryption fails.
-pub fn aes_encrypt(key: &Key<Aes256Gcm>, plaintext: &[u8], nonce: u64) -> anyhow::Result<Vec<u8>> {
+/// # Errors
+/// Returns an error if the nonce size is incorrect or if encryption fails.
+pub fn aes_encrypt(
+    key: &Key<Aes256Gcm>,
+    plaintext: &[u8],
+    nonce: Vec<u8>,
+) -> anyhow::Result<Vec<u8>> {
+    if nonce.len() != 12 {
+        return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
+    }
+    let nonce_array =
+        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
     let cipher = Aes256Gcm::new(key);
-    let nonce = u64_to_generic_u8_array(nonce);
-    // encrypt the Vec<u8>
     cipher
-        .encrypt(&nonce, plaintext)
+        .encrypt(&nonce_array, plaintext)
         .map_err(|e| anyhow!("AES encryption failed: {:?}", e))
 }
 
-/// Decrypts ciphertext using AES-256 GCM with the provided key and nonce.
+/// Decrypts ciphertext using AES-256 GCM with a 92-bit nonce.
 ///
-/// This function uses AES-GCM to decrypt a ciphertext into a Vec<u8>.
-/// It expects the ciphertext to be a slice of bytes
+/// This function requires the nonce to be exactly 92 bits (12 bytes),
+/// with no padding or truncation. The caller must pass a `Vec<u8>`
+/// containing 12 bytes.
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
 /// * `ciphertext` - A slice of bytes (`&[u8]`) representing the encrypted data.
-/// * `nonce` - A 64-bit unsigned integer used as the nonce for decryption.
+/// * `nonce` - A `Vec<u8>` containing exactly 12 bytes (92 bits).
 ///
 /// # Returns
-/// A `Vec<u8>` containing the bytes of the decrypted plaintext
+/// A `Vec<u8>` containing the bytes of the decrypted plaintext.
 ///
-/// # Panics
-/// This function will panic if decryption or decoding fails.
-pub fn aes_decrypt(key: &Key<Aes256Gcm>, ciphertext: &[u8], nonce: u64) -> anyhow::Result<Vec<u8>> {
-    let cipher = Aes256Gcm::new(key);
-    let nonce = u64_to_generic_u8_array(nonce);
+/// # Errors
+/// Returns an error if the nonce size is incorrect or if decryption fails.
+pub fn aes_decrypt(
+    key: &Key<Aes256Gcm>,
+    ciphertext: &[u8],
+    nonce: Vec<u8>,
+) -> anyhow::Result<Vec<u8>> {
+    if nonce.len() != 12 {
+        return Err(anyhow!("Nonce must be exactly 12 bytes (92 bits)"));
+    }
 
-    let plaintext = cipher
-        .decrypt(&nonce, ciphertext)
-        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))?;
-    Ok(plaintext)
+    let nonce_array =
+        GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::clone_from_slice(&nonce);
+    let cipher = Aes256Gcm::new(key);
+
+    cipher
+        .decrypt(&nonce_array, ciphertext)
+        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))
 }
 
 /// Derives an AES key from a shared secret using HKDF and SHA-256.
