@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::request_types::nonce::Nonce;
+
 /// Struct representing the IO encryption request.
 ///
 /// # Fields
@@ -10,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct IoEncryptionRequest {
     pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
-    pub nonce: Vec<u8>,
+    pub nonce: Nonce,
 }
 
 /// Struct representing the IO encryption response.
@@ -32,7 +34,7 @@ pub struct IoEncryptionResponse {
 pub struct IoDecryptionRequest {
     pub key: secp256k1::PublicKey,
     pub data: Vec<u8>,
-    pub nonce: Vec<u8>,
+    pub nonce: Nonce,
 }
 
 /// Struct representing the IO decryption response.

@@ -28,7 +28,7 @@ pub async fn build_snapsync_response(
     OsRng.fill_bytes(&mut nonce);
 
     // encrypt the snapsync data
-    let encrypted_data = enclave_ecdh_encrypt(&client_signing_pk, snapsync_bytes, nonce.to_vec())?;
+    let encrypted_data = enclave_ecdh_encrypt(&client_signing_pk, snapsync_bytes, nonce)?;
 
     // Sign the snapsync data
     let signature = enclave_sign(&encrypted_data)?;
