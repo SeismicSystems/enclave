@@ -1,7 +1,6 @@
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
-
-use super::{enclave_ecdh_decrypt, enclave_ecdh_encrypt};
+use tee_service_api::crypto::{enclave_ecdh_decrypt, enclave_ecdh_encrypt};
 use tee_service_api::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
@@ -39,6 +38,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     // load key and encrypt data
     let encrypted_data = enclave_ecdh_encrypt(
         &encryption_request.key,
+        &get_secp256k1_sk(),
         encryption_request.data,
         encryption_request.nonce,
     )
@@ -82,6 +82,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     // load key and decrypt data
     let decrypted_data = enclave_ecdh_decrypt(
         &decryption_request.key,
+        &get_secp256k1_sk(),
         decryption_request.data,
         decryption_request.nonce,
     );

@@ -199,3 +199,33 @@ pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
     )
     .unwrap()
 }
+
+/// Encrypts the provided data using an AES key derived from
+/// the provided public key and the enclave's private key
+pub fn enclave_ecdh_encrypt(
+    pk: &PublicKey,
+    sk: &SecretKey,
+    data: Vec<u8>,
+    nonce: impl Into<Nonce>,
+) -> Result<Vec<u8>, anyhow::Error> {
+    let shared_secret = SharedSecret::new(pk, &sk);
+    let aes_key =
+        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let encrypted_data = aes_encrypt(&aes_key, &data, nonce)?;
+    Ok(encrypted_data)
+}
+
+/// Decrypts the provided data using an AES key derived from
+/// the provided public key and the enclave's private key
+pub fn enclave_ecdh_decrypt(
+    pk: &PublicKey,
+    sk: &SecretKey,
+    data: Vec<u8>,
+    nonce: impl Into<Nonce>,
+) -> Result<Vec<u8>, anyhow::Error> {
+    let shared_secret = SharedSecret::new(pk, &sk);
+    let aes_key =
+        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let decrypted_data = aes_decrypt(&aes_key, &data, nonce)?;
+    Ok(decrypted_data)
+}
