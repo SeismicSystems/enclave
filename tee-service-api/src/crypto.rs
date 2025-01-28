@@ -201,8 +201,8 @@ pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
 }
 
 /// Encrypts the provided data using an AES key derived from
-/// the provided public key and the enclave's private key
-pub fn enclave_ecdh_encrypt(
+/// the provided public key and the provided private key
+pub fn ecdh_encrypt(
     pk: &PublicKey,
     sk: &SecretKey,
     data: Vec<u8>,
@@ -216,8 +216,8 @@ pub fn enclave_ecdh_encrypt(
 }
 
 /// Decrypts the provided data using an AES key derived from
-/// the provided public key and the enclave's private key
-pub fn enclave_ecdh_decrypt(
+/// the provided public key and the provided private key
+pub fn ecdh_decrypt(
     pk: &PublicKey,
     sk: &SecretKey,
     data: Vec<u8>,

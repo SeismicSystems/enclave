@@ -3,7 +3,7 @@ pub mod handlers;
 use crate::coco_aa::attest_signing_pk;
 use crate::get_secp256k1_sk;
 use crate::signing::enclave_sign;
-use tee_service_api::enclave_ecdh_encrypt;
+use tee_service_api::ecdh_encrypt;
 use tee_service_api::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 
 use secp256k1::rand::rngs::OsRng;
@@ -30,7 +30,7 @@ pub async fn build_snapsync_response(
     OsRng.fill_bytes(&mut nonce);
 
     // encrypt the snapsync data
-    let encrypted_data = enclave_ecdh_encrypt(
+    let encrypted_data = ecdh_encrypt(
         &client_signing_pk,
         &get_secp256k1_sk(),
         snapsync_bytes,
