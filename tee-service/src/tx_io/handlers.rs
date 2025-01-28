@@ -6,6 +6,8 @@ use tee_service_api::errors::{
 };
 use tee_service_api::request_types::tx_io::*;
 
+use crate::get_secp256k1_sk;
+
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
 /// # Arguments
