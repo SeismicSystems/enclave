@@ -7,3 +7,5 @@ pub use client::*;
 pub use crypto::*;
 pub use errors::*;
 pub use request_types::*;
+
+pub use secp256k1::*;
