@@ -1,11 +1,12 @@
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
-
-use super::{enclave_ecdh_decrypt, enclave_ecdh_encrypt};
+use tee_service_api::crypto::{ecdh_decrypt, ecdh_encrypt};
 use tee_service_api::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
 use tee_service_api::request_types::tx_io::*;
+
+use crate::get_secp256k1_sk;
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
@@ -37,8 +38,9 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     };
 
     // load key and encrypt data
-    let encrypted_data = enclave_ecdh_encrypt(
+    let encrypted_data = ecdh_encrypt(
         &encryption_request.key,
+        &get_secp256k1_sk(),
         encryption_request.data,
         encryption_request.nonce,
     )
@@ -80,8 +82,9 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     };
 
     // load key and decrypt data
-    let decrypted_data = enclave_ecdh_decrypt(
+    let decrypted_data = ecdh_decrypt(
         &decryption_request.key,
+        &get_secp256k1_sk(),
         decryption_request.data,
         decryption_request.nonce,
     );
