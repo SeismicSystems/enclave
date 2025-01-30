@@ -61,6 +61,12 @@ pub trait TeeAPI {
     ) -> Result<IoDecryptionResponse, anyhow::Error> {
         Err(anyhow::Error::msg("Unimplemented"))
     }
+
+    async fn get_eph_rng_keypair(
+        &self,
+    ) -> Result<secp256k1::SecretKey, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
 }
 
 pub trait WalletAPI {

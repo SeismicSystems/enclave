@@ -5,17 +5,10 @@ use aes_gcm::{
 use anyhow::anyhow;
 use hkdf::Hkdf;
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
 use crate::request_types::nonce::Nonce;
-
-#[derive(Serialize, Deserialize)]
-pub struct Secp256k1KeyPair {
-    pub secret_key: SecretKey,
-    pub public_key: PublicKey,
-}
 
 /// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
 ///
