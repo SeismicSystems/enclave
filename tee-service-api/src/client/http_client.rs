@@ -1,4 +1,4 @@
-use crate::get_sample_secp256k1_sk;
+use crate::get_sample_schnorrkel_keypair;
 
 use super::*;
 use reqwest::Client;
@@ -213,7 +213,7 @@ impl TeeAPI for TeeHttpClient {
         Ok(dec_response)
     }
     
-    async fn get_eph_rng_keypair(&self) -> Result<secp256k1::SecretKey, anyhow::Error> {
-        Ok(get_sample_secp256k1_sk())
+    async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
+        Ok(get_sample_schnorrkel_keypair())
     }
 }
