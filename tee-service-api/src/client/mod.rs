@@ -64,9 +64,7 @@ pub trait TeeAPI {
         Err(anyhow::Error::msg("Unimplemented"))
     }
 
-    async fn get_eph_rng_keypair(
-        &self,
-    ) -> Result<SchnorrkelKeypair, anyhow::Error> {
+    async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
         Err(anyhow::Error::msg("Unimplemented"))
     }
 }

@@ -4,10 +4,10 @@ use aes_gcm::{
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
+use schnorrkel::{keys::Keypair as SchnorrkelKeypair, ExpansionMode, MiniSecretKey};
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
-use schnorrkel::{keys::Keypair as SchnorrkelKeypair, ExpansionMode, MiniSecretKey};
 
 use crate::request_types::nonce::Nonce;
 
@@ -203,7 +203,6 @@ pub fn get_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
     .unwrap();
     mini_secret_key.expand(ExpansionMode::Uniform).into()
 }
-
 
 /// Encrypts the provided data using an AES key derived from
 /// the provided public key and the provided private key

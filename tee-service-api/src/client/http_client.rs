@@ -212,7 +212,7 @@ impl TeeAPI for TeeHttpClient {
 
         Ok(dec_response)
     }
-    
+
     async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
         Ok(get_sample_schnorrkel_keypair())
     }
