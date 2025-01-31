@@ -12,7 +12,7 @@ use crate::{
     request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*},
 };
 
-use schnorrkel::keys::Keypair as SchnorrkelKeypair;
+pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 
 pub trait TeeAPI {
     async fn genesis_data(
