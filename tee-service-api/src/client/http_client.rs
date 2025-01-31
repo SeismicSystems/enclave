@@ -1,3 +1,5 @@
+use crate::get_sample_schnorrkel_keypair;
+
 use super::*;
 use reqwest::Client;
 use serde::Deserialize;
@@ -209,5 +211,9 @@ impl TeeAPI for TeeHttpClient {
         let dec_response: IoDecryptionResponse = serde_json::from_slice(&body)?;
 
         Ok(dec_response)
+    }
+
+    async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
+        Ok(get_sample_schnorrkel_keypair())
     }
 }

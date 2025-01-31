@@ -43,4 +43,8 @@ pub trait MockServer {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
+    fn get_eph_rng_keypair(&self) -> Result<Response<Body>, Infallible> {
+        let body = Body::from("Error: Mock Unimplimented".to_string());
+        Ok(Response::builder().status(500).body(body).unwrap())
+    }
 }

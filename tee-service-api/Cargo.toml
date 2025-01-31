@@ -9,7 +9,6 @@ name = "tee_service_api"
 path = "src/lib.rs"
 
 [dependencies]
-
 aes-gcm = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 serde_json = { workspace = true }
@@ -26,3 +25,4 @@ serde = { workspace = true, features = ["derive"] }
 strum = { version = "0.25", features = ["derive"] }
 bincode = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["blocking"]}
+schnorrkel = { workspace = true }
