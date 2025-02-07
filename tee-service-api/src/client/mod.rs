@@ -12,6 +12,8 @@ use crate::{
     request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*},
 };
 
+pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
+
 pub trait TeeAPI {
     async fn genesis_data(
         &self,
@@ -59,6 +61,10 @@ pub trait TeeAPI {
         &self,
         _payload: IoDecryptionRequest,
     ) -> Result<IoDecryptionResponse, anyhow::Error> {
+        Err(anyhow::Error::msg("Unimplemented"))
+    }
+
+    async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
         Err(anyhow::Error::msg("Unimplemented"))
     }
 }
