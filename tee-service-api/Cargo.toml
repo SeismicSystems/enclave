@@ -9,20 +9,21 @@ name = "tee_service_api"
 path = "src/lib.rs"
 
 [dependencies]
-aes-gcm = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-serde_json = { workspace = true }
-bytes = { workspace = true }
-hyper = { workspace = true, features = ["full"] }
-anyhow = { workspace = true }
-secp256k1 = { workspace = true, features = ["rand", "recovery", "std", "serde"] }
-sha2 = { workspace = true }
-hkdf = { workspace = true }
-once_cell = { workspace = true }
-kbs-types = { workspace = true }
-byteorder = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-strum = { version = "0.25", features = ["derive"] }
-bincode = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["blocking"]}
-schnorrkel = { workspace = true }
+aes-gcm.workspace = true
+anyhow.workspace = true
+bincode.workspace = true
+byteorder.workspace = true
+bytes.workspace = true
+hkdf.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+kbs-types.workspace = true
+once_cell.workspace = true
+reqwest.workspace = true
+schnorrkel.workspace = true
+secp256k1.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+strum.workspace = true
+tokio.workspace = true
