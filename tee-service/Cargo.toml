@@ -9,35 +9,34 @@ name = "tee_service"
 path = "src/lib.rs"
 
 [dependencies]
-
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
 attestation-service = { git = "https://github.com/confidential-containers/trustee"}
 tee_service_api = { path = "../tee-service-api" }
 
-aes-gcm = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-serde_json = { workspace = true }
-base64 = { workspace = true }
-bytes = { workspace = true }
-hyper = { workspace = true, features = ["full"] }
-anyhow = { workspace = true }
-az-tdx-vtpm = { workspace = true }
-routerify = { workspace = true }
-secp256k1 = { workspace = true, features = ["rand", "recovery", "std", "serde"] }
-sha2 = { workspace = true }
-hkdf = { workspace = true }
-log = { workspace = true }
-env_logger = { workspace = true }
-once_cell = { workspace = true }
-kbs-types = { workspace = true }
-bincode = { workspace = true }
-hex = { workspace = true }
-byteorder = { workspace = true }
-scroll = { workspace = true, default-features = false, features = ["derive"] }
-serde = { workspace = true, features = ["derive"] }
+aes-gcm.workspace = true
+anyhow.workspace = true
+az-tdx-vtpm.workspace = true
+base64.workspace = true
+bincode.workspace = true
+byteorder.workspace = true
+bytes.workspace = true
+env_logger.workspace = true
+hex.workspace = true
+hkdf.workspace = true
+hyper.workspace = true
+kbs-types.workspace = true
+log.workspace = true
+once_cell.workspace = true
+routerify.workspace = true
+scroll.workspace = true
+secp256k1.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
 
+[dev-dependencies]
 serial_test = "3.1.0"
-
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
