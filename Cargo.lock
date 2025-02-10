@@ -4685,6 +4685,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "hkdf",
+ "http-body-util",
  "hyper 1.4.1",
  "kbs-types",
  "once_cell",
