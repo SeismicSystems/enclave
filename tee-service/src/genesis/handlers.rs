@@ -1,8 +1,8 @@
-use hyper::{Body, Request, Response};
+use hyper::{body::Incoming, Body, Request, Response};
 use std::convert::Infallible;
 
 use super::att_genesis_data;
-use tee_service_api::request_types::genesis::*;
+use tee_service_api::{request_types::genesis::*, response::{string_body, BytesBody}};
 
 /// Handles request to get genesis data.
 ///
@@ -11,7 +11,7 @@ use tee_service_api::request_types::genesis::*;
 /// Along with an attestation of such data that can be verified with the attestation/as/eval_evidence endpoint
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
-pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn genesis_get_data_handler(_: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
     let (genesis_data, evidence) = att_genesis_data().await.unwrap();
 
     // Return the evidence as a response
@@ -20,7 +20,7 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
         evidence,
     };
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 #[allow(unused_imports)]
@@ -57,7 +57,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = genesis_get_data_handler(req).await.unwrap();
+        let res = genesis_get_data_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK);
@@ -94,7 +94,7 @@ mod tests {
             .uri("/genesis/data")
             .body(Body::empty())
             .unwrap();
-        let res: Response<Body> = genesis_get_data_handler(req).await.unwrap();
+        let res = genesis_get_data_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let genesis_data_response: GenesisDataResponse =
@@ -118,7 +118,7 @@ mod tests {
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json))
             .unwrap();
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the eval evidence response
         assert_eq!(res.status(), StatusCode::OK);

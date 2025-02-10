@@ -6,10 +6,13 @@ use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
 
 use anyhow::Result;
+use hyper::body::Body;
 use hyper::{Body, Request, Response, Server, StatusCode};
 use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
+use tee_service_api::response::BytesBody;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use tee_service_api::string_body;
 
 pub async fn start_server(addr: SocketAddr) -> Result<()> {
     // Initialize the logger
@@ -52,7 +55,7 @@ pub async fn start_server(addr: SocketAddr) -> Result<()> {
 }
 
 // A middleware which logs an http request.
-async fn logger(req: Request<Body>) -> Result<Request<Body>, Infallible> {
+async fn logger<T: Body>(req: Request<T>) -> Result<Request<T>, Infallible> {
     println!(
         "{} {} {}",
         req.remote_addr(),
@@ -64,11 +67,11 @@ async fn logger(req: Request<Body>) -> Result<Request<Body>, Infallible> {
 
 // Define an error handler function which will accept the `routerify::Error`
 // and the request information and generates an appropriate response.
-async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<Body> {
+async fn error_handler(err: routerify::RouteError, _: RequestInfo) -> Response<BytesBody> {
     println!("\n\nError: {:?}\n\n", err);
     eprintln!("{}", err);
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Body::from(format!("Something went wrong: {}", err)))
+        .body(string_body(format!("Something went wrong: {}", err)))
         .unwrap()
 }

@@ -1,4 +1,6 @@
+use hyper::body::Incoming;
 use hyper::{body::to_bytes, Body, Request, Response};
+use tee_service_api::response::{string_body, BytesBody};
 use std::convert::Infallible;
 
 use super::into_original::*;
@@ -31,8 +33,8 @@ use super::into_original::IntoOriginalHashAlgorithm;
 ///    - Ensures that the TEE state aligns with the security policies defined by the attestation service.
 ///    - This includes confirming that the correct software is running within the TEE
 pub async fn attestation_eval_evidence_handler(
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // Parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -89,7 +91,7 @@ pub async fn attestation_eval_evidence_handler(
         claims: Some(claims),
     };
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 #[cfg(test)]
@@ -138,7 +140,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 400 Bad Request
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -188,7 +190,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK);
@@ -245,7 +247,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK);
@@ -308,7 +310,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -350,7 +352,7 @@ mod tests {
             .body(Body::from(payload_json))
             .unwrap();
 
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
@@ -376,7 +378,7 @@ mod tests {
             .body(Body::from(payload_json))
             .unwrap();
 
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res = attestation_eval_evidence_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{res:?}");
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let body_str = String::from_utf8_lossy(&body);

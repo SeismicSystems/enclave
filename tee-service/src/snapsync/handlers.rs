@@ -5,9 +5,9 @@ use std::convert::Infallible;
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
-use tee_service_api::errors::{
+use tee_service_api::{errors::{
     bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
-};
+}, response::{string_body, BytesBody}};
 use tee_service_api::request_types::snapsync::*;
 
 /// handles a request to provide private information required for SnapSync
@@ -23,7 +23,7 @@ use tee_service_api::request_types::snapsync::*;
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn provide_snapsync_handler(req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
+pub async fn provide_snapsync_handler(req: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -75,7 +75,7 @@ pub async fn provide_snapsync_handler(req: Request<Incoming>) -> Result<Response
 
     // return the response
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 #[cfg(test)]
@@ -137,7 +137,7 @@ mod tests {
             .uri("/")
             .body(Body::from(payload_json))
             .unwrap();
-        let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
+        let res = provide_snapsync_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
 
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
@@ -205,7 +205,7 @@ mod tests {
             .uri("/")
             .body(Body::from(payload_json))
             .unwrap();
-        let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
+        let res = provide_snapsync_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }

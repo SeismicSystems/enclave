@@ -1,5 +1,7 @@
+use hyper::body::Incoming;
 use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
 use serde_json::json;
+use tee_service_api::response::{string_body, BytesBody};
 use std::convert::Infallible;
 
 use super::{enclave_sign, get_secp256k1_pk};
@@ -19,7 +21,7 @@ use tee_service_api::request_types::signing::*;
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn secp256k1_sign_handler(req: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -42,7 +44,7 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
     let response_body = Secp256k1SignResponse { sig: signature };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 /// Handles request to verify a secp256k1 signature.
@@ -57,7 +59,7 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
 ///
 /// # Errors
 /// The function may panic if parsing the request body or verifying the signature fails.
-pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn secp256k1_verify_handler(req: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
@@ -88,7 +90,7 @@ pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Bod
     let response_body = Secp256k1VerifyResponse { verified };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 #[cfg(test)]
