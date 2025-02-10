@@ -1,11 +1,11 @@
 use anyhow::Result;
-use hyper::{Body, Request, Response};
+use hyper::{body::{Incoming, Body}, Request, Response};
 use std::convert::Infallible;
 
 pub trait MockServer {
     fn attestation_get_evidence_handler(
         &self,
-        _req: Request<Body>,
+        _req: Request<Incoming>,
     ) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
@@ -13,37 +13,37 @@ pub trait MockServer {
 
     fn attestation_eval_evidence_handler(
         &self,
-        _req: Request<Body>,
+        _req: Request<Incoming>,
     ) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
-    fn genesis_get_data_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn genesis_get_data_handler(&self, _req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
-    fn secp256k1_sign_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn secp256k1_sign_handler(&self, _req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
-    fn secp256k1_verify_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn secp256k1_verify_handler(&self, _req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
-    fn tx_io_encrypt_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn tx_io_encrypt_handler(&self, _req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
 
-    fn tx_io_decrypt_handler(&self, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    fn tx_io_decrypt_handler(&self, _req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }
-    fn get_eph_rng_keypair(&self) -> Result<Response<Body>, Infallible> {
+    fn get_eph_rng_keypair(&self) -> Result<Response<Incoming>, Infallible> {
         let body = Body::from("Error: Mock Unimplimented".to_string());
         Ok(Response::builder().status(500).body(body).unwrap())
     }

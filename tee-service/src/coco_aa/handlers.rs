@@ -1,4 +1,4 @@
-use hyper::{body::to_bytes, Body, Request, Response};
+use hyper::{body::{to_bytes, Incoming}, Body, Request, Response};
 use std::convert::Infallible;
 
 use super::attest;
@@ -20,7 +20,7 @@ use tee_service_api::request_types::coco_aa::*;
 /// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
 /// Section 2.3.2 for more details
 pub async fn attestation_get_evidence_handler(
-    req: Request<Body>,
+    req: Request<Incoming>,
 ) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {

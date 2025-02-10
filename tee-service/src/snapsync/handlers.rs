@@ -1,5 +1,5 @@
 use attestation_service::HashAlgorithm;
-use hyper::{body::to_bytes, Body, Request, Response};
+use hyper::{body::{to_bytes, Incoming}, Body, Request, Response};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
@@ -23,7 +23,7 @@ use tee_service_api::request_types::snapsync::*;
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn provide_snapsync_handler(req: Request<Incoming>) -> Result<Response<Body>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
