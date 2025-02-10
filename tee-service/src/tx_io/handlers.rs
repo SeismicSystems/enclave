@@ -1,3 +1,4 @@
+use hyper::body::Incoming;
 use hyper::{body::to_bytes, Body, Request, Response};
 use std::convert::Infallible;
 use tee_service_api::crypto::{ecdh_decrypt, ecdh_encrypt};
@@ -5,6 +6,7 @@ use tee_service_api::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
 use tee_service_api::request_types::tx_io::*;
+use tee_service_api::response::{string_body, BytesBody};
 
 use crate::get_secp256k1_sk;
 
@@ -20,7 +22,9 @@ use crate::get_secp256k1_sk;
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
-pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn tx_io_encrypt_handler(
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -49,7 +53,7 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let response_body = IoEncryptionResponse { encrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 /// Handles an IO decryption request, decrypting the provided encrypted data using AES.
@@ -64,7 +68,9 @@ pub async fn tx_io_encrypt_handler(req: Request<Body>) -> Result<Response<Body>,
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
-pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn tx_io_decrypt_handler(
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -99,7 +105,7 @@ pub async fn tx_io_decrypt_handler(req: Request<Body>) -> Result<Response<Body>,
     let response_body = IoDecryptionResponse { decrypted_data };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 #[cfg(test)]

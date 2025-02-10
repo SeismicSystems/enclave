@@ -1,9 +1,15 @@
-use hyper::{body::to_bytes, Body, Request, Response};
+use hyper::{
+    body::{to_bytes, Incoming},
+    Body, Request, Response,
+};
 use std::convert::Infallible;
 
 use super::attest;
-use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use tee_service_api::request_types::coco_aa::*;
+use tee_service_api::{
+    errors::{invalid_json_body_resp, invalid_req_body_resp},
+    response::BytesBody,
+};
 
 /// Handles attestation evidence request.
 ///
@@ -20,8 +26,8 @@ use tee_service_api::request_types::coco_aa::*;
 /// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
 /// Section 2.3.2 for more details
 pub async fn attestation_get_evidence_handler(
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -47,7 +53,7 @@ pub async fn attestation_get_evidence_handler(
     // Return the evidence as a response
     let response_body = AttestationGetEvidenceResponse { evidence };
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(string_body(response_json)))
 }
 
 #[cfg(test)]
@@ -58,6 +64,7 @@ mod tests {
     use hyper::{Body, Request, Response, StatusCode};
     use serde_json::Value;
     use serial_test::serial;
+    use tee_service_api::response::BytesBody;
 
     #[tokio::test]
     #[serial(attestation_agent)]
@@ -85,7 +92,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_get_evidence_handler(req).await.unwrap();
+        let res: Response<BytesBody> = attestation_get_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK);
@@ -135,14 +142,14 @@ mod tests {
 
         println!("req_1: {:?}", req_1);
 
-        let res_1: Response<Body> = attestation_get_evidence_handler(req_1).await.unwrap();
+        let res_1 = attestation_get_evidence_handler(req_1).await.unwrap();
         let req_2 = Request::builder()
             .method("POST")
             .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
             .body(Body::from(payload_json_2))
             .unwrap();
-        let res_2: Response<Body> = attestation_get_evidence_handler(req_2).await.unwrap();
+        let res_2 = attestation_get_evidence_handler(req_2).await.unwrap();
 
         assert_eq!(res_1.status(), StatusCode::OK);
         assert_eq!(res_2.status(), StatusCode::OK);
@@ -169,7 +176,7 @@ mod tests {
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_get_evidence_handler(req).await.unwrap();
+        let res = attestation_get_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 400 Bad Request
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
