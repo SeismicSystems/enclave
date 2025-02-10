@@ -1,12 +1,12 @@
 use hyper::body::Incoming;
 use hyper::{body::to_bytes, Body, Request, Response};
-use tee_service_api::response::{string_body, BytesBody};
 use std::convert::Infallible;
 use tee_service_api::crypto::{ecdh_decrypt, ecdh_encrypt};
 use tee_service_api::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
 use tee_service_api::request_types::tx_io::*;
+use tee_service_api::response::{string_body, BytesBody};
 
 use crate::get_secp256k1_sk;
 
@@ -22,7 +22,9 @@ use crate::get_secp256k1_sk;
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
-pub async fn tx_io_encrypt_handler(req: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
+pub async fn tx_io_encrypt_handler(
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
@@ -66,7 +68,9 @@ pub async fn tx_io_encrypt_handler(req: Request<Incoming>) -> Result<Response<By
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
-pub async fn tx_io_decrypt_handler(req: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
+pub async fn tx_io_decrypt_handler(
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,

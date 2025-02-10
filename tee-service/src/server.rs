@@ -9,9 +9,9 @@ use anyhow::Result;
 use hyper::body::Body;
 use hyper::{Body, Request, Response, Server, StatusCode};
 use routerify::{prelude::*, Middleware, RequestInfo, Router, RouterService};
-use tee_service_api::response::BytesBody;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use tee_service_api::response::BytesBody;
 use tee_service_api::string_body;
 
 pub async fn start_server(addr: SocketAddr) -> Result<()> {

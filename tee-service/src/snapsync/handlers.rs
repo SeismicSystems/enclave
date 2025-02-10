@@ -1,14 +1,20 @@
 use attestation_service::HashAlgorithm;
-use hyper::{body::{to_bytes, Incoming}, Body, Request, Response};
+use hyper::{
+    body::{to_bytes, Incoming},
+    Body, Request, Response,
+};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
-use tee_service_api::{errors::{
-    bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
-}, response::{string_body, BytesBody}};
 use tee_service_api::request_types::snapsync::*;
+use tee_service_api::{
+    errors::{
+        bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
+    },
+    response::{string_body, BytesBody},
+};
 
 /// handles a request to provide private information required for SnapSync
 ///
@@ -23,7 +29,9 @@ use tee_service_api::request_types::snapsync::*;
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn provide_snapsync_handler(req: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
+pub async fn provide_snapsync_handler(
+    req: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     // parse the request body
     let body_bytes = match to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,

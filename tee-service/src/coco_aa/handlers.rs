@@ -1,9 +1,15 @@
-use hyper::{body::{to_bytes, Incoming}, Body, Request, Response};
+use hyper::{
+    body::{to_bytes, Incoming},
+    Body, Request, Response,
+};
 use std::convert::Infallible;
 
 use super::attest;
-use tee_service_api::{errors::{invalid_json_body_resp, invalid_req_body_resp}, response::BytesBody};
 use tee_service_api::request_types::coco_aa::*;
+use tee_service_api::{
+    errors::{invalid_json_body_resp, invalid_req_body_resp},
+    response::BytesBody,
+};
 
 /// Handles attestation evidence request.
 ///

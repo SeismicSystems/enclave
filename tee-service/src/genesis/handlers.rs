@@ -2,7 +2,10 @@ use hyper::{body::Incoming, Body, Request, Response};
 use std::convert::Infallible;
 
 use super::att_genesis_data;
-use tee_service_api::{request_types::genesis::*, response::{string_body, BytesBody}};
+use tee_service_api::{
+    request_types::genesis::*,
+    response::{string_body, BytesBody},
+};
 
 /// Handles request to get genesis data.
 ///
@@ -11,7 +14,9 @@ use tee_service_api::{request_types::genesis::*, response::{string_body, BytesBo
 /// Along with an attestation of such data that can be verified with the attestation/as/eval_evidence endpoint
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
-pub async fn genesis_get_data_handler(_: Request<Incoming>) -> Result<Response<BytesBody>, Infallible> {
+pub async fn genesis_get_data_handler(
+    _: Request<Incoming>,
+) -> Result<Response<BytesBody>, Infallible> {
     let (genesis_data, evidence) = att_genesis_data().await.unwrap();
 
     // Return the evidence as a response

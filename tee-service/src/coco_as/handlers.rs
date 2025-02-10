@@ -1,7 +1,7 @@
 use hyper::body::Incoming;
 use hyper::{body::to_bytes, Body, Request, Response};
-use tee_service_api::response::{string_body, BytesBody};
 use std::convert::Infallible;
+use tee_service_api::response::{string_body, BytesBody};
 
 use super::into_original::*;
 use super::{eval_att_evidence, parse_as_token_claims};

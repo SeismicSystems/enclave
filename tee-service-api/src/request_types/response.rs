@@ -1,5 +1,5 @@
-use http_body_util::Full;
 use bytes::Bytes;
+use http_body_util::Full;
 
 pub type BytesBody = Full<Bytes>;
 

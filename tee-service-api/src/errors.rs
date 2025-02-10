@@ -1,7 +1,7 @@
+use crate::request_types::response::BytesBody;
 use anyhow::Error;
 use hyper::{Response, StatusCode};
 use serde_json::json;
-use crate::request_types::response::BytesBody;
 
 /// Returns 400 Bad Request
 /// Meant to be used if there is an error while reading the request body
