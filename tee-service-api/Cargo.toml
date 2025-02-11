@@ -1,10 +1,10 @@
 [package]
 name = "tee_service_api"
-version = "0.1.0"
-edition = "2021"
-repository = "https://github.com/SeismicSystems/TEEService"
-homepage = "https://github.com/SeismicSystems/TEEService"
-authors = ["Seismic Systems"]
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 
 [lib]
 name = "tee_service_api"

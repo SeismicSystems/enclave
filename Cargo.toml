@@ -1,5 +1,10 @@
 [workspace]
 resolver = "2"
+edition = "2021"
+version = "0.1.0"
+repository = "https://github.com/SeismicSystems/TEEService"
+homepage = "https://github.com/SeismicSystems/TEEService"
+authors = ["Seismic Systems"]
 members = [
     "tee-service",
     "tee-service-api",
