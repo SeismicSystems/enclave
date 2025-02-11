@@ -21,7 +21,7 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 ///
 /// UNSAFE: Currently this is using a sample key for testing purposes
 pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-    let signing_pk = tee_service_api::get_sample_secp256k1_pk();
+    let signing_pk = seismic_enclave::get_sample_secp256k1_pk();
     let signing_pk_bytes = signing_pk.serialize();
     let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
 

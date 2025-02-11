@@ -1,5 +1,5 @@
 [package]
-name = "tee_service"
+name = "seismic-enclave-server"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -8,13 +8,13 @@ authors.workspace = true
 license.workspace = true
 
 [lib]
-name = "tee_service"
+name = "seismic_enclave_server"
 path = "src/lib.rs"
 
 [dependencies]
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
 attestation-service = { git = "https://github.com/confidential-containers/trustee"}
-tee_service_api = { path = "../tee-service-api" }
+seismic-enclave = { path = "../enclave" }
 
 aes-gcm.workspace = true
 anyhow.workspace = true

@@ -3,8 +3,8 @@ pub mod handlers;
 use crate::coco_aa::attest_signing_pk;
 use crate::get_secp256k1_sk;
 use crate::signing::enclave_sign;
-use tee_service_api::ecdh_encrypt;
-use tee_service_api::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
+use seismic_enclave::ecdh_encrypt;
+use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 
 use secp256k1::rand::rngs::OsRng;
 use secp256k1::rand::RngCore;

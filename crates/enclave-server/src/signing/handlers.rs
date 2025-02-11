@@ -3,9 +3,9 @@ use serde_json::json;
 use std::convert::Infallible;
 
 use super::{enclave_sign, get_secp256k1_pk};
-use tee_service_api::crypto::*;
-use tee_service_api::errors::{invalid_json_body_resp, invalid_req_body_resp};
-use tee_service_api::request_types::signing::*;
+use seismic_enclave::crypto::*;
+use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
+use seismic_enclave::request_types::signing::*;
 
 /// Handles request to sign a message using secp256k1.
 ///

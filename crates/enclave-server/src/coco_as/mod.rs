@@ -7,7 +7,7 @@ use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use kbs_types::Tee;
-use tee_service_api::coco_as::ASCoreTokenClaims;
+use seismic_enclave::coco_as::ASCoreTokenClaims;
 
 // Call the evaluate function of the attestation service
 // Gets back a b64 JWT web token of the form "header.claims.signature"

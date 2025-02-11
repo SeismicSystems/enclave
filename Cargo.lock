@@ -4158,6 +4158,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "seismic-enclave"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "bincode",
+ "byteorder",
+ "bytes",
+ "hkdf",
+ "http-body-util",
+ "hyper 0.14.30",
+ "kbs-types",
+ "once_cell",
+ "reqwest 0.12.12",
+ "schnorrkel",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "strum 0.25.0",
+ "tokio",
+]
+
+[[package]]
+name = "seismic-enclave-server"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "attestation-agent",
+ "attestation-service",
+ "az-tdx-vtpm",
+ "base64 0.22.1",
+ "bincode",
+ "byteorder",
+ "bytes",
+ "env_logger 0.11.6",
+ "hex",
+ "hkdf",
+ "hyper 0.14.30",
+ "kbs-types",
+ "log",
+ "once_cell",
+ "routerify",
+ "scroll",
+ "secp256k1",
+ "seismic-enclave",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4616,61 +4671,6 @@ name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
-
-[[package]]
-name = "tee_service"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "attestation-agent",
- "attestation-service",
- "az-tdx-vtpm",
- "base64 0.22.1",
- "bincode",
- "byteorder",
- "bytes",
- "env_logger 0.11.6",
- "hex",
- "hkdf",
- "hyper 0.14.30",
- "kbs-types",
- "log",
- "once_cell",
- "routerify",
- "scroll",
- "secp256k1",
- "serde",
- "serde_json",
- "serial_test",
- "sha2",
- "tee_service_api",
- "tokio",
-]
-
-[[package]]
-name = "tee_service_api"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "bincode",
- "byteorder",
- "bytes",
- "hkdf",
- "http-body-util",
- "hyper 0.14.30",
- "kbs-types",
- "once_cell",
- "reqwest 0.12.12",
- "schnorrkel",
- "secp256k1",
- "serde",
- "serde_json",
- "sha2",
- "strum 0.25.0",
- "tokio",
-]
 
 [[package]]
 name = "tempfile"

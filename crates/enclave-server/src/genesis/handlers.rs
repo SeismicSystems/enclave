@@ -2,7 +2,7 @@ use hyper::{Body, Request, Response};
 use std::convert::Infallible;
 
 use super::att_genesis_data;
-use tee_service_api::request_types::genesis::*;
+use seismic_enclave::request_types::genesis::*;
 
 /// Handles request to get genesis data.
 ///
@@ -33,15 +33,15 @@ mod tests {
     };
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
+    use seismic_enclave::request_types::coco_as::*;
     use serde_json::Value;
     use serial_test::serial;
     use sha2::{Digest, Sha256};
-    use tee_service_api::request_types::coco_as::*;
 
     use attestation_service::Data as OriginalData;
     use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-    use tee_service_api::request_types::coco_as::Data as ApiData;
-    use tee_service_api::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
+    use seismic_enclave::request_types::coco_as::Data as ApiData;
+    use seismic_enclave::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
 
     #[tokio::test]
     #[serial(attestation_agent)]
