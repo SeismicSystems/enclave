@@ -13,7 +13,7 @@ csv-rs = { git = "https://github.com/cdrappi/csv-rs.git", branch = "bump-openssl
 [workspace.dependencies]
 aes-gcm = "0.10"
 anyhow = "1.0"
-az-tdx-vtpm = "0.7.0"
+az-tdx-vtpm = "0.7.1"
 base64 = "0.22"
 bytes = "1.7"
 byteorder = "1"
