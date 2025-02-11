@@ -6,6 +6,8 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 license.workspace = true
+readme.workspace = true
+description = "Tools for Seismic Systems' enclave"
 
 [lib]
 name = "seismic_enclave"
