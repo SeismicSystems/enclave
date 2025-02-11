@@ -9,8 +9,13 @@ name = "tee_service"
 path = "src/lib.rs"
 
 [dependencies]
-attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev = "25dbce5", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee", rev = "81f7dfa", features = ["az-tdx-vtpm-verifier"]}
+attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev = "25dbce5", features = [
+    "az-tdx-vtpm-attester",
+] }
+attestation-service = { git = "https://github.com/confidential-containers/trustee", rev = "81f7dfa", features = [
+    "az-tdx-vtpm-verifier",
+    "az-snp-vtpm-verifier",
+] }
 tee_service_api = { path = "../tee-service-api" }
 
 aes-gcm.workspace = true
