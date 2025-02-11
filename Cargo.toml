@@ -11,6 +11,7 @@ version = "0.1.0"
 repository = "https://github.com/SeismicSystems/TEEService"
 homepage = "https://github.com/SeismicSystems/TEEService"
 authors = ["Seismic Systems"]
+license = "MIT"
 
 # Instead of getting csv-rs from github, use the forked version from Seismic's very own cdrappi
 [patch.'https://github.com/openanolis/csv-rs']

@@ -5,6 +5,7 @@ edition.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
+license.workspace = true
 
 [lib]
 name = "tee_service_api"
