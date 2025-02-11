@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee"}
+attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["az-tdx-vtpm-verifier"]}
 tee_service_api = { path = "../tee-service-api" }
 
 aes-gcm.workspace = true
