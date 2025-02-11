@@ -7,6 +7,7 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
+description = "Seismic enclave backend"
 
 [lib]
 name = "seismic_enclave_server"
