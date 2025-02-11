@@ -1,4 +1,4 @@
-# TEEService
+# Seismic enclave
 
 **Current state**
 
@@ -10,11 +10,10 @@ You can only run the server on a machine where various Intel SGX & TDX libraries
 
 The command to run the server is:
 
-`cargo build && sudo target/debug/TeeService`
+`cargo build && sudo target/debug/seismic-enclave-server`
 
 You should see something like `Listening on http://127.0.0.1:7878`
 
 ## Example Request
 
 curl http://127.0.0.1:7878/genesis/data
-

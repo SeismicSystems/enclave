@@ -1,10 +1,10 @@
 use hyper::{body::to_bytes, Body, Request, Response};
-use std::convert::Infallible;
-use tee_service_api::crypto::{ecdh_decrypt, ecdh_encrypt};
-use tee_service_api::errors::{
+use seismic_enclave::crypto::{ecdh_decrypt, ecdh_encrypt};
+use seismic_enclave::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
-use tee_service_api::request_types::tx_io::*;
+use seismic_enclave::request_types::tx_io::*;
+use std::convert::Infallible;
 
 use crate::get_secp256k1_sk;
 

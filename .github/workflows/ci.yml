@@ -49,27 +49,7 @@ jobs:
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
 
-  test_service:
-    runs-on: self-hosted
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable      
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "service-cache"
-      - name: Run tests for tee-service
-        run: |
-          cd tee-service
-          OUTPUT=$(cargo test -p tee_service --no-run 2>&1)
-          echo "$OUTPUT"
-          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*tee_service-[a-z0-9]*')
-          for binary in "${binaries[@]}"; do
-            echo "Running binary: $binary"
-            sudo "$binary"
-          done
-
-  test_client:
+  test_enclave:
     runs-on: self-hosted
     timeout-minutes: 30
     steps:
@@ -78,13 +58,34 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "client-cache"
-      - name: Run tests for tee-service-api
+      - name: Run tests for seismic-enclave
         run: |
-          cd tee-service-api
-          OUTPUT=$(cargo test -p tee_service_api --no-run 2>&1)
+          cd crates/enclave
+          OUTPUT=$(cargo test -p seismic-enclave --no-run 2>&1)
           echo "$OUTPUT"
-          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*tee_service_api-[a-z0-9]*')
+          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave-[a-z0-9]*')
           for binary in "${binaries[@]}"; do
             echo "Running binary: $binary"
             sudo "$binary"
           done
+
+  test_enclave_server:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "service-cache"
+      - name: Run tests for seismic-enclave-server
+        run: |
+          cd crates/enclave-server
+          OUTPUT=$(cargo test -p seismic-enclave-server --no-run 2>&1)
+          echo "$OUTPUT"
+          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave_server-[a-z0-9]*')
+          for binary in "${binaries[@]}"; do
+            echo "Running binary: $binary"
+            sudo "$binary"
+          done
+

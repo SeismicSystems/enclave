@@ -17,7 +17,7 @@ use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use tee_service_api::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
+use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 
 pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
