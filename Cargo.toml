@@ -5,11 +5,6 @@ members = [
     "tee-service-api",
 ]
 
-# Instead of getting csv-rs from github, use the forked version from Seismic's very own cdrappi
-[patch.'https://github.com/openanolis/csv-rs']
-csv-rs = { git = "https://github.com/cdrappi/csv-rs.git", branch = "bump-openssl" }
-
-
 [workspace.dependencies]
 aes-gcm = "0.10"
 anyhow = "1.0"
