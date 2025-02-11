@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::net::SocketAddr;
 
-use seismic_enclave_server::server::start_server;
 use seismic_enclave::client::http_client::{TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave_server::server::start_server;
 
 /// Initializes a server with the given address and handlers
 #[tokio::main]

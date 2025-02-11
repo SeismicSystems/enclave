@@ -85,10 +85,10 @@ mod tests {
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
     use secp256k1::ecdh::SharedSecret;
-    use serial_test::serial;
     use seismic_enclave::aes_decrypt;
     use seismic_enclave::derive_aes_key;
     use seismic_enclave::secp256k1_verify;
+    use serial_test::serial;
 
     use crate::{
         coco_aa::attest_signing_pk,

@@ -1,10 +1,10 @@
 use hyper::{body::to_bytes, Body, Request, Response};
-use std::convert::Infallible;
 use seismic_enclave::crypto::{ecdh_decrypt, ecdh_encrypt};
 use seismic_enclave::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
 use seismic_enclave::request_types::tx_io::*;
+use std::convert::Infallible;
 
 use crate::get_secp256k1_sk;
 

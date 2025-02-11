@@ -33,10 +33,10 @@ mod tests {
     };
     use hyper::{Body, Request, Response, StatusCode};
     use kbs_types::Tee;
+    use seismic_enclave::request_types::coco_as::*;
     use serde_json::Value;
     use serial_test::serial;
     use sha2::{Digest, Sha256};
-    use seismic_enclave::request_types::coco_as::*;
 
     use attestation_service::Data as OriginalData;
     use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
