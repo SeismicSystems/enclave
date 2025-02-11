@@ -5,10 +5,10 @@ use std::convert::Infallible;
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
-use tee_service_api::errors::{
+use seismic_enclave::errors::{
     bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
 };
-use tee_service_api::request_types::snapsync::*;
+use seismic_enclave::request_types::snapsync::*;
 
 /// handles a request to provide private information required for SnapSync
 ///
@@ -86,9 +86,9 @@ mod tests {
     use kbs_types::Tee;
     use secp256k1::ecdh::SharedSecret;
     use serial_test::serial;
-    use tee_service_api::aes_decrypt;
-    use tee_service_api::derive_aes_key;
-    use tee_service_api::secp256k1_verify;
+    use seismic_enclave::aes_decrypt;
+    use seismic_enclave::derive_aes_key;
+    use seismic_enclave::secp256k1_verify;
 
     use crate::{
         coco_aa::attest_signing_pk,

@@ -1,5 +1,5 @@
 [package]
-name = "tee_service_api"
+name = "seismic-enclave"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -8,7 +8,7 @@ authors.workspace = true
 license.workspace = true
 
 [lib]
-name = "tee_service_api"
+name = "seismic_enclave"
 path = "src/lib.rs"
 
 [dependencies]

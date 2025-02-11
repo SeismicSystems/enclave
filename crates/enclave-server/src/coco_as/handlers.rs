@@ -5,10 +5,10 @@ use super::into_original::*;
 use super::{eval_att_evidence, parse_as_token_claims};
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-use tee_service_api::errors::{
+use seismic_enclave::errors::{
     bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
 };
-use tee_service_api::request_types::coco_as::*;
+use seismic_enclave::request_types::coco_as::*;
 
 use super::into_original::IntoOriginalHashAlgorithm;
 

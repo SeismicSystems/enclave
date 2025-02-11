@@ -10,11 +10,11 @@ use base64::Engine;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
-use tee_service_api::request_types::genesis::GenesisData;
+use seismic_enclave::request_types::genesis::GenesisData;
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
-use tee_service_api::request_types::*;
+use seismic_enclave::request_types::*;
 
 #[test]
 #[ignore]
