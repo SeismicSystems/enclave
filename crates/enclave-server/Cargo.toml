@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"] }
-attestation-service = { git = "https://github.com/confidential-containers/trustee"}
+attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"]}
 seismic-enclave = { path = "../enclave" }
 
 aes-gcm.workspace = true
