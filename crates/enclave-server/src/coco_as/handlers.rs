@@ -191,7 +191,7 @@ mod tests {
         let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Parse and check the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
@@ -248,7 +248,7 @@ mod tests {
         let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Parse and check the response body
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();

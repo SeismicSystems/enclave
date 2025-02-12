@@ -1,6 +1,7 @@
 //! This file has cargo tests so I can
 //! one click run them and see the output
 //! They are for dev convenience only
+//! and should be ignored in automated testing workflows
 
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
