@@ -29,6 +29,7 @@ bytes.workspace = true
 env_logger.workspace = true
 hex.workspace = true
 hkdf.workspace = true
+http-body-util.workspace = true
 hyper.workspace = true
 kbs-types.workspace = true
 log.workspace = true

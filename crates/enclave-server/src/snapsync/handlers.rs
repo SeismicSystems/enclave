@@ -1,5 +1,9 @@
 use attestation_service::HashAlgorithm;
-use hyper::{body::to_bytes, Body, Request, Response};
+use http_body_util::{BodyExt, Full};
+use hyper::{
+    body::{Body, Bytes},
+    Request, Response,
+};
 use sha2::{Digest, Sha256};
 use std::convert::Infallible;
 
@@ -23,13 +27,13 @@ use seismic_enclave::request_types::snapsync::*;
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn provide_snapsync_handler(
+    req: Request<impl Body>,
+) -> Result<Response<Full<Bytes>>, Infallible> {
     // parse the request body
-    let body_bytes = match to_bytes(req.into_body()).await {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(invalid_req_body_resp());
-        }
+    let body_bytes: Bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => return Ok(invalid_req_body_resp()),
     };
 
     // Deserialize the request body into the appropriate struct
@@ -75,14 +79,15 @@ pub async fn provide_snapsync_handler(req: Request<Body>) -> Result<Response<Bod
 
     // return the response
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::get_secp256k1_sk;
-    use hyper::{Body, Request, Response, StatusCode};
+
+    use hyper::StatusCode;
     use kbs_types::Tee;
     use secp256k1::ecdh::SharedSecret;
     use seismic_enclave::aes_decrypt;
@@ -132,16 +137,16 @@ mod tests {
 
         let payload_json = serde_json::to_string(&snap_sync_request).unwrap();
 
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
-        let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = provide_snapsync_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let snapsync_response: SnapSyncResponse = serde_json::from_slice(&body_bytes).unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let snapsync_response: SnapSyncResponse = serde_json::from_slice(&body).unwrap();
 
         // Check that you can decrypt the response successfully
         let server_pk =
@@ -200,12 +205,12 @@ mod tests {
         };
 
         let payload_json = serde_json::to_string(&snap_sync_request).unwrap();
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
-        let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = provide_snapsync_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }

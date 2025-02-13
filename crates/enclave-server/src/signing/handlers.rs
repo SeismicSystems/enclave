@@ -1,5 +1,8 @@
-use hyper::{body::to_bytes, Body, Request, Response, StatusCode};
-use serde_json::json;
+use http_body_util::{BodyExt, Full};
+use hyper::{
+    body::{Body, Bytes},
+    Request, Response,
+};
 use std::convert::Infallible;
 
 use super::{enclave_sign, get_secp256k1_pk};
@@ -19,13 +22,13 @@ use seismic_enclave::request_types::signing::*;
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn secp256k1_sign_handler(
+    req: Request<impl Body>,
+) -> Result<Response<Full<Bytes>>, Infallible> {
     // parse the request body
-    let body_bytes = match to_bytes(req.into_body()).await {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(invalid_req_body_resp());
-        }
+    let body_bytes: Bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => return Ok(invalid_req_body_resp()),
     };
 
     // deserialize the request body
@@ -42,7 +45,7 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
     let response_body = Secp256k1SignResponse { sig: signature };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
 /// Handles request to verify a secp256k1 signature.
@@ -57,19 +60,13 @@ pub async fn secp256k1_sign_handler(req: Request<Body>) -> Result<Response<Body>
 ///
 /// # Errors
 /// The function may panic if parsing the request body or verifying the signature fails.
-pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn secp256k1_verify_handler(
+    req: Request<impl Body>,
+) -> Result<Response<Full<Bytes>>, Infallible> {
     // parse the request body
-    // parse the request body
-    let body_bytes = match to_bytes(req.into_body()).await {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            // Return 400 Bad Request if there is an error while reading the body
-            let error_response = json!({ "error": "Invalid request body" }).to_string();
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from(error_response))
-                .unwrap());
-        }
+    let body_bytes: Bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => return Ok(invalid_req_body_resp()),
     };
 
     // deserialize the request body
@@ -88,13 +85,13 @@ pub async fn secp256k1_verify_handler(req: Request<Body>) -> Result<Response<Bod
     let response_body = Secp256k1VerifyResponse { verified };
     let response_json = serde_json::to_string(&response_body).unwrap();
 
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper::{Body, Request};
+    use hyper::Request;
 
     #[tokio::test]
     async fn test_secp256k1_sign() {
@@ -105,18 +102,18 @@ mod tests {
         };
         let payload_json = serde_json::to_string(&sign_request).unwrap();
 
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/sign")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
         let res = secp256k1_sign_handler(req).await.unwrap();
         assert_eq!(res.status(), 200);
 
         // Parse the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let sign_response: Secp256k1SignResponse = serde_json::from_slice(&body).unwrap();
         assert!(!sign_response.sig.is_empty());
     }
@@ -124,18 +121,18 @@ mod tests {
     #[tokio::test]
     async fn test_secp256k1_sign_invalid_body() {
         // Prepare invalid request body (non-JSON body)
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/sign")
             .header("Content-Type", "application/json")
-            .body(Body::from("invalid body"))
+            .body(Full::from(Bytes::from("Invalid body")))
             .unwrap();
 
         let res = secp256k1_sign_handler(req).await.unwrap();
         assert_eq!(res.status(), 400);
 
         // Parse the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(error_response["error"], "Invalid JSON in request body");
     }
@@ -149,16 +146,16 @@ mod tests {
         };
         let sign_payload_json = serde_json::to_string(&sign_request).unwrap();
 
-        let sign_req = Request::builder()
+        let sign_req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/sign")
             .header("Content-Type", "application/json")
-            .body(Body::from(sign_payload_json))
+            .body(Full::from(Bytes::from(sign_payload_json)))
             .unwrap();
 
-        let sign_res = secp256k1_sign_handler(sign_req).await.unwrap();
-        let sign_body = hyper::body::to_bytes(sign_res.into_body()).await.unwrap();
-        let sign_response: Secp256k1SignResponse = serde_json::from_slice(&sign_body).unwrap();
+        let res = secp256k1_sign_handler(sign_req).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let sign_response: Secp256k1SignResponse = serde_json::from_slice(&body).unwrap();
 
         // Prepare verify request body
         let verify_request = Secp256k1VerifyRequest {
@@ -167,38 +164,37 @@ mod tests {
         };
         let verify_payload_json = serde_json::to_string(&verify_request).unwrap();
 
-        let verify_req = Request::builder()
+        let verify_req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/verify")
             .header("Content-Type", "application/json")
-            .body(Body::from(verify_payload_json))
+            .body(Full::from(Bytes::from(verify_payload_json)))
             .unwrap();
 
-        let verify_res = secp256k1_verify_handler(verify_req).await.unwrap();
-        assert_eq!(verify_res.status(), 200);
+        let res = secp256k1_verify_handler(verify_req).await.unwrap();
+        assert_eq!(res.status(), 200);
 
         // Parse the response body
-        let verify_body = hyper::body::to_bytes(verify_res.into_body()).await.unwrap();
-        let verify_response: Secp256k1VerifyResponse =
-            serde_json::from_slice(&verify_body).unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let verify_response: Secp256k1VerifyResponse = serde_json::from_slice(&body).unwrap();
         assert!(verify_response.verified);
     }
 
     #[tokio::test]
     async fn test_secp256k1_verify_invalid_body() {
         // Prepare invalid request body (non-JSON body)
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/verify")
             .header("Content-Type", "application/json")
-            .body(Body::from("invalid body"))
+            .body(Full::from(Bytes::from("Invalid body")))
             .unwrap();
 
         let res = secp256k1_verify_handler(req).await.unwrap();
         assert_eq!(res.status(), 400);
 
         // Parse the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(error_response["error"], "Invalid JSON in request body");
     }

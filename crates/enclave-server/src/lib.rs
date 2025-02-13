@@ -9,15 +9,15 @@ mod utils;
 
 use anyhow::Result;
 use attestation_agent::AttestationAgent;
-use attestation_service::{AttestationService, config::Config};
+use attestation_service::{config::Config, AttestationService};
 use base64::Engine;
 use coco_as::policies;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use attestation_service::token::AttestationTokenConfig;
 use attestation_service::token::simple;
+use attestation_service::token::AttestationTokenConfig;
 
 use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 
