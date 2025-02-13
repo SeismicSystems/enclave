@@ -138,7 +138,7 @@ mod tests {
             .body(Body::from(payload_json))
             .unwrap();
         let res: Response<Body> = provide_snapsync_handler(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let snapsync_response: SnapSyncResponse = serde_json::from_slice(&body_bytes).unwrap();

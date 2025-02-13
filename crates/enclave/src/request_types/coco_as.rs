@@ -2,9 +2,7 @@ use kbs_types::Tee;
 use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 use strum::{AsRefStr, Display, EnumString};
@@ -101,10 +99,7 @@ pub struct ASCoreTokenClaims {
     pub evaluation_reports: Vec<Value>,
 
     #[serde(rename = "tcb-status")]
-    pub tcb_status: Map<String, Value>,
-
-    #[serde(rename = "reference-data")]
-    pub reference_data: HashMap<String, Vec<String>>,
+    pub tcb_status: String,
 
     pub customized_claims: ASCustomizedClaims,
 }
