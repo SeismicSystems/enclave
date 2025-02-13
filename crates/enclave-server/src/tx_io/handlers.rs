@@ -8,7 +8,6 @@ use seismic_enclave::errors::{
     invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
 };
 use seismic_enclave::request_types::tx_io::*;
-use std::convert::Infallible;
 
 use crate::get_secp256k1_sk;
 
@@ -26,7 +25,7 @@ use crate::get_secp256k1_sk;
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
 pub async fn tx_io_encrypt_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),
@@ -70,7 +69,7 @@ pub async fn tx_io_encrypt_handler(
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
 pub async fn tx_io_decrypt_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),

@@ -3,7 +3,6 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
-use std::convert::Infallible;
 
 use super::into_original::*;
 use super::{eval_att_evidence, parse_as_token_claims};
@@ -36,7 +35,7 @@ use super::into_original::IntoOriginalHashAlgorithm;
 ///    - This includes confirming that the correct software is running within the TEE
 pub async fn attestation_eval_evidence_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // Parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),

@@ -4394,6 +4394,7 @@ dependencies = [
  "hkdf",
  "http-body-util",
  "hyper 1.6.0",
+ "hyper-util",
  "kbs-types",
  "log",
  "once_cell",

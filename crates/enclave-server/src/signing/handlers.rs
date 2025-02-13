@@ -3,7 +3,6 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
-use std::convert::Infallible;
 
 use super::{enclave_sign, get_secp256k1_pk};
 use seismic_enclave::crypto::*;
@@ -24,7 +23,7 @@ use seismic_enclave::request_types::signing::*;
 /// The function may panic if parsing the request body or signing the message fails.
 pub async fn secp256k1_sign_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),
@@ -62,7 +61,7 @@ pub async fn secp256k1_sign_handler(
 /// The function may panic if parsing the request body or verifying the signature fails.
 pub async fn secp256k1_verify_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),

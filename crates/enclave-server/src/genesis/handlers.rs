@@ -3,7 +3,6 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
-use std::convert::Infallible;
 
 use super::att_genesis_data;
 use seismic_enclave::request_types::genesis::*;
@@ -17,7 +16,7 @@ use seismic_enclave::request_types::genesis::*;
 /// Currently uses hardcoded values for testing purposes, which will be updated later
 pub async fn genesis_get_data_handler(
     _: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     let (genesis_data, evidence) = att_genesis_data().await.unwrap();
 
     // Return the evidence as a response

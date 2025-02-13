@@ -3,7 +3,6 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
-use std::convert::Infallible;
 
 use super::attest;
 use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
@@ -25,7 +24,7 @@ use seismic_enclave::request_types::coco_aa::*;
 /// Section 2.3.2 for more details
 pub async fn attestation_get_evidence_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),

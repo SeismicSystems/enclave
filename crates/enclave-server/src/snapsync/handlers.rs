@@ -5,7 +5,6 @@ use hyper::{
     Request, Response,
 };
 use sha2::{Digest, Sha256};
-use std::convert::Infallible;
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
@@ -29,7 +28,7 @@ use seismic_enclave::request_types::snapsync::*;
 /// The function may panic if parsing the request body or signing the message fails.
 pub async fn provide_snapsync_handler(
     req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
     let body_bytes: Bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),
