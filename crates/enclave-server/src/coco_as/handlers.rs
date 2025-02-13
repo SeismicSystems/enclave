@@ -81,6 +81,9 @@ pub async fn attestation_eval_evidence_handler(
         }
     };
 
+    // println!("{as_token}");
+    // assert!(false);
+
     let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
         .unwrap();
@@ -118,7 +121,7 @@ mod tests {
 
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
-        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"61792a819cb38c3bda3026ddcc0300685e01bfb9e77eee0122af0064cd4880a6475c9a9fb6001cca2fcaddcea24bb1bf\",\"policy-id\":\"allow_any\"}]");
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"b3b555df21b9e952384aec5e81e03e53ca82741da3c5d055ccdb6ba5a85dcc2e6fd1196819dc3c26d09471735275b30a\",\"policy-id\":\"yocto\"}]");
         let tcb_status_map: serde_json::Map<String, Value> = serde_json::from_str(&claims.tcb_status).unwrap();
         assert_eq!(
             tcb_status_map.get("aztdxvtpm.quote.body.mr_td"),
