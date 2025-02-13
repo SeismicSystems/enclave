@@ -81,9 +81,6 @@ pub async fn attestation_eval_evidence_handler(
         }
     };
 
-    // println!("{as_token}");
-    // assert!(false);
-
     let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
         .unwrap();
