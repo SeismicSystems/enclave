@@ -72,6 +72,7 @@ pub async fn attestation_eval_evidence_handler(
         evaluate_request.policy_ids,
     )
     .await;
+    println!("eval_result.is_err(): {:?}", eval_result.is_err());
 
     let as_token: String = match eval_result {
         Ok(as_token) => as_token,
@@ -110,7 +111,7 @@ mod tests {
             Ok(path) => println!("Current directory: {}", path.display()),
             Err(e) => eprintln!("Error getting current directory: {}", e),
         }
-        let ex_token_path = "../../examples/as_token.txt";
+        let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
         let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
 
         let claims = parse_as_token_claims(&ex_token).unwrap();
@@ -317,6 +318,7 @@ mod tests {
     #[tokio::test]
     #[serial(attestation_service)]
     async fn test_eval_evidence_az_tdx_tpm_pcr04() {
+        println!("starting test_eval_evidence_az_tdx_tpm_pcr04");
         // handle set up permissions
         if !is_sudo() {
             eprintln!("test_eval_evidence_az_tdx_tpm_pcr04: skipped (requires sudo privileges)");
@@ -329,7 +331,7 @@ mod tests {
 
         // Make a passing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
-            read_vector_txt("../../examples/yocto_20241023223507.txt".to_string()).unwrap();
+            read_vector_txt("../../examples/yocto_20241023223507.txt".to_string()).unwrap(); // assumes tests are run from enclaver-server dir
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
