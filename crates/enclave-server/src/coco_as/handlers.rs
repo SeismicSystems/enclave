@@ -122,7 +122,8 @@ mod tests {
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
         assert_eq!(evaluation_reports, "[{\"policy-hash\":\"b3b555df21b9e952384aec5e81e03e53ca82741da3c5d055ccdb6ba5a85dcc2e6fd1196819dc3c26d09471735275b30a\",\"policy-id\":\"yocto\"}]");
-        let tcb_status_map: serde_json::Map<String, Value> = serde_json::from_str(&claims.tcb_status).unwrap();
+        let tcb_status_map: serde_json::Map<String, Value> =
+            serde_json::from_str(&claims.tcb_status).unwrap();
         assert_eq!(
             tcb_status_map.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
@@ -205,7 +206,8 @@ mod tests {
         assert!(eval_evidence_response.eval);
         let claims = eval_evidence_response.claims.unwrap();
         assert_eq!(claims.tee, "sample");
-        let tcb_status_map: serde_json::Map<String, Value> = serde_json::from_str(&claims.tcb_status).unwrap();
+        let tcb_status_map: serde_json::Map<String, Value> =
+            serde_json::from_str(&claims.tcb_status).unwrap();
         assert_eq!(tcb_status_map["report_data"], "bm9uY2U=");
     }
 
@@ -266,7 +268,8 @@ mod tests {
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
         assert_eq!(evaluation_reports, "[{\"policy-hash\":\"fbb1cf91bb453d7c89b04cbc8d727dc142c47d84c5c9c2012b8c86d4d1892874743a63f7448e592ca6bee9cfeb286732\",\"policy-id\":\"allow\"}]");
-        let tcb_status_map: serde_json::Map<String, Value> = serde_json::from_str(&claims.tcb_status).unwrap();
+        let tcb_status_map: serde_json::Map<String, Value> =
+            serde_json::from_str(&claims.tcb_status).unwrap();
         assert_eq!(
             tcb_status_map.get("aztdxvtpm.quote.body.mr_td"),
             Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
@@ -389,7 +392,7 @@ mod tests {
         let body_str = String::from_utf8_lossy(&body);
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
         assert!(
-            body_str.contains(&expected_err_msg), 
+            body_str.contains(&expected_err_msg),
             "Response does not contain expected message. Expected to see: \"{expected_err_msg}\", Was: {body_str}"
         );
     }

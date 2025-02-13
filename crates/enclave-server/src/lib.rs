@@ -53,12 +53,16 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
 
     let mut config = config.unwrap_or_default();
 
-    // set stuff for attestation token broker 
+    // set stuff for attestation token broker
     use attestation_service::token::AttestationTokenConfig;
     // use attestation_service::token::ear_broker;
     use attestation_service::token::simple;
-    config.attestation_token_broker = AttestationTokenConfig::Simple(simple::Configuration::default());
-    println!("attestation token broker: {:?}", config.attestation_token_broker);
+    config.attestation_token_broker =
+        AttestationTokenConfig::Simple(simple::Configuration::default());
+    println!(
+        "attestation token broker: {:?}",
+        config.attestation_token_broker
+    );
     // done
 
     // Initialize the AttestationService
