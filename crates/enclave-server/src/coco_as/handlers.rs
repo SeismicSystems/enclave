@@ -1,5 +1,8 @@
-use hyper::{body::to_bytes, Body, Request, Response};
-use std::convert::Infallible;
+use http_body_util::{BodyExt, Full};
+use hyper::{
+    body::{Body, Bytes},
+    Request, Response,
+};
 
 use super::into_original::*;
 use super::{eval_att_evidence, parse_as_token_claims};
@@ -31,14 +34,12 @@ use super::into_original::IntoOriginalHashAlgorithm;
 ///    - Ensures that the TEE state aligns with the security policies defined by the attestation service.
 ///    - This includes confirming that the correct software is running within the TEE
 pub async fn attestation_eval_evidence_handler(
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+    req: Request<impl Body>,
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // Parse the request body
-    let body_bytes = match to_bytes(req.into_body()).await {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(invalid_req_body_resp());
-        }
+    let body_bytes: Bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => return Ok(invalid_req_body_resp()),
     };
 
     // Deserialize the request body into the evaluate request struct
@@ -81,9 +82,6 @@ pub async fn attestation_eval_evidence_handler(
         }
     };
 
-    // println!("{as_token}");
-    // assert!(false);
-
     let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
         .map_err(|e| format!("Error while parsing AS token: {:?}", e))
         .unwrap();
@@ -93,7 +91,7 @@ pub async fn attestation_eval_evidence_handler(
         claims: Some(claims),
     };
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
 #[cfg(test)]
@@ -102,7 +100,7 @@ mod tests {
     use crate::init_coco_as;
     use crate::utils::test_utils::{is_sudo, read_vector_txt};
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    use hyper::{Body, Request, Response, StatusCode};
+    use hyper::StatusCode;
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;
@@ -135,22 +133,22 @@ mod tests {
     #[tokio::test]
     async fn test_attestation_eval_evidence_handler_invalid_json() {
         // Create a request with invalid JSON body
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from("Invalid JSON"))
+            .body(Full::from(Bytes::from("Invalid JSON")))
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 400 Bad Request
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
         // Parse and check the response body
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let response_json: Value = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(response_json["error"], "Invalid JSON in request body");
     }
@@ -185,21 +183,21 @@ mod tests {
         let payload_json = serde_json::to_string(&eval_request).unwrap();
 
         // Create a request
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Parse and check the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let eval_evidence_response: AttestationEvalEvidenceResponse =
             serde_json::from_slice(&body).unwrap();
 
@@ -244,21 +242,21 @@ mod tests {
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
 
         // Create a request
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Parse and check the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let eval_evidence_response: AttestationEvalEvidenceResponse =
             serde_json::from_slice(&body).unwrap();
 
@@ -308,15 +306,15 @@ mod tests {
         let payload_json = serde_json::to_string(&eval_request).unwrap();
 
         // Create a request
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -353,14 +351,14 @@ mod tests {
         };
 
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
@@ -379,16 +377,16 @@ mod tests {
         };
 
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{res:?}");
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let body_str = String::from_utf8_lossy(&body);
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
         assert!(
