@@ -75,7 +75,6 @@ pub async fn route_req(req: Request<impl Body>) -> Result<Response<Full<Bytes>>>
     }
 }
 
-
 async fn health_check(_: Request<impl Body>) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     Ok(Response::new(Full::new(Bytes::from("OK"))))
 }
@@ -91,23 +90,27 @@ fn log_request(req: &Request<impl Body>) {
 mod test {
     use super::start_server;
     use seismic_enclave::client::http_client::TeeHttpClient;
-    use seismic_enclave::client::http_client::{TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT};
+    use seismic_enclave::client::http_client::{
+        TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
+    };
     use seismic_enclave::request_types::tx_io::*;
     use seismic_enclave::TeeAPI;
 
-    use std::net::SocketAddr;
     use secp256k1::PublicKey;
+    use std::net::SocketAddr;
     use std::str::FromStr;
 
     use tokio::time::Duration;
     use tokio::time::Instant;
-    
+
     #[tokio::test]
     async fn test_tx_io_req() {
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
-        let _server_handle = tokio::spawn(start_server(addr)); 
-        wait_for_server(&format!("{}/health", addr), Duration::from_secs(2)).await.unwrap();
+        let _server_handle = tokio::spawn(start_server(addr));
+        wait_for_server(&format!("{}/health", addr), Duration::from_secs(2))
+            .await
+            .unwrap();
 
         // make the request struct
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
@@ -141,7 +144,10 @@ mod test {
         assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
     }
 
-    async fn wait_for_server(addr: &str, timeout: Duration) -> Result<(), Box<dyn std::error::Error>> {
+    async fn wait_for_server(
+        addr: &str,
+        timeout: Duration,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let start = Instant::now();
         while start.elapsed() < timeout {
             if reqwest::get(addr).await.is_ok() {
