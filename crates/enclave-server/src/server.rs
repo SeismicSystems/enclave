@@ -89,6 +89,7 @@ fn log_request(req: &Request<impl Body>) {
 #[cfg(test)]
 mod test {
     use super::start_server;
+    use crate::utils::test_utils::is_sudo;
     use seismic_enclave::client::http_client::TeeHttpClient;
     use seismic_enclave::client::http_client::{
         TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
@@ -99,16 +100,22 @@ mod test {
     use secp256k1::PublicKey;
     use std::net::SocketAddr;
     use std::str::FromStr;
-
     use tokio::time::Duration;
     use tokio::time::Instant;
 
     #[tokio::test]
-    async fn test_tx_io_req() {
+    async fn test_server_tx_io_req() {
+        // handle set up permissions
+        if !is_sudo() {
+            eprintln!("test_server_tx_io_req: skipped (requires sudo privileges)");
+            return;
+        }
+
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
         let _server_handle = tokio::spawn(start_server(addr));
-        wait_for_server(&format!("{}/health", addr), Duration::from_secs(2))
+        let wait_duration = Duration::from_secs(2);
+        wait_for_server(&format!("{}/health", addr), wait_duration)
             .await
             .unwrap();
 
