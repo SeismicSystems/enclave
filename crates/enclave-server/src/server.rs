@@ -91,8 +91,9 @@ pub async fn route_req(req: Request<impl Body>) -> Result<Response<Full<Bytes>>>
 }
 
 
-fn log_request(req: &Request<impl Body>) -> String {
+fn log_request(req: &Request<impl Body>) {
     let method = req.method().to_string();
     let uri = req.uri().to_string();
-    format!("{} {}", method, uri)
+    let log = format!("{} {}", method, uri);
+    println!("{log}");
 }
