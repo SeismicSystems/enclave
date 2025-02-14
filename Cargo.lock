@@ -2798,7 +2798,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -4363,7 +4363,7 @@ dependencies = [
  "bytes",
  "hkdf",
  "http-body-util",
- "hyper 0.14.32",
+ "hyper 1.6.0",
  "kbs-types",
  "once_cell",
  "reqwest 0.12.12",
@@ -4392,7 +4392,7 @@ dependencies = [
  "env_logger 0.11.6",
  "hex",
  "hkdf",
- "hyper 0.14.32",
+ "hyper 1.6.0",
  "kbs-types",
  "log",
  "once_cell",
