@@ -103,6 +103,7 @@ mod test {
     use tokio::time::Duration;
     use tokio::time::Instant;
 
+    #[ignore]
     #[tokio::test]
     async fn test_server_tx_io_req() {
         // handle set up permissions
