@@ -4398,6 +4398,7 @@ dependencies = [
  "kbs-types",
  "log",
  "once_cell",
+ "reqwest 0.12.12",
  "routerify",
  "scroll",
  "secp256k1",
