@@ -9,13 +9,15 @@ mod utils;
 
 use anyhow::Result;
 use attestation_agent::AttestationAgent;
-use attestation_service::config::Config;
-use attestation_service::AttestationService;
+use attestation_service::{config::Config, AttestationService};
 use base64::Engine;
 use coco_as::policies;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+use attestation_service::token::simple;
+use attestation_service::token::AttestationTokenConfig;
 
 use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 
@@ -52,18 +54,8 @@ pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
     }
 
     let mut config = config.unwrap_or_default();
-
-    // set stuff for attestation token broker
-    use attestation_service::token::AttestationTokenConfig;
-    // use attestation_service::token::ear_broker;
-    use attestation_service::token::simple;
     config.attestation_token_broker =
         AttestationTokenConfig::Simple(simple::Configuration::default());
-    println!(
-        "attestation token broker: {:?}",
-        config.attestation_token_broker
-    );
-    // done
 
     // Initialize the AttestationService
     let coco_as = AttestationService::new(config)
