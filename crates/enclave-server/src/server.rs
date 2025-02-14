@@ -58,6 +58,7 @@ pub async fn start_server(addr: SocketAddr) -> Result<()> {
 }
 
 pub async fn route_req(req: Request<impl Body>) -> Result<Response<Full<Bytes>>> {
+    log_request(&req);
     match (req.method(), req.uri().path()) {
         // Genesis
         (&Method::GET, "/genesis/data") => genesis_get_data_handler(req).await,
@@ -87,4 +88,11 @@ pub async fn route_req(req: Request<impl Body>) -> Result<Response<Full<Bytes>>>
             .body(Full::from(Bytes::from("route not found")))
             .unwrap()),
     }
+}
+
+
+fn log_request(req: &Request<impl Body>) -> String {
+    let method = req.method().to_string();
+    let uri = req.uri().to_string();
+    format!("{} {}", method, uri)
 }
