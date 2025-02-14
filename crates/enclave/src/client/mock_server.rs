@@ -60,6 +60,7 @@ pub trait MockServer {
         let body = Full::new(Bytes::from("Error: Mock Unimplimented".to_string()));
         Ok(Response::builder().status(500).body(body).unwrap())
     }
+    
     fn get_eph_rng_keypair(&self) -> Result<Response<Full<Bytes>>, Infallible> {
         let body = Full::new(Bytes::from("Error: Mock Unimplimented".to_string()));
         Ok(Response::builder().status(500).body(body).unwrap())
