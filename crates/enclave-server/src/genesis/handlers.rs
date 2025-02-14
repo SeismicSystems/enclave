@@ -1,5 +1,8 @@
-use hyper::{Body, Request, Response};
-use std::convert::Infallible;
+use http_body_util::Full;
+use hyper::{
+    body::{Body, Bytes},
+    Request, Response,
+};
 
 use super::att_genesis_data;
 use seismic_enclave::request_types::genesis::*;
@@ -11,7 +14,9 @@ use seismic_enclave::request_types::genesis::*;
 /// Along with an attestation of such data that can be verified with the attestation/as/eval_evidence endpoint
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
-pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn genesis_get_data_handler(
+    _: Request<impl Body>,
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     let (genesis_data, evidence) = att_genesis_data().await.unwrap();
 
     // Return the evidence as a response
@@ -20,7 +25,7 @@ pub async fn genesis_get_data_handler(_: Request<Body>) -> Result<Response<Body>
         evidence,
     };
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
 #[allow(unused_imports)]
@@ -31,7 +36,8 @@ mod tests {
         coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
         init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
     };
-    use hyper::{Body, Request, Response, StatusCode};
+    use http_body_util::BodyExt;
+    use hyper::StatusCode;
     use kbs_types::Tee;
     use seismic_enclave::request_types::coco_as::*;
     use serde_json::Value;
@@ -50,21 +56,21 @@ mod tests {
         init_coco_aa().expect("Failed to initialize AttestationAgent");
 
         // Create a request
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("GET")
             .uri("/genesis/data")
-            .body(Body::empty())
+            .body(Full::default())
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = genesis_get_data_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = genesis_get_data_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Parse and check the response body
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let response: GenesisDataResponse = serde_json::from_slice(&body_bytes).unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let response: GenesisDataResponse = serde_json::from_slice(&body).unwrap();
 
         // assert that the attestation is not empty
         assert!(!response.evidence.is_empty());
@@ -89,16 +95,15 @@ mod tests {
             .expect("Failed to initialize AS policies");
 
         // Make a genesis data request
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("GET")
             .uri("/genesis/data")
-            .body(Body::empty())
+            .body(Full::default())
             .unwrap();
-        let res: Response<Body> = genesis_get_data_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = genesis_get_data_handler(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let genesis_data_response: GenesisDataResponse =
-            serde_json::from_slice(&body_bytes).unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let genesis_data_response: GenesisDataResponse = serde_json::from_slice(&body).unwrap();
 
         // Submit the genesis data to the attestation service
         let bytes = genesis_data_response.data.to_bytes().unwrap();
@@ -112,18 +117,18 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
         let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/as/eval_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
-        let res: Response<Body> = attestation_eval_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
 
         // Check that the eval evidence response
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
         // Parse and check the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let eval_evidence_response: AttestationEvalEvidenceResponse =
             serde_json::from_slice(&body).unwrap();
 

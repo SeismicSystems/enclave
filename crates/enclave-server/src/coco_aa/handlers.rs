@@ -1,5 +1,8 @@
-use hyper::{body::to_bytes, Body, Request, Response};
-use std::convert::Infallible;
+use http_body_util::{BodyExt, Full};
+use hyper::{
+    body::{Body, Bytes},
+    Request, Response,
+};
 
 use super::attest;
 use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
@@ -20,14 +23,12 @@ use seismic_enclave::request_types::coco_aa::*;
 /// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
 /// Section 2.3.2 for more details
 pub async fn attestation_get_evidence_handler(
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+    req: Request<impl Body>,
+) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     // parse the request body
-    let body_bytes = match to_bytes(req.into_body()).await {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(invalid_req_body_resp());
-        }
+    let body_bytes: Bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => return Ok(invalid_req_body_resp()),
     };
 
     // Deserialize the request body into the appropriate struct
@@ -47,7 +48,7 @@ pub async fn attestation_get_evidence_handler(
     // Return the evidence as a response
     let response_body = AttestationGetEvidenceResponse { evidence };
     let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Body::from(response_json)))
+    Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
 #[cfg(test)]
@@ -55,7 +56,8 @@ mod tests {
     use super::*;
     use crate::init_coco_aa;
     use crate::utils::test_utils::is_sudo;
-    use hyper::{Body, Request, Response, StatusCode};
+
+    use hyper::StatusCode;
     use serde_json::Value;
     use serial_test::serial;
 
@@ -77,21 +79,21 @@ mod tests {
         let payload_json = serde_json::to_string(&evidence_request).unwrap();
 
         // Create a request
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json))
+            .body(Full::from(Bytes::from(payload_json)))
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_get_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_get_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 200 OK
         assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Parse and check the response body
-        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let get_evidence_resp: AttestationGetEvidenceResponse =
             serde_json::from_slice(&body).unwrap();
 
@@ -126,30 +128,28 @@ mod tests {
         let payload_json_2 = serde_json::to_string(&evidence_request_2).unwrap();
 
         // Create a request
-        let req_1 = Request::builder()
+        let req_1: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json_1))
+            .body(Full::from(Bytes::from(payload_json_1)))
             .unwrap();
+        let res_1: Response<Full<Bytes>> = attestation_get_evidence_handler(req_1).await.unwrap();
 
-        println!("req_1: {:?}", req_1);
-
-        let res_1: Response<Body> = attestation_get_evidence_handler(req_1).await.unwrap();
-        let req_2 = Request::builder()
+        let req_2: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from(payload_json_2))
+            .body(Full::from(Bytes::from(payload_json_2)))
             .unwrap();
-        let res_2: Response<Body> = attestation_get_evidence_handler(req_2).await.unwrap();
+        let res_2: Response<Full<Bytes>> = attestation_get_evidence_handler(req_2).await.unwrap();
 
         assert_eq!(res_1.status(), StatusCode::OK);
         assert_eq!(res_2.status(), StatusCode::OK);
 
         // Parse and check the response body
-        let body_1 = hyper::body::to_bytes(res_1.into_body()).await.unwrap();
-        let body_2 = hyper::body::to_bytes(res_2.into_body()).await.unwrap();
+        let body_1: Bytes = res_1.into_body().collect().await.unwrap().to_bytes();
+        let body_2: Bytes = res_2.into_body().collect().await.unwrap().to_bytes();
         let get_evidence_resp_1: AttestationGetEvidenceResponse =
             serde_json::from_slice(&body_1).unwrap();
         let get_evidence_resp_2: AttestationGetEvidenceResponse =
@@ -161,22 +161,22 @@ mod tests {
     #[tokio::test]
     async fn test_attestation_evidence_handler_invalid_json() {
         // Create a request with invalid JSON body
-        let req = Request::builder()
+        let req: Request<Full<Bytes>> = Request::builder()
             .method("POST")
             .uri("/attestation/aa/get_evidence")
             .header("Content-Type", "application/json")
-            .body(Body::from("Invalid JSON"))
+            .body(Full::from(Bytes::from("Invalid JSON")))
             .unwrap();
 
         // Call the handler
-        let res: Response<Body> = attestation_get_evidence_handler(req).await.unwrap();
+        let res: Response<Full<Bytes>> = attestation_get_evidence_handler(req).await.unwrap();
 
         // Check that the response status is 400 Bad Request
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
         // Parse and check the response body
-        let body_bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        let response_json: Value = serde_json::from_slice(&body_bytes).unwrap();
+        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let response_json: Value = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(response_json["error"], "Invalid JSON in request body");
     }
