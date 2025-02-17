@@ -159,8 +159,10 @@ pub async fn rpc_attestation_eval_evidence_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::init_coco_as;
-    use crate::utils::test_utils::{is_sudo, read_vector_txt};
+    use crate::{
+        coco_as::init_coco_as,
+        utils::test_utils::{is_sudo, read_vector_txt},
+    };
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use hyper::StatusCode;
     use kbs_types::Tee;
@@ -368,9 +370,10 @@ mod tests {
 
         let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request).await;
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
+        let err_msg = eval_evidence_response.err().unwrap().to_string();
         assert!(
-            eval_evidence_response.err().unwrap().to_string().contains(&expected_err_msg),
-            "Response does not contain expected message. Expected to see: \"{expected_err_msg}\", Was: {eval_evidence_response.err().unwrap().to_string()}"
+            err_msg.contains(&expected_err_msg),
+            "Response does not contain expected message. Expected to see: \"{expected_err_msg}\", Was: {err_msg}"
         );
     }
 }
