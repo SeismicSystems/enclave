@@ -36,7 +36,6 @@ mod tests {
 
     use super::*;
 
-    use serde_json::Value;
     use serial_test::serial;
 
     #[tokio::test]
@@ -83,10 +82,6 @@ mod tests {
         let evidence_request_2 = AttestationGetEvidenceRequest {
             runtime_data: runtime_data_2.to_vec(),
         };
-
-        // Serialize the request to JSON
-        let payload_json_1 = serde_json::to_string(&evidence_request_1).unwrap();
-        let payload_json_2 = serde_json::to_string(&evidence_request_2).unwrap();
 
         let res_1 = attestation_get_evidence_handler(evidence_request_1)
             .await

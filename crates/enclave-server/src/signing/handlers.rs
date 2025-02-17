@@ -70,7 +70,6 @@ mod tests {
         let sign_request = Secp256k1SignRequest {
             msg: msg_to_sign.clone(),
         };
-        let sign_payload_json = serde_json::to_string(&sign_request).unwrap();
         let res = secp256k1_sign_handler(sign_request).await.unwrap();
 
         // Prepare verify request body

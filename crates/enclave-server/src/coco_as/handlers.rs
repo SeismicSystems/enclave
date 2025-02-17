@@ -260,7 +260,7 @@ mod tests {
             policy_ids: vec![test_policy_id.clone()],
         };
 
-        let eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request)
+        let _eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request)
             .await
             .unwrap();
 
