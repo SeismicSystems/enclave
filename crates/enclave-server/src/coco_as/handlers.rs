@@ -75,7 +75,6 @@ pub async fn attestation_eval_evidence_handler(
         evaluate_request.policy_ids,
     )
     .await;
-    println!("eval_result.is_err(): {:?}", eval_result.is_err());
 
     let as_token: String = match eval_result {
         Ok(as_token) => as_token,
@@ -137,7 +136,6 @@ pub async fn rpc_attestation_eval_evidence_handler(
         request.policy_ids,
     )
     .await;
-    println!("eval_result.is_err(): {:?}", eval_result.is_err());
 
     let as_token: String = match eval_result {
         Ok(as_token) => as_token,
