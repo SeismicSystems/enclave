@@ -163,7 +163,6 @@ mod tests {
             msg: msg_to_sign,
             sig: res.sig,
         };
-        let verify_payload_json = serde_json::to_string(&verify_request).unwrap();
 
         let res = rpc_secp256k1_verify_handler(verify_request).await.unwrap();
         assert_eq!(res.verified, true);

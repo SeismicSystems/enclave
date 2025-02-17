@@ -245,6 +245,7 @@ mod tests {
 
         let res = rpc_provide_snapsync_handler(snap_sync_request).await;
         assert_eq!(res.is_err(), true);
-        println!("Error: {:?}", res.err().unwrap());
+        let err = res.err().unwrap();
+        assert!(err.to_string().contains("Error while evaluating evidence"));
     }
 }
