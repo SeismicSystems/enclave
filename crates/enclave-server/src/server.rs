@@ -19,8 +19,11 @@ use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::{debug, info};
+
+pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 pub struct EnclaveServer {}
 
@@ -114,14 +117,12 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
 #[cfg(test)]
 mod test {
     use crate::server::start_rpc_server;
+    use crate::server::TEE_DEFAULT_ENDPOINT_ADDR;
+    use crate::server::TEE_DEFAULT_ENDPOINT_PORT;
     use crate::utils::test_utils::is_sudo;
-    use seismic_enclave::client::http_client::{
-        TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
-    };
+    use secp256k1::PublicKey;
     use seismic_enclave::request_types::tx_io::*;
     use seismic_enclave::rpc::EnclaveApiClient;
-
-    use secp256k1::PublicKey;
     use std::net::SocketAddr;
     use std::str::FromStr;
     use tokio::time::Duration;

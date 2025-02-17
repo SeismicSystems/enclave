@@ -4,14 +4,10 @@
 //! operations, e.g. encryption and decryption operations. The main structures and
 //! traits define the API and implementation for the TEE client.
 #![allow(async_fn_in_trait)]
-pub mod http_client;
 pub mod mock_server;
 pub mod rpc;
 
-use crate::{
-    nonce::Nonce,
-    request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*},
-};
+use crate::nonce::Nonce;
 
 pub trait WalletAPI {
     fn encrypt(
