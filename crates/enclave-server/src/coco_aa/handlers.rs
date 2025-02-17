@@ -26,7 +26,7 @@ use seismic_enclave::{
 ///
 /// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
 /// Section 2.3.2 for more details
-pub async fn rpc_attestation_get_evidence_handler(
+pub async fn attestation_get_evidence_handler(
     req: AttestationGetEvidenceRequest,
 ) -> RpcResult<AttestationGetEvidenceResponse> {
     // Get the evidence from the attestation agent
@@ -63,7 +63,7 @@ mod tests {
         };
 
         // Call the handler
-        let res = rpc_attestation_get_evidence_handler(evidence_request)
+        let res = attestation_get_evidence_handler(evidence_request)
             .await
             .unwrap();
 
@@ -97,10 +97,10 @@ mod tests {
         let payload_json_1 = serde_json::to_string(&evidence_request_1).unwrap();
         let payload_json_2 = serde_json::to_string(&evidence_request_2).unwrap();
 
-        let res_1 = rpc_attestation_get_evidence_handler(evidence_request_1)
+        let res_1 = attestation_get_evidence_handler(evidence_request_1)
             .await
             .unwrap();
-        let res_2 = rpc_attestation_get_evidence_handler(evidence_request_2)
+        let res_2 = attestation_get_evidence_handler(evidence_request_2)
             .await
             .unwrap();
 

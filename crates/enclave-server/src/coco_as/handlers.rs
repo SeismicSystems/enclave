@@ -35,7 +35,7 @@ use super::into_original::IntoOriginalHashAlgorithm;
 /// 3. **TEE State Compliance with Attestation Service (AS) Policy:**
 ///    - Ensures that the TEE state aligns with the security policies defined by the attestation service.
 ///    - This includes confirming that the correct software is running within the TEE
-pub async fn rpc_attestation_eval_evidence_handler(
+pub async fn attestation_eval_evidence_handler(
     request: AttestationEvalEvidenceRequest,
 ) -> RpcResult<AttestationEvalEvidenceResponse> {
     // Convert the request's runtime data hash algorithm to the original enum
@@ -141,7 +141,7 @@ mod tests {
         };
 
         // Call the handler
-        let eval_evidence_response = rpc_attestation_eval_evidence_handler(eval_request)
+        let eval_evidence_response = attestation_eval_evidence_handler(eval_request)
             .await
             .unwrap();
 
@@ -183,7 +183,7 @@ mod tests {
         };
 
         // Call the handler
-        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+        let eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request)
             .await
             .unwrap();
 
@@ -230,7 +230,7 @@ mod tests {
         };
 
         // Call the handler
-        let eval_evidence_response = rpc_attestation_eval_evidence_handler(eval_request).await;
+        let eval_evidence_response = attestation_eval_evidence_handler(eval_request).await;
 
         assert!(
             eval_evidence_response.is_err(),
@@ -269,7 +269,7 @@ mod tests {
             policy_ids: vec![test_policy_id.clone()],
         };
 
-        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+        let eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request)
             .await
             .unwrap();
 
@@ -288,7 +288,7 @@ mod tests {
             policy_ids: vec!["yocto".to_string()],
         };
 
-        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request).await;
+        let eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request).await;
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
         let err_msg = eval_evidence_response.err().unwrap().to_string();
         assert!(

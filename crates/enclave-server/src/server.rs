@@ -50,7 +50,7 @@ impl EnclaveApiServer for EnclaveServer {
 
     /// Handler for: `genesis.get_data`
     async fn genesis_get_data(&self) -> RpcResult<GenesisDataResponse> {
-        rpc_genesis_get_data_handler().await
+        genesis_get_data_handler().await
     }
 
     /// Handler for: `snapsync.provide_backup`
@@ -58,17 +58,17 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         request: SnapSyncRequest,
     ) -> RpcResult<SnapSyncResponse> {
-        rpc_provide_snapsync_handler(request).await
+        provide_snapsync_handler(request).await
     }
 
     /// Handler for: `tx_io.encrypt`
     async fn tx_io_encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        rpc_tx_io_encrypt_handler(req).await
+        tx_io_encrypt_handler(req).await
     }
 
     /// Handler for: `tx_io.decrypt`
     async fn tx_io_decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        rpc_tx_io_decrypt_handler(req).await
+        tx_io_decrypt_handler(req).await
     }
 
     /// Handler for: `attestation.aa.get_evidence`
@@ -76,7 +76,7 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
-        rpc_attestation_get_evidence_handler(req).await
+        attestation_get_evidence_handler(req).await
     }
 
     /// Handler for: `attestation.as.eval_evidence`
@@ -84,12 +84,12 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
-        rpc_attestation_eval_evidence_handler(req).await
+        attestation_eval_evidence_handler(req).await
     }
 
     /// Handler for: `signing.sign`
     async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        rpc_secp256k1_sign_handler(req).await
+        secp256k1_sign_handler(req).await
     }
 
     /// Handler for: `signing.verify`
@@ -97,7 +97,7 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         req: Secp256k1VerifyRequest,
     ) -> RpcResult<Secp256k1VerifyResponse> {
-        rpc_secp256k1_verify_handler(req).await
+        secp256k1_verify_handler(req).await
     }
 }
 

@@ -22,7 +22,7 @@ use seismic_enclave::{crypto::*, rpc_bad_argument_error};
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn rpc_secp256k1_sign_handler(
+pub async fn secp256k1_sign_handler(
     request: Secp256k1SignRequest,
 ) -> RpcResult<Secp256k1SignResponse> {
     // sign the message
@@ -42,7 +42,7 @@ pub async fn rpc_secp256k1_sign_handler(
 ///
 /// # Errors
 /// The function may panic if parsing the request body or verifying the signature fails.
-pub async fn rpc_secp256k1_verify_handler(
+pub async fn secp256k1_verify_handler(
     request: Secp256k1VerifyRequest,
 ) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
@@ -66,7 +66,7 @@ mod tests {
             msg: msg_to_sign.clone(),
         };
 
-        let res = rpc_secp256k1_sign_handler(sign_request).await.unwrap();
+        let res = secp256k1_sign_handler(sign_request).await.unwrap();
         assert!(!res.sig.is_empty());
     }
 
@@ -78,7 +78,7 @@ mod tests {
             msg: msg_to_sign.clone(),
         };
         let sign_payload_json = serde_json::to_string(&sign_request).unwrap();
-        let res = rpc_secp256k1_sign_handler(sign_request).await.unwrap();
+        let res = secp256k1_sign_handler(sign_request).await.unwrap();
 
         // Prepare verify request body
         let verify_request = Secp256k1VerifyRequest {
@@ -86,7 +86,7 @@ mod tests {
             sig: res.sig,
         };
 
-        let res = rpc_secp256k1_verify_handler(verify_request).await.unwrap();
+        let res = secp256k1_verify_handler(verify_request).await.unwrap();
         assert_eq!(res.verified, true);
     }
 }

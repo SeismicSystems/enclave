@@ -15,7 +15,7 @@ use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 /// Along with an attestation of such data that can be verified with the attestation/as/eval_evidence endpoint
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
-pub async fn rpc_genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
+pub async fn genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
     let (genesis_data, evidence) = att_genesis_data()
         .await
         .map_err(|e| rpc_bad_argument_error(e))?;
@@ -31,7 +31,7 @@ pub async fn rpc_genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::coco_as::handlers::rpc_attestation_eval_evidence_handler;
+    use crate::coco_as::handlers::attestation_eval_evidence_handler;
     use crate::{
         coco_aa::init_coco_aa, coco_as::init_as_policies, coco_as::init_coco_as,
         coco_as::into_original::*, utils::test_utils::is_sudo,
@@ -56,7 +56,7 @@ mod tests {
         init_coco_aa().expect("Failed to initialize AttestationAgent");
 
         // Call the handler
-        let res = rpc_genesis_get_data_handler().await.unwrap();
+        let res = genesis_get_data_handler().await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 
@@ -79,7 +79,7 @@ mod tests {
             .expect("Failed to initialize AS policies");
 
         // Make a genesis data request
-        let res = rpc_genesis_get_data_handler().await.unwrap();
+        let res = genesis_get_data_handler().await.unwrap();
 
         // Submit the genesis data to the attestation service
         let bytes = res.data.to_bytes().unwrap();
@@ -92,7 +92,7 @@ mod tests {
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["allow".to_string()],
         };
-        let res = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+        let res = attestation_eval_evidence_handler(tdx_eval_request)
             .await
             .unwrap();
 

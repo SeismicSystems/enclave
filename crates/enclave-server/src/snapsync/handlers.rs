@@ -30,7 +30,7 @@ use seismic_enclave::{request_types::snapsync::*, rpc_bad_argument_error};
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
+pub async fn provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
     // verify the request attestation
     let signing_pk_hash: [u8; 32] = Sha256::digest(request.client_signing_pk.as_slice()).into();
     let eval_result = eval_att_evidence(
@@ -115,9 +115,7 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let snapsync_response = rpc_provide_snapsync_handler(snap_sync_request)
-            .await
-            .unwrap();
+        let snapsync_response = provide_snapsync_handler(snap_sync_request).await.unwrap();
 
         // Check that you can decrypt the response successfully
         let server_pk =
@@ -175,7 +173,7 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let res = rpc_provide_snapsync_handler(snap_sync_request).await;
+        let res = provide_snapsync_handler(snap_sync_request).await;
         assert_eq!(res.is_err(), true);
         let err = res.err().unwrap();
         assert!(err.to_string().contains("Error while evaluating evidence"));

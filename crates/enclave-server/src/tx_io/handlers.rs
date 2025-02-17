@@ -27,9 +27,7 @@ use crate::get_secp256k1_sk;
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
-pub async fn rpc_tx_io_encrypt_handler(
-    req: IoEncryptionRequest,
-) -> RpcResult<IoEncryptionResponse> {
+pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
     let encrypted_data = ecdh_encrypt(&req.key, &get_secp256k1_sk(), req.data, req.nonce).unwrap();
 
@@ -48,7 +46,7 @@ pub async fn rpc_tx_io_encrypt_handler(
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
-pub async fn rpc_tx_io_decrypt_handler(
+pub async fn tx_io_decrypt_handler(
     request: IoDecryptionRequest,
 ) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
@@ -84,7 +82,7 @@ mod tests {
             nonce: nonce.clone().into(),
         };
 
-        let res = rpc_tx_io_encrypt_handler(req).await.unwrap();
+        let res = tx_io_encrypt_handler(req).await.unwrap();
 
         println!("Encrypted data: {:?}", res.encrypted_data);
 
@@ -99,7 +97,7 @@ mod tests {
             nonce: nonce.into(),
         };
 
-        let res = rpc_tx_io_decrypt_handler(req).await.unwrap();
+        let res = tx_io_decrypt_handler(req).await.unwrap();
 
         println!("Decrypted data: {:?}", res.decrypted_data);
 
@@ -119,7 +117,7 @@ mod tests {
             data: bad_ciphertext,
             nonce: nonce.into(),
         };
-        let res = rpc_tx_io_decrypt_handler(decryption_request).await;
+        let res = tx_io_decrypt_handler(decryption_request).await;
 
         assert_eq!(res.is_err(), true);
         assert_eq!(
