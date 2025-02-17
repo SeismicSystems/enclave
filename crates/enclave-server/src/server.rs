@@ -24,7 +24,9 @@ use seismic_enclave::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
 use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
-use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest};
+use seismic_enclave::tx_io::{
+    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
+};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
