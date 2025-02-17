@@ -1,12 +1,6 @@
-use http_body_util::{BodyExt, Full};
-use hyper::{
-    body::{Body, Bytes},
-    Request, Response,
-};
 use jsonrpsee::core::RpcResult;
 
 use super::{enclave_sign, get_secp256k1_pk};
-use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use seismic_enclave::request_types::signing::*;
 use seismic_enclave::{crypto::*, rpc_bad_argument_error};
 

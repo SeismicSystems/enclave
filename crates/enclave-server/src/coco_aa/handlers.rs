@@ -1,16 +1,9 @@
-use http_body_util::{BodyExt, Full};
-use hyper::{
-    body::{Body, Bytes},
-    Request, Response,
-};
+use http_body_util::BodyExt;
 use jsonrpsee::core::RpcResult;
 
 use super::attest;
 use seismic_enclave::request_types::coco_aa::*;
-use seismic_enclave::{
-    errors::{invalid_json_body_resp, invalid_req_body_resp},
-    rpc_bad_argument_error,
-};
+use seismic_enclave::rpc_bad_argument_error;
 
 /// Handles attestation evidence request.
 ///

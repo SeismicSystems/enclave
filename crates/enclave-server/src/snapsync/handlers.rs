@@ -1,20 +1,10 @@
 use attestation_service::HashAlgorithm;
-use http_body_util::{BodyExt, Full};
-use hyper::{
-    body::{Body, Bytes},
-    Request, Response,
-};
 use jsonrpsee::core::RpcResult;
 use sha2::{Digest, Sha256};
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
-use seismic_enclave::{
-    errors::{
-        bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
-    },
-    rpc_bad_evidence_error,
-};
+use seismic_enclave::rpc_bad_evidence_error;
 use seismic_enclave::{request_types::snapsync::*, rpc_bad_argument_error};
 
 /// handles a request to provide private information required for SnapSync
