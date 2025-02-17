@@ -83,10 +83,9 @@ pub async fn rpc_attestation_get_evidence_handler(
 
 #[cfg(test)]
 mod tests {
-    use crate::coco_aa::init_coco_aa;
+    use crate::{coco_aa::init_coco_aa, utils::test_utils::is_sudo};
 
     use super::*;
-    use utils::test_utils::is_sudo;
 
     use hyper::StatusCode;
     use serde_json::Value;

@@ -46,8 +46,8 @@ pub async fn rpc_genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
 mod tests {
     use super::*;
     use crate::{
-        coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
-        init_as_policies, init_coco_aa, init_coco_as, utils::test_utils::is_sudo,
+        coco_aa::init_coco_aa, coco_as::init_as_policies, coco_as::init_coco_as,
+        coco_as::into_original::*, utils::test_utils::is_sudo,
     };
     use http_body_util::BodyExt;
     use hyper::StatusCode;
