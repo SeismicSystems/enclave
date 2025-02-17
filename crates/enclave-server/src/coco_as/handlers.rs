@@ -366,9 +366,7 @@ mod tests {
             policy_ids: vec!["yocto".to_string()],
         };
 
-        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request)
-            .await
-            .unwrap_err();
+        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request).await;
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
         assert!(
             eval_evidence_response.err().unwrap().to_string().contains(&expected_err_msg),

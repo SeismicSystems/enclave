@@ -106,7 +106,7 @@ mod tests {
         };
 
         // Call the handler
-        let res = attestation_get_evidence_handler(evidence_request)
+        let res = rpc_attestation_get_evidence_handler(evidence_request)
             .await
             .unwrap();
 
