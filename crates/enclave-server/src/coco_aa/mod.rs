@@ -2,6 +2,7 @@ pub mod handlers;
 
 use crate::ATTESTATION_AGENT;
 use attestation_agent::AttestationAPIs;
+use attestation_agent::AttestationAgent;
 
 use anyhow::{anyhow, Result};
 use sha2::{Digest, Sha256};
