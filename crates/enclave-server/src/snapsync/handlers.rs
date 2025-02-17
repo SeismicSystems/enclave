@@ -112,6 +112,8 @@ pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult
     )
     .await;
 
+    println!("eval_result: {:?}", eval_result);
+
     match eval_result {
         Ok(_) => (),
         Err(e) => {
