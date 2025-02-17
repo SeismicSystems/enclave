@@ -31,10 +31,8 @@ mod tests {
         coco_aa::init_coco_aa, coco_as::init_as_policies, coco_as::init_coco_as,
         coco_as::into_original::*, utils::test_utils::is_sudo,
     };
-    use http_body_util::BodyExt;
     use kbs_types::Tee;
     use seismic_enclave::request_types::coco_as::*;
-    use serde_json::Value;
     use serial_test::serial;
     use sha2::{Digest, Sha256};
 
