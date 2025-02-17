@@ -8,8 +8,6 @@ mod tx_io;
 mod utils;
 
 use base64::Engine;
-use coco_as::policies;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
