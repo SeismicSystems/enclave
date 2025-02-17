@@ -29,14 +29,15 @@ pub async fn genesis_get_data_handler(
 }
 
 pub async fn rpc_genesis_get_data_handler() -> Result<GenesisDataResponse, anyhow::Error> {
-    let (genesis_data, evidence) = att_genesis_data().await.unwrap();
+    let (genesis_data, evidence) = att_genesis_data()
+        .await
+        .map_err(|e| rpc_bad_argument_error(e))?;
 
     // Return the evidence as a response
-    let response_body = GenesisDataResponse {
+    Ok(GenesisDataResponse {
         data: genesis_data,
         evidence,
-    };
-    Ok(response_body)
+    })
 }
 
 #[allow(unused_imports)]

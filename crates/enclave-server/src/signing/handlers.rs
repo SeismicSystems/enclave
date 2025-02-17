@@ -5,9 +5,9 @@ use hyper::{
 };
 
 use super::{enclave_sign, get_secp256k1_pk};
-use seismic_enclave::crypto::*;
 use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use seismic_enclave::request_types::signing::*;
+use seismic_enclave::{crypto::*, rpc_bad_argument_error};
 
 /// Handles request to sign a message using secp256k1.
 ///
@@ -102,8 +102,10 @@ pub async fn secp256k1_verify_handler(
 pub async fn rpc_secp256k1_sign_handler(
     request: Secp256k1SignRequest,
 ) -> RpcResult<Secp256k1SignResponse> {
-    let signature = enclave_sign(&request.msg).unwrap();
-    Ok(Secp256k1SignResponse { sig: signature })
+    // sign the message
+    let signature = enclave_sign(&request.msg).map_err(|e| rpc_bad_argument_error(e))?;
+    let response_body = Secp256k1SignResponse { sig: signature };
+    Ok(response_body)
 }
 
 /// Handles request to verify a secp256k1 signature.
@@ -123,10 +125,12 @@ pub async fn rpc_secp256k1_verify_handler(
 ) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
     let pk = get_secp256k1_pk();
-    let verified = secp256k1_verify(&request.msg, &request.sig, pk)
-        .expect("Internal error while verifying the signature");
+    let verified =
+        secp256k1_verify(&request.msg, &request.sig, pk).map_err(|e| rpc_bad_argument_error(e))?;
 
-    Ok(Secp256k1VerifyResponse { verified })
+    let response_body = Secp256k1VerifyResponse { verified };
+
+    Ok(response_body)
 }
 
 #[cfg(test)]
