@@ -189,7 +189,7 @@ mod tests {
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
-            data: enc_response.encrypted_data,
+            data: res.encrypted_data,
             nonce: nonce.into(),
         };
 
