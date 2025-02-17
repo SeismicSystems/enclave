@@ -84,11 +84,8 @@ pub async fn eval_att_evidence(
     init_data_hash_algorithm: OriginalHashAlgorithm,
     policy_ids: Vec<String>,
 ) -> Result<String, anyhow::Error> {
-    println!("eval_att_evidence");
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    println!("eval_att_evidence: got coco_as");
     let readable_as = coco_as.read().await;
-    println!("eval_att_evidence: got readable_as");
     let res = readable_as
         .evaluate(
             evidence,
@@ -100,7 +97,6 @@ pub async fn eval_att_evidence(
             policy_ids,
         )
         .await;
-    println!("eval_att_evidence: got res");
     res
 }
 
