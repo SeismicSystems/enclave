@@ -183,18 +183,9 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let payload_json = serde_json::to_string(&snap_sync_request).unwrap();
-
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/")
-            .body(Full::from(Bytes::from(payload_json)))
+        let snapsync_response = rpc_provide_snapsync_handler(snap_sync_request)
+            .await
             .unwrap();
-        let res: Response<Full<Bytes>> = provide_snapsync_handler(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let snapsync_response: SnapSyncResponse = serde_json::from_slice(&body).unwrap();
 
         // Check that you can decrypt the response successfully
         let server_pk =
@@ -252,13 +243,8 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let payload_json = serde_json::to_string(&snap_sync_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-        let res: Response<Full<Bytes>> = provide_snapsync_handler(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let res = rpc_provide_snapsync_handler(snap_sync_request).await;
+        assert_eq!(res.is_err(), true);
+        println!("Error: {:?}", res.err().unwrap());
     }
 }
