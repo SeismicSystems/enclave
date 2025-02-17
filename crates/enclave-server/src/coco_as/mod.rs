@@ -86,9 +86,9 @@ pub async fn eval_att_evidence(
 ) -> Result<String, anyhow::Error> {
     println!("eval_att_evidence");
     let coco_as = ATTESTATION_SERVICE.get().unwrap();
-    println!("coco_as: {:?}", coco_as);
+    println!("eval_att_evidence: got coco_as");
     let readable_as = coco_as.read().await;
-    println!("readable_as: {:?}", readable_as);
+    println!("eval_att_evidence: got readable_as");
     readable_as
         .evaluate(
             evidence,
