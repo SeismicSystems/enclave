@@ -69,25 +69,9 @@ mod tests {
         // Initialize ATTESTATION_AGENT
         init_coco_aa().expect("Failed to initialize AttestationAgent");
 
-        // Create a request
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("GET")
-            .uri("/genesis/data")
-            .body(Full::default())
-            .unwrap();
-
         // Call the handler
-        let res: Response<Full<Bytes>> = genesis_get_data_handler(req).await.unwrap();
-
-        // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let response: GenesisDataResponse = serde_json::from_slice(&body).unwrap();
-
-        // assert that the attestation is not empty
-        assert!(!response.evidence.is_empty());
+        let res = rpc_genesis_get_data_handler().await.unwrap();
+        assert!(!res.evidence.is_empty());
     }
 
     #[tokio::test]
@@ -130,22 +114,10 @@ mod tests {
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["allow".to_string()],
         };
-        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
+        let res = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+            .await
             .unwrap();
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
 
-        // Check that the eval evidence response
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let eval_evidence_response: AttestationEvalEvidenceResponse =
-            serde_json::from_slice(&body).unwrap();
-
-        assert!(eval_evidence_response.eval);
+        assert!(res.eval);
     }
 }

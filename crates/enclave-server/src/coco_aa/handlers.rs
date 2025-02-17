@@ -105,30 +105,13 @@ mod tests {
             runtime_data: runtime_data.to_vec(),
         };
 
-        // Serialize the request to JSON
-        let payload_json = serde_json::to_string(&evidence_request).unwrap();
-
-        // Create a request
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/aa/get_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
+        // Call the handler
+        let res = attestation_get_evidence_handler(evidence_request)
+            .await
             .unwrap();
 
-        // Call the handler
-        let res: Response<Full<Bytes>> = attestation_get_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let get_evidence_resp: AttestationGetEvidenceResponse =
-            serde_json::from_slice(&body).unwrap();
-
         // Ensure the response is not empty
-        assert!(!get_evidence_resp.evidence.is_empty());
+        assert!(!res.evidence.is_empty());
     }
 
     #[tokio::test]
@@ -157,57 +140,13 @@ mod tests {
         let payload_json_1 = serde_json::to_string(&evidence_request_1).unwrap();
         let payload_json_2 = serde_json::to_string(&evidence_request_2).unwrap();
 
-        // Create a request
-        let req_1: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/aa/get_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json_1)))
+        let res_1 = rpc_attestation_get_evidence_handler(evidence_request_1)
+            .await
             .unwrap();
-        let res_1: Response<Full<Bytes>> = attestation_get_evidence_handler(req_1).await.unwrap();
-
-        let req_2: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/aa/get_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json_2)))
-            .unwrap();
-        let res_2: Response<Full<Bytes>> = attestation_get_evidence_handler(req_2).await.unwrap();
-
-        assert_eq!(res_1.status(), StatusCode::OK);
-        assert_eq!(res_2.status(), StatusCode::OK);
-
-        // Parse and check the response body
-        let body_1: Bytes = res_1.into_body().collect().await.unwrap().to_bytes();
-        let body_2: Bytes = res_2.into_body().collect().await.unwrap().to_bytes();
-        let get_evidence_resp_1: AttestationGetEvidenceResponse =
-            serde_json::from_slice(&body_1).unwrap();
-        let get_evidence_resp_2: AttestationGetEvidenceResponse =
-            serde_json::from_slice(&body_2).unwrap();
-
-        assert_ne!(get_evidence_resp_1.evidence, get_evidence_resp_2.evidence);
-    }
-
-    #[tokio::test]
-    async fn test_attestation_evidence_handler_invalid_json() {
-        // Create a request with invalid JSON body
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/aa/get_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from("Invalid JSON")))
+        let res_2 = rpc_attestation_get_evidence_handler(evidence_request_2)
+            .await
             .unwrap();
 
-        // Call the handler
-        let res: Response<Full<Bytes>> = attestation_get_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 400 Bad Request
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let response_json: Value = serde_json::from_slice(&body).unwrap();
-
-        assert_eq!(response_json["error"], "Invalid JSON in request body");
+        assert_ne!(res_1.evidence, res_2.evidence);
     }
 }

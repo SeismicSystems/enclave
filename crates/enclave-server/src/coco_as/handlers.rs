@@ -159,10 +159,8 @@ pub async fn rpc_attestation_eval_evidence_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        coco_as::init_coco_as,
-        utils::test_utils::{is_sudo, read_vector_txt},
-    };
+    use crate::init_coco_as;
+    use crate::utils::test_utils::{is_sudo, read_vector_txt};
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use hyper::StatusCode;
     use kbs_types::Tee;
@@ -195,29 +193,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attestation_eval_evidence_handler_invalid_json() {
-        // Create a request with invalid JSON body
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from("Invalid JSON")))
-            .unwrap();
-
-        // Call the handler
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 400 Bad Request
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let response_json: Value = serde_json::from_slice(&body).unwrap();
-
-        assert_eq!(response_json["error"], "Invalid JSON in request body");
-    }
-
-    #[tokio::test]
     #[serial(attestation_service)]
     async fn test_eval_evidence_sample() {
         // handle set up permissions
@@ -243,27 +218,10 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        // Serialize the request to JSON
-        let payload_json = serde_json::to_string(&eval_request).unwrap();
-
-        // Create a request
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-
         // Call the handler
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let eval_evidence_response: AttestationEvalEvidenceResponse =
-            serde_json::from_slice(&body).unwrap();
+        let eval_evidence_response = rpc_attestation_eval_evidence_handler(eval_request)
+            .await
+            .unwrap();
 
         assert!(eval_evidence_response.eval);
         let claims = eval_evidence_response.claims.unwrap();
@@ -302,27 +260,10 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        // Serialize the request to JSON
-        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-
-        // Create a request
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-
         // Call the handler
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
-
-        // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
-
-        // Parse and check the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let eval_evidence_response: AttestationEvalEvidenceResponse =
-            serde_json::from_slice(&body).unwrap();
+        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+            .await
+            .unwrap();
 
         assert!(eval_evidence_response.eval);
         let claims = eval_evidence_response.claims.unwrap();
@@ -366,22 +307,14 @@ mod tests {
             policy_ids: vec!["deny".to_string()],
         };
 
-        // Serialize the request to JSON
-        let payload_json = serde_json::to_string(&eval_request).unwrap();
-
-        // Create a request
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-
         // Call the handler
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
+        let eval_evidence_response = rpc_attestation_eval_evidence_handler(eval_request).await;
 
-        // Check that the response status is 200 OK
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            eval_evidence_response.is_err(),
+            "Expected error for deny policy {:?}",
+            eval_evidence_response.err().unwrap()
+        );
     }
 
     #[tokio::test]
@@ -414,16 +347,9 @@ mod tests {
             policy_ids: vec![test_policy_id.clone()],
         };
 
-        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
+        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+            .await
             .unwrap();
-
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
 
         // Make a failing request to validate using a policy that checks mr_td, mr_seam, and pcr04
         let az_tdx_evidence: Vec<u8> =
@@ -440,22 +366,13 @@ mod tests {
             policy_ids: vec!["yocto".to_string()],
         };
 
-        let payload_json = serde_json::to_string(&tdx_eval_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/attestation/as/eval_evidence")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-
-        let res: Response<Full<Bytes>> = attestation_eval_evidence_handler(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{res:?}");
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let body_str = String::from_utf8_lossy(&body);
+        let eval_evidence_response = rpc_attestation_eval_evidence_handler(tdx_eval_request)
+            .await
+            .unwrap_err();
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
         assert!(
-            body_str.contains(&expected_err_msg),
-            "Response does not contain expected message. Expected to see: \"{expected_err_msg}\", Was: {body_str}"
+            eval_evidence_response.err().unwrap().to_string().contains(&expected_err_msg),
+            "Response does not contain expected message. Expected to see: \"{expected_err_msg}\", Was: {eval_evidence_response.err().unwrap().to_string()}"
         );
     }
 }
