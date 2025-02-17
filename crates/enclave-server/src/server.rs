@@ -26,6 +26,7 @@ use tokio::net::TcpListener;
 
 pub struct EnclaveServer {}
 
+#[async_trait]
 impl SigningApiServer for EnclaveServer {
     async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         rpc_secp256k1_sign_handler(req).await
@@ -39,6 +40,7 @@ impl SigningApiServer for EnclaveServer {
     }
 }
 
+#[async_trait]
 impl EnclaveApiServer for EnclaveServer {
     // Health Check
     async fn health_check(&self) -> RpcResult<String> {
