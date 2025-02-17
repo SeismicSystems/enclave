@@ -76,7 +76,6 @@ mod tests {
         utils::test_utils::{is_sudo, read_vector_txt},
     };
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    use hyper::StatusCode;
     use kbs_types::Tee;
     use serde_json::Value;
     use serial_test::serial;

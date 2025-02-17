@@ -36,7 +36,6 @@ mod tests {
 
     use super::*;
 
-    use hyper::StatusCode;
     use serde_json::Value;
     use serial_test::serial;
 

@@ -20,6 +20,7 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use std::net::SocketAddr;
+use 
 
 pub struct EnclaveServer {}
 
@@ -41,6 +42,7 @@ impl EnclaveApiServer for EnclaveServer {
 
     /// Handler for: `genesis.get_data`
     async fn genesis_get_data(&self) -> RpcResult<GenesisDataResponse> {
+        trace!(target: "rpc::enclave", "Serving genesis.get_data");
         genesis_get_data_handler().await
     }
 
@@ -49,16 +51,19 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         request: SnapSyncRequest,
     ) -> RpcResult<SnapSyncResponse> {
+        trace!(target: "rpc::enclave", "Serving snapsync.provide_backup");
         provide_snapsync_handler(request).await
     }
 
     /// Handler for: `tx_io.encrypt`
     async fn tx_io_encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+        trace!(target: "rpc::enclave", "Serving tx_io.encrypt");
         tx_io_encrypt_handler(req).await
     }
 
     /// Handler for: `tx_io.decrypt`
     async fn tx_io_decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
+        trace!(target: "rpc::enclave", "Serving tx_io.decrypt");
         tx_io_decrypt_handler(req).await
     }
 
@@ -67,6 +72,7 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
+        trace!(target: "rpc::enclave", "Serving attestation.aa.get_evidence");
         attestation_get_evidence_handler(req).await
     }
 
@@ -75,11 +81,13 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
+        trace!(target: "rpc::enclave", "Serving attestation.as.eval_evidence");
         attestation_eval_evidence_handler(req).await
     }
 
     /// Handler for: `signing.sign`
     async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
+        trace!(target: "rpc::enclave", "Serving signing.sign");
         secp256k1_sign_handler(req).await
     }
 
@@ -88,6 +96,7 @@ impl EnclaveApiServer for EnclaveServer {
         &self,
         req: Secp256k1VerifyRequest,
     ) -> RpcResult<Secp256k1VerifyResponse> {
+        trace!(target: "rpc::enclave", "Serving signing.verify");
         secp256k1_verify_handler(req).await
     }
 }

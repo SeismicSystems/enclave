@@ -50,7 +50,6 @@ pub async fn secp256k1_verify_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper::Request;
 
     #[tokio::test]
     async fn test_secp256k1_sign() {

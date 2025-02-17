@@ -29,9 +29,6 @@ bytes.workspace = true
 env_logger.workspace = true
 hex.workspace = true
 hkdf.workspace = true
-http-body-util.workspace = true
-hyper.workspace = true
-hyper-util.workspace = true
 kbs-types.workspace = true
 log.workspace = true
 once_cell.workspace = true
@@ -43,6 +40,7 @@ serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 jsonrpsee.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 serial_test = "3.2.0"

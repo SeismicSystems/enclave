@@ -61,7 +61,6 @@ mod tests {
     use super::*;
     use crate::get_secp256k1_sk;
 
-    use hyper::StatusCode;
     use kbs_types::Tee;
     use secp256k1::ecdh::SharedSecret;
     use seismic_enclave::aes_decrypt;
