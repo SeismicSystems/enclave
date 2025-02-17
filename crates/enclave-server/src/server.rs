@@ -6,14 +6,6 @@ use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
 
 use anyhow::Result;
-use http_body_util::Full;
-use hyper::{
-    body::{Body, Bytes},
-    server::conn::http1,
-    service::service_fn,
-    Method, Request, Response, StatusCode,
-};
-use hyper_util::rt::TokioIo;
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
@@ -108,17 +100,6 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
     let server_handle = rpc_server.start(module);
     server_handle.stopped().await;
     Ok(())
-}
-
-async fn health_check(_: Request<impl Body>) -> Result<Response<Full<Bytes>>, anyhow::Error> {
-    Ok(Response::new(Full::new(Bytes::from("OK"))))
-}
-
-fn log_request(req: &Request<impl Body>) {
-    let method = req.method().to_string();
-    let uri = req.uri().to_string();
-    let log = format!("{} {}", method, uri);
-    println!("{log}");
 }
 
 #[cfg(test)]

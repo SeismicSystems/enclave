@@ -1,4 +1,3 @@
-use http_body_util::BodyExt;
 use jsonrpsee::core::RpcResult;
 
 use super::attest;
