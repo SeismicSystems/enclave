@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
+
 // initializes the AttestationService
 // which is reponsible for evaluating attestations
 pub async fn init_coco_as(config: Option<Config>) -> Result<()> {
