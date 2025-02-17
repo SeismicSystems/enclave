@@ -31,9 +31,7 @@ pub async fn rpc_genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::coco_as::handlers::{
-        attestation_eval_evidence_handler, rpc_attestation_eval_evidence_handler,
-    };
+    use crate::coco_as::handlers::rpc_attestation_eval_evidence_handler;
     use crate::{
         coco_aa::init_coco_aa, coco_as::init_as_policies, coco_as::init_coco_as,
         coco_as::into_original::*, utils::test_utils::is_sudo,

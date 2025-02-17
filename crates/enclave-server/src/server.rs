@@ -123,7 +123,6 @@ fn log_request(req: &Request<impl Body>) {
 
 #[cfg(test)]
 mod test {
-    use super::start_server;
     use crate::server::start_rpc_server;
     use crate::utils::test_utils::is_sudo;
     use seismic_enclave::client::http_client::TeeHttpClient;
@@ -150,7 +149,7 @@ mod test {
 
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
-        let _server_handle = tokio::spawn(start_server(addr));
+        let _server_handle = tokio::spawn(start_rpc_server(addr));
         let wait_duration = Duration::from_secs(2);
         wait_for_server(&format!("{}/health", addr), wait_duration)
             .await
