@@ -96,15 +96,13 @@ mod tests {
 
         // Make a genesis data request
         let res = rpc_genesis_get_data_handler().await.unwrap();
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let genesis_data_response: GenesisDataResponse = serde_json::from_slice(&body).unwrap();
 
         // Submit the genesis data to the attestation service
-        let bytes = genesis_data_response.data.to_bytes().unwrap();
+        let bytes = res.data.to_bytes().unwrap();
         let genesis_data_hash: [u8; 32] = Sha256::digest(bytes).into();
 
         let tdx_eval_request = AttestationEvalEvidenceRequest {
-            evidence: genesis_data_response.evidence,
+            evidence: res.evidence,
             tee: Tee::AzTdxVtpm,
             runtime_data: Some(ApiData::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
             runtime_data_hash_algorithm: None,
