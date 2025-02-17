@@ -125,8 +125,6 @@ mod test {
     use seismic_enclave::rpc::EnclaveApiClient;
     use std::net::SocketAddr;
     use std::str::FromStr;
-    use tokio::time::Duration;
-    use tokio::time::Instant;
 
     #[tokio::test]
     async fn test_server_tx_io_req() {
