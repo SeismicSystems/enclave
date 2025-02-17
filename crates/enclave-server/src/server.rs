@@ -41,6 +41,25 @@ impl SigningApiServer for EnclaveServer {
 }
 
 #[async_trait]
+impl AttestationApiServer for EnclaveServer {
+    /// Handles request to get evidence for attestation
+    async fn attestation_get_evidence(
+        &self,
+        req: AttestationGetEvidenceRequest,
+    ) -> RpcResult<AttestationGetEvidenceResponse> {
+        rpc_attestation_get_evidence_handler(req).await
+    }
+
+    /// Handles request to evaluate evidence for attestation
+    async fn attestation_eval_evidence(
+        &self,
+        req: AttestationEvalEvidenceRequest,
+    ) -> RpcResult<AttestationEvalEvidenceResponse> {
+        rpc_attestation_eval_evidence_handler(req).await
+    }
+}
+
+#[async_trait]
 impl EnclaveApiServer for EnclaveServer {
     // Health Check
     async fn health_check(&self) -> RpcResult<String> {

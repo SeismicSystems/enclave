@@ -51,6 +51,32 @@ pub async fn attestation_get_evidence_handler(
     Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
+/// Handles attestation evidence request.
+///
+/// Attestation evidence is:
+/// 1) The current state of the TEE, such as its RTMR measurements,
+/// 2) The runtime data that is included in the request.
+///     This can be up to 64 bytes, usually acting as a nonce to prevent replay
+///     or the hash of some other data
+/// 3) A signature of 1) and 2) above, which needs to be checked against
+///     a registry of enclave public keys.
+///     Intel maintains a pccs, and you can configure which service to use
+///     by modifying /etc/sgx_default_qcnl.conf
+///
+/// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
+/// Section 2.3.2 for more details
+pub async fn rpc_attestation_get_evidence_handler(
+    req: AttestationGetEvidenceRequest,
+) -> RpcResult<AttestationGetEvidenceResponse> {
+    // Get the evidence from the attestation agent
+    let evidence = attest(req.runtime_data.as_slice())
+        .await
+        .map_err(|e| rpc_bad_argument_error(e))?;
+
+    // Return the evidence as a response
+    Ok(AttestationGetEvidenceResponse { evidence })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

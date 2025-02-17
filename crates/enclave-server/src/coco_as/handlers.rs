@@ -8,10 +8,11 @@ use super::into_original::*;
 use super::{eval_att_evidence, parse_as_token_claims};
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-use seismic_enclave::errors::{
-    bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
-};
 use seismic_enclave::request_types::coco_as::*;
+use seismic_enclave::{
+    errors::{bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp},
+    rpc_bad_evidence_error,
+};
 
 use super::into_original::IntoOriginalHashAlgorithm;
 
@@ -92,6 +93,66 @@ pub async fn attestation_eval_evidence_handler(
     };
     let response_json = serde_json::to_string(&response_body).unwrap();
     Ok(Response::new(Full::new(Bytes::from(response_json))))
+}
+
+/// Handles attestation evidence verification.
+///
+/// This function is responsible for evaluating the provided attestation evidence and ensuring its validity.
+/// The attestation service checks the following criteria:
+///
+/// 1. **Internal Consistency of Evidence:**
+///    - Verifies that the provided evidence is consistent with itself through the AS verifier dependency
+///    - Ex checks that the evidence data matches the TEE's signature.
+///    - Ex checks that the init_data and runtime_data in the request match with the attestation evidence.
+///    - Also includes a call to the PCCS to verify the TEE public key is valid
+///
+/// 2. **Comparison with Reference Values (RVPS):**
+///    - Validates the evidence against trusted reference values provided by the **Reference Value Provider Service (RVPS)**.
+///    - These reference values are typically supplied by the manufacturer or another trusted entity and represent the expected state of the platform.
+///
+/// 3. **TEE State Compliance with Attestation Service (AS) Policy:**
+///    - Ensures that the TEE state aligns with the security policies defined by the attestation service.
+///    - This includes confirming that the correct software is running within the TEE
+pub async fn rpc_attestation_eval_evidence_handler(
+    request: AttestationEvalEvidenceRequest,
+) -> RpcResult<AttestationEvalEvidenceResponse> {
+    // Convert the request's runtime data hash algorithm to the original enum
+    let runtime_data: Option<OriginalData> = request.runtime_data.map(|data| data.into_original());
+    let runtime_data_hash_algorithm: OriginalHashAlgorithm =
+        match request.runtime_data_hash_algorithm {
+            Some(alg) => alg.into_original(),
+            None => OriginalHashAlgorithm::Sha256,
+        };
+
+    // Call the evaluate function of the attestation service
+    // Gets back a b64 JWT web token of the form "header.claims.signature"
+    let eval_result = eval_att_evidence(
+        request.evidence,
+        request.tee,
+        runtime_data,
+        runtime_data_hash_algorithm,
+        None,                          // hardcoded because AzTdxVtpm doesn't support init data
+        OriginalHashAlgorithm::Sha256, // dummy val to make this compile
+        request.policy_ids,
+    )
+    .await;
+    println!("eval_result.is_err(): {:?}", eval_result.is_err());
+
+    let as_token: String = match eval_result {
+        Ok(as_token) => as_token,
+        Err(e) => {
+            return Err(rpc_bad_evidence_error(e));
+        }
+    };
+
+    let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
+        .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!("Error while parsing AS token: {e}")))
+        .unwrap();
+
+    Ok(AttestationEvalEvidenceResponse {
+        eval: true,
+        claims: Some(claims),
+    })
 }
 
 #[cfg(test)]
