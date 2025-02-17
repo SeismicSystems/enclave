@@ -174,6 +174,7 @@ mod tests {
         let client_sk = get_secp256k1_sk();
         let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
         let client_signing_pk = signing_pk.serialize().to_vec();
+        println!("client_signing_pk: {:?}", client_signing_pk);
 
         // Make the request
         let snap_sync_request = SnapSyncRequest {
@@ -183,9 +184,13 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
+        println!("snap_sync_request: {:?}", snap_sync_request);
+
         let snapsync_response = rpc_provide_snapsync_handler(snap_sync_request)
             .await
             .unwrap();
+
+        println!("snapsync_response: {:?}", snapsync_response);
 
         // Check that you can decrypt the response successfully
         let server_pk =
