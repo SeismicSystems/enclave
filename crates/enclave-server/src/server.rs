@@ -15,6 +15,8 @@ use hyper::{
 };
 use hyper_util::rt::TokioIo;
 use jsonrpsee::core::{async_trait, RpcResult};
+use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
+use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::rpc::{EnclaveApiServer, SigningApiServer};
 use seismic_enclave::signing::{
