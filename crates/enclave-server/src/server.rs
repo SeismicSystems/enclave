@@ -19,11 +19,12 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
-use seismic_enclave::rpc::{AttestationApiServer, EnclaveApiServer, SigningApiServer};
+use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
 use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
+use seismic_enclave::tx_io::{IoDecryptionResponse, IoEncryptionRequest};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
