@@ -14,12 +14,48 @@ use hyper::{
     Method, Request, Response, StatusCode,
 };
 use hyper_util::rt::TokioIo;
+use seismic_enclave::genesis::GenesisDataResponse;
+use seismic_enclave::rpc::{EnclaveApiServer, SigningApiServer};
+use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
+pub struct EnclaveServer {}
+
+impl SigningApiServer for EnclaveServer {
+    async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
+        rpc_secp256k1_sign_handler(req).await
+    }
+
+    async fn secp256k1_verify(
+        &self,
+        req: Secp256k1VerifyRequest,
+    ) -> RpcResult<Secp256k1VerifyResponse> {
+        rpc_secp256k1_verify_handler(req).await
+    }
+}
+
+impl EnclaveApiServer for EnclaveServer {
+    // Health Check
+    async fn health_check(&self) -> RpcResult<String> {
+        Ok("OK".into())
+    }
+
+    // Genesis
+    async fn genesis_get_data(&self) -> RpcResult<GenesisDataResponse> {
+        rpc_genesis_get_data_handler().await
+    }
+
+    async fn provide_snapsync_backup(
+        &self,
+        request: SnapSyncRequest,
+    ) -> RpcResult<SnapSyncResponse> {
+        rpc_provide_snapsync_handler(request).await
+    }
+}
+
 pub async fn start_server(addr: SocketAddr) -> Result<()> {
-    // Initialize services
-    init_coco_aa()?;
+    // Initialize services init_coco_aa()?;
     init_coco_as(None).await?;
 
     let listener = TcpListener::bind(&addr).await?;

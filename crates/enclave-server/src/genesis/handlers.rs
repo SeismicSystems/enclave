@@ -28,6 +28,17 @@ pub async fn genesis_get_data_handler(
     Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
+pub async fn rpc_genesis_get_data_handler() -> Result<GenesisDataResponse, anyhow::Error> {
+    let (genesis_data, evidence) = att_genesis_data().await.unwrap();
+
+    // Return the evidence as a response
+    let response_body = GenesisDataResponse {
+        data: genesis_data,
+        evidence,
+    };
+    Ok(response_body)
+}
+
 #[allow(unused_imports)]
 #[cfg(test)]
 mod tests {

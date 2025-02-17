@@ -87,6 +87,48 @@ pub async fn secp256k1_verify_handler(
     Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
+/// Handles request to sign a message using secp256k1.
+///
+/// # Arguments
+/// * `req` - The incoming HTTP request containing the message to be signed. The body of the request
+///   Should be a JSON-encoded `Secp256k1SignRequest`.
+///
+/// # Returns
+/// A `Result` containing an HTTP response with the signature, or an error of type `Infallible`.
+/// The response body is JSON-encoded and contains the signature as part of a `Secp256k1SignResponse`.
+///
+/// # Errors
+/// The function may panic if parsing the request body or signing the message fails.
+pub async fn rpc_secp256k1_sign_handler(
+    request: Secp256k1SignRequest,
+) -> Result<Secp256k1SignResponse, anyhow::Error> {
+    let signature = enclave_sign(&request.msg).unwrap();
+    Ok(Secp256k1SignResponse { sig: signature })
+}
+
+/// Handles request to verify a secp256k1 signature.
+///
+/// # Arguments
+/// * `req` - The incoming HTTP request containing the message and signature to verify. The body of the request
+///   Should be a JSON-encoded `Secp256k1VerifyRequest`.
+///
+/// # Returns
+/// A `Result` containing an HTTP response with the verification result, or an error of type `Infallible`.
+/// The response body is JSON-encoded and contains the verification result as part of a `Secp256k1VerifyResponse`.
+///
+/// # Errors
+/// The function may panic if parsing the request body or verifying the signature fails.
+pub async fn rpc_secp256k1_verify_handler(
+    request: Secp256k1VerifyRequest,
+) -> Result<Secp256k1VerifyResponse, anyhow::Error> {
+    // verify the signature
+    let pk = get_secp256k1_pk();
+    let verified = secp256k1_verify(&request.msg, &request.sig, pk)
+        .expect("Internal error while verifying the signature");
+
+    Ok(Secp256k1VerifyResponse { verified })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

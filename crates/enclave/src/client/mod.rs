@@ -6,6 +6,7 @@
 #![allow(async_fn_in_trait)]
 pub mod http_client;
 pub mod mock_server;
+pub mod rpc;
 
 use crate::{
     nonce::Nonce,
