@@ -1,7 +1,6 @@
 use anyhow::Error;
 use http_body_util::Full;
 use hyper::{body::Bytes, header::CONTENT_TYPE, Response, StatusCode};
-use jsonrpsee::core::RpcResult;
 use serde_json::json;
 
 /// Returns 400 Bad Request
