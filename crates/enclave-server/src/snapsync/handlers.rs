@@ -4,6 +4,7 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
+use jsonrpsee::core::RpcResult;
 use sha2::{Digest, Sha256};
 
 use super::build_snapsync_response;
@@ -81,9 +82,7 @@ pub async fn provide_snapsync_handler(
     Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
-pub async fn rpc_provide_snapsync_handler(
-    request: SnapSyncRequest,
-) -> Result<SnapSyncResponse, anyhow::Error> {
+pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
     // verify the request attestation
     let signing_pk_hash: [u8; 32] = Sha256::digest(request.client_signing_pk.as_slice()).into();
     let eval_result = eval_att_evidence(
@@ -108,9 +107,9 @@ pub async fn rpc_provide_snapsync_handler(
     let client_signing_pk = match secp256k1::PublicKey::from_slice(&request.client_signing_pk) {
         Ok(pk) => pk,
         Err(_) => {
-            return Ok(bad_argument_response(anyhow::anyhow!(
+            return Err(anyhow::anyhow!(
                 "Unable to deserialize the client signing public key"
-            )))
+            ))
         }
     };
     let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();
