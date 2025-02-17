@@ -3,6 +3,7 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
+use jsonrpsee::core::RpcResult;
 
 use super::attest;
 use seismic_enclave::request_types::coco_aa::*;
