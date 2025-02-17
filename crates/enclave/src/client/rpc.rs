@@ -14,7 +14,7 @@ use crate::tx_io::{
 };
 
 #[rpc(client, server)]
-pub trait EnclaveApi: TxIoApi + SigningApi + AttestationApi {
+pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "health.check")]
     async fn health_check(&self) -> RpcResult<String>;

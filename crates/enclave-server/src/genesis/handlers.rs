@@ -32,7 +32,6 @@ mod tests {
         coco_as::into_original::*, utils::test_utils::is_sudo,
     };
     use http_body_util::BodyExt;
-    use hyper::StatusCode;
     use kbs_types::Tee;
     use seismic_enclave::request_types::coco_as::*;
     use serde_json::Value;
