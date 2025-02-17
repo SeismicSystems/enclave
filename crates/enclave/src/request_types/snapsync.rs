@@ -21,7 +21,7 @@ pub struct SnapSyncRequest {
 ///                          an signing pk as its runtime data.
 /// * `encrypted_data` - The SnapSyncData, serialized and then encrypted under the clients key.
 /// * `signature` - a signature of the snapsync data under the server signing key
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SnapSyncResponse {
     pub server_attestation: Vec<u8>,
     pub server_signing_pk: Vec<u8>,
