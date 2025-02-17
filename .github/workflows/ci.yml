@@ -14,60 +14,60 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # rustfmt:
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 5
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@nightly
-  #       with:
-  #         components: rustfmt
-  #     - name: Check formatting
-  #       run: cargo fmt --all --check
+  rustfmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all --check
 
-  # build:
-  #   runs-on: self-hosted
-  #   timeout-minutes: 30
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         shared-key: "build-cache"
-  #     - name: cargo build without flags
-  #       run: cargo build
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "build-cache"
+      - name: cargo build without flags
+        run: cargo build
 
-  # warnings:
-  #   runs-on: self-hosted
-  #   timeout-minutes: 30
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         shared-key: "warnings-cache"
-  #     - name: cargo check warnings
-  #       run: RUSTFLAGS="-D warnings" cargo check
+  warnings:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "warnings-cache"
+      - name: cargo check warnings
+        run: RUSTFLAGS="-D warnings" cargo check
 
-  # test_enclave:
-  #   runs-on: self-hosted
-  #   timeout-minutes: 30
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         shared-key: "client-cache"
-  #     - name: Run tests for seismic-enclave
-  #       run: |
-  #         cd crates/enclave
-  #         OUTPUT=$(cargo test -p seismic-enclave --no-run 2>&1)
-  #         echo "$OUTPUT"
-  #         mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave-[a-z0-9]*')
-  #         for binary in "${binaries[@]}"; do
-  #           echo "Running binary: $binary"
-  #           sudo "$binary"
-  #         done
+  test_enclave:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "client-cache"
+      - name: Run tests for seismic-enclave
+        run: |
+          cd crates/enclave
+          OUTPUT=$(cargo test -p seismic-enclave --no-run 2>&1)
+          echo "$OUTPUT"
+          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave-[a-z0-9]*')
+          for binary in "${binaries[@]}"; do
+            echo "Running binary: $binary"
+            sudo "$binary"
+          done
 
   test_enclave_server:
     runs-on: self-hosted
