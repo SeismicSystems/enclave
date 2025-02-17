@@ -15,10 +15,7 @@ use seismic_enclave::coco_as::ASCoreTokenClaims;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = {
-    let _ = init_coco_as(None);
-    OnceCell::new()
-};
+pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 
 // initializes the AttestationService
 // which is reponsible for evaluating attestations
