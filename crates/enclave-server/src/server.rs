@@ -120,7 +120,6 @@ mod test {
     };
     use seismic_enclave::request_types::tx_io::*;
     use seismic_enclave::rpc::EnclaveApiClient;
-    use seismic_enclave::TeeAPI;
 
     use secp256k1::PublicKey;
     use std::net::SocketAddr;
