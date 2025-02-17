@@ -7,10 +7,8 @@ mod snapsync;
 mod tx_io;
 mod utils;
 
-use anyhow::Result;
 use base64::Engine;
 use coco_as::policies;
-use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

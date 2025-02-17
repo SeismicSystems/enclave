@@ -10,6 +10,7 @@ use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::{config::Config, AttestationService};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use kbs_types::Tee;
+use once_cell::sync::OnceCell;
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 
 pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
