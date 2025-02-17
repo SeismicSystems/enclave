@@ -148,8 +148,12 @@ mod tests {
     use serial_test::serial;
 
     use crate::{
-        coco_aa::attest_signing_pk, coco_aa::init_coco_aa, coco_as::init_as_policies,
-        coco_as::init_coco_as, utils::test_utils::is_sudo,
+        coco_aa::attest_signing_pk,
+        // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
+        init_as_policies,
+        init_coco_aa,
+        init_coco_as,
+        utils::test_utils::is_sudo,
     };
 
     #[serial(attestation_agent, attestation_service)]
@@ -252,9 +256,13 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let res = rpc_provide_snapsync_handler(snap_sync_request).await;
-        assert_eq!(res.is_err(), true);
-        let err = res.err().unwrap();
-        assert!(err.to_string().contains("Error while evaluating evidence"));
+        let payload_json = serde_json::to_string(&snap_sync_request).unwrap();
+        let req: Request<Full<Bytes>> = Request::builder()
+            .method("POST")
+            .uri("/")
+            .body(Full::from(Bytes::from(payload_json)))
+            .unwrap();
+        let res: Response<Full<Bytes>> = provide_snapsync_handler(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }
