@@ -3,9 +3,10 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
+use jsonrpsee::core::RpcResult;
 
 use super::att_genesis_data;
-use seismic_enclave::request_types::genesis::*;
+use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 
 /// Handles request to get genesis data.
 ///
@@ -28,7 +29,7 @@ pub async fn genesis_get_data_handler(
     Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
-pub async fn rpc_genesis_get_data_handler() -> Result<GenesisDataResponse, anyhow::Error> {
+pub async fn rpc_genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
     let (genesis_data, evidence) = att_genesis_data()
         .await
         .map_err(|e| rpc_bad_argument_error(e))?;
