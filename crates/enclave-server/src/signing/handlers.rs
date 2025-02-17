@@ -105,8 +105,7 @@ pub async fn rpc_secp256k1_sign_handler(
 ) -> RpcResult<Secp256k1SignResponse> {
     // sign the message
     let signature = enclave_sign(&request.msg).map_err(|e| rpc_bad_argument_error(e))?;
-    let response_body = Secp256k1SignResponse { sig: signature };
-    Ok(response_body)
+    Ok(Secp256k1SignResponse { sig: signature })
 }
 
 /// Handles request to verify a secp256k1 signature.
@@ -129,9 +128,7 @@ pub async fn rpc_secp256k1_verify_handler(
     let verified = secp256k1_verify(&request.msg, &request.sig, pk)
         .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
-    let response_body = Secp256k1VerifyResponse { verified };
-
-    Ok(response_body)
+    Ok(Secp256k1VerifyResponse { verified })
 }
 
 #[cfg(test)]
