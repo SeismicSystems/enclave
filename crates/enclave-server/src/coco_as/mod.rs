@@ -89,7 +89,7 @@ pub async fn eval_att_evidence(
     println!("eval_att_evidence: got coco_as");
     let readable_as = coco_as.read().await;
     println!("eval_att_evidence: got readable_as");
-    readable_as
+    let res = readable_as
         .evaluate(
             evidence,
             tee,
@@ -99,7 +99,9 @@ pub async fn eval_att_evidence(
             init_data_hash_algorithm,
             policy_ids,
         )
-        .await
+        .await;
+    println!("eval_att_evidence: got res");
+    res
 }
 
 // parses the b64 JWT token retuned by the attestation service
