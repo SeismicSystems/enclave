@@ -164,51 +164,12 @@ mod tests {
     use std::str::FromStr;
 
     #[tokio::test]
-    async fn test_encryption_handler_invalid_body() {
-        // Prepare invalid request body (non-JSON body)
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/encrypt")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from("invalid body")))
-            .unwrap();
-
-        let res = tx_io_encrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 400);
-
-        // Parse the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(error_response["error"], "Invalid JSON in request body");
-    }
-
-    #[tokio::test]
-    async fn test_decryption_handler_invalid_body() {
-        // Prepare invalid request body (non-JSON body)
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/decrypt")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from("invalid body")))
-            .unwrap();
-
-        let res = tx_io_decrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 400);
-
-        // Parse the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(error_response["error"], "Invalid JSON in request body");
-    }
-
-    #[tokio::test]
     async fn test_io_encryption() {
         // Prepare encryption request body
-        let base_url = "http://localhost:7878";
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let mut nonce = vec![0u8; 4]; // 4 leading zeros
         nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
-        let encryption_request = IoEncryptionRequest {
+        let req = IoEncryptionRequest {
             key: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
@@ -216,28 +177,15 @@ mod tests {
             data: data_to_encrypt.clone(),
             nonce: nonce.clone().into(),
         };
-        let payload_json = serde_json::to_string(&encryption_request).unwrap();
 
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri(format!("{}/tx_io/encrypt", base_url))
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-
-        let res = tx_io_encrypt_handler(req).await.unwrap();
+        let res = rpc_tx_io_encrypt_handler(req).await.unwrap();
         assert_eq!(res.status(), 200);
 
-        // Parse the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let enc_response: IoEncryptionResponse = serde_json::from_slice(&body).unwrap();
-        assert!(!enc_response.encrypted_data.is_empty());
-
-        println!("Encrypted data: {:?}", enc_response.encrypted_data);
+        println!("Encrypted data: {:?}", res.encrypted_data);
 
         // check that decryption returns the original data
         // Prepare decrypt request body
-        let decryption_request = IoDecryptionRequest {
+        let req = IoDecryptionRequest {
             key: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
@@ -245,20 +193,13 @@ mod tests {
             data: enc_response.encrypted_data,
             nonce: nonce.into(),
         };
-        let payload_json = serde_json::to_string(&decryption_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri(format!("{}/tx_io/decrypt", base_url))
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
 
-        let res = tx_io_decrypt_handler(req).await.unwrap();
+        let res = rpc_tx_io_decrypt_handler(req).await.unwrap();
         assert_eq!(res.status(), 200);
 
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let dec_response: IoDecryptionResponse = serde_json::from_slice(&body).unwrap();
-        assert_eq!(dec_response.decrypted_data, data_to_encrypt);
+        println!("Decrypted data: {:?}", res.decrypted_data);
+
+        assert_eq!(res.decrypted_data, data_to_encrypt);
     }
 
     #[tokio::test]
