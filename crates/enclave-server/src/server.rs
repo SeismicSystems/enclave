@@ -115,11 +115,11 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
 mod test {
     use crate::server::start_rpc_server;
     use crate::utils::test_utils::is_sudo;
-    use seismic_enclave::client::http_client::TeeHttpClient;
     use seismic_enclave::client::http_client::{
         TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
     };
     use seismic_enclave::request_types::tx_io::*;
+    use seismic_enclave::rpc::EnclaveApiClient;
     use seismic_enclave::TeeAPI;
 
     use secp256k1::PublicKey;
@@ -128,7 +128,6 @@ mod test {
     use tokio::time::Duration;
     use tokio::time::Instant;
 
-    #[ignore]
     #[tokio::test]
     async fn test_server_tx_io_req() {
         // handle set up permissions
@@ -140,10 +139,11 @@ mod test {
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
         let _server_handle = tokio::spawn(start_rpc_server(addr));
-        let wait_duration = Duration::from_secs(2);
-        wait_for_server(&format!("{}/health", addr), wait_duration)
-            .await
+        let client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .build(format!("http://{}:{}", addr.ip(), addr.port()))
             .unwrap();
+
+        let _ = client.genesis_get_data().await.unwrap();
 
         // make the request struct
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
@@ -159,8 +159,7 @@ mod test {
         };
 
         // make the http request
-        let http_cleint = TeeHttpClient::default();
-        let encryption_response = http_cleint.tx_io_encrypt(encryption_request).await.unwrap();
+        let encryption_response = client.tx_io_encrypt(encryption_request).await.unwrap();
 
         // check the response
         assert!(!encryption_response.encrypted_data.is_empty());
@@ -173,21 +172,7 @@ mod test {
             data: encryption_response.encrypted_data,
             nonce: nonce.into(),
         };
-        let decryption_response = http_cleint.tx_io_decrypt(decryption_request).await.unwrap();
+        let decryption_response = client.tx_io_decrypt(decryption_request).await.unwrap();
         assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
-    }
-
-    async fn wait_for_server(
-        addr: &str,
-        timeout: Duration,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let start = Instant::now();
-        while start.elapsed() < timeout {
-            if reqwest::get(addr).await.is_ok() {
-                return Ok(());
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        Err("Server did not start in time".into())
     }
 }

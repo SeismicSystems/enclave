@@ -13,63 +13,6 @@ use crate::{
     request_types::{coco_aa::*, coco_as::*, genesis::*, signing::*, tx_io::*},
 };
 
-pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
-
-pub trait TeeAPI {
-    async fn genesis_data(
-        &self,
-        _payload: GenesisData,
-    ) -> Result<GenesisDataResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn attestation_get_evidence(
-        &self,
-        _payload: AttestationGetEvidenceRequest,
-    ) -> Result<AttestationGetEvidenceResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn attestation_eval_evidence(
-        &self,
-        _payload: AttestationEvalEvidenceRequest,
-    ) -> Result<AttestationEvalEvidenceResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn signing_sign(
-        &self,
-        _payload: Secp256k1SignRequest,
-    ) -> Result<Secp256k1SignResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn signing_verify(
-        &self,
-        _payload: Secp256k1VerifyRequest,
-    ) -> Result<Secp256k1VerifyResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn tx_io_encrypt(
-        &self,
-        _payload: IoEncryptionRequest,
-    ) -> Result<IoEncryptionResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn tx_io_decrypt(
-        &self,
-        _payload: IoDecryptionRequest,
-    ) -> Result<IoDecryptionResponse, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-
-    async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
-        Err(anyhow::Error::msg("Unimplemented"))
-    }
-}
-
 pub trait WalletAPI {
     fn encrypt(
         &self,

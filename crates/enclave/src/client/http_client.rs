@@ -1,6 +1,7 @@
 use crate::get_sample_schnorrkel_keypair;
 
 use super::*;
+use jsonrpsee::core::RpcResult;
 use reqwest::Client;
 use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -213,7 +214,7 @@ impl TeeAPI for TeeHttpClient {
         Ok(dec_response)
     }
 
-    async fn get_eph_rng_keypair(&self) -> Result<SchnorrkelKeypair, anyhow::Error> {
+    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(get_sample_schnorrkel_keypair())
     }
 }
