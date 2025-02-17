@@ -152,6 +152,7 @@ mod tests {
         coco_as::init_coco_as, utils::test_utils::is_sudo,
     };
 
+    #[serial(attestation_agent, attestation_service)]
     #[tokio::test]
     async fn test_snapsync_handler() {
         // handle set up permissions
@@ -211,6 +212,7 @@ mod tests {
 
     // test that it rejects a bad attestation (ex wrong public key)
     #[tokio::test]
+    #[serial(attestation_service, attestation_agent)]
     async fn test_snapsync_handler_pk_mismatch() {
         // handle set up permissions
         if !is_sudo() {
