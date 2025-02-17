@@ -13,7 +13,6 @@ use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-
 #[rpc(client, server)]
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
