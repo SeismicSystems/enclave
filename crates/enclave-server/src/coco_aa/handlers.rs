@@ -5,8 +5,11 @@ use hyper::{
 };
 
 use super::attest;
-use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
 use seismic_enclave::request_types::coco_aa::*;
+use seismic_enclave::{
+    errors::{invalid_json_body_resp, invalid_req_body_resp},
+    rpc_bad_argument_error,
+};
 
 /// Handles attestation evidence request.
 ///

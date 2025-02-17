@@ -8,11 +8,11 @@ use super::into_original::*;
 use super::{eval_att_evidence, parse_as_token_claims};
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-use seismic_enclave::request_types::coco_as::*;
 use seismic_enclave::{
     errors::{bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp},
     rpc_bad_evidence_error,
 };
+use seismic_enclave::{request_types::coco_as::*, rpc_bad_argument_error};
 
 use super::into_original::IntoOriginalHashAlgorithm;
 
