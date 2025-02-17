@@ -20,7 +20,7 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use std::net::SocketAddr;
-use tracing::debug;
+use tracing::{debug, info};
 
 pub struct EnclaveServer {}
 
@@ -106,6 +106,7 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
     let module = server.into_rpc();
     let rpc_server = ServerBuilder::new().build(addr).await?;
     let server_handle = rpc_server.start(module);
+    info!(target: "rpc::enclave", "Server started at {}", addr);
     server_handle.stopped().await;
     Ok(())
 }
