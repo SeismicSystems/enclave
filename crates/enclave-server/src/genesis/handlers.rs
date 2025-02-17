@@ -95,13 +95,7 @@ mod tests {
             .expect("Failed to initialize AS policies");
 
         // Make a genesis data request
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("GET")
-            .uri("/genesis/data")
-            .body(Full::default())
-            .unwrap();
-        let res: Response<Full<Bytes>> = genesis_get_data_handler(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK, "{res:?}");
+        let res = rpc_genesis_get_data_handler().await.unwrap();
         let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
         let genesis_data_response: GenesisDataResponse = serde_json::from_slice(&body).unwrap();
 

@@ -146,9 +146,9 @@ pub async fn rpc_attestation_eval_evidence_handler(
         }
     };
 
-    let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token)
-        .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!("Error while parsing AS token: {e}")))
-        .unwrap();
+    let claims: ASCoreTokenClaims = parse_as_token_claims(&as_token).map_err(|e| {
+        rpc_bad_argument_error(anyhow::anyhow!("Error while parsing AS token: {e}"))
+    })?;
 
     Ok(AttestationEvalEvidenceResponse {
         eval: true,
