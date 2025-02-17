@@ -7,9 +7,6 @@ mod snapsync;
 mod tx_io;
 mod utils;
 
-use base64::Engine;
-use tokio::sync::RwLock;
-
 use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 
 /// Loads a secp256k1 private key from a file.

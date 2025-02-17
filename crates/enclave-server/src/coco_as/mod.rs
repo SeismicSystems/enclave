@@ -2,7 +2,7 @@ pub mod handlers;
 pub mod into_original;
 pub mod policies;
 
-use crate::ATTESTATION_SERVICE;
+use anyhow::Result;
 use attestation_service::token::simple;
 use attestation_service::token::AttestationTokenConfig;
 use attestation_service::Data as OriginalData;
@@ -12,6 +12,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use kbs_types::Tee;
 use once_cell::sync::OnceCell;
 use seismic_enclave::coco_as::ASCoreTokenClaims;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub static ATTESTATION_SERVICE: OnceCell<Arc<RwLock<AttestationService>>> = OnceCell::new();
 // initializes the AttestationService

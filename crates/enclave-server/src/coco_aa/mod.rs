@@ -2,7 +2,6 @@ pub mod handlers;
 
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
-use coco_as::policies;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 
