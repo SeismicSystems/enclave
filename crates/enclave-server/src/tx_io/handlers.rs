@@ -204,7 +204,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_decrypt_invalid_ciphertext() {
-        let base_url = "http://localhost:7878";
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let mut nonce = vec![0u8; 4]; // 4 leading zeros
         nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
@@ -216,15 +215,8 @@ mod tests {
             data: bad_ciphertext,
             nonce: nonce.into(),
         };
-        let payload_json = serde_json::to_string(&decryption_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri(format!("{}/tx_io/decrypt", base_url))
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
-
-        let res = tx_io_decrypt_handler(req).await.unwrap();
+        let res = rpc_tx_io_decrypt_handler(decryption_request).await;
+        println!("Decryption response: {:?}", res);
         assert_eq!(res.status(), 422);
     }
 }
