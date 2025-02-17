@@ -14,8 +14,10 @@ use hyper::{
     Method, Request, Response, StatusCode,
 };
 use hyper_util::rt::TokioIo;
+use jsonrpsee::core::RpcResult;
 use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::rpc::{EnclaveApiServer, SigningApiServer};
+use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
