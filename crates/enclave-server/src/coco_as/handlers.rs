@@ -159,8 +159,10 @@ pub async fn rpc_attestation_eval_evidence_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::init_coco_as;
-    use crate::utils::test_utils::{is_sudo, read_vector_txt};
+    use crate::{
+        coco_as::init_coco_as,
+        utils::test_utils::{is_sudo, read_vector_txt},
+    };
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use hyper::StatusCode;
     use kbs_types::Tee;

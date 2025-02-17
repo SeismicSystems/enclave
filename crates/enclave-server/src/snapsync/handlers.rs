@@ -148,12 +148,8 @@ mod tests {
     use serial_test::serial;
 
     use crate::{
-        coco_aa::attest_signing_pk,
-        // coco_as::handlers::attestation_eval_evidence_handler, coco_as::into_original::*,
-        init_as_policies,
-        init_coco_aa,
-        init_coco_as,
-        utils::test_utils::is_sudo,
+        coco_aa::attest_signing_pk, coco_aa::init_coco_aa, coco_as::init_as_policies,
+        coco_as::init_coco_as, utils::test_utils::is_sudo,
     };
 
     #[serial(attestation_agent, attestation_service)]
