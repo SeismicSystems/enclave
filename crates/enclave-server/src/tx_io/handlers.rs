@@ -214,6 +214,14 @@ mod tests {
             nonce: nonce.into(),
         };
         let res = rpc_tx_io_decrypt_handler(decryption_request).await;
-        println!("Decryption response: {:?}", res);
+
+        assert_eq!(res.is_err(), true);
+        assert_eq!(
+            res.err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid ciphertext"),
+            true
+        );
     }
 }

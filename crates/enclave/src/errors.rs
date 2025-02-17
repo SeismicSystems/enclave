@@ -85,7 +85,7 @@ pub fn rpc_bad_argument_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
 /// Convert an invalid ciphertext error into a JSON-RPC error response
 pub fn rpc_invalid_ciphertext_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
     jsonrpsee::types::ErrorObject::owned(
-        jsonrpsee::types::error::INVALID_REQUEST_CODE,
+        jsonrpsee::types::error::INVALID_PARAMS_CODE,
         format!("Invalid ciphertext: {}", e),
         None::<()>,
     )

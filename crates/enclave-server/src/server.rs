@@ -199,7 +199,7 @@ mod test {
     #[tokio::test]
     async fn test_server_start() {
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
-        start_rpc_server(addr);
+        start_rpc_server(addr).await.unwrap();
     }
 
     #[ignore]
