@@ -1,5 +1,5 @@
-use crate::coco_aa::handlers::*;
-use crate::coco_as::handlers::*;
+use crate::coco_aa::{handlers::*, init_coco_aa};
+use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
 use crate::signing::handlers::*;
 use crate::snapsync::handlers::*;
@@ -19,8 +19,8 @@ use tokio::net::TcpListener;
 
 pub async fn start_server(addr: SocketAddr) -> Result<()> {
     // Initialize services
-    crate::init_coco_aa()?;
-    crate::init_coco_as(None).await?;
+    init_coco_aa()?;
+    init_coco_as(None).await?;
 
     let listener = TcpListener::bind(&addr).await?;
     println!("Listening on http://{}", addr);
