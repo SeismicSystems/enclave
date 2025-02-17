@@ -3,6 +3,7 @@ use hyper::{
     body::{Body, Bytes},
     Request, Response,
 };
+use jsonrpsee::core::RpcResult;
 
 use super::{enclave_sign, get_secp256k1_pk};
 use seismic_enclave::errors::{invalid_json_body_resp, invalid_req_body_resp};
@@ -125,8 +126,8 @@ pub async fn rpc_secp256k1_verify_handler(
 ) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
     let pk = get_secp256k1_pk();
-    let verified =
-        secp256k1_verify(&request.msg, &request.sig, pk).map_err(|e| rpc_bad_argument_error(e))?;
+    let verified = secp256k1_verify(&request.msg, &request.sig, pk)
+        .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
     let response_body = Secp256k1VerifyResponse { verified };
 
