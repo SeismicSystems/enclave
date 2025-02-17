@@ -9,10 +9,13 @@ use sha2::{Digest, Sha256};
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
-use seismic_enclave::errors::{
-    bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
+use seismic_enclave::{
+    errors::{
+        bad_argument_response, bad_evidence_response, invalid_json_body_resp, invalid_req_body_resp,
+    },
+    rpc_bad_evidence_error,
 };
-use seismic_enclave::request_types::snapsync::*;
+use seismic_enclave::{request_types::snapsync::*, rpc_bad_argument_error};
 
 /// handles a request to provide private information required for SnapSync
 ///
@@ -82,6 +85,19 @@ pub async fn provide_snapsync_handler(
     Ok(Response::new(Full::new(Bytes::from(response_json))))
 }
 
+/// handles a request to provide private information required for SnapSync
+///
+/// /// # Arguments
+/// * `req` - The incoming HTTP request containing the message to be signed. The body of the request
+///   Should be a JSON-encoded `SnapSyncRequest`.
+///
+/// # Returns
+/// A `Result` containing an HTTP response with the signature, or an error of type `Infallible`.
+/// The response body is JSON-encoded and contains the SnapSyncResponse
+/// holding the encrypted data and signature.
+///
+/// # Errors
+/// The function may panic if parsing the request body or signing the message fails.
 pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
     // verify the request attestation
     let signing_pk_hash: [u8; 32] = Sha256::digest(request.client_signing_pk.as_slice()).into();
@@ -99,7 +115,7 @@ pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult
     match eval_result {
         Ok(_) => (),
         Err(e) => {
-            return Ok(bad_evidence_response(e));
+            return Err(rpc_bad_evidence_error(e));
         }
     };
 
@@ -107,9 +123,9 @@ pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult
     let client_signing_pk = match secp256k1::PublicKey::from_slice(&request.client_signing_pk) {
         Ok(pk) => pk,
         Err(_) => {
-            return Err(anyhow::anyhow!(
+            return Err(rpc_bad_argument_error(anyhow::anyhow!(
                 "Unable to deserialize the client signing public key"
-            ))
+            )));
         }
     };
     let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();

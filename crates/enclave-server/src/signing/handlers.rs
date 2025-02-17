@@ -101,7 +101,7 @@ pub async fn secp256k1_verify_handler(
 /// The function may panic if parsing the request body or signing the message fails.
 pub async fn rpc_secp256k1_sign_handler(
     request: Secp256k1SignRequest,
-) -> Result<Secp256k1SignResponse, anyhow::Error> {
+) -> RpcResult<Secp256k1SignResponse> {
     let signature = enclave_sign(&request.msg).unwrap();
     Ok(Secp256k1SignResponse { sig: signature })
 }
@@ -120,7 +120,7 @@ pub async fn rpc_secp256k1_sign_handler(
 /// The function may panic if parsing the request body or verifying the signature fails.
 pub async fn rpc_secp256k1_verify_handler(
     request: Secp256k1VerifyRequest,
-) -> Result<Secp256k1VerifyResponse, anyhow::Error> {
+) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
     let pk = get_secp256k1_pk();
     let verified = secp256k1_verify(&request.msg, &request.sig, pk)
