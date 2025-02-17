@@ -11,6 +11,12 @@ async fn main() -> Result<()> {
         std::env::set_var("RUST_BACKTRACE", "1");
     }
 
+    if std::env::var_os("RUST_LOG").is_none() {
+        std::env::set_var("RUST_LOG", "debug");
+    }
+
+    tracing_subscriber::fmt::init();
+
     let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
     start_rpc_server(addr).await?;
     Ok(())
