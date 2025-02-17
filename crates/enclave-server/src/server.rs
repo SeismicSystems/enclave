@@ -110,63 +110,6 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
     Ok(())
 }
 
-pub async fn start_server(addr: SocketAddr) -> Result<()> {
-    // Initialize services init_coco_aa()?;
-    init_coco_as(None).await?;
-
-    let listener = TcpListener::bind(&addr).await?;
-    println!("Listening on http://{}", addr);
-
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
-
-        tokio::task::spawn(async move {
-            let service = service_fn(route_req);
-
-            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                println!("Failed to serve connection: {:?}", err);
-            }
-        });
-    }
-}
-
-pub async fn route_req(req: Request<impl Body>) -> Result<Response<Full<Bytes>>> {
-    log_request(&req);
-    match (req.method(), req.uri().path()) {
-        // Health check
-        (&Method::GET, "/health") => health_check(req).await,
-
-        // Genesis
-        (&Method::GET, "/genesis/data") => genesis_get_data_handler(req).await,
-
-        // Attestation
-        (&Method::POST, "/attestation/aa/get_evidence") => {
-            attestation_get_evidence_handler(req).await
-        }
-        (&Method::POST, "/attestation/as/eval_evidence") => {
-            attestation_eval_evidence_handler(req).await
-        }
-
-        // Signing
-        (&Method::POST, "/signing/sign") => secp256k1_sign_handler(req).await,
-        (&Method::POST, "/signing/verify") => secp256k1_verify_handler(req).await,
-
-        // SnapSync
-        (&Method::POST, "/snapsync/provide_backup") => provide_snapsync_handler(req).await,
-
-        // Transaction I/O
-        (&Method::POST, "/tx_io/encrypt") => tx_io_encrypt_handler(req).await,
-        (&Method::POST, "/tx_io/decrypt") => tx_io_decrypt_handler(req).await,
-
-        // Default: 404 Not Found
-        _ => Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Full::from(Bytes::from("route not found")))
-            .unwrap()),
-    }
-}
-
 async fn health_check(_: Request<impl Body>) -> Result<Response<Full<Bytes>>, anyhow::Error> {
     Ok(Response::new(Full::new(Bytes::from("OK"))))
 }

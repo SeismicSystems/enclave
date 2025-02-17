@@ -26,49 +26,6 @@ use seismic_enclave::{
 ///
 /// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
 /// Section 2.3.2 for more details
-pub async fn attestation_get_evidence_handler(
-    req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, anyhow::Error> {
-    // parse the request body
-    let body_bytes: Bytes = match req.into_body().collect().await {
-        Ok(collected) => collected.to_bytes(),
-        Err(_) => return Ok(invalid_req_body_resp()),
-    };
-
-    // Deserialize the request body into the appropriate struct
-    let evidence_request: AttestationGetEvidenceRequest = match serde_json::from_slice(&body_bytes)
-    {
-        Ok(request) => request,
-        Err(_) => {
-            return Ok(invalid_json_body_resp());
-        }
-    };
-
-    // Get the evidence from the attestation agent
-    let evidence = attest(evidence_request.runtime_data.as_slice())
-        .await
-        .unwrap();
-
-    // Return the evidence as a response
-    let response_body = AttestationGetEvidenceResponse { evidence };
-    let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Full::new(Bytes::from(response_json))))
-}
-
-/// Handles attestation evidence request.
-///
-/// Attestation evidence is:
-/// 1) The current state of the TEE, such as its RTMR measurements,
-/// 2) The runtime data that is included in the request.
-///     This can be up to 64 bytes, usually acting as a nonce to prevent replay
-///     or the hash of some other data
-/// 3) A signature of 1) and 2) above, which needs to be checked against
-///     a registry of enclave public keys.
-///     Intel maintains a pccs, and you can configure which service to use
-///     by modifying /etc/sgx_default_qcnl.conf
-///
-/// See https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf
-/// Section 2.3.2 for more details
 pub async fn rpc_attestation_get_evidence_handler(
     req: AttestationGetEvidenceRequest,
 ) -> RpcResult<AttestationGetEvidenceResponse> {

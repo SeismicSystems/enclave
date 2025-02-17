@@ -15,20 +15,6 @@ use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 /// Along with an attestation of such data that can be verified with the attestation/as/eval_evidence endpoint
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
-pub async fn genesis_get_data_handler(
-    _: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, anyhow::Error> {
-    let (genesis_data, evidence) = att_genesis_data().await.unwrap();
-
-    // Return the evidence as a response
-    let response_body = GenesisDataResponse {
-        data: genesis_data,
-        evidence,
-    };
-    let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Full::new(Bytes::from(response_json))))
-}
-
 pub async fn rpc_genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
     let (genesis_data, evidence) = att_genesis_data()
         .await

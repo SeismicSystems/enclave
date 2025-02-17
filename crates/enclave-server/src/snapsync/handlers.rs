@@ -30,74 +30,6 @@ use seismic_enclave::{request_types::snapsync::*, rpc_bad_argument_error};
 ///
 /// # Errors
 /// The function may panic if parsing the request body or signing the message fails.
-pub async fn provide_snapsync_handler(
-    req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, anyhow::Error> {
-    // parse the request body
-    let body_bytes: Bytes = match req.into_body().collect().await {
-        Ok(collected) => collected.to_bytes(),
-        Err(_) => return Ok(invalid_req_body_resp()),
-    };
-
-    // Deserialize the request body into the appropriate struct
-    let snapsync_request: SnapSyncRequest = match serde_json::from_slice(&body_bytes) {
-        Ok(request) => request,
-        Err(_) => {
-            return Ok(invalid_json_body_resp());
-        }
-    };
-
-    // verify the request attestation
-    let signing_pk_hash: [u8; 32] =
-        Sha256::digest(snapsync_request.client_signing_pk.as_slice()).into();
-    let eval_result = eval_att_evidence(
-        snapsync_request.client_attestation,
-        snapsync_request.tee,
-        Some(attestation_service::Data::Raw(signing_pk_hash.to_vec())),
-        HashAlgorithm::Sha256,
-        None,
-        HashAlgorithm::Sha256,
-        snapsync_request.policy_ids,
-    )
-    .await;
-
-    match eval_result {
-        Ok(_) => (),
-        Err(e) => {
-            return Ok(bad_evidence_response(e));
-        }
-    };
-
-    // Get the SnapSync data
-    let client_signing_pk =
-        match secp256k1::PublicKey::from_slice(&snapsync_request.client_signing_pk) {
-            Ok(pk) => pk,
-            Err(_) => {
-                return Ok(bad_argument_response(anyhow::anyhow!(
-                    "Unable to deserialize the client signing public key"
-                )))
-            }
-        };
-    let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();
-
-    // return the response
-    let response_json = serde_json::to_string(&response_body).unwrap();
-    Ok(Response::new(Full::new(Bytes::from(response_json))))
-}
-
-/// handles a request to provide private information required for SnapSync
-///
-/// /// # Arguments
-/// * `req` - The incoming HTTP request containing the message to be signed. The body of the request
-///   Should be a JSON-encoded `SnapSyncRequest`.
-///
-/// # Returns
-/// A `Result` containing an HTTP response with the signature, or an error of type `Infallible`.
-/// The response body is JSON-encoded and contains the SnapSyncResponse
-/// holding the encrypted data and signature.
-///
-/// # Errors
-/// The function may panic if parsing the request body or signing the message fails.
 pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
     // verify the request attestation
     let signing_pk_hash: [u8; 32] = Sha256::digest(request.client_signing_pk.as_slice()).into();
@@ -111,8 +43,6 @@ pub async fn rpc_provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult
         request.policy_ids,
     )
     .await;
-
-    println!("eval_result: {:?}", eval_result);
 
     match eval_result {
         Ok(_) => (),
