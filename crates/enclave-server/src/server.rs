@@ -7,7 +7,7 @@ use crate::tx_io::handlers::*;
 
 use anyhow::Result;
 use jsonrpsee::core::{async_trait, RpcResult};
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::server::ServerBuilder;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -20,7 +20,6 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use std::net::SocketAddr;
-use tokio::net::TcpListener;
 
 pub struct EnclaveServer {}
 
