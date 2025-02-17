@@ -15,7 +15,7 @@ use hyper::{
 };
 use hyper_util::rt::TokioIo;
 use jsonrpsee::core::{async_trait, RpcResult};
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -102,7 +102,8 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
     let server = EnclaveServer::new().await?;
     let module = server.into_rpc();
     let rpc_server = ServerBuilder::new().build(addr).await?;
-    rpc_server.start(module).await?;
+    let server_handle = rpc_server.start(module);
+    server_handle.stopped().await;
     Ok(())
 }
 
@@ -177,6 +178,7 @@ fn log_request(req: &Request<impl Body>) {
 #[cfg(test)]
 mod test {
     use super::start_server;
+    use crate::server::start_rpc_server;
     use crate::utils::test_utils::is_sudo;
     use seismic_enclave::client::http_client::TeeHttpClient;
     use seismic_enclave::client::http_client::{
@@ -190,6 +192,12 @@ mod test {
     use std::str::FromStr;
     use tokio::time::Duration;
     use tokio::time::Instant;
+
+    #[tokio::test]
+    async fn test_server_start() {
+        let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
+        start_rpc_server(addr);
+    }
 
     #[ignore]
     #[tokio::test]
