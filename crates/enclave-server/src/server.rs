@@ -14,7 +14,7 @@ use hyper::{
     Method, Request, Response, StatusCode,
 };
 use hyper_util::rt::TokioIo;
-use jsonrpsee::core::RpcResult;
+use jsonrpsee::core::{async_trait, RpcResult};
 use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::rpc::{EnclaveApiServer, SigningApiServer};
 use seismic_enclave::signing::{
