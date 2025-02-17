@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::net::SocketAddr;
+use tracing::info;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use seismic_enclave::client::http_client::{TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT};
@@ -32,5 +33,5 @@ fn init_tracing() {
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 
-    info!("🚀 Application started");
+    info!("Enclave server tracing initialized");
 }
