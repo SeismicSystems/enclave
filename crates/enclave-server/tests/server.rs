@@ -148,7 +148,7 @@ async fn test_server() {
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let _server_handle = start_rpc_server(EnclaveServer::new(addr)).await.unwrap();
+    let _server_handle = EnclaveServer::new(addr).start().await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 

@@ -1,7 +1,8 @@
 use anyhow::Result;
 use tracing::info;
 
-use seismic_enclave_server::server::{init_tracing, start_rpc_server, EnclaveServer};
+use seismic_enclave::client::rpc::BuildableServer;
+use seismic_enclave_server::server::{init_tracing, EnclaveServer};
 
 /// Initializes a server with the given address and handlers
 #[tokio::main]
@@ -13,7 +14,7 @@ async fn main() -> Result<()> {
 
     info!("Enclave server starting");
 
-    let handle = start_rpc_server(EnclaveServer::default()).await?;
+    let handle = EnclaveServer::default().start().await?;
     handle.stopped().await;
 
     Ok(())

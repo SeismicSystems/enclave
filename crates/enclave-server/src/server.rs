@@ -136,11 +136,6 @@ impl EnclaveApiServer for EnclaveServer {
     }
 }
 
-pub async fn start_rpc_server(server: impl BuildableServer) -> Result<ServerHandle> {
-    let server_handle = server.start().await?;
-    Ok(server_handle)
-}
-
 pub fn init_tracing() {
     // Read log level from RUST_LOG
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
