@@ -78,8 +78,7 @@ mod tests {
     async fn test_snapsync_handler() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
         // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
@@ -135,8 +134,7 @@ mod tests {
     async fn test_snapsync_handler_pk_mismatch() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
         // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
