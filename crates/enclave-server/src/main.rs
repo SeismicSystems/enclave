@@ -4,7 +4,7 @@ use tracing::info;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use seismic_enclave_server::server::{
-    start_rpc_server, TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
+    init_tracing, start_rpc_server, TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
 };
 
 /// Initializes a server with the given address and handlers
@@ -21,18 +21,4 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
     start_rpc_server(addr).await?;
     Ok(())
-}
-
-fn init_tracing() {
-    // Read log level from RUST_LOG
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
-
-    // Initialize the subscriber
-    let subscriber = FmtSubscriber::builder()
-        .with_env_filter(filter) // Use dynamic log level
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
-
-    info!("Enclave server tracing initialized");
 }

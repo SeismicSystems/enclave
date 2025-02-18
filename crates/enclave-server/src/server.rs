@@ -114,6 +114,20 @@ pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
     Ok(())
 }
 
+pub fn init_tracing() {
+    // Read log level from RUST_LOG
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
+
+    // Initialize the subscriber
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(filter) // Use dynamic log level
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+
+    info!("Enclave server tracing initialized");
+}
+
 #[cfg(test)]
 mod test {
     use crate::server::start_rpc_server;
@@ -130,6 +144,8 @@ mod test {
 
     #[tokio::test]
     async fn test_server_tx_io_req() {
+        init_tracing();
+
         // handle set up permissions
         if !is_sudo() {
             eprintln!("test_server_tx_io_req: skipped (requires sudo privileges)");
@@ -138,7 +154,7 @@ mod test {
 
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
-        let server_handle = tokio::spawn(start_rpc_server(addr));
+        let _server_handle = tokio::spawn(start_rpc_server(addr));
         sleep(Duration::from_secs(4));
         let client = jsonrpsee::http_client::HttpClientBuilder::default()
             .build(format!("http://{}:{}", addr.ip(), addr.port()))
