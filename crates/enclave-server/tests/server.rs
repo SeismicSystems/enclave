@@ -1,6 +1,7 @@
 #[cfg(test)]
 use kbs_types::Tee;
 use secp256k1::PublicKey;
+use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
@@ -13,7 +14,6 @@ use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::signing::Secp256k1SignRequest;
 use seismic_enclave::signing::Secp256k1VerifyRequest;
 use seismic_enclave_server::server::init_tracing;
-use seismic_enclave_server::server::start_rpc_server;
 use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use serial_test::serial;
