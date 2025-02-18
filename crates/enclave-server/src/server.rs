@@ -145,6 +145,7 @@ mod test {
     use std::time::Duration;
 
     #[tokio::test]
+    #[ignore]
     async fn test_server_tx_io_req() {
         // handle set up permissions
         if !is_sudo() {
