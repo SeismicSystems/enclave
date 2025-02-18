@@ -19,7 +19,7 @@ use seismic_enclave::tx_io::{
 
 use anyhow::Result;
 use jsonrpsee::core::{async_trait, RpcResult};
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
