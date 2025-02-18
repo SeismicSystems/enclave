@@ -6,6 +6,7 @@ use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
 use seismic_enclave::coco_as::HashAlgorithm;
+use seismic_enclave::get_sample_secp256k1_pk;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::signing::Secp256k1SignRequest;
@@ -126,6 +127,11 @@ async fn test_secp256k1_sign_verify(client: &HttpClient) {
     assert_eq!(res.verified, true);
 }
 
+async fn test_get_public_key(client: &HttpClient) {
+    let res = client.get_public_key().await.unwrap();
+    assert_eq!(res, get_sample_secp256k1_pk());
+}
+
 #[tokio::test]
 #[serial(attestation_agent, attestation_service)]
 async fn test_server() {
@@ -150,4 +156,5 @@ async fn test_server() {
     test_attestation_get_evidence(&client).await;
     test_attestation_eval_evidence(&client).await;
     test_secp256k1_sign_verify(&client).await;
+    test_get_public_key(&client).await;
 }
