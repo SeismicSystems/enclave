@@ -137,7 +137,6 @@ impl EnclaveApiServer for EnclaveServer {
 }
 
 pub async fn start_rpc_server(server: impl BuildableServer) -> Result<ServerHandle> {
-    init_tracing();
     let server_handle = server.start().await?;
     Ok(server_handle)
 }
