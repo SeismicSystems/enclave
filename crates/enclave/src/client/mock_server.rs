@@ -16,10 +16,10 @@ use crate::{
 
 use super::rpc::EnclaveApiServer;
 
-pub struct MockServer {}
+pub struct MockEnclaveServer {}
 
 #[async_trait]
-impl EnclaveApiServer for MockServer {
+impl EnclaveApiServer for MockEnclaveServer {
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
         Ok(get_sample_secp256k1_pk())
     }
