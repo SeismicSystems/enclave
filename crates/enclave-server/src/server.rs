@@ -106,14 +106,14 @@ impl EnclaveApiServer for EnclaveServer {
     }
 }
 
-pub async fn start_rpc_server(addr: SocketAddr) -> Result<()> {
+pub async fn start_rpc_server(addr: SocketAddr) -> Result<ServerHandle> {
+    init_tracing();
     let server = EnclaveServer::new().await?;
     let module = server.into_rpc();
     let rpc_server = ServerBuilder::new().build(addr).await?;
     let server_handle = rpc_server.start(module);
     info!(target: "rpc::enclave", "Server started at {}", addr);
-    server_handle.stopped().await;
-    Ok(())
+    Ok(server_handle)
 }
 
 pub fn init_tracing() {
@@ -132,7 +132,6 @@ pub fn init_tracing() {
 
 #[cfg(test)]
 mod test {
-    use crate::server::init_tracing;
     use crate::server::start_rpc_server;
     use crate::server::TEE_DEFAULT_ENDPOINT_ADDR;
     use crate::server::TEE_DEFAULT_ENDPOINT_PORT;
@@ -147,8 +146,6 @@ mod test {
 
     #[tokio::test]
     async fn test_server_tx_io_req() {
-        init_tracing();
-
         // handle set up permissions
         if !is_sudo() {
             eprintln!("test_server_tx_io_req: skipped (requires sudo privileges)");
@@ -157,7 +154,7 @@ mod test {
 
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
-        let _server_handle = tokio::spawn(start_rpc_server(addr));
+        let _server_handle = start_rpc_server(addr).await.unwrap();
         sleep(Duration::from_secs(4));
         let client = jsonrpsee::http_client::HttpClientBuilder::default()
             .build(format!("http://{}:{}", addr.ip(), addr.port()))

@@ -81,7 +81,7 @@ jobs:
       - name: Run tests for seismic-enclave-server
         run: |
           cd crates/enclave-server
-          OUTPUT=$(cargo test -p seismic-enclave-server --no-run 2>&1)
+          OUTPUT=$(RUST_TEST_THREADS=1 cargo test -p seismic-enclave-server --no-run 2>&1)
           echo "$OUTPUT"
           mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave_server-[a-z0-9]*')
           for binary in "${binaries[@]}"; do
