@@ -2,7 +2,7 @@
 use kbs_types::Tee;
 use secp256k1::PublicKey;
 use seismic_enclave::client::EnclaveClient;
-use seismic_enclave::client::TEE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
@@ -143,7 +143,7 @@ async fn test_server() {
 
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port();
-    let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, port));
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     let _server_handle = start_rpc_server(addr).await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));

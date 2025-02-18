@@ -4,8 +4,8 @@ use std::{
     ops::Deref,
 };
 
-pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
+pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 /// A client for the enclave API.
 #[derive(Debug, Clone)]
@@ -18,7 +18,7 @@ impl Default for EnclaveClient {
     fn default() -> Self {
         Self::new(format!(
             "http://{}:{}",
-            TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT
+            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
         ))
     }
 }

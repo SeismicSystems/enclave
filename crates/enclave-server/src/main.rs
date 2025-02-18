@@ -1,5 +1,5 @@
 use anyhow::Result;
-use seismic_enclave::client::{TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave::client::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 use std::net::SocketAddr;
 use tracing::info;
 
@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
 
     info!("Enclave server starting");
 
-    let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
     let handle = start_rpc_server(addr).await?;
     handle.stopped().await;
 
