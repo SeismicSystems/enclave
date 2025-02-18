@@ -8,6 +8,7 @@ pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 /// A client for the enclave API.
+#[derive(Debug, Clone)]
 pub struct EnclaveClient {
     /// The inner HTTP client.
     inner: HttpClient,
