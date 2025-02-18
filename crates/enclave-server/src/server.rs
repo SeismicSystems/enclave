@@ -6,10 +6,11 @@ use crate::signing::handlers::*;
 use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
 
+use jsonrpsee::Methods;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
-use seismic_enclave::rpc::EnclaveApiServer;
+use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
 use seismic_enclave::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
@@ -20,22 +21,54 @@ use seismic_enclave::tx_io::{
 
 use anyhow::Result;
 use jsonrpsee::core::{async_trait, RpcResult};
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use std::net::SocketAddr;
+use jsonrpsee::server::ServerHandle;
+use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use std::net::{IpAddr, SocketAddr};
+use std::str::FromStr;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-pub struct EnclaveServer {}
+pub struct EnclaveServer {
+    addr: SocketAddr,
+}
 
 impl EnclaveServer {
-    pub async fn new() -> Result<Self> {
+    pub async fn init_attestation() -> Result<()> {
         init_coco_aa()?;
         init_coco_as(None).await?;
-        Ok(Self {})
+        Ok(())
+    }
+
+    pub fn new(addr: impl Into<SocketAddr>) -> Self {
+        Self { addr: addr.into() }
+    }
+
+    pub fn new_from_addr_port(addr: String, port: u16) -> Self {
+        Self::new((IpAddr::from_str(&addr).unwrap(), port))
     }
 }
 
-// Implements the EnclaveApiServer trait to handle RPC requests for enclave operations
+impl Default for EnclaveServer {
+    fn default() -> Self {
+        Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))
+    }
+}
+
+impl BuildableServer for EnclaveServer {
+    fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    fn methods(self) -> Methods {
+        self.into_rpc().into()
+    }
+
+    async fn start(self) -> Result<ServerHandle> {
+        Self::init_attestation().await?;
+        BuildableServer::start_rpc_server(self).await
+    }
+}
+
 #[async_trait]
 impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getPublicKey`
@@ -103,13 +136,9 @@ impl EnclaveApiServer for EnclaveServer {
     }
 }
 
-pub async fn start_rpc_server(addr: SocketAddr) -> Result<ServerHandle> {
+pub async fn start_rpc_server(server: impl BuildableServer) -> Result<ServerHandle> {
     init_tracing();
-    let server = EnclaveServer::new().await?;
-    let module = server.into_rpc();
-    let rpc_server = ServerBuilder::new().build(addr).await?;
-    let server_handle = rpc_server.start(module);
-    info!(target: "rpc::enclave", "Server started at {}", addr);
+    let server_handle = server.start().await?;
     Ok(server_handle)
 }
 

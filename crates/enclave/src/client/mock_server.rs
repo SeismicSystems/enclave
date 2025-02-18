@@ -1,4 +1,14 @@
-use jsonrpsee::core::{async_trait, RpcResult};
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
+
+use anyhow::Result;
+use jsonrpsee::{
+    core::{async_trait, RpcResult},
+    server::ServerHandle,
+    Methods,
+};
 
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
@@ -14,9 +24,44 @@ use crate::{
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
-use super::rpc::EnclaveApiServer;
+use super::{
+    rpc::{BuildableServer, EnclaveApiServer},
+    ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+};
 
-pub struct MockEnclaveServer {}
+pub struct MockEnclaveServer {
+    addr: SocketAddr,
+}
+
+impl MockEnclaveServer {
+    pub fn new(addr: impl Into<SocketAddr>) -> Self {
+        Self { addr: addr.into() }
+    }
+
+    pub fn new_from_addr_port(addr: String, port: u16) -> Self {
+        Self::new((IpAddr::from_str(&addr).unwrap(), port))
+    }
+}
+
+impl Default for MockEnclaveServer {
+    fn default() -> Self {
+        Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))
+    }
+}
+
+impl BuildableServer for MockEnclaveServer {
+    fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    fn methods(self) -> Methods {
+        self.into_rpc().into()
+    }
+
+    async fn start(self) -> Result<ServerHandle> {
+        BuildableServer::start_rpc_server(self).await
+    }
+}
 
 #[async_trait]
 impl EnclaveApiServer for MockEnclaveServer {

@@ -1,6 +1,11 @@
-// JSON-RPC Trait for Server and Client
+use std::net::SocketAddr;
+
+/// JSON-RPC Trait for Server and Client
+use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::Methods;
 
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -13,6 +18,25 @@ use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
+use tracing::info;
+
+pub trait BuildableServer {
+    fn addr(&self) -> SocketAddr;
+    fn methods(self) -> Methods;
+    async fn start(self) -> Result<ServerHandle>;
+    async fn start_rpc_server(self) -> Result<ServerHandle>
+    where
+        Self: Sized,
+    {
+        let addr = self.addr();
+        let rpc_server = ServerBuilder::new().build(addr).await?;
+        let module = self.methods();
+        let server_handle = rpc_server.start(module);
+        info!(target: "rpc::enclave", "Server started at {}", addr);
+        Ok(server_handle)
+    }
+}
+
 #[rpc(client, server)]
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running

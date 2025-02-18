@@ -1,9 +1,7 @@
 use anyhow::Result;
-use seismic_enclave::client::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use std::net::SocketAddr;
 use tracing::info;
 
-use seismic_enclave_server::server::start_rpc_server;
+use seismic_enclave_server::server::{start_rpc_server, EnclaveServer};
 
 /// Initializes a server with the given address and handlers
 #[tokio::main]
@@ -14,8 +12,7 @@ async fn main() -> Result<()> {
 
     info!("Enclave server starting");
 
-    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
-    let handle = start_rpc_server(addr).await?;
+    let handle = start_rpc_server(EnclaveServer::default()).await?;
     handle.stopped().await;
 
     Ok(())
