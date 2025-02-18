@@ -5,9 +5,6 @@ use crate::signing::handlers::*;
 use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
 
-use anyhow::Result;
-use jsonrpsee::core::{async_trait, RpcResult};
-use jsonrpsee::server::ServerBuilder;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -19,8 +16,13 @@ use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
+
+use anyhow::Result;
+use jsonrpsee::core::{async_trait, RpcResult};
+use jsonrpsee::server::ServerBuilder;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::{debug, info};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;

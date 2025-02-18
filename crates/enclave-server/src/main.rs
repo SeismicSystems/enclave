@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::net::SocketAddr;
 use tracing::info;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use seismic_enclave_server::server::{
     init_tracing, start_rpc_server, TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT,
