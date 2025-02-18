@@ -138,8 +138,8 @@ mod test {
 
         // spawn a seperate thread for the server, otherwise the test will hang
         let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, TEE_DEFAULT_ENDPOINT_PORT));
-        let _server_handle = tokio::spawn(start_rpc_server(addr));
-        sleep(Duration::from_secs(1));
+        let server_handle = tokio::spawn(start_rpc_server(addr));
+        sleep(Duration::from_secs(4));
         let client = jsonrpsee::http_client::HttpClientBuilder::default()
             .build(format!("http://{}:{}", addr.ip(), addr.port()))
             .unwrap();
