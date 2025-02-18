@@ -3,9 +3,10 @@ pub mod handlers;
 use attestation_agent::AttestationAPIs;
 use sha2::{Digest, Sha256};
 
-use crate::ATTESTATION_AGENT;
 use seismic_enclave::crypto::get_sample_secp256k1_pk;
 use seismic_enclave::request_types::genesis::*;
+
+use crate::coco_aa::ATTESTATION_AGENT;
 
 async fn att_genesis_data() -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
     // For now, we load the keypair from a file

@@ -4,7 +4,7 @@ use aes_gcm::{
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
-use schnorrkel::{keys::Keypair as SchnorrkelKeypair, ExpansionMode, MiniSecretKey};
+use schnorrkel::{keys::Keypair, ExpansionMode, MiniSecretKey};
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
@@ -195,7 +195,7 @@ pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
 }
 
 /// Returns a sample SchnorrkelKeypair public key for testing purposes.
-pub fn get_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
+pub fn get_sample_schnorrkel_keypair() -> Keypair {
     let mini_secret_key = MiniSecretKey::from_bytes(&[
         221, 143, 4, 149, 139, 56, 101, 208, 232, 50, 47, 39, 112, 211, 4, 111, 63, 63, 202, 141,
         138, 195, 190, 41, 139, 177, 214, 90, 176, 210, 173, 14,
