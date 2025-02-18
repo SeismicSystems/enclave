@@ -43,7 +43,7 @@ async fn test_tx_io_encrypt_decrypt(client: &HttpClient) {
     };
 
     // make the http request
-    let encryption_response = client.tx_io_encrypt(encryption_request).await.unwrap();
+    let encryption_response = client.encrypt(encryption_request).await.unwrap();
 
     // check the response
     assert!(!encryption_response.encrypted_data.is_empty());
@@ -57,7 +57,7 @@ async fn test_tx_io_encrypt_decrypt(client: &HttpClient) {
         nonce: nonce.into(),
     };
 
-    let decryption_response = client.tx_io_decrypt(decryption_request).await.unwrap();
+    let decryption_response = client.decrypt(decryption_request).await.unwrap();
     assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
 }
 
@@ -67,7 +67,7 @@ async fn test_health_check(client: &HttpClient) {
 }
 
 async fn test_genesis_get_data(client: &HttpClient) {
-    let resposne = client.genesis_get_data().await.unwrap();
+    let resposne = client.get_genesis_data().await.unwrap();
     assert!(!resposne.evidence.is_empty());
 }
 
@@ -79,7 +79,7 @@ async fn test_attestation_get_evidence(client: &HttpClient) {
 
     // Call the handler
     let res = client
-        .attestation_get_evidence(evidence_request)
+        .get_attestation_evidence(evidence_request)
         .await
         .unwrap();
 
@@ -101,7 +101,7 @@ async fn test_attestation_eval_evidence(client: &HttpClient) {
     };
 
     let resposne = client
-        .attestation_eval_evidence(eval_request)
+        .eval_attestation_evidence(eval_request)
         .await
         .unwrap();
 
@@ -114,7 +114,7 @@ async fn test_secp256k1_sign_verify(client: &HttpClient) {
     let sign_request = Secp256k1SignRequest {
         msg: msg_to_sign.clone(),
     };
-    let res = client.secp256k1_sign(sign_request).await.unwrap();
+    let res = client.sign(sign_request).await.unwrap();
 
     // Prepare verify request body
     let verify_request = Secp256k1VerifyRequest {
@@ -122,7 +122,7 @@ async fn test_secp256k1_sign_verify(client: &HttpClient) {
         sig: res.sig,
     };
 
-    let res = client.secp256k1_verify(verify_request).await.unwrap();
+    let res = client.verify(verify_request).await.unwrap();
     assert_eq!(res.verified, true);
 }
 
