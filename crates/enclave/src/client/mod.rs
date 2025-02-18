@@ -9,3 +9,4 @@ pub mod mock_server;
 pub mod rpc;
 
 pub use client::*;
+pub use mock_server::*;
