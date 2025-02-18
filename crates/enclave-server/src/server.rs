@@ -130,6 +130,7 @@ pub fn init_tracing() {
 
 #[cfg(test)]
 mod test {
+    use crate::server::init_tracing;
     use crate::server::start_rpc_server;
     use crate::server::TEE_DEFAULT_ENDPOINT_ADDR;
     use crate::server::TEE_DEFAULT_ENDPOINT_PORT;
