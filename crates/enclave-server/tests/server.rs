@@ -14,6 +14,7 @@ use seismic_enclave::signing::Secp256k1SignRequest;
 use seismic_enclave::signing::Secp256k1VerifyRequest;
 use seismic_enclave_server::server::init_tracing;
 use seismic_enclave_server::server::start_rpc_server;
+use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use serial_test::serial;
 use std::net::SocketAddr;
@@ -21,6 +22,7 @@ use std::net::TcpListener;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
+use tracing::error;
 
 fn get_random_port() -> u16 {
     TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
@@ -146,7 +148,7 @@ async fn test_server() {
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let _server_handle = start_rpc_server(addr).await.unwrap();
+    let _server_handle = start_rpc_server(EnclaveServer::new(addr)).await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 
