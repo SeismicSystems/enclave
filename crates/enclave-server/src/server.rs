@@ -21,12 +21,9 @@ use seismic_enclave::tx_io::{
 use anyhow::Result;
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
-
-pub const TEE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-pub const TEE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 pub struct EnclaveServer {}
 

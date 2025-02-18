@@ -1,7 +1,8 @@
 #[cfg(test)]
-use jsonrpsee::http_client::HttpClient;
 use kbs_types::Tee;
 use secp256k1::PublicKey;
+use seismic_enclave::client::EnclaveClient;
+use seismic_enclave::client::TEE_DEFAULT_ENDPOINT_ADDR;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
@@ -12,7 +13,6 @@ use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::signing::Secp256k1SignRequest;
 use seismic_enclave::signing::Secp256k1VerifyRequest;
 use seismic_enclave_server::server::start_rpc_server;
-use seismic_enclave_server::server::TEE_DEFAULT_ENDPOINT_ADDR;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use serial_test::serial;
 use std::net::SocketAddr;
@@ -29,7 +29,7 @@ fn get_random_port() -> u16 {
         .port()
 }
 
-async fn test_tx_io_encrypt_decrypt(client: &HttpClient) {
+async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
     let data_to_encrypt = vec![72, 101, 108, 108, 111];
     let mut nonce = vec![0u8; 4]; // 4 leading zeros
@@ -62,17 +62,17 @@ async fn test_tx_io_encrypt_decrypt(client: &HttpClient) {
     assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
 }
 
-async fn test_health_check(client: &HttpClient) {
+async fn test_health_check(client: &EnclaveClient) {
     let resposne = client.health_check().await.unwrap();
     assert_eq!(resposne, "OK");
 }
 
-async fn test_genesis_get_data(client: &HttpClient) {
+async fn test_genesis_get_data(client: &EnclaveClient) {
     let resposne = client.get_genesis_data().await.unwrap();
     assert!(!resposne.evidence.is_empty());
 }
 
-async fn test_attestation_get_evidence(client: &HttpClient) {
+async fn test_attestation_get_evidence(client: &EnclaveClient) {
     let runtime_data = "nonce".as_bytes(); // Example runtime data
     let evidence_request = AttestationGetEvidenceRequest {
         runtime_data: runtime_data.to_vec(),
@@ -88,7 +88,7 @@ async fn test_attestation_get_evidence(client: &HttpClient) {
     assert!(!res.evidence.is_empty());
 }
 
-async fn test_attestation_eval_evidence(client: &HttpClient) {
+async fn test_attestation_eval_evidence(client: &EnclaveClient) {
     // Mock a valid AttestationEvalEvidenceRequest
     let eval_request = AttestationEvalEvidenceRequest {
         evidence: vec![
@@ -109,7 +109,7 @@ async fn test_attestation_eval_evidence(client: &HttpClient) {
     assert!(resposne.eval);
 }
 
-async fn test_secp256k1_sign_verify(client: &HttpClient) {
+async fn test_secp256k1_sign_verify(client: &EnclaveClient) {
     // Prepare sign request to get a valid signature
     let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
     let sign_request = Secp256k1SignRequest {
@@ -127,7 +127,7 @@ async fn test_secp256k1_sign_verify(client: &HttpClient) {
     assert_eq!(res.verified, true);
 }
 
-async fn test_get_public_key(client: &HttpClient) {
+async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
     assert_eq!(res, get_sample_secp256k1_pk());
 }
@@ -146,9 +146,7 @@ async fn test_server() {
     let addr = SocketAddr::from((TEE_DEFAULT_ENDPOINT_ADDR, port));
     let _server_handle = start_rpc_server(addr).await.unwrap();
     sleep(Duration::from_secs(4));
-    let client = jsonrpsee::http_client::HttpClientBuilder::default()
-        .build(format!("http://{}:{}", addr.ip(), addr.port()))
-        .unwrap();
+    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 
     test_health_check(&client).await;
     test_genesis_get_data(&client).await;
