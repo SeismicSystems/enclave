@@ -139,13 +139,14 @@ mod test {
     use secp256k1::PublicKey;
     use seismic_enclave::request_types::tx_io::*;
     use seismic_enclave::rpc::EnclaveApiClient;
+    use serial_test::serial;
     use std::net::SocketAddr;
     use std::str::FromStr;
     use std::thread::sleep;
     use std::time::Duration;
 
     #[tokio::test]
-    #[ignore]
+    #[serial(attestation_agent, attestation_service)]
     async fn test_server_tx_io_req() {
         // handle set up permissions
         if !is_sudo() {
