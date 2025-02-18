@@ -41,7 +41,7 @@ impl EnclaveClient {
     }
 
     ///
-    pub fn new_from_addr_port(addr: impl AsRef<str>, port: u16) -> Self {
-        Self::new(format!("http://{}:{}", addr.as_ref(), port))
+    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
+        Self::new(format!("http://{}:{}", addr.into(), port))
     }
 }
