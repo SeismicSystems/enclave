@@ -126,6 +126,7 @@ mod test {
     use std::net::SocketAddr;
     use std::str::FromStr;
     use std::thread::sleep;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn test_server_tx_io_req() {
