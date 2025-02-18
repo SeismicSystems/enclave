@@ -110,8 +110,7 @@ mod tests {
     async fn test_eval_evidence_sample() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_sample: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_sample: skipped (requires sudo privileges)");
         }
 
         // Initialize ATTESTATION_SERVICE
@@ -149,8 +148,7 @@ mod tests {
     async fn test_eval_evidence_az_tdx() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
         // Initialize ATTESTATION_SERVICE
@@ -199,8 +197,7 @@ mod tests {
     async fn test_eval_policy_deny() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
         // Initialize ATTESTATION_SERVICE
@@ -236,8 +233,7 @@ mod tests {
         println!("starting test_eval_evidence_az_tdx_tpm_pcr04");
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_az_tdx_tpm_pcr04: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_az_tdx_tpm_pcr04: skipped (requires sudo privileges)");
         }
 
         init_coco_as(None)
