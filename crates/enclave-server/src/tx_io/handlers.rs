@@ -1,13 +1,9 @@
-use http_body_util::{BodyExt, Full};
-use hyper::{
-    body::{Body, Bytes},
-    Request, Response,
-};
-use seismic_enclave::crypto::{ecdh_decrypt, ecdh_encrypt};
-use seismic_enclave::errors::{
-    invalid_ciphertext_resp, invalid_json_body_resp, invalid_req_body_resp,
-};
+use jsonrpsee::core::RpcResult;
 use seismic_enclave::request_types::tx_io::*;
+use seismic_enclave::{
+    crypto::{ecdh_decrypt, ecdh_encrypt},
+    rpc_invalid_ciphertext_error,
+};
 
 use crate::get_secp256k1_sk;
 
@@ -23,36 +19,11 @@ use crate::get_secp256k1_sk;
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
-pub async fn tx_io_encrypt_handler(
-    req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, anyhow::Error> {
-    // parse the request body
-    let body_bytes: Bytes = match req.into_body().collect().await {
-        Ok(collected) => collected.to_bytes(),
-        Err(_) => return Ok(invalid_req_body_resp()),
-    };
-
-    // Deserialize the request body into IoEncryptionRequest
-    let encryption_request: IoEncryptionRequest = match serde_json::from_slice(&body_bytes) {
-        Ok(request) => request,
-        Err(_) => {
-            return Ok(invalid_json_body_resp());
-        }
-    };
-
+pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
-    let encrypted_data = ecdh_encrypt(
-        &encryption_request.key,
-        &get_secp256k1_sk(),
-        encryption_request.data,
-        encryption_request.nonce,
-    )
-    .unwrap();
+    let encrypted_data = ecdh_encrypt(&req.key, &get_secp256k1_sk(), req.data, req.nonce).unwrap();
 
-    let response_body = IoEncryptionResponse { encrypted_data };
-    let response_json = serde_json::to_string(&response_body).unwrap();
-
-    Ok(Response::new(Full::new(Bytes::from(response_json))))
+    Ok(IoEncryptionResponse { encrypted_data })
 }
 
 /// Handles an IO decryption request, decrypting the provided encrypted data using AES.
@@ -68,41 +39,18 @@ pub async fn tx_io_encrypt_handler(
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
 pub async fn tx_io_decrypt_handler(
-    req: Request<impl Body>,
-) -> Result<Response<Full<Bytes>>, anyhow::Error> {
-    // parse the request body
-    let body_bytes: Bytes = match req.into_body().collect().await {
-        Ok(collected) => collected.to_bytes(),
-        Err(_) => return Ok(invalid_req_body_resp()),
-    };
-
-    // Deserialize the request body into IoDecryptionRequest
-    let decryption_request: IoDecryptionRequest = match serde_json::from_slice(&body_bytes) {
-        Ok(request) => request,
-        Err(_) => {
-            return Ok(invalid_json_body_resp());
-        }
-    };
-
+    request: IoDecryptionRequest,
+) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
     let decrypted_data = ecdh_decrypt(
-        &decryption_request.key,
+        &request.key,
         &get_secp256k1_sk(),
-        decryption_request.data,
-        decryption_request.nonce,
-    );
+        request.data,
+        request.nonce,
+    )
+    .map_err(|e| rpc_invalid_ciphertext_error(e))?;
 
-    let decrypted_data = match decrypted_data {
-        Ok(data) => data,
-        Err(e) => {
-            return Ok(invalid_ciphertext_resp(e));
-        }
-    };
-
-    let response_body = IoDecryptionResponse { decrypted_data };
-    let response_json = serde_json::to_string(&response_body).unwrap();
-
-    Ok(Response::new(Full::new(Bytes::from(response_json))))
+    Ok(IoDecryptionResponse { decrypted_data })
 }
 
 #[cfg(test)]
@@ -112,51 +60,12 @@ mod tests {
     use std::str::FromStr;
 
     #[tokio::test]
-    async fn test_encryption_handler_invalid_body() {
-        // Prepare invalid request body (non-JSON body)
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/encrypt")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from("invalid body")))
-            .unwrap();
-
-        let res = tx_io_encrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 400);
-
-        // Parse the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(error_response["error"], "Invalid JSON in request body");
-    }
-
-    #[tokio::test]
-    async fn test_decryption_handler_invalid_body() {
-        // Prepare invalid request body (non-JSON body)
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri("/decrypt")
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from("invalid body")))
-            .unwrap();
-
-        let res = tx_io_decrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 400);
-
-        // Parse the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(error_response["error"], "Invalid JSON in request body");
-    }
-
-    #[tokio::test]
     async fn test_io_encryption() {
         // Prepare encryption request body
-        let base_url = "http://localhost:7878";
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let mut nonce = vec![0u8; 4]; // 4 leading zeros
         nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
-        let encryption_request = IoEncryptionRequest {
+        let req = IoEncryptionRequest {
             key: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
@@ -164,54 +73,31 @@ mod tests {
             data: data_to_encrypt.clone(),
             nonce: nonce.clone().into(),
         };
-        let payload_json = serde_json::to_string(&encryption_request).unwrap();
-
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri(format!("{}/tx_io/encrypt", base_url))
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
 
         let res = tx_io_encrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 200);
 
-        // Parse the response body
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let enc_response: IoEncryptionResponse = serde_json::from_slice(&body).unwrap();
-        assert!(!enc_response.encrypted_data.is_empty());
-
-        println!("Encrypted data: {:?}", enc_response.encrypted_data);
+        println!("Encrypted data: {:?}", res.encrypted_data);
 
         // check that decryption returns the original data
         // Prepare decrypt request body
-        let decryption_request = IoDecryptionRequest {
+        let req = IoDecryptionRequest {
             key: PublicKey::from_str(
                 "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
             )
             .unwrap(),
-            data: enc_response.encrypted_data,
+            data: res.encrypted_data,
             nonce: nonce.into(),
         };
-        let payload_json = serde_json::to_string(&decryption_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri(format!("{}/tx_io/decrypt", base_url))
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
 
         let res = tx_io_decrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 200);
 
-        let body: Bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let dec_response: IoDecryptionResponse = serde_json::from_slice(&body).unwrap();
-        assert_eq!(dec_response.decrypted_data, data_to_encrypt);
+        println!("Decrypted data: {:?}", res.decrypted_data);
+
+        assert_eq!(res.decrypted_data, data_to_encrypt);
     }
 
     #[tokio::test]
     async fn test_decrypt_invalid_ciphertext() {
-        let base_url = "http://localhost:7878";
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let mut nonce = vec![0u8; 4]; // 4 leading zeros
         nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
@@ -223,15 +109,15 @@ mod tests {
             data: bad_ciphertext,
             nonce: nonce.into(),
         };
-        let payload_json = serde_json::to_string(&decryption_request).unwrap();
-        let req: Request<Full<Bytes>> = Request::builder()
-            .method("POST")
-            .uri(format!("{}/tx_io/decrypt", base_url))
-            .header("Content-Type", "application/json")
-            .body(Full::from(Bytes::from(payload_json)))
-            .unwrap();
+        let res = tx_io_decrypt_handler(decryption_request).await;
 
-        let res = tx_io_decrypt_handler(req).await.unwrap();
-        assert_eq!(res.status(), 422);
+        assert_eq!(res.is_err(), true);
+        assert_eq!(
+            res.err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid ciphertext"),
+            true
+        );
     }
 }
