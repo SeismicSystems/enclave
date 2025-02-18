@@ -66,8 +66,7 @@ mod tests {
     async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data() {
         // handle set up permissions
         if !is_sudo() {
-            eprintln!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-            return;
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
         init_coco_aa().expect("Failed to initialize AttestationAgent");

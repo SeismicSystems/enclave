@@ -5,7 +5,7 @@ pub mod server;
 mod signing;
 mod snapsync;
 mod tx_io;
-mod utils;
+pub mod utils;
 
 use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 
