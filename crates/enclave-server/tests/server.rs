@@ -135,6 +135,11 @@ async fn test_get_public_key(client: &EnclaveClient) {
     assert_eq!(res, get_sample_secp256k1_pk());
 }
 
+async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
+    let res = client.get_eph_rng_keypair().await.unwrap();
+    debug!("eph_rng_keypair: {:?}", res);
+}
+
 #[tokio::test]
 #[serial(attestation_agent, attestation_service)]
 async fn test_server() {
@@ -159,4 +164,5 @@ async fn test_server() {
     test_attestation_eval_evidence(&client).await;
     test_secp256k1_sign_verify(&client).await;
     test_get_public_key(&client).await;
+    test_get_eph_rng_keypair(&client).await;
 }

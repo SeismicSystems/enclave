@@ -15,7 +15,8 @@ use crate::{
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     ecdh_decrypt, ecdh_encrypt,
     genesis::GenesisDataResponse,
-    get_sample_secp256k1_pk, get_sample_secp256k1_sk, rpc_invalid_ciphertext_error,
+    get_sample_schnorrkel_keypair, get_sample_secp256k1_pk, get_sample_secp256k1_sk,
+    rpc_invalid_ciphertext_error,
     signing::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
