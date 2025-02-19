@@ -88,20 +88,3 @@ async fn test_server() {
     });
     handle.await.unwrap();
 }
-
-#[ignore]
-#[tokio::test]
-async fn test_client() {
-    // spawn a seperate thread for the server, otherwise the test will hang
-    let port = 51893;
-    let addr = SocketAddr::from(("127.0.0.1".parse::<std::net::IpAddr>().unwrap(), port));
-    println!("addr: {:?}", addr);
-
-    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
-    println!("client: {:?}", client);
-
-    test_health_check(&client).await;
-    test_tx_io_encrypt_decrypt(&client).await;
-    test_get_public_key(&client).await;
-    test_get_eph_rng_keypair(&client).await;
-}
