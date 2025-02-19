@@ -7,6 +7,7 @@ use hkdf::Hkdf;
 use schnorrkel::{keys::Keypair, ExpansionMode, MiniSecretKey};
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256};
+use std::env;
 use std::str::FromStr;
 
 use crate::request_types::nonce::Nonce;
@@ -188,10 +189,15 @@ pub fn get_sample_secp256k1_sk() -> secp256k1::SecretKey {
 
 /// Returns a sample Secp256k1 public key for testing purposes.
 pub fn get_sample_secp256k1_pk() -> secp256k1::PublicKey {
-    secp256k1::PublicKey::from_str(
-        "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
-    )
-    .unwrap()
+    env::var("SAMPLE_SECP256K1_ADDRESS")
+        .ok()
+        .and_then(|addr| PublicKey::from_str(&addr).ok())
+        .unwrap_or_else(|| {
+            PublicKey::from_str(
+                "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
+            )
+            .unwrap()
+        })
 }
 
 /// Returns a sample SchnorrkelKeypair public key for testing purposes.
