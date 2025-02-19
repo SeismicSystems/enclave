@@ -1,18 +1,11 @@
 #[cfg(test)]
-use kbs_types::Tee;
 use secp256k1::PublicKey;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
-use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
-use seismic_enclave::coco_as::Data;
-use seismic_enclave::coco_as::HashAlgorithm;
 use seismic_enclave::get_sample_secp256k1_pk;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
-use seismic_enclave::signing::Secp256k1SignRequest;
-use seismic_enclave::signing::Secp256k1VerifyRequest;
 use seismic_enclave::MockEnclaveServer;
 use std::net::SocketAddr;
 use std::net::TcpListener;
@@ -81,12 +74,42 @@ async fn test_server() {
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+    println!("addr: {:?}", addr);
     let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+    println!("client: {:?}", client);
 
     test_health_check(&client).await;
     test_tx_io_encrypt_decrypt(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
+
+    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+
+    let handle = tokio::spawn(async move {
+        println!("client 2: {:?}", client);
+        test_health_check(&client).await;
+        test_tx_io_encrypt_decrypt(&client).await;
+        test_get_public_key(&client).await;
+        test_get_eph_rng_keypair(&client).await;
+    });
+    handle.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_client() {
+    // spawn a seperate thread for the server, otherwise the test will hang
+    let port = 51893;
+    let addr = SocketAddr::from(("127.0.0.1".parse::<std::net::IpAddr>().unwrap(), port));
+    println!("addr: {:?}", addr);
+
+    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+    println!("client: {:?}", client);
+
+    test_health_check(&client).await;
+    test_tx_io_encrypt_decrypt(&client).await;
+    test_get_public_key(&client).await;
+    test_get_eph_rng_keypair(&client).await;
+    sleep(Duration::from_secs(1000));
 }
