@@ -7,7 +7,10 @@ mod snapsync;
 mod tx_io;
 pub mod utils;
 
-use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
+use seismic_enclave::{
+    get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
+    get_unsecure_sample_secp256k1_sk,
+};
 
 /// Loads a secp256k1 private key from a file.
 ///
@@ -22,7 +25,7 @@ use seismic_enclave::{get_sample_secp256k1_pk, get_sample_secp256k1_sk};
 ///
 /// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
 fn get_secp256k1_sk() -> secp256k1::SecretKey {
-    get_sample_secp256k1_sk()
+    get_unsecure_sample_secp256k1_sk()
 }
 
 /// Loads a secp256k1 public key from a file.
@@ -38,5 +41,22 @@ fn get_secp256k1_sk() -> secp256k1::SecretKey {
 ///
 /// # TODO: replace with a more secure solution. Currently loads a hardcoded sample
 fn get_secp256k1_pk() -> secp256k1::PublicKey {
-    get_sample_secp256k1_pk()
+    get_unsecure_sample_secp256k1_pk()
+}
+
+/// Loads a Schnorrkel keypair from a file.
+///
+/// This function retrieves a keypair from a JSON file for testing purposes. Like `get_secp256k1_pk`,
+/// this implementation is insecure and should be replaced with a more secure approach, such as
+/// generating the keypair dynamically or obtaining it from a KMS service.
+///
+/// # Returns
+/// A `schnorrkel::keys::Keypair` loaded from the keypair file.
+///
+/// # Panics
+/// This function may panic if the file is missing, corrupted, or cannot be properly deserialized.
+///
+/// # TODO: Replace this function with a more secure key management solution.
+fn get_schnorrkel_keypair() -> schnorrkel::keys::Keypair {
+    get_unsecure_sample_schnorrkel_keypair()
 }

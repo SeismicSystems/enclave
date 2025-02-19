@@ -15,7 +15,8 @@ use crate::{
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     ecdh_decrypt, ecdh_encrypt,
     genesis::GenesisDataResponse,
-    get_sample_secp256k1_pk, get_sample_secp256k1_sk, rpc_invalid_ciphertext_error,
+    get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
+    get_unsecure_sample_secp256k1_sk, rpc_invalid_ciphertext_error,
     signing::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
@@ -66,7 +67,7 @@ impl BuildableServer for MockEnclaveServer {
 #[async_trait]
 impl EnclaveApiServer for MockEnclaveServer {
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(get_sample_secp256k1_pk())
+        Ok(get_unsecure_sample_secp256k1_pk())
     }
 
     async fn health_check(&self) -> RpcResult<String> {
@@ -107,7 +108,7 @@ impl EnclaveApiServer for MockEnclaveServer {
         // load key and encrypt data
         let encrypted_data = ecdh_encrypt(
             &request.key,
-            &get_sample_secp256k1_sk(),
+            &get_unsecure_sample_secp256k1_sk(),
             request.data,
             request.nonce,
         )
@@ -120,12 +121,16 @@ impl EnclaveApiServer for MockEnclaveServer {
         // load key and decrypt data
         let decrypted_data = ecdh_decrypt(
             &request.key,
-            &get_sample_secp256k1_sk(),
+            &get_unsecure_sample_secp256k1_sk(),
             request.data,
             request.nonce,
         )
         .map_err(|e| rpc_invalid_ciphertext_error(e))?;
 
         Ok(IoDecryptionResponse { decrypted_data })
+    }
+
+    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
+        Ok(get_unsecure_sample_schnorrkel_keypair())
     }
 }

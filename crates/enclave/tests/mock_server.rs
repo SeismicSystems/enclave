@@ -3,7 +3,7 @@ use secp256k1::PublicKey;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
-use seismic_enclave::get_sample_secp256k1_pk;
+use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::MockEnclaveServer;
@@ -61,7 +61,7 @@ async fn test_health_check(client: &EnclaveClient) {
 
 async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
-    assert_eq!(res, get_sample_secp256k1_pk());
+    assert_eq!(res, get_unsecure_sample_secp256k1_pk());
 }
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {

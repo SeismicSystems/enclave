@@ -59,13 +59,13 @@ pub async fn provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<Sna
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::get_secp256k1_sk;
+    use seismic_enclave::aes_decrypt;
+    use seismic_enclave::derive_aes_key;
+    use seismic_enclave::get_unsecure_sample_secp256k1_sk;
+    use seismic_enclave::secp256k1_verify;
 
     use kbs_types::Tee;
     use secp256k1::ecdh::SharedSecret;
-    use seismic_enclave::aes_decrypt;
-    use seismic_enclave::derive_aes_key;
-    use seismic_enclave::secp256k1_verify;
     use serial_test::serial;
 
     use crate::{
@@ -91,7 +91,7 @@ mod tests {
             .expect("Failed to initialize AS policies");
 
         // Get sample attestation and keys to make the test request
-        let client_sk = get_secp256k1_sk();
+        let client_sk = get_unsecure_sample_secp256k1_sk();
         let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
         let client_signing_pk = signing_pk.serialize().to_vec();
 
