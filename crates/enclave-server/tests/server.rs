@@ -137,7 +137,7 @@ async fn test_get_public_key(client: &EnclaveClient) {
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
     let res = client.get_eph_rng_keypair().await.unwrap();
-    debug!("eph_rng_keypair: {:?}", res);
+    println!("eph_rng_keypair: {:?}", res);
 }
 
 #[tokio::test]
