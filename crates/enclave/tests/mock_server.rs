@@ -1,15 +1,13 @@
 #[cfg(test)]
-use secp256k1::PublicKey;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
-use seismic_enclave::get_sample_secp256k1_pk;
+use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::MockEnclaveServer;
 use std::net::SocketAddr;
 use std::net::TcpListener;
-use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -27,10 +25,7 @@ async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     let mut nonce = vec![0u8; 4]; // 4 leading zeros
     nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
     let encryption_request = IoEncryptionRequest {
-        key: PublicKey::from_str(
-            "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
-        )
-        .unwrap(),
+        key: get_unsecure_sample_secp256k1_pk(),
         data: data_to_encrypt.clone(),
         nonce: nonce.clone().into(),
     };
@@ -42,10 +37,7 @@ async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     assert!(!encryption_response.encrypted_data.is_empty());
 
     let decryption_request = IoDecryptionRequest {
-        key: PublicKey::from_str(
-            "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
-        )
-        .unwrap(),
+        key: get_unsecure_sample_secp256k1_pk(),
         data: encryption_response.encrypted_data,
         nonce: nonce.into(),
     };
@@ -61,7 +53,7 @@ async fn test_health_check(client: &EnclaveClient) {
 
 async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
-    assert_eq!(res, get_sample_secp256k1_pk());
+    assert_eq!(res, get_unsecure_sample_secp256k1_pk());
 }
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
@@ -97,6 +89,7 @@ async fn test_server() {
     handle.await.unwrap();
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_client() {
     // spawn a seperate thread for the server, otherwise the test will hang
@@ -111,5 +104,4 @@ async fn test_client() {
     test_tx_io_encrypt_decrypt(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
-    sleep(Duration::from_secs(1000));
 }

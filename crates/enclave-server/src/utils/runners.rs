@@ -8,6 +8,7 @@ use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::request_types::genesis::GenesisData;
 use sha2::Digest;
 use sha2::Sha256;
@@ -33,10 +34,7 @@ fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
 #[ignore]
 fn run_hash_genesis_data() -> Result<(), anyhow::Error> {
     let genesis_data = GenesisData {
-        io_pk: secp256k1::PublicKey::from_str(
-            "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
-        )
-        .unwrap(),
+        io_pk: get_unsecure_sample_secp256k1_pk(),
     };
 
     let genesis_data_bytes = genesis_data.to_bytes()?;

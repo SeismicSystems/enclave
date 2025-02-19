@@ -56,8 +56,7 @@ pub async fn tx_io_decrypt_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use secp256k1::PublicKey;
-    use std::str::FromStr;
+    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 
     #[tokio::test]
     async fn test_io_encryption() {
@@ -66,10 +65,7 @@ mod tests {
         let mut nonce = vec![0u8; 4]; // 4 leading zeros
         nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
         let req = IoEncryptionRequest {
-            key: PublicKey::from_str(
-                "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
-            )
-            .unwrap(),
+            key: get_unsecure_sample_secp256k1_pk(),
             data: data_to_encrypt.clone(),
             nonce: nonce.clone().into(),
         };
@@ -81,10 +77,7 @@ mod tests {
         // check that decryption returns the original data
         // Prepare decrypt request body
         let req = IoDecryptionRequest {
-            key: PublicKey::from_str(
-                "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
-            )
-            .unwrap(),
+            key: get_unsecure_sample_secp256k1_pk(),
             data: res.encrypted_data,
             nonce: nonce.into(),
         };
@@ -102,10 +95,7 @@ mod tests {
         let mut nonce = vec![0u8; 4]; // 4 leading zeros
         nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
         let decryption_request = IoDecryptionRequest {
-            key: PublicKey::from_str(
-                "03e31e68908a6404a128904579c677534d19d0e5db80c7d9cf4de6b4b7fe0518bd",
-            )
-            .unwrap(),
+            key: get_unsecure_sample_secp256k1_pk(),
             data: bad_ciphertext,
             nonce: nonce.into(),
         };
