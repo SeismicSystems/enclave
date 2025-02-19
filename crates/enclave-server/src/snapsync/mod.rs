@@ -55,8 +55,9 @@ pub async fn build_snapsync_response(
 /// TODO: get real private state data from [location TBD]
 async fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
     let sample_private_state = format!("private state @ %{}", DB_PATH).as_bytes().to_vec();
+    let io_sk = get_secp256k1_sk();
     Ok(SnapSyncData {
-        io_sk: "io sk".as_bytes().to_vec(),
+        io_sk: io_sk.secret_bytes().to_vec(),
         state: sample_private_state,
     })
 }

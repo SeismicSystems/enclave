@@ -3,14 +3,13 @@ pub mod handlers;
 use attestation_agent::AttestationAPIs;
 use sha2::{Digest, Sha256};
 
-use seismic_enclave::crypto::get_sample_secp256k1_pk;
+use crate::get_secp256k1_pk;
 use seismic_enclave::request_types::genesis::*;
 
 use crate::coco_aa::ATTESTATION_AGENT;
 
 async fn att_genesis_data() -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
-    // For now, we load the keypair from a file
-    let io_pk = get_sample_secp256k1_pk();
+    let io_pk = get_secp256k1_pk();
 
     // For now the genesis data is just the public key of the IO encryption keypair
     // But this is expected to change in the future

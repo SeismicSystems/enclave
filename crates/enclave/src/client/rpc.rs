@@ -10,7 +10,6 @@ use jsonrpsee::Methods;
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
-use crate::get_sample_schnorrkel_keypair;
 use crate::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
@@ -86,8 +85,6 @@ pub trait EnclaveApi {
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse>;
 
     /// Generates an ephemeral keypair
-    #[method(name = "getEphRngKeypair")]
-    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        Ok(get_sample_schnorrkel_keypair())
-    }
+    #[method(name = "eph_rng.get_keypair")]
+    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
 }

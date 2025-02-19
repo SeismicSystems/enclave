@@ -1,10 +1,10 @@
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
-use crate::get_secp256k1_pk;
 use crate::signing::handlers::*;
 use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
+use crate::{get_schnorrkel_keypair, get_secp256k1_pk};
 
 use jsonrpsee::Methods;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
@@ -133,6 +133,12 @@ impl EnclaveApiServer for EnclaveServer {
     async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
         debug!(target: "rpc::enclave", "Serving verify");
         secp256k1_verify_handler(req).await
+    }
+
+    /// Handler for: 'eph_rng.get_keypair'
+    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
+        debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
+        Ok(get_schnorrkel_keypair())
     }
 }
 

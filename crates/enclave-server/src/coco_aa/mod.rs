@@ -1,12 +1,13 @@
 pub mod handlers;
 
+use crate::get_secp256k1_pk;
+
+use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use once_cell::sync::OnceCell;
-use std::sync::Arc;
-
-use anyhow::{anyhow, Result};
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 
 pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
@@ -41,10 +42,8 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 
 /// Makes an attestation with a hash of a Secp256k1 public key as the runtime data
 /// returns (attestation, signing_pk)
-///
-/// UNSAFE: Currently this is using a sample key for testing purposes
 pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-    let signing_pk = seismic_enclave::get_sample_secp256k1_pk();
+    let signing_pk = get_secp256k1_pk();
     let signing_pk_bytes = signing_pk.serialize();
     let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
 
