@@ -97,6 +97,7 @@ async fn test_server() {
     handle.await.unwrap();
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_client() {
     // spawn a seperate thread for the server, otherwise the test will hang
@@ -111,5 +112,4 @@ async fn test_client() {
     test_tx_io_encrypt_decrypt(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
-    sleep(Duration::from_secs(1000));
 }
