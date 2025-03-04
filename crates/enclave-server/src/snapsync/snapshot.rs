@@ -68,11 +68,23 @@ mod tests {
 
     #[test]
     fn test_create_snapshot() {
+        let snapshot_path = &format!("{}/{}", DB_DIR, SNAPSHOT_FILE);
+        let mdbx_path = &format!("{}/{}", DB_DIR, MDBX_FILE);
+        if !Path::new(&mdbx_path).exists() {
+            panic!("Database file not found at expected path: {:?}", &mdbx_path);
+        }
         create_snapshot().unwrap();
+        assert!(Path::new(&snapshot_path).exists());
     }
 
     #[test]
     fn test_restore_snapshot() {
+        let snapshot_path = &format!("{}/{}", DB_DIR, SNAPSHOT_FILE);
+        let mdbx_path = &format!("{}/{}", DB_DIR, MDBX_FILE);
+        if !Path::new(&snapshot_path).exists() {
+            panic!("Snapshot file not found at expected path: {:?}", &snapshot_path);
+        }
         restore_snapshot().unwrap();
+        assert!(Path::new(mdbx_path).exists());
     }
 }
