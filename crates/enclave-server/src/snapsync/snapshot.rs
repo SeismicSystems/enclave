@@ -17,9 +17,8 @@ fn create_snapshot() -> Result<(), anyhow::Error> {
     }
 
     // run the tar command to create the compressed snapshot
-    let status = Command::new("sudo")
+    let status = Command::new("tar")
         .args([
-            "tar",
             "--use-compress-program=lz4",
             "-cvPf",
             snapshot_path,
@@ -45,9 +44,8 @@ fn restore_snapshot() -> Result<(), anyhow::Error> {
     }
 
     // run the tar command to decompress the snapshot
-    let status = Command::new("sudo")
+    let status = Command::new("tar")
     .args([
-        "tar",
         "--use-compress-program=lz4",
         "-xvPf",
         &snapshot_path,
