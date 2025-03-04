@@ -23,6 +23,7 @@ hkdf.workspace = true
 jsonrpsee.workspace = true
 kbs-types.workspace = true
 once_cell.workspace = true
+rand.workspace = true
 reqwest.workspace = true
 schnorrkel.workspace = true
 secp256k1.workspace = true

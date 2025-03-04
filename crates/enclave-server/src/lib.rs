@@ -8,8 +8,8 @@ mod tx_io;
 pub mod utils;
 
 use seismic_enclave::{
-    get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
-    get_unsecure_sample_secp256k1_sk,
+    get_unsecure_sample_aesgcm_key, get_unsecure_sample_schnorrkel_keypair,
+    get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk,
 };
 
 /// Loads a secp256k1 private key from a file.
@@ -59,4 +59,9 @@ fn get_secp256k1_pk() -> secp256k1::PublicKey {
 /// # TODO: Replace this function with a more secure key management solution.
 fn get_schnorrkel_keypair() -> schnorrkel::keys::Keypair {
     get_unsecure_sample_schnorrkel_keypair()
+}
+
+// TODO: use unique key, write docs, 
+fn get_snapshot_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
+    get_unsecure_sample_aesgcm_key()
 }

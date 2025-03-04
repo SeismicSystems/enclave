@@ -2,7 +2,7 @@ pub mod handlers;
 mod snapshot;
 
 use crate::coco_aa::attest_signing_pk;
-use crate::get_secp256k1_sk;
+use crate::{get_secp256k1_sk, get_snapshot_key};
 use crate::signing::enclave_sign;
 use seismic_enclave::ecdh_encrypt;
 use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
@@ -60,9 +60,9 @@ async fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
     let sample_private_state = format!("private state @ %{}", RETH_DB_DIR)
         .as_bytes()
         .to_vec();
-    let io_sk = get_secp256k1_sk();
+    let snapshot_sk = get_snapshot_key();
     Ok(SnapSyncData {
-        io_sk: io_sk.secret_bytes().to_vec(),
+        io_sk: snapshot_sk.to_vec(),
         state: sample_private_state,
     })
 }

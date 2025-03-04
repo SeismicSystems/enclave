@@ -1,7 +1,14 @@
+use crate::get_snapshot_key;
+
 use std::path::Path;
 use std::process::Command;
+use seismic_enclave::crypto::{encrypt_file, decrypt_file};
 
-// Constants for paths
+// fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str) -> Result<(), anyhow::Error> {
+//     create_snapshot(db_dir, snapshot_file, mdbx_file);
+//     encrypt_snapshot(db_dir, snapshot_file);
+//     Ok(())
+// }
 
 /// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
 fn create_snapshot(
@@ -60,6 +67,44 @@ fn restore_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Err
     Ok(())
 }
 
+/// Encrypts the snapshot file using the snapshot_key
+fn encrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+    let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
+    let ciphertext_path = &format!("{}.enc", snapshot_path);
+
+    // confirm that the snapshot file exists
+    if !Path::new(&snapshot_path).exists() {
+        anyhow::bail!(
+            "Snapshot file not found at expected path: {:?}",
+            &snapshot_path
+        );
+    }
+
+    let snapshot_key = get_snapshot_key();
+    encrypt_file(&snapshot_path, &ciphertext_path, &snapshot_key)?;
+
+    Ok(())
+}
+
+/// Decrypts the snapshot file using the snapshot_key
+fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+    let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
+    let ciphertext_path = &format!("{}.enc", snapshot_path);
+
+    // confirm that the snapshot file exists
+    if !Path::new(&ciphertext_path).exists() {
+        anyhow::bail!(
+            "Encrypted Snapshot file not found at expected path: {:?}",
+            &snapshot_path
+        );
+    }
+
+    let snapshot_key = get_snapshot_key();
+    decrypt_file(&ciphertext_path, &snapshot_path, &snapshot_key)?;
+
+    Ok(())
+}
+
 // todo: some kind of error checking, ex if file is missing, restrictive permissions, etc
 // todo: put an integation test somewhere that uses actual reth?
 // todo: test that it overwrites the file if it already exists?
@@ -69,20 +114,17 @@ mod tests {
     use crate::snapsync::{MDBX_FILE, SNAPSHOT_FILE};
     use std::fs;
     use anyhow::Error;
-    use std::io::Write;
+    use std::io::{Read, Write};
     use std::path::Path;
     use tempfile::tempdir;
 
-    fn file_metadata(file_path: &Path) -> Option<(u64, u64)> {
-        let metadata = fs::metadata(file_path).ok()?;
-        let file_size = metadata.len();
-        let modified_time = metadata
-            .modified()
-            .ok()?
-            .duration_since(std::time::UNIX_EPOCH)
-            .ok()?
-            .as_secs();
-        Some((file_size, modified_time))
+    fn read_first_n_bytes(file_path: &str, n: usize) -> Result<Vec<u8>, anyhow::Error>{
+        let mut file = fs::File::open(file_path)?;
+        let mut buffer = vec![0; n]; // Allocate a buffer of size `n`
+        let bytes_read = file.read(&mut buffer)?;
+    
+        buffer.truncate(bytes_read); // Truncate buffer in case file is smaller than `n`
+        Ok(buffer)
     }
 
     // Function to generate a dummy database file
@@ -93,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_snapshot() -> Result<(), Error> {
+    fn test_create_snapshot() -> Result<(), anyhow::Error> {
         // Set up a temp dir
         println!("Current dir: {:?}", std::env::current_dir().unwrap());
         let temp_dir = tempdir().unwrap();
@@ -105,7 +147,7 @@ mod tests {
         generate_dummy_file(&mdbx_path, 10 * 1024 * 1024)?;
 
         // Check the metadata of the original file
-        let orig_metadata = file_metadata(&mdbx_path).unwrap();
+        let orig_leading_bytes = read_first_n_bytes(&mdbx_path.display().to_string(), 100).unwrap();
 
         // Create the snapshot
         create_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE, MDBX_FILE).unwrap();
@@ -118,9 +160,40 @@ mod tests {
         assert!(Path::new(&mdbx_path).exists());
 
         // Check metadata of restored file matches the original
-        let new_metadata = file_metadata(&mdbx_path).unwrap();
-        assert_eq!(orig_metadata.0, new_metadata.0);
-        assert_eq!(orig_metadata.1, new_metadata.1);
+        let new_leading_bytes = read_first_n_bytes(&mdbx_path.display().to_string(), 100).unwrap();
+        assert_eq!(orig_leading_bytes, new_leading_bytes);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_encrypt_snapshot() -> Result<(), Error> {
+        // Set up a temp dir
+        println!("Current dir: {:?}", std::env::current_dir().unwrap());
+        let temp_dir = tempdir().unwrap();
+        let temp_path = temp_dir.path();
+        let snapshot_path = temp_path.join(SNAPSHOT_FILE);
+        let ciphertext_path = temp_path.join(format!("{}.enc", SNAPSHOT_FILE));
+
+        // Generate a dummy database file (e.g., 10MB)
+        generate_dummy_file(&snapshot_path, 10 * 1024 * 1024)?;
+
+        // Check the metadata of the original file
+        let orig_leading_bytes = read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
+
+        // Create the encrypted snapshot
+        encrypt_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        assert!(Path::new(&ciphertext_path).exists());
+
+        // Confirm that we recover the original file
+        fs::remove_file(&snapshot_path)?;
+        assert!(!Path::new(&snapshot_path).exists());
+        decrypt_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        assert!(Path::new(&snapshot_path).exists());
+
+        // Check metadata of restored file matches the original
+        let new_leading_bytes = read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
+        assert_eq!(orig_leading_bytes, new_leading_bytes);
 
         Ok(())
     }
