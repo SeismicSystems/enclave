@@ -10,7 +10,9 @@ use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 use secp256k1::rand::rngs::OsRng;
 use secp256k1::rand::RngCore;
 
-const DB_PATH: &str = "./src/snapsync.db";
+pub const RETH_DB_DIR: &str = "/home/azureuser/.local/share/reth/5124/db";
+pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
+pub const MDBX_FILE: &str = "mdbx.dat";
 
 /// Gathers the snapsync data, signs it, and returns a SnapSyncResponse
 /// Currently the snapsync data has the io private key and an encrypted version of the state
@@ -55,7 +57,9 @@ pub async fn build_snapsync_response(
 ///
 /// TODO: get real private state data from [location TBD]
 async fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
-    let sample_private_state = format!("private state @ %{}", DB_PATH).as_bytes().to_vec();
+    let sample_private_state = format!("private state @ %{}", RETH_DB_DIR)
+        .as_bytes()
+        .to_vec();
     let io_sk = get_secp256k1_sk();
     Ok(SnapSyncData {
         io_sk: io_sk.secret_bytes().to_vec(),
