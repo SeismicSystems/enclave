@@ -3,15 +3,10 @@ use seismic_enclave::crypto::{decrypt_file, encrypt_file};
 
 use std::path::Path;
 use std::process::Command;
-
-// fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str) -> Result<(), anyhow::Error> {
-//     create_snapshot(db_dir, snapshot_file, mdbx_file);
-//     encrypt_snapshot(db_dir, snapshot_file);
-//     Ok(())
-// }
+use std::os::unix::fs::PermissionsExt;
 
 /// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
-fn create_snapshot(
+pub fn compress_db(
     db_dir: &str,
     snapshot_file: &str,
     mdbx_file: &str,
@@ -26,25 +21,28 @@ fn create_snapshot(
 
     // run the tar command to create the compressed snapshot
     // we use command here because tar crate can only handle relative paths
-    let status = Command::new("tar")
+    let output = Command::new("sudo")
         .args([
+            "tar",
             "--use-compress-program=lz4",
             "-cvPf",
             snapshot_path,
             mdbx_path,
         ])
-        .status()
+        .output()
         .expect("Failed to execute tar command");
 
-    if !status.success() {
-        anyhow::bail!("Failed to compress mdbx with tar");
+    if !output.status.success() {
+        anyhow::bail!("Failed to compress mdbx with tar: {:?}", output);
     }
 
     Ok(())
 }
 
+
+
 /// Restores the snapshot by extracting the `.tar.lz4` archive.
-fn restore_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+pub fn decompress_db(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
     let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
 
     // confirm that the snapshot file exists
@@ -56,20 +54,20 @@ fn restore_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Err
     }
 
     // run the tar command to decompress the snapshot
-    let status = Command::new("tar")
+    let output = Command::new("tar")
         .args(["--use-compress-program=lz4", "-xvPf", &snapshot_path])
-        .status()
+        .output()
         .expect("Failed to execute tar command");
 
-    if !status.success() {
-        anyhow::bail!("Failed to decompress snapshot with tar");
+    if !output.status.success() {
+        anyhow::bail!("Failed to compress mdbx with tar: {:?}", output);
     }
 
     Ok(())
 }
 
 /// Encrypts the snapshot file using the snapshot_key
-fn encrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+pub fn encrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
     let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
     let ciphertext_path = &format!("{}.enc", snapshot_path);
 
@@ -88,7 +86,7 @@ fn encrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Err
 }
 
 /// Decrypts the snapshot file using the snapshot_key
-fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+pub fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
     let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
     let ciphertext_path = &format!("{}.enc", snapshot_path);
 
@@ -119,6 +117,7 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
+    // reads the first n bytes of a file
     fn read_first_n_bytes(file_path: &str, n: usize) -> Result<Vec<u8>, anyhow::Error> {
         let mut file = fs::File::open(file_path)?;
         let mut buffer = vec![0; n]; // Allocate a buffer of size `n`
@@ -135,8 +134,19 @@ mod tests {
         Ok(())
     }
 
+    // simulates the db file being owned by root by settong permissions to 000
+    fn restrict_file_permissions(path: &Path) -> std::io::Result<()> {
+        let perms = fs::Permissions::from_mode(0o000); // owner cannot access, sudo can still bypass permissions checks
+        fs::set_permissions(path, perms)
+    }
+
+    fn unrestrict_file_permissions(path: &Path) -> std::io::Result<()> {
+        let perms = fs::Permissions::from_mode(0o644);
+        fs::set_permissions(path, perms)
+    }
+
     #[test]
-    fn test_create_snapshot() -> Result<(), anyhow::Error> {
+    fn test_compress_db() -> Result<(), anyhow::Error> {
         // Set up a temp dir
         println!("Current dir: {:?}", std::env::current_dir().unwrap());
         let temp_dir = tempdir().unwrap();
@@ -146,21 +156,23 @@ mod tests {
 
         // Generate a dummy database file (e.g., 10MB)
         generate_dummy_file(&mdbx_path, 10 * 1024 * 1024)?;
-
         // Check the metadata of the original file
         let orig_leading_bytes = read_first_n_bytes(&mdbx_path.display().to_string(), 100).unwrap();
+        // Restrict file permissions to 000 to simulate root ownership
+        restrict_file_permissions(&mdbx_path)?; 
 
         // Create the snapshot
-        create_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE, MDBX_FILE).unwrap();
+        compress_db(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE, MDBX_FILE).unwrap();
         assert!(Path::new(&snapshot_path).exists());
 
         // Confirm that we recover the original file
         fs::remove_file(&mdbx_path)?;
         assert!(!Path::new(&mdbx_path).exists());
-        restore_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        decompress_db(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
         assert!(Path::new(&mdbx_path).exists());
 
         // Check metadata of restored file matches the original
+        unrestrict_file_permissions(&mdbx_path)?; // open permissions to read new leading bytes
         let new_leading_bytes = read_first_n_bytes(&mdbx_path.display().to_string(), 100).unwrap();
         assert_eq!(orig_leading_bytes, new_leading_bytes);
 
