@@ -1,8 +1,8 @@
 use crate::get_snapshot_key;
+use seismic_enclave::crypto::{decrypt_file, encrypt_file};
 
 use std::path::Path;
 use std::process::Command;
-use seismic_enclave::crypto::{encrypt_file, decrypt_file};
 
 // fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str) -> Result<(), anyhow::Error> {
 //     create_snapshot(db_dir, snapshot_file, mdbx_file);
@@ -113,17 +113,17 @@ fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Err
 mod tests {
     use super::*;
     use crate::snapsync::{MDBX_FILE, SNAPSHOT_FILE};
-    use std::fs;
     use anyhow::Error;
+    use std::fs;
     use std::io::{Read, Write};
     use std::path::Path;
     use tempfile::tempdir;
 
-    fn read_first_n_bytes(file_path: &str, n: usize) -> Result<Vec<u8>, anyhow::Error>{
+    fn read_first_n_bytes(file_path: &str, n: usize) -> Result<Vec<u8>, anyhow::Error> {
         let mut file = fs::File::open(file_path)?;
         let mut buffer = vec![0; n]; // Allocate a buffer of size `n`
         let bytes_read = file.read(&mut buffer)?;
-    
+
         buffer.truncate(bytes_read); // Truncate buffer in case file is smaller than `n`
         Ok(buffer)
     }
@@ -180,7 +180,8 @@ mod tests {
         generate_dummy_file(&snapshot_path, 10 * 1024 * 1024)?;
 
         // Check the metadata of the original file
-        let orig_leading_bytes = read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
+        let orig_leading_bytes =
+            read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
 
         // Create the encrypted snapshot
         encrypt_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
@@ -193,7 +194,8 @@ mod tests {
         assert!(Path::new(&snapshot_path).exists());
 
         // Check metadata of restored file matches the original
-        let new_leading_bytes = read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
+        let new_leading_bytes =
+            read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
         assert_eq!(orig_leading_bytes, new_leading_bytes);
 
         Ok(())

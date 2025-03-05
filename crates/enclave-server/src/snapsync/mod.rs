@@ -1,10 +1,10 @@
 pub mod handlers;
+pub mod reth_supervisor;
 mod snapshot;
-mod reth_supervisor;
 
 use crate::coco_aa::attest_signing_pk;
-use crate::{get_secp256k1_sk, get_snapshot_key};
 use crate::signing::enclave_sign;
+use crate::{get_secp256k1_sk, get_snapshot_key};
 use seismic_enclave::ecdh_encrypt;
 use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 

@@ -4,14 +4,13 @@ use aes_gcm::{
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
+use rand::RngCore;
 pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::{fs, io::Read, io::Write};
-use rand::RngCore;
-
 
 use crate::request_types::nonce::Nonce;
 
@@ -245,7 +244,11 @@ pub fn ecdh_decrypt(
     Ok(decrypted_data)
 }
 
-pub fn encrypt_file(input_path: &str, output_path: &str, key: &Key<Aes256Gcm>) -> Result<(), anyhow::Error> {
+pub fn encrypt_file(
+    input_path: &str,
+    output_path: &str,
+    key: &Key<Aes256Gcm>,
+) -> Result<(), anyhow::Error> {
     let plaintext = fs::read(input_path)?;
 
     // Generate a random nonce
@@ -254,18 +257,21 @@ pub fn encrypt_file(input_path: &str, output_path: &str, key: &Key<Aes256Gcm>) -
     rng.fill_bytes(&mut nonce_bytes);
 
     // Encrypt the data
-    let ciphertext = aes_encrypt(key, &plaintext, nonce_bytes)
-        .expect("Encryption failed!");
+    let ciphertext = aes_encrypt(key, &plaintext, nonce_bytes).expect("Encryption failed!");
 
     // Save nonce + ciphertext together
     let mut output_file = fs::File::create(output_path)?;
-    output_file.write_all(&nonce_bytes)?;  // Write nonce first
-    output_file.write_all(&ciphertext)?;   // Write encrypted content
+    output_file.write_all(&nonce_bytes)?; // Write nonce first
+    output_file.write_all(&ciphertext)?; // Write encrypted content
 
     Ok(())
 }
 
-pub fn decrypt_file(input_path: &str, output_path: &str, key: &Key<Aes256Gcm>) -> Result<(), anyhow::Error> {
+pub fn decrypt_file(
+    input_path: &str,
+    output_path: &str,
+    key: &Key<Aes256Gcm>,
+) -> Result<(), anyhow::Error> {
     let mut file = fs::File::open(input_path)?;
     let mut file_data = Vec::new();
     file.read_to_end(&mut file_data)?;

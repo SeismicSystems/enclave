@@ -61,7 +61,7 @@ fn get_schnorrkel_keypair() -> schnorrkel::keys::Keypair {
     get_unsecure_sample_schnorrkel_keypair()
 }
 
-// TODO: use unique key, write docs, 
+// TODO: use unique key, write docs,
 fn get_snapshot_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
     get_unsecure_sample_aesgcm_key()
 }
