@@ -1,6 +1,7 @@
 pub mod handlers;
 pub mod reth_supervisor;
 mod snapshot;
+mod check_operator;
 
 use crate::coco_aa::attest_signing_pk;
 use crate::signing::enclave_sign;
