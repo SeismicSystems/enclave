@@ -25,6 +25,7 @@ fn create_snapshot(
     }
 
     // run the tar command to create the compressed snapshot
+    // we use command here because tar crate can only handle relative paths
     let status = Command::new("tar")
         .args([
             "--use-compress-program=lz4",
