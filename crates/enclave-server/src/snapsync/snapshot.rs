@@ -1,9 +1,9 @@
 use crate::get_snapshot_key;
 use seismic_enclave::crypto::{decrypt_file, encrypt_file};
 
+
 use std::path::Path;
 use std::process::Command;
-use std::os::unix::fs::PermissionsExt;
 
 /// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
 pub fn compress_db(
@@ -38,8 +38,6 @@ pub fn compress_db(
 
     Ok(())
 }
-
-
 
 /// Restores the snapshot by extracting the `.tar.lz4` archive.
 pub fn decompress_db(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
@@ -80,7 +78,8 @@ pub fn encrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow:
     }
 
     let snapshot_key = get_snapshot_key();
-    encrypt_file(&snapshot_path, &ciphertext_path, &snapshot_key)?;
+    encrypt_file(&snapshot_path, &ciphertext_path, &snapshot_key)
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt snapshot file: {:?}", e))?;
 
     Ok(())
 }
@@ -99,7 +98,8 @@ pub fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow:
     }
 
     let snapshot_key = get_snapshot_key();
-    decrypt_file(&ciphertext_path, &snapshot_path, &snapshot_key)?;
+    decrypt_file(&ciphertext_path, &snapshot_path, &snapshot_key)
+        .map_err(|e| anyhow::anyhow!("Failed to decrypt snapshot file: {:?}", e))?;
 
     Ok(())
 }
@@ -111,10 +111,13 @@ pub fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow:
 mod tests {
     use super::*;
     use crate::snapsync::{MDBX_FILE, SNAPSHOT_FILE};
+    // use crate::snapsync::RETH_DB_DIR;
+
     use anyhow::Error;
     use std::fs;
     use std::io::{Read, Write};
     use std::path::Path;
+    use std::os::unix::fs::PermissionsExt;
     use tempfile::tempdir;
 
     // reads the first n bytes of a file
@@ -159,7 +162,7 @@ mod tests {
         // Check the metadata of the original file
         let orig_leading_bytes = read_first_n_bytes(&mdbx_path.display().to_string(), 100).unwrap();
         // Restrict file permissions to 000 to simulate root ownership
-        restrict_file_permissions(&mdbx_path)?; 
+        restrict_file_permissions(&mdbx_path)?;
 
         // Create the snapshot
         compress_db(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE, MDBX_FILE).unwrap();
@@ -212,4 +215,9 @@ mod tests {
 
         Ok(())
     }
+
+    // #[test]
+    // fn call_encrypt_snapshot() {
+    //     encrypt_snapshot(RETH_DB_DIR, SNAPSHOT_FILE).unwrap();
+    // }
 }
