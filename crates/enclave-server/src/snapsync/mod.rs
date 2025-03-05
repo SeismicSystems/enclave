@@ -1,5 +1,6 @@
 pub mod handlers;
 mod snapshot;
+mod reth_supervisor;
 
 use crate::coco_aa::attest_signing_pk;
 use crate::{get_secp256k1_sk, get_snapshot_key};
