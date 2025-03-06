@@ -63,12 +63,3 @@ pub async fn deploy_contract(
 
     Ok(())
 }
-
-#[tokio::test]
-async fn test_deploy_contract() {
-    let rpc = "http://localhost:8545";
-    let sk = ANVIL_ALICE_PK;
-    let foundry_json_path = "tests/e2e/UpgradeOperator.json";
-    deploy_contract(foundry_json_path, sk, rpc).await.unwrap();
-    println!("done");
-}

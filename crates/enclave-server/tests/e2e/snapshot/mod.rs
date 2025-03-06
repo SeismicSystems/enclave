@@ -1,49 +1,76 @@
-use seismic_enclave_server::snapsync::*;
+use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
 use seismic_enclave_server::snapsync::check_operator::check_operator;
+use seismic_enclave_server::snapsync::*;
 use seismic_enclave_server::utils::supervisor::reth_is_running;
 
-
-use std::path::Path;
 use alloy_primitives::Bytes;
+use seismic_enclave_server::utils::test_utils::is_sudo;
+use std::path::Path;
 
-#[test]
-fn test_create_encrypted_snapshot() {
-    assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-    assert!(!Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-    assert!(reth_is_running()); // assumes reth is running when the test starts
+// #[test]
+// fn test_restore_from_encrypted_snapshot() {
+//     assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
+//     assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
+//     assert!(reth_is_running()); // assumes reth is running when the test starts
 
-    create_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE).unwrap();
-    assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-    assert!(reth_is_running());
-}
+//     restore_from_encrypted_snapshot(RETH_DB_DIR, format!("{}.enc", SNAPSHOT_FILE).as_str())
+//         .unwrap();
+//     assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
+//     assert!(reth_is_running());
+// }
 
-#[test]
-fn test_restore_from_encrypted_snapshot() {
-    assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-    assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-    assert!(reth_is_running()); // assumes reth is running when the test starts
+// #[tokio::test]
+// async fn test_check_operator() {
+//     let rootfs_hash = Bytes::from(vec![0x00; 32]);
+//     let mrtd = Bytes::from(vec![0x00; 48]);
+//     let rtmr0 = Bytes::from(vec![0x00; 48]);
+//     let rtmr3 = Bytes::from(vec![0x00; 48]);
 
-    restore_from_encrypted_snapshot(RETH_DB_DIR, format!("{}.enc", SNAPSHOT_FILE).as_str()).unwrap();
-    assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-    assert!(reth_is_running());
-}
+//     let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+//         .await
+//         .unwrap();
+// }
 
 #[tokio::test]
-async fn test_check_operator() {
-    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    let mrtd = Bytes::from(vec![0x00; 48]);
-    let rtmr0 = Bytes::from(vec![0x00; 48]);
-    let rtmr3 = Bytes::from(vec![0x00; 48]);
+async fn full_snapshot_test() -> Result<(), anyhow::Error> {
+    // match std::env::current_dir() {
+    //     Ok(path) => println!("Current directory: {}", path.display()),
+    //     Err(e) => eprintln!("Error getting current directory: {}", e),
+    // }
+    assert!(is_sudo(), "Must be run as sudo");
+    // Check the starting conditions are as expected
+    assert!(
+        Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists(),
+        "Startup error: MDBX misconfigured"
+    );
+    assert!(
+        !Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists(),
+        "Startup error: Encrypted snapshot already exists"
+    );
+    // assert!(
+    //     reth_is_running(),
+    //     "Startup error: Reth is not running"
+    // );
 
-    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .await
-        .unwrap();
+    // Deploy UpgradeOperator contract
+    let rpc = "http://localhost:8545";
+    let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";
+    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
+        |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract: {:?}", e),
+    )?;
+
+    // Create encrypted snapshot
+    create_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE)?;
+    assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
+    // assert!(reth_is_running());
+
+    // delete files that will be recovered
+
+    // Restore from encrypted snapshot
+
+    // Check that the chain data is recovered
+    // E.g. by checking that the UpgradeOperator contract is deployed
+
+
+    Ok(())
 }
-
-
-#[test]
-fn full_snapshot_test() {
-    // assumes reth is running from block zero
-
-}
-

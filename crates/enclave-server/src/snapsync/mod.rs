@@ -13,8 +13,8 @@ use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 use secp256k1::rand::rngs::OsRng;
 use secp256k1::rand::RngCore;
 
-// pub const RETH_DB_DIR: &str = "/home/azureuser/.local/share/reth/5124/db"; // correct when running reth with `cargo run`
-pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; // correct when running reth with supervisorctl
+pub const RETH_DB_DIR: &str = "/home/azureuser/.local/share/reth/5124/db"; // correct when running reth with `cargo run`
+// pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; // correct when running reth with supervisorctl
 pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 pub const MDBX_FILE: &str = "mdbx.dat";
 
