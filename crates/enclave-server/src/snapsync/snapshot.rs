@@ -1,7 +1,6 @@
 use crate::get_snapshot_key;
 use seismic_enclave::crypto::{decrypt_file, encrypt_file};
 
-
 use std::path::Path;
 use std::process::Command;
 
@@ -52,8 +51,8 @@ pub fn decompress_db(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Er
     }
 
     // run the tar command to decompress the snapshot
-    let output = Command::new("tar")
-        .args(["--use-compress-program=lz4", "-xvPf", &snapshot_path])
+    let output = Command::new("sudo")
+        .args(["tar", "--use-compress-program=lz4", "-xvPf", &snapshot_path])
         .output()
         .expect("Failed to execute tar command");
 
@@ -116,8 +115,8 @@ mod tests {
     use anyhow::Error;
     use std::fs;
     use std::io::{Read, Write};
-    use std::path::Path;
     use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
     use tempfile::tempdir;
 
     // reads the first n bytes of a file

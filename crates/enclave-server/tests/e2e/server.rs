@@ -134,11 +134,11 @@ async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
 
 #[tokio::test]
 #[serial(attestation_agent, attestation_service)]
-async fn test_server() {
+async fn test_server_requests() {
     init_tracing();
     // handle set up permissions
     if !is_sudo() {
-        error!("test_server: skipped (requires sudo privileges)");
+        error!("test_server_requests: skipped (requires sudo privileges)");
         return;
     }
 
