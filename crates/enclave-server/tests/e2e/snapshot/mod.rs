@@ -6,30 +6,7 @@ use seismic_enclave_server::utils::supervisor::reth_is_running;
 use alloy_primitives::Bytes;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use std::path::Path;
-
-// #[test]
-// fn test_restore_from_encrypted_snapshot() {
-//     assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-//     assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-//     assert!(reth_is_running()); // assumes reth is running when the test starts
-
-//     restore_from_encrypted_snapshot(RETH_DB_DIR, format!("{}.enc", SNAPSHOT_FILE).as_str())
-//         .unwrap();
-//     assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-//     assert!(reth_is_running());
-// }
-
-// #[tokio::test]
-// async fn test_check_operator() {
-//     let rootfs_hash = Bytes::from(vec![0x00; 32]);
-//     let mrtd = Bytes::from(vec![0x00; 48]);
-//     let rtmr0 = Bytes::from(vec![0x00; 48]);
-//     let rtmr3 = Bytes::from(vec![0x00; 48]);
-
-//     let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-//         .await
-//         .unwrap();
-// }
+use std::process::Command;
 
 #[tokio::test]
 async fn full_snapshot_test() -> Result<(), anyhow::Error> {
@@ -65,12 +42,42 @@ async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     // assert!(reth_is_running());
 
     // delete files that will be recovered
+    let snapshot_path = &format!("{}/{}", RETH_DB_DIR, SNAPSHOT_FILE);
+    let mdbx_path = &format!("{}/{}", RETH_DB_DIR, MDBX_FILE);
+    let output = Command::new("sudo")
+    .args([
+        "rm",
+        snapshot_path,
+    ])
+    .output()
+    .expect("Failed to execute command");
+
+    let output = Command::new("sudo")
+    .args([
+        "rm",
+        mdbx_path,
+    ])
+    .output()
+    .expect("Failed to execute command");
 
     // Restore from encrypted snapshot
+    assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
+    assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
+    restore_from_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE)
+        .unwrap();
+    assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
+    // assert!(reth_is_running());
 
     // Check that the chain data is recovered
     // E.g. by checking that the UpgradeOperator contract is deployed
+    let rootfs_hash = Bytes::from(vec![0x00; 32]);
+    let mrtd = Bytes::from(vec![0x00; 48]);
+    let rtmr0 = Bytes::from(vec![0x00; 48]);
+    let rtmr3 = Bytes::from(vec![0x00; 48]);
 
+    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+        .await
+        .unwrap();
 
     Ok(())
 }
