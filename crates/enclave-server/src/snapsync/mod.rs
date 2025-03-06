@@ -1,6 +1,6 @@
 pub mod handlers;
 mod snapshot;
-mod check_operator;
+pub mod check_operator;
 
 use crate::coco_aa::attest_signing_pk;
 use crate::signing::enclave_sign;
@@ -73,7 +73,7 @@ fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
 
 
 
-fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str) -> Result<(), anyhow::Error> {
+pub fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str) -> Result<(), anyhow::Error> {
     stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
     compress_db(db_dir, snapshot_file, mdbx_file)?;
     encrypt_snapshot(db_dir, snapshot_file)?;
@@ -81,41 +81,10 @@ fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str)
     Ok(())
 }
 
-fn restore_from_encrypted_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+pub fn restore_from_encrypted_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
     stop_reth()?;
     decrypt_snapshot(db_dir, snapshot_file)?;
     decompress_db(db_dir, snapshot_file)?;
     start_reth()?;
     Ok(())
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::utils::supervisor::reth_is_running;
-
-    use std::path::Path;
-   
-    #[test]
-    fn test_create_encrypted_snapshot() {
-        assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-        assert!(!Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-        assert!(reth_is_running()); // assumes reth is running when the test starts
-
-        create_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE).unwrap();
-        assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-        assert!(reth_is_running());
-    }
-
-    #[test]
-    fn test_restore_from_encrypted_snapshot() {
-        assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-        assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-        assert!(reth_is_running()); // assumes reth is running when the test starts
-
-        restore_from_encrypted_snapshot(RETH_DB_DIR, format!("{}.enc", SNAPSHOT_FILE).as_str()).unwrap();
-        assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-        assert!(reth_is_running());
-    }
 }

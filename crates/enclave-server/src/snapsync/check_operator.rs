@@ -42,20 +42,3 @@ pub async fn check_operator(
 
     Ok(is_valid)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_check_operator() {
-        let rootfs_hash = Bytes::from(vec![0x00; 32]);
-        let mrtd = Bytes::from(vec![0x00; 48]);
-        let rtmr0 = Bytes::from(vec![0x00; 48]);
-        let rtmr3 = Bytes::from(vec![0x00; 48]);
-
-        let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-            .await
-            .unwrap();
-    }
-}
