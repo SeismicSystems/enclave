@@ -47,9 +47,6 @@ pub async fn deploy_contract(
         .with_deploy_code(bytecode)
         .with_gas_price(gas_price)
         .with_gas_limit(gas_limit);
-    println!("tx request created");
-    io::stdout().flush().unwrap();
-    // Deploy the contract.
     match provider.send_transaction(tx).await {
         Ok(pending_tx) => {
             println!("Transaction sent! Hash: {:?}", pending_tx.tx_hash());

@@ -9,11 +9,7 @@ use std::path::Path;
 use std::process::Command;
 
 #[tokio::test]
-async fn full_snapshot_test() -> Result<(), anyhow::Error> {
-    // match std::env::current_dir() {
-    //     Ok(path) => println!("Current directory: {}", path.display()),
-    //     Err(e) => eprintln!("Error getting current directory: {}", e),
-    // }
+pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     assert!(is_sudo(), "Must be run as sudo");
     // Check the starting conditions are as expected
     assert!(
@@ -24,10 +20,10 @@ async fn full_snapshot_test() -> Result<(), anyhow::Error> {
         !Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists(),
         "Startup error: Encrypted snapshot already exists"
     );
-    // assert!(
-    //     reth_is_running(),
-    //     "Startup error: Reth is not running"
-    // );
+    assert!(
+        reth_is_running(),
+        "Startup error: Reth is not running"
+    );
 
     // Deploy UpgradeOperator contract
     let rpc = "http://localhost:8545";
@@ -39,7 +35,7 @@ async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     // Create encrypted snapshot
     create_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE)?;
     assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-    // assert!(reth_is_running());
+    assert!(reth_is_running());
 
     // delete files that will be recovered
     let files = [SNAPSHOT_FILE, MDBX_FILE];
@@ -58,10 +54,25 @@ async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     restore_from_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE)
         .unwrap();
     assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-    // assert!(reth_is_running());
+    assert!(reth_is_running());
 
     // Check that the chain data is recovered
     // E.g. by checking that the UpgradeOperator contract is deployed
+    let rootfs_hash = Bytes::from(vec![0x00; 32]);
+    let mrtd = Bytes::from(vec![0x00; 48]);
+    let rtmr0 = Bytes::from(vec![0x00; 48]);
+    let rtmr3 = Bytes::from(vec![0x00; 48]);
+
+    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+
+#[tokio::test]
+pub async fn runner() -> Result<(), anyhow::Error> {
     let rootfs_hash = Bytes::from(vec![0x00; 32]);
     let mrtd = Bytes::from(vec![0x00; 48]);
     let rtmr0 = Bytes::from(vec![0x00; 48]);

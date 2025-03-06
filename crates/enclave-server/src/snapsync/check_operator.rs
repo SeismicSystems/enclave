@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 const OPERATOR_ADDR: &str = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // TODO: replace
 
-// Define the Solidity interface using the `sol!` macro
+// Define the Solidity ABI using the `sol!` macro
 sol! {
     #[sol(rpc)]
     contract UpgradeOperator {
