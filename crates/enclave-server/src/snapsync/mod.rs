@@ -1,12 +1,11 @@
 pub mod handlers;
-pub mod reth_supervisor;
 mod snapshot;
 mod check_operator;
 
 use crate::coco_aa::attest_signing_pk;
 use crate::signing::enclave_sign;
 use crate::{get_secp256k1_sk, get_snapshot_key};
-use reth_supervisor::{start_reth, stop_reth};
+use crate::utils::supervisor::{start_reth, stop_reth};
 use snapshot::{compress_db, decompress_db, encrypt_snapshot, decrypt_snapshot};
 use seismic_enclave::ecdh_encrypt;
 use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
@@ -94,7 +93,7 @@ fn restore_from_encrypted_snapshot(db_dir: &str, snapshot_file: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reth_supervisor::reth_is_running;
+    use crate::utils::supervisor::reth_is_running;
 
     use std::path::Path;
    

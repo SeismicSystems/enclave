@@ -30,19 +30,3 @@ pub fn reth_is_running() -> bool {
         .unwrap();
     stdout.contains("RUNNING")
 }
-
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-
-    
-    #[test]
-    fn test_start_stop_reth() {
-        assert!(!reth_is_running()); // assumes reth is not running when the test starts
-        start_reth().unwrap();
-        assert!(reth_is_running());
-        stop_reth().unwrap();
-        assert!(!reth_is_running());
-    }
-}

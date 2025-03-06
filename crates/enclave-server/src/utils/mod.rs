@@ -1,4 +1,5 @@
 pub mod test_utils;
+pub mod supervisor;
 
 /// tdx_evidence_helpers contains helpers for dealing with Vec<u8> evidence
 /// and converting it to a human readable format. It is mainly used for debugging
