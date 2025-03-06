@@ -4,7 +4,7 @@ use seismic_enclave_server::utils::supervisor::reth_is_running;
 
 
 use std::path::Path;
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Bytes;
 
 #[test]
 fn test_create_encrypted_snapshot() {

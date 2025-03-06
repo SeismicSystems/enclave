@@ -52,6 +52,16 @@ alloy-provider = "0.8"
 serial_test = "3.2.0"
 tempfile = "3.17.1"
 reqwest.workspace = true
+alloy = { version = "0.11", features = [
+    "eips",
+    "full",
+    "hyper",
+    "json-rpc",
+    "node-bindings",
+    "rpc-client",
+     "rpc-types-debug",
+    "rpc-types-trace",
+] }
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
