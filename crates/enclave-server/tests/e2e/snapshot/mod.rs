@@ -42,23 +42,15 @@ async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     // assert!(reth_is_running());
 
     // delete files that will be recovered
-    let snapshot_path = &format!("{}/{}", RETH_DB_DIR, SNAPSHOT_FILE);
-    let mdbx_path = &format!("{}/{}", RETH_DB_DIR, MDBX_FILE);
-    let output = Command::new("sudo")
-    .args([
-        "rm",
-        snapshot_path,
-    ])
-    .output()
-    .expect("Failed to execute command");
-
-    let output = Command::new("sudo")
-    .args([
-        "rm",
-        mdbx_path,
-    ])
-    .output()
-    .expect("Failed to execute command");
+    let files = [SNAPSHOT_FILE, MDBX_FILE];
+    for file in &files {
+        let path = format!("{}/{}", RETH_DB_DIR, file);
+        Command::new("sudo")
+            .arg("rm")
+            .arg(&path)
+            .output()
+            .expect("Failed to execute command");
+    }
 
     // Restore from encrypted snapshot
     assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
