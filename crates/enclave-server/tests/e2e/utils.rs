@@ -4,7 +4,6 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, Write};
 
 pub const ANVIL_ALICE_PK: &str =
     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
