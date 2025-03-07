@@ -26,14 +26,12 @@ pub async fn deploy_contract(
     rpc: &str,
 ) -> Result<(), anyhow::Error> {
     // Read contract bytecode from Foundry JSON
-    println!("Reading contract bytecode from Foundry JSON...");
     let file_content = fs::read_to_string(foundry_json_path)?;
     let artifact: ContractArtifact = serde_json::from_str(&file_content)?;
     let bytecode_str = artifact.bytecode.object;
     let bytecode = Bytes::from(hex::decode(bytecode_str.trim_start_matches("0x"))?);
 
     // Set up signer from the first default Anvil account (Alice).
-    println!("Setting up signer...");
     let signer: PrivateKeySigner = sk.parse().unwrap();
     let wallet = EthereumWallet::from(signer);
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
@@ -49,8 +47,6 @@ pub async fn deploy_contract(
         .with_gas_limit(gas_limit);
     match provider.send_transaction(tx).await {
         Ok(pending_tx) => {
-            println!("Transaction sent! Hash: {:?}", pending_tx.tx_hash());
-            io::stdout().flush().unwrap();
             let receipt = pending_tx.watch().await?;
             println!("Transaction receipt: {:?}", receipt);
             io::stdout().flush().unwrap();

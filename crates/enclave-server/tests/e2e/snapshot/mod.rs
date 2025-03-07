@@ -5,8 +5,10 @@ use seismic_enclave_server::utils::supervisor::reth_is_running;
 
 use alloy_primitives::Bytes;
 use seismic_enclave_server::utils::test_utils::is_sudo;
+use tokio::time::sleep;
 use std::path::Path;
 use std::process::Command;
+use std::time::Duration;
 
 #[tokio::test]
 pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
@@ -14,15 +16,15 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     // Check the starting conditions are as expected
     assert!(
         Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists(),
-        "Startup error: MDBX misconfigured"
+        "Test startup error: MDBX misconfigured"
     );
     assert!(
         !Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists(),
-        "Startup error: Encrypted snapshot already exists"
+        "Test startup error: Encrypted snapshot already exists"
     );
     assert!(
         reth_is_running(),
-        "Startup error: Reth is not running"
+        "Test startup error: Reth is not running"
     );
 
     // Deploy UpgradeOperator contract
@@ -30,6 +32,14 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";
     deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
         |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract: {:?}", e),
+    )?;
+    // deploy 2 more times to trigger the reth persistence threshhold
+    // and have the first block save to disk
+    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
+        |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 2: {:?}", e),
+    )?;
+    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
+        |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 3: {:?}", e),
     )?;
 
     // Create encrypted snapshot
@@ -58,6 +68,8 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
 
     // Check that the chain data is recovered
     // E.g. by checking that the UpgradeOperator contract is deployed
+    println!("Finished restoring. Checking operator contract...");
+    sleep(Duration::from_secs(2)).await; // wait to avoid a connection refused error
     let rootfs_hash = Bytes::from(vec![0x00; 32]);
     let mrtd = Bytes::from(vec![0x00; 48]);
     let rtmr0 = Bytes::from(vec![0x00; 48]);
@@ -73,14 +85,6 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 pub async fn runner() -> Result<(), anyhow::Error> {
-    let rpc = "http://localhost:8545";
-    let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";
-    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
-        |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract: {:?}", e),
-    )?;
-    
-
-    
     let rootfs_hash = Bytes::from(vec![0x00; 32]);
     let mrtd = Bytes::from(vec![0x00; 48]);
     let rtmr0 = Bytes::from(vec![0x00; 48]);
