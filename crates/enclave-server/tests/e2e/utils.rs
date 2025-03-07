@@ -1,6 +1,10 @@
 // use alloy::network::ReceiptResponse;
 use alloy::{
-    network::{EthereumWallet, TransactionBuilder}, primitives::Bytes, providers::{Provider, ProviderBuilder}, rpc::types::TransactionRequest, signers::local::PrivateKeySigner
+    network::{EthereumWallet, TransactionBuilder},
+    primitives::Bytes,
+    providers::{Provider, ProviderBuilder},
+    rpc::types::TransactionRequest,
+    signers::local::PrivateKeySigner,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -62,7 +66,7 @@ pub async fn deploy_contract(
             // let receipt = _pending_tx.watch().await?;
             // println!("Transaction receipt: {:?}", receipt);
             // io::stdout().flush().unwrap();
-        },
+        }
         Err(err) => println!("Error during send_transaction: {:?}", err),
     }
 

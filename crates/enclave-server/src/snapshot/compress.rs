@@ -64,7 +64,10 @@ pub fn decompress_db(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Er
 mod tests {
     use super::*;
     use crate::snapshot::{MDBX_FILE, SNAPSHOT_FILE};
-    use crate::utils::test_utils::{generate_dummy_file, restrict_file_permissions, unrestrict_file_permissions, read_first_n_bytes};
+    use crate::utils::test_utils::{
+        generate_dummy_file, read_first_n_bytes, restrict_file_permissions,
+        unrestrict_file_permissions,
+    };
 
     use std::fs;
     use std::path::Path;

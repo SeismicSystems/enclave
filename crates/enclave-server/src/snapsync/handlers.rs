@@ -56,7 +56,6 @@ pub async fn provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<Sna
     Ok(response_body)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

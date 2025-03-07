@@ -65,9 +65,12 @@ pub async fn check_operator(
         .get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3)
         .call()
         .await
-        .map_err(
-            |e| anyhow::anyhow!("Failed to call get_mrtd on UpgradeOperator contract: {:?}", e),
-        )?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to call get_mrtd on UpgradeOperator contract: {:?}",
+                e
+            )
+        })?;
     let is_valid: bool = result._0;
 
     Ok(is_valid)

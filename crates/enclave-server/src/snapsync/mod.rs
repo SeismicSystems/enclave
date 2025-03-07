@@ -9,7 +9,7 @@ use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 use secp256k1::rand::rngs::OsRng;
 use secp256k1::rand::RngCore;
 
-pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; 
+pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db";
 
 /// Gathers the snapsync data, signs it, and returns a SnapSyncResponse
 /// Currently the snapsync data has the io private key and an encrypted version of the state
