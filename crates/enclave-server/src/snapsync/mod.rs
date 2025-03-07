@@ -1,22 +1,15 @@
 pub mod handlers;
-mod snapshot;
-pub mod check_operator;
 
 use crate::coco_aa::attest_signing_pk;
 use crate::signing::enclave_sign;
 use crate::{get_secp256k1_sk, get_snapshot_key};
-use crate::utils::supervisor::{start_reth, stop_reth};
-use snapshot::{compress_db, decompress_db, encrypt_snapshot, decrypt_snapshot};
 use seismic_enclave::ecdh_encrypt;
 use seismic_enclave::request_types::snapsync::{SnapSyncData, SnapSyncResponse};
 
 use secp256k1::rand::rngs::OsRng;
 use secp256k1::rand::RngCore;
 
-// pub const RETH_DB_DIR: &str = "/home/azureuser/.local/share/reth/5124/db"; // correct when running reth with `cargo run`
-pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; // correct when running reth with supervisorctl
-pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
-pub const MDBX_FILE: &str = "mdbx.dat";
+pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; 
 
 /// Gathers the snapsync data, signs it, and returns a SnapSyncResponse
 /// Currently the snapsync data has the io private key and an encrypted version of the state
@@ -69,22 +62,4 @@ fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
         io_sk: snapshot_sk.to_vec(),
         state: sample_private_state,
     })
-}
-
-
-
-pub fn create_encrypted_snapshot(db_dir: &str, snapshot_file: &str, mdbx_file: &str) -> Result<(), anyhow::Error> {
-    stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
-    compress_db(db_dir, snapshot_file, mdbx_file)?;
-    encrypt_snapshot(db_dir, snapshot_file)?;
-    start_reth().expect("Failed to start reth during create_encrypted_snapshot");
-    Ok(())
-}
-
-pub fn restore_from_encrypted_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
-    stop_reth()?;
-    decrypt_snapshot(db_dir, snapshot_file)?;
-    decompress_db(db_dir, snapshot_file)?;
-    start_reth()?;
-    Ok(())
 }

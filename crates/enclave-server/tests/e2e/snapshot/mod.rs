@@ -1,6 +1,6 @@
 use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
-use seismic_enclave_server::snapsync::check_operator::check_operator;
-use seismic_enclave_server::snapsync::*;
+use seismic_enclave_server::snapshot::check_operator::check_operator;
+use seismic_enclave_server::snapshot::*;
 use seismic_enclave_server::utils::supervisor::reth_is_running;
 
 use alloy_primitives::Bytes;

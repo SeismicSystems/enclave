@@ -3,7 +3,8 @@ mod coco_as;
 mod genesis;
 pub mod server;
 mod signing;
-pub mod snapsync;
+pub mod snapshot; // pub for e2e testing
+mod snapsync;
 mod tx_io;
 pub mod utils;
 
