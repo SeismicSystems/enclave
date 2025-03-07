@@ -12,8 +12,8 @@ use std::time::Duration;
 
 #[tokio::test]
 pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
-    assert!(is_sudo(), "Must be run as sudo");
     // Check the starting conditions are as expected
+    assert!(is_sudo(), "Must be run as sudo");
     assert!(
         Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists(),
         "Test startup error: MDBX misconfigured"
@@ -26,15 +26,19 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
         reth_is_running(),
         "Test startup error: Reth is not running"
     );
+    // set path to the contract's json file
+    // this file can be recreated `forge build`
+    // assumes test is run from the root of the enclave-server crate
+    let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";  
 
     // Deploy UpgradeOperator contract
     let rpc = "http://localhost:8545";
-    let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";
     deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
         |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract: {:?}", e),
     )?;
     // deploy 2 more times to trigger the reth persistence threshhold
     // and have the first block save to disk
+    // based on the assumption that reth is run with the  --dev.block-max-transactions 1 flag
     deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
         |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 2: {:?}", e),
     )?;

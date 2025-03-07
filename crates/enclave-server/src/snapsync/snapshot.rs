@@ -103,14 +103,12 @@ pub fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow:
     Ok(())
 }
 
-// todo: some kind of error checking, ex if file is missing, restrictive permissions, etc
-// todo: put an integation test somewhere that uses actual reth?
-// todo: test that it overwrites the file if it already exists?
+// TODO: test that it overwrites the file if it already exists?
+// TODO: test the case where start/stop reth is fails
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::snapsync::{MDBX_FILE, SNAPSHOT_FILE};
-    // use crate::snapsync::RETH_DB_DIR;
 
     use anyhow::Error;
     use std::fs;
@@ -120,6 +118,7 @@ mod tests {
     use tempfile::tempdir;
 
     // reads the first n bytes of a file
+    // useful for checking file equality
     fn read_first_n_bytes(file_path: &str, n: usize) -> Result<Vec<u8>, anyhow::Error> {
         let mut file = fs::File::open(file_path)?;
         let mut buffer = vec![0; n]; // Allocate a buffer of size `n`
@@ -184,7 +183,6 @@ mod tests {
     #[test]
     fn test_encrypt_snapshot() -> Result<(), Error> {
         // Set up a temp dir
-        println!("Current dir: {:?}", std::env::current_dir().unwrap());
         let temp_dir = tempdir().unwrap();
         let temp_path = temp_dir.path();
         let snapshot_path = temp_path.join(SNAPSHOT_FILE);
@@ -214,9 +212,4 @@ mod tests {
 
         Ok(())
     }
-
-    // #[test]
-    // fn call_encrypt_snapshot() {
-    //     encrypt_snapshot(RETH_DB_DIR, SNAPSHOT_FILE).unwrap();
-    // }
 }

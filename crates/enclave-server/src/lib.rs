@@ -61,7 +61,19 @@ fn get_schnorrkel_keypair() -> schnorrkel::keys::Keypair {
     get_unsecure_sample_schnorrkel_keypair()
 }
 
-// TODO: use unique key, write docs,
+/// Generates an AES-GCM encryption key for snapshot encryption.
+///
+/// This function retrieves a predefined, insecure AES-256-GCM key for testing purposes.
+/// this implementation is insecure and should be replaced with a more secure approach, such as
+/// generating the keypair dynamically or obtaining it from a KMS service.
+///
+/// # Returns
+/// An `aes_gcm::Key<aes_gcm::Aes256Gcm>` instance representing the encryption key.
+///
+/// # Panics
+/// This function may panic if the underlying key retrieval mechanism fails.
+///
+/// # TODO: Replace this function with a more secure key management solution.
 fn get_snapshot_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
     get_unsecure_sample_aesgcm_key()
 }
