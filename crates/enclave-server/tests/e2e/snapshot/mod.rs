@@ -62,7 +62,7 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
     let mrtd = Bytes::from(vec![0x00; 48]);
     let rtmr0 = Bytes::from(vec![0x00; 48]);
     let rtmr3 = Bytes::from(vec![0x00; 48]);
-
+    
     let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
         .await
         .unwrap();
@@ -73,6 +73,14 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 pub async fn runner() -> Result<(), anyhow::Error> {
+    let rpc = "http://localhost:8545";
+    let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";
+    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, rpc).await.map_err(
+        |e| anyhow::anyhow!("failed to deploy UpgradeOperator contract: {:?}", e),
+    )?;
+    
+
+    
     let rootfs_hash = Bytes::from(vec![0x00; 32]);
     let mrtd = Bytes::from(vec![0x00; 48]);
     let rtmr0 = Bytes::from(vec![0x00; 48]);
