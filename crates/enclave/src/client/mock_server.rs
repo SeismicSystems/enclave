@@ -55,12 +55,12 @@ impl BuildableServer for MockEnclaveServer {
         self.addr
     }
 
-    fn methods(self) -> Methods {
+    fn methods(&self) -> Methods {
         self.into_rpc().into()
     }
 
     async fn start(self) -> Result<ServerHandle> {
-        BuildableServer::start_rpc_server(self).await
+        BuildableServer::start_rpc_server(&self).await
     }
 }
 

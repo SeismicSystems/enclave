@@ -21,12 +21,14 @@ use tracing::info;
 
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
-    fn methods(self) -> Methods;
-    async fn start(self) -> Result<ServerHandle>;
-    async fn start_rpc_server(self) -> Result<ServerHandle>
+    fn methods(&self) -> Methods;
+    async fn start(self) -> Result<ServerHandle>
     where
         Self: Sized,
     {
+        self.start_rpc_server().await
+    }
+    async fn start_rpc_server(&self) -> Result<ServerHandle> {
         let addr = self.addr();
         let rpc_server = ServerBuilder::new().build(addr).await?;
         let module = self.methods();

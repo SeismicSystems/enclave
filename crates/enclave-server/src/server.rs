@@ -59,13 +59,13 @@ impl BuildableServer for EnclaveServer {
         self.addr
     }
 
-    fn methods(self) -> Methods {
+    fn methods(&self) -> Methods {
         self.into_rpc().into()
     }
 
     async fn start(self) -> Result<ServerHandle> {
         Self::init_attestation().await?;
-        BuildableServer::start_rpc_server(self).await
+        BuildableServer::start_rpc_server(&self).await
     }
 }
 
