@@ -68,28 +68,15 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
 
     // Check that the chain data is recovered
     // E.g. by checking that the UpgradeOperator contract is deployed
+    let sleep_sec = 20; // 15 sec is not enough
     println!("Finished restoring. Checking operator contract...");
-    sleep(Duration::from_secs(2)).await; // wait to avoid a connection refused error
+    println!("Sleeping for {} seconds...", sleep_sec);
+    sleep(Duration::from_secs(sleep_sec)).await; // wait to avoid a connection refused error
     let rootfs_hash = Bytes::from(vec![0x00; 32]);
     let mrtd = Bytes::from(vec![0x00; 48]);
     let rtmr0 = Bytes::from(vec![0x00; 48]);
     let rtmr3 = Bytes::from(vec![0x00; 48]);
     
-    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .await
-        .unwrap();
-
-    Ok(())
-}
-
-
-#[tokio::test]
-pub async fn runner() -> Result<(), anyhow::Error> {
-    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    let mrtd = Bytes::from(vec![0x00; 48]);
-    let rtmr0 = Bytes::from(vec![0x00; 48]);
-    let rtmr3 = Bytes::from(vec![0x00; 48]);
-
     let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
         .await
         .unwrap();
