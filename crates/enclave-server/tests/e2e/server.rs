@@ -1,4 +1,5 @@
 #[cfg(test)]
+use crate::utils::get_random_port;
 use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
@@ -17,18 +18,8 @@ use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use serial_test::serial;
 use std::net::SocketAddr;
-use std::net::TcpListener;
 use std::thread::sleep;
 use std::time::Duration;
-use tracing::error;
-
-fn get_random_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
-        .expect("Failed to bind to a port")
-        .local_addr()
-        .unwrap()
-        .port()
-}
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
@@ -138,7 +129,7 @@ async fn test_server_requests() {
     init_tracing();
     // handle set up permissions
     if !is_sudo() {
-        error!("test_server_requests: skipped (requires sudo privileges)");
+        tracing::error!("test_server_requests: skipped (requires sudo privileges)");
         return;
     }
 

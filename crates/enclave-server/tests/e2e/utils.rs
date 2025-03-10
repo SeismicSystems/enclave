@@ -8,6 +8,7 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::net::TcpListener;
 
 // Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_PK: &str =
@@ -71,4 +72,12 @@ pub async fn deploy_contract(
     }
 
     Ok(())
+}
+
+pub fn get_random_port() -> u16 {
+    TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
+        .expect("Failed to bind to a port")
+        .local_addr()
+        .unwrap()
+        .port()
 }
