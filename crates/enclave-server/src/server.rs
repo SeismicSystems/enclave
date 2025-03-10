@@ -157,24 +157,6 @@ impl EnclaveApiServer for EnclaveServer {
         prepare_encrypted_snapshot_handler(req).await
     }
 
-    // /// Handler for: 'snapshot.download_encrypted_snapshot'
-    // async fn download_encrypted_snapshot(
-    //     &self,
-    //     req: DownloadEncryptedSnapshotRequest,
-    // ) -> RpcResult<DownloadEncryptedSnapshotResponse> {
-    //     debug!(target: "rpc::enclave", "Serving snapshot.download_encrypted_snapshot");
-    //     download_encrypted_snapshot_handler(req).await
-    // }
-
-    // /// Handler for: 'snapshot.upload_encrypted_snapshot'
-    // async fn upload_encrypted_snapshot(
-    //     &self,
-    //     req: UploadEncryptedSnapshotRequest,
-    // ) -> RpcResult<UploadEncryptedSnapshotResponse> {
-    //     debug!(target: "rpc::enclave", "Serving snapshot.upload_encrypted_snapshot");
-    //     upload_encrypted_snapshot_handler(req).await
-    // }
-
     /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
     async fn restore_from_encrypted_snapshot(
         &self,

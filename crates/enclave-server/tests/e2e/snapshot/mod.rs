@@ -1,17 +1,18 @@
-use crate::utils::{deploy_contract, get_random_port, ANVIL_ALICE_PK};
-use seismic_enclave::rpc::{BuildableServer, EnclaveApiClient};
-use seismic_enclave::snapshot::{
-    PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
-    RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-};
-use seismic_enclave::{EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_ADDR};
-use seismic_enclave_server::server::{EnclaveServer, init_tracing};
+use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
+// use crate::utils::test_utils::get_random_port;
+// use seismic_enclave::rpc::{BuildableServer, EnclaveApiClient};
+// use seismic_enclave::snapshot::{
+//     PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+//     RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+// };
+// use seismic_enclave::{EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_ADDR};
+// use seismic_enclave_server::server::{EnclaveServer, init_tracing};
 use seismic_enclave_server::snapshot::*;
 use seismic_enclave_server::utils::supervisor::reth_is_running;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 
 use alloy_primitives::Bytes;
-use std::net::SocketAddr;
+// use std::net::SocketAddr;
 use std::path::Path;
 use std::process::Command;
 use std::thread::sleep;
@@ -49,10 +50,11 @@ pub async fn test_snapshot_integration_direct() -> Result<(), anyhow::Error> {
     deploy_contract(foundry_json_path, ANVIL_ALICE_PK, reth_rpc)
         .await
         .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 3: {:?}", e))?;
+    sleep(Duration::from_secs(2));
 
     // Create encrypted snapshot
-    prepare_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE)?;
-    assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
+    prepare_encrypted_snapshot(RETH_DB_DIR, DATA_DISK_DIR, SNAPSHOT_FILE, MDBX_FILE)?;
+    assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
     assert!(reth_is_running());
 
     // delete files that will be recovered
@@ -68,14 +70,14 @@ pub async fn test_snapshot_integration_direct() -> Result<(), anyhow::Error> {
 
     // Restore from encrypted snapshot
     assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
-    assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
-    restore_from_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE).unwrap();
+    assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
+    restore_from_encrypted_snapshot(RETH_DB_DIR, DATA_DISK_DIR, SNAPSHOT_FILE).unwrap();
     assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
     assert!(reth_is_running());
 
     // Check that the chain data is recovered
     // E.g. by checking that the UpgradeOperator contract is deployed
-    let sleep_sec = 20; // 15 sec is not enough
+    let sleep_sec = 30; // 15 sec is not enough
     println!("Finished restoring. Checking operator contract...");
     println!("Sleeping for {} seconds...", sleep_sec);
     sleep(Duration::from_secs(sleep_sec)); // wait to avoid a connection refused error

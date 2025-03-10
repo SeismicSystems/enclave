@@ -4,40 +4,40 @@ use seismic_enclave::crypto::{decrypt_file, encrypt_file};
 use std::path::Path;
 
 /// Encrypts the snapshot file using the snapshot_key
-pub fn encrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
-    let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
-    let ciphertext_path = &format!("{}.enc", snapshot_path);
+pub fn encrypt_snapshot(input_dir: &str, output_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+    let input_path = &format!("{}/{}", input_dir, snapshot_file);
+    let output_path = &format!("{}/{}.enc", output_dir, snapshot_file);
 
     // confirm that the snapshot file exists
-    if !Path::new(&snapshot_path).exists() {
+    if !Path::new(&input_path).exists() {
         anyhow::bail!(
             "Snapshot file not found at expected path: {:?}",
-            &snapshot_path
+            &input_path
         );
     }
 
     let snapshot_key = get_snapshot_key();
-    encrypt_file(&snapshot_path, &ciphertext_path, &snapshot_key)
+    encrypt_file(&input_path, &output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to encrypt snapshot file: {:?}", e))?;
 
     Ok(())
 }
 
 /// Decrypts the snapshot file using the snapshot_key
-pub fn decrypt_snapshot(db_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
-    let snapshot_path = &format!("{}/{}", db_dir, snapshot_file);
-    let ciphertext_path = &format!("{}.enc", snapshot_path);
+pub fn decrypt_snapshot(input_dir: &str, output_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+    let input_path = &format!("{}/{}.enc", input_dir, snapshot_file);
+    let output_path = &format!("{}/{}", output_dir, snapshot_file);
 
     // confirm that the snapshot file exists
-    if !Path::new(&ciphertext_path).exists() {
+    if !Path::new(&input_path).exists() {
         anyhow::bail!(
             "Encrypted Snapshot file not found at expected path: {:?}",
-            &snapshot_path
+            &input_path
         );
     }
 
     let snapshot_key = get_snapshot_key();
-    decrypt_file(&ciphertext_path, &snapshot_path, &snapshot_key)
+    decrypt_file(&input_path, &output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to decrypt snapshot file: {:?}", e))?;
 
     Ok(())
@@ -72,13 +72,13 @@ mod tests {
             read_first_n_bytes(&snapshot_path.display().to_string(), 100).unwrap();
 
         // Create the encrypted snapshot
-        encrypt_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        encrypt_snapshot(temp_path.to_str().unwrap(), temp_path.to_str().unwrap(), SNAPSHOT_FILE).unwrap();
         assert!(Path::new(&ciphertext_path).exists());
 
         // Confirm that we recover the original file
         fs::remove_file(&snapshot_path)?;
         assert!(!Path::new(&snapshot_path).exists());
-        decrypt_snapshot(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        decrypt_snapshot(temp_path.to_str().unwrap(), temp_path.to_str().unwrap(),SNAPSHOT_FILE).unwrap();
         assert!(Path::new(&snapshot_path).exists());
 
         // Check metadata of restored file matches the original

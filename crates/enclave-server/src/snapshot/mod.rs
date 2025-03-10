@@ -8,8 +8,11 @@ pub use check_operator::check_operator;
 use compress::{compress_db, decompress_db};
 use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for e2e testing
 
+use std::fs;
+
 // pub const RETH_DB_DIR: &str = "/home/azureuser/.local/share/reth/5124/db"; // correct when running reth with `cargo run`
 pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; // correct when running reth with supervisorctl
+pub const DATA_DISK_DIR: &str = "/mnt/datadisk"; // TODO: change this to /mnt/snapshot?
 pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 pub const MDBX_FILE: &str = "mdbx.dat";
 
@@ -31,13 +34,15 @@ pub const MDBX_FILE: &str = "mdbx.dat";
 /// # Errors
 /// Returns an error if any step in the process (stopping Reth, compression, encryption, or restarting Reth) fails.
 pub fn prepare_encrypted_snapshot(
-    db_dir: &str,
+    reth_db_dir: &str,
+    data_disk_dir: &str,
     snapshot_file: &str,
     mdbx_file: &str,
 ) -> Result<(), anyhow::Error> {
     stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
-    compress_db(db_dir, snapshot_file, mdbx_file)?;
-    encrypt_snapshot(db_dir, snapshot_file)?;
+    compress_db(reth_db_dir, snapshot_file, mdbx_file)?;
+    encrypt_snapshot(reth_db_dir, data_disk_dir, snapshot_file)?;
+    fs::remove_file(format!("{}/{}", reth_db_dir, snapshot_file))?; // remove the compressed file after encryption
     start_reth().expect("Failed to start reth during create_encrypted_snapshot");
     Ok(())
 }
@@ -59,12 +64,14 @@ pub fn prepare_encrypted_snapshot(
 /// # Errors
 /// Returns an error if any step in the process (stopping Reth, decryption, decompression, or restarting Reth) fails.
 pub fn restore_from_encrypted_snapshot(
-    db_dir: &str,
+    reth_db_dir: &str,
+    data_disk_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
     stop_reth()?;
-    decrypt_snapshot(db_dir, snapshot_file)?;
-    decompress_db(db_dir, snapshot_file)?;
+    decrypt_snapshot(data_disk_dir, reth_db_dir, snapshot_file)?;
+    decompress_db(reth_db_dir, snapshot_file)?;
+    fs::remove_file(format!("{}/{}", reth_db_dir, snapshot_file))?; // remove the compressed file after decryption
     start_reth()?;
     Ok(())
 }

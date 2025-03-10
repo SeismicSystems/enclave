@@ -2,6 +2,7 @@ use std::path::Path;
 use std::process::Command;
 
 /// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
+/// Compressed file is saved in the same directory as the original file so that access permissions are identical
 pub fn compress_db(
     db_dir: &str,
     snapshot_file: &str,
