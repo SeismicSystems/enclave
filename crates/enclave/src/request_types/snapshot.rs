@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PrepareEncryptedSnapshotRequest {}
+pub struct PrepareEncryptedSnapshotRequest {} // require auth token eventually
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PrepareEncryptedSnapshotResponse {
     pub success: bool,
+    // size
+    // block number at snapshot point
+    // block hash at snapshot point
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
