@@ -14,10 +14,8 @@ use crate::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
 use crate::snapshot::{
-    DownloadEncryptedSnapshotRequest, DownloadEncryptedSnapshotResponse,
     PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
     RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-    UploadEncryptedSnapshotRequest, UploadEncryptedSnapshotResponse,
 };
 use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
@@ -99,18 +97,6 @@ pub trait EnclaveApi {
         &self,
         request: PrepareEncryptedSnapshotRequest,
     ) -> RpcResult<PrepareEncryptedSnapshotResponse>;
-
-    #[method(name = "snapshot.download_encrypted_snapshot")]
-    async fn download_encrypted_snapshot(
-        &self,
-        request: DownloadEncryptedSnapshotRequest,
-    ) -> RpcResult<DownloadEncryptedSnapshotResponse>;
-
-    #[method(name = "snapshot.upload_encrypted_snapshot")]
-    async fn upload_encrypted_snapshot(
-        &self,
-        request: UploadEncryptedSnapshotRequest,
-    ) -> RpcResult<UploadEncryptedSnapshotResponse>;
 
     #[method(name = "snapshot.restore_from_encrypted_snapshot")]
     async fn restore_from_encrypted_snapshot(

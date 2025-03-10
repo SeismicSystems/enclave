@@ -22,10 +22,8 @@ use crate::{
         Secp256k1VerifyResponse,
     },
     snapshot::{
-        DownloadEncryptedSnapshotRequest, DownloadEncryptedSnapshotResponse,
         PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
         RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-        UploadEncryptedSnapshotRequest, UploadEncryptedSnapshotResponse,
     },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
@@ -145,20 +143,6 @@ impl EnclaveApiServer for MockEnclaveServer {
         _request: PrepareEncryptedSnapshotRequest,
     ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
         unimplemented!("prepare_encrypted_snapshot not implemented for mock server")
-    }
-
-    async fn download_encrypted_snapshot(
-        &self,
-        _request: DownloadEncryptedSnapshotRequest,
-    ) -> RpcResult<DownloadEncryptedSnapshotResponse> {
-        unimplemented!("download_encrypted_snapshot not implemented for mock server")
-    }
-
-    async fn upload_encrypted_snapshot(
-        &self,
-        _request: UploadEncryptedSnapshotRequest,
-    ) -> RpcResult<UploadEncryptedSnapshotResponse> {
-        unimplemented!("upload_encrypted_snapshot not implemented for mock server")
     }
 
     async fn restore_from_encrypted_snapshot(
