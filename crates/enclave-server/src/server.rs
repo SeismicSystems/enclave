@@ -2,11 +2,11 @@ use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
 use crate::signing::handlers::*;
+use crate::snapshot::handlers::*;
 use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
 use crate::{get_schnorrkel_keypair, get_secp256k1_pk};
 
-use jsonrpsee::Methods;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -14,15 +14,22 @@ use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
 use seismic_enclave::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
+use seismic_enclave::snapshot::{
+    DownloadEncryptedSnapshotRequest, DownloadEncryptedSnapshotResponse,
+    PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+    RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+    UploadEncryptedSnapshotRequest, UploadEncryptedSnapshotResponse,
+};
 use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
+use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
 use anyhow::Result;
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
-use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use jsonrpsee::Methods;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use tracing::{debug, info};
@@ -139,6 +146,42 @@ impl EnclaveApiServer for EnclaveServer {
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
         Ok(get_schnorrkel_keypair())
+    }
+
+    /// Handler for: 'snapshot.prepare_encrypted_snapshot'
+    async fn prepare_encrypted_snapshot(
+        &self,
+        req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+        debug!(target: "rpc::enclave", "Serving snapshot.prepare_encrypted_snapshot");
+        prepare_encrypted_snapshot_handler(req).await
+    }
+
+    /// Handler for: 'snapshot.download_encrypted_snapshot'
+    async fn download_encrypted_snapshot(
+        &self,
+        req: DownloadEncryptedSnapshotRequest,
+    ) -> RpcResult<DownloadEncryptedSnapshotResponse> {
+        debug!(target: "rpc::enclave", "Serving snapshot.download_encrypted_snapshot");
+        download_encrypted_snapshot_handler(req).await
+    }
+
+    /// Handler for: 'snapshot.upload_encrypted_snapshot'
+    async fn upload_encrypted_snapshot(
+        &self,
+        req: UploadEncryptedSnapshotRequest,
+    ) -> RpcResult<UploadEncryptedSnapshotResponse> {
+        debug!(target: "rpc::enclave", "Serving snapshot.upload_encrypted_snapshot");
+        upload_encrypted_snapshot_handler(req).await
+    }
+
+    /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        debug!(target: "rpc::enclave", "Serving snapshot.restore_from_encrypted_snapshot");
+        restore_from_encrypted_snapshot_handler(req).await
     }
 }
 

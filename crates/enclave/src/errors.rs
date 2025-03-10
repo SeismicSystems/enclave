@@ -26,3 +26,11 @@ pub fn rpc_invalid_ciphertext_error(e: Error) -> jsonrpsee::types::ErrorObjectOw
         None::<()>,
     )
 }
+
+pub fn rpc_internal_server_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
+    jsonrpsee::types::ErrorObject::owned(
+        jsonrpsee::types::error::INTERNAL_ERROR_CODE,
+        format!("Internal server error: {}", e),
+        None::<()>,
+    )
+}

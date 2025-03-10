@@ -13,7 +13,7 @@ pub const RETH_DB_DIR: &str = "/home/azureuser/.reth/db"; // correct when runnin
 pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 pub const MDBX_FILE: &str = "mdbx.dat";
 
-pub fn create_encrypted_snapshot(
+pub fn prepare_encrypted_snapshot(
     db_dir: &str,
     snapshot_file: &str,
     mdbx_file: &str,

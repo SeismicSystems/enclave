@@ -43,7 +43,7 @@ pub async fn full_snapshot_test() -> Result<(), anyhow::Error> {
         .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 3: {:?}", e))?;
 
     // Create encrypted snapshot
-    create_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE)?;
+    prepare_encrypted_snapshot(RETH_DB_DIR, SNAPSHOT_FILE, MDBX_FILE)?;
     assert!(Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists());
     assert!(reth_is_running());
 
