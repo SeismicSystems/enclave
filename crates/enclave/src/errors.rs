@@ -34,3 +34,11 @@ pub fn rpc_internal_server_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned
         None::<()>,
     )
 }
+
+pub fn rpc_missing_snapshot_error() -> jsonrpsee::types::ErrorObjectOwned {
+    jsonrpsee::types::ErrorObject::owned(
+        jsonrpsee::types::error::INVALID_PARAMS_CODE,
+        "Snapshot file not found. Snapshot must be prepared/uploaded before attempting this action.",
+        None::<()>,
+    )
+}
