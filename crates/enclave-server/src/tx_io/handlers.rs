@@ -21,7 +21,7 @@ use crate::get_secp256k1_sk;
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
 pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
-    let encrypted_data = ecdh_encrypt(&req.key, &get_secp256k1_sk(), req.data, req.nonce).unwrap();
+    let encrypted_data = ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce).unwrap();
 
     Ok(IoEncryptionResponse { encrypted_data })
 }
@@ -45,7 +45,7 @@ pub async fn tx_io_decrypt_handler(
     let decrypted_data = ecdh_decrypt(
         &request.key,
         &get_secp256k1_sk(),
-        request.data,
+        &request.data,
         request.nonce,
     )
     .map_err(|e| rpc_invalid_ciphertext_error(e))?;
