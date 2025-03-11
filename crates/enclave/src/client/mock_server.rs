@@ -43,7 +43,7 @@ impl MockEnclaveServer {
         Self::new((IpAddr::from_str(&addr).unwrap(), port))
     }
 
-    fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+    pub fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         // Use the sample secret key for encryption
         let encrypted_data = ecdh_encrypt(
             &req.key,
@@ -56,7 +56,7 @@ impl MockEnclaveServer {
         Ok(IoEncryptionResponse { encrypted_data })
     }
 
-    fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
+    pub fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         // Use the sample secret key for decryption
         let decrypted_data = ecdh_decrypt(
             &req.key,
@@ -69,7 +69,7 @@ impl MockEnclaveServer {
         Ok(IoDecryptionResponse { decrypted_data })
     }
 
-    fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
+    pub fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         // Return a sample Schnorrkel keypair for testing
         Ok(get_unsecure_sample_schnorrkel_keypair())
     }
