@@ -210,7 +210,7 @@ pub fn get_unsecure_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
 pub fn ecdh_encrypt(
     pk: &PublicKey,
     sk: &SecretKey,
-    data: Vec<u8>,
+    data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let shared_secret = SharedSecret::new(pk, &sk);
@@ -225,7 +225,7 @@ pub fn ecdh_encrypt(
 pub fn ecdh_decrypt(
     pk: &PublicKey,
     sk: &SecretKey,
-    data: Vec<u8>,
+    data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let shared_secret = SharedSecret::new(pk, &sk);
