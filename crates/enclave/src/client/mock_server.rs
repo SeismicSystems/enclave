@@ -42,6 +42,37 @@ impl MockEnclaveServer {
     pub fn new_from_addr_port(addr: String, port: u16) -> Self {
         Self::new((IpAddr::from_str(&addr).unwrap(), port))
     }
+
+    fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+        // Use the sample secret key for encryption
+        let encrypted_data = ecdh_encrypt(
+            &req.key,
+            &get_unsecure_sample_secp256k1_sk(),
+            &req.data,
+            req.nonce,
+        )
+        .unwrap();
+
+        Ok(IoEncryptionResponse { encrypted_data })
+    }
+
+    fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
+        // Use the sample secret key for decryption
+        let decrypted_data = ecdh_decrypt(
+            &req.key,
+            &get_unsecure_sample_secp256k1_sk(),
+            &req.data,
+            req.nonce,
+        )
+        .map_err(|e| rpc_invalid_ciphertext_error(e))?;
+
+        Ok(IoDecryptionResponse { decrypted_data })
+    }
+
+    fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
+        // Return a sample Schnorrkel keypair for testing
+        Ok(get_unsecure_sample_schnorrkel_keypair())
+    }
 }
 
 impl Default for MockEnclaveServer {
@@ -105,32 +136,14 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 
     async fn encrypt(&self, request: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        // load key and encrypt data
-        let encrypted_data = ecdh_encrypt(
-            &request.key,
-            &get_unsecure_sample_secp256k1_sk(),
-            &request.data,
-            request.nonce,
-        )
-        .unwrap();
-
-        Ok(IoEncryptionResponse { encrypted_data })
+        self.encrypt(request)
     }
 
     async fn decrypt(&self, request: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        // load key and decrypt data
-        let decrypted_data = ecdh_decrypt(
-            &request.key,
-            &get_unsecure_sample_secp256k1_sk(),
-            &request.data,
-            request.nonce,
-        )
-        .map_err(|e| rpc_invalid_ciphertext_error(e))?;
-
-        Ok(IoDecryptionResponse { decrypted_data })
+        self.decrypt(request)
     }
 
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        Ok(get_unsecure_sample_schnorrkel_keypair())
+        self.get_eph_rng_keypair()
     }
 }
