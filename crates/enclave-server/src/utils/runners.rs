@@ -13,6 +13,8 @@ use seismic_enclave::request_types::genesis::GenesisData;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
+use alloy_primitives::Bytes;
+use crate::snapshot::check_operator;
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
@@ -62,4 +64,18 @@ fn see_as_token() -> Result<(), anyhow::Error> {
 async fn see_default_config() {
     let config = Config::default();
     println!("{:?}", config);
+}
+
+
+#[tokio::test]
+#[ignore]
+async fn get_mrtd() {
+    let rootfs_hash = Bytes::from(vec![0x00; 32]);
+    let mrtd = Bytes::from(vec![0x00; 48]);
+    let rtmr0 = Bytes::from(vec![0x00; 48]);
+    let rtmr3 = Bytes::from(vec![0x00; 48]);
+
+    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+        .await
+        .unwrap();
 }
