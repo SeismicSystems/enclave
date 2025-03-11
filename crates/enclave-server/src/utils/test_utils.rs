@@ -81,3 +81,10 @@ pub fn unrestrict_file_permissions(path: &Path) -> std::io::Result<()> {
     let perms = fs::Permissions::from_mode(0o644);
     fs::set_permissions(path, perms)
 }
+
+pub fn print_flush<S: AsRef<str>>(s: S) {
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock(); // lock ensures safe writing
+    write!(handle, "{}", s.as_ref()).unwrap();
+    handle.flush().unwrap();
+}

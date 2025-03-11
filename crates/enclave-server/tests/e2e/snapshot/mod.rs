@@ -1,7 +1,7 @@
 use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
 use seismic_enclave_server::snapshot::*;
 use seismic_enclave_server::utils::supervisor::reth_is_running;
-use seismic_enclave_server::utils::test_utils::is_sudo;
+use seismic_enclave_server::utils::test_utils::{is_sudo, print_flush};
 
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::snapshot::{
@@ -96,6 +96,7 @@ use std::io::Write;
 
 #[tokio::test]
 pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
+    print_flush("Running test_snapshot_integration_handlers. Expected runtime is ~90 sec");
     // Check the starting conditions are as expected
     assert!(is_sudo(), "Must be run as sudo");
     assert!(
@@ -167,8 +168,8 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // Check that the chain data is recovered
     // E.g. by checking that the UpgradeOperator contract is deployed
     let sleep_sec = 45; // 30 sec is not enough sometimes
-    eprintln!("Finished restoring. Checking operator contract...");
-    eprintln!("Sleeping for {} seconds...", sleep_sec);
+    print_flush("Finished restoring. Checking operator contract...");
+    print_flush(format!("Sleeping for {} seconds... \n", sleep_sec));
     std::io::stdout().flush().unwrap();
     sleep(Duration::from_secs(sleep_sec)); // wait to avoid a connection refused error
     let rootfs_hash = Bytes::from(vec![0x00; 32]);
