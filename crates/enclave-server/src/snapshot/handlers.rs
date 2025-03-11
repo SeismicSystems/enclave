@@ -31,13 +31,14 @@ pub async fn prepare_encrypted_snapshot_handler(
 pub async fn restore_from_encrypted_snapshot_handler(
     _request: RestoreFromEncryptedSnapshotRequest,
 ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
-    let encrypted_snapshot_path = format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE);
+    let encrypted_snapshot_path = format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE);
     if !Path::new(&encrypted_snapshot_path).exists() {
         return Err(rpc_missing_snapshot_error());
     }
     let res = super::restore_from_encrypted_snapshot(RETH_DB_DIR, DATA_DISK_DIR, SNAPSHOT_FILE);
     let resp = RestoreFromEncryptedSnapshotResponse {
         success: res.is_ok(),
-    }; // TODO: consider adding a blocknumber to the response
+        // TODO: consider adding a blocknumber / other fieldsto the response
+    }; 
     Ok(resp)
 }
