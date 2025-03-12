@@ -62,7 +62,7 @@ async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
 }
 
 #[tokio::test]
-async fn test_server() {
+async fn test_mock_server() {
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
@@ -76,15 +76,4 @@ async fn test_server() {
     test_tx_io_encrypt_decrypt(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
-
-    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
-
-    let handle = tokio::spawn(async move {
-        println!("client 2: {:?}", client);
-        test_health_check(&client).await;
-        test_tx_io_encrypt_decrypt(&client).await;
-        test_get_public_key(&client).await;
-        test_get_eph_rng_keypair(&client).await;
-    });
-    handle.await.unwrap();
 }

@@ -3,7 +3,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     ops::Deref,
 };
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
 
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
@@ -28,7 +28,7 @@ pub struct EnclaveClient {
     /// The inner HTTP client.
     async_client: HttpClient,
     /// The runtime for the client.
-    runtime: Runtime,
+    runtime: Handle,
 }
 
 impl Default for EnclaveClient {
@@ -56,7 +56,7 @@ impl EnclaveClient {
             .unwrap();
         Self {
             async_client: inner,
-            runtime: Runtime::new().unwrap(),
+            runtime: Handle::current(),
         }
     }
 

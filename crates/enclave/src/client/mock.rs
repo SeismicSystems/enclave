@@ -216,3 +216,10 @@ impl EnclaveApiServer for MockEnclaveServer {
         Ok(MockEnclaveClient::get_eph_rng_keypair())
     }
 }
+
+#[test]
+fn test_mock_client() {
+    let client = MockEnclaveClient {};
+    let res = client.health_check().unwrap();
+    assert_eq!(res, "OK");
+}
