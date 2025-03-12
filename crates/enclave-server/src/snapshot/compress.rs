@@ -9,7 +9,6 @@ pub fn compress_datadir(
     snapshot_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
-    fs::create_dir_all(snapshot_dir).unwrap(); // TODO: error handling
     let snapshot_path = &format!("{}/{}", snapshot_dir, snapshot_file);
 
     let exclude_items = [

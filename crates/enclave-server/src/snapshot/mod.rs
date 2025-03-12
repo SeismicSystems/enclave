@@ -44,6 +44,7 @@ pub fn prepare_encrypted_snapshot(
     snapshot_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
+    fs::create_dir_all(snapshot_dir).unwrap(); // TODO: error handling
     stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
     compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
     println!("Compressed snapshot file: {}", snapshot_file);
@@ -75,8 +76,9 @@ pub fn restore_from_encrypted_snapshot(
     snapshot_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
+    fs::create_dir_all(snapshot_dir).unwrap(); // TODO: error handling
     stop_reth()?;
-    decrypt_snapshot(data_disk_dir, snapshot_file, snapshot_file)?;
+    decrypt_snapshot(data_disk_dir, snapshot_dir, snapshot_file)?;
     decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
     // fs::remove_file(format!("{}/{}", reth_db_dir, snapshot_file))?; // remove the compressed file after decryption
     start_reth()?;
