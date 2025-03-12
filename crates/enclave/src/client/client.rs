@@ -1,8 +1,4 @@
-use jsonrpsee::{
-    core::{ClientError, RpcResult},
-    http_client::HttpClient,
-    types::{ErrorCode, ErrorObject, ErrorObjectOwned},
-};
+use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
     net::{IpAddr, Ipv4Addr},
     ops::Deref,
@@ -12,10 +8,7 @@ use tokio::runtime::Runtime;
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
-    ecdh_decrypt, ecdh_encrypt,
     genesis::GenesisDataResponse,
-    get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
-    get_unsecure_sample_secp256k1_sk, rpc_invalid_ciphertext_error,
     signing::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
@@ -73,19 +66,12 @@ impl EnclaveClient {
     }
 }
 
-// Helper function to convert any error to jsonrpsee::core::client::Error
-fn convert_error<T, E: std::fmt::Display>(
-    result: Result<T, E>,
-) -> Result<T, jsonrpsee::core::client::Error> {
-    result.map_err(|e| jsonrpsee::core::client::Error::Custom(e.to_string()))
-}
-
 macro_rules! impl_sync_client {
-    ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> Result<$return_ty:ty, $error_ty:ty>),* $(,)?) => {
+    ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
         impl SyncEnclaveApiClient for EnclaveClient {
             $(
-                fn $method_name(&self, $($param: $param_ty),*) -> Result<$return_ty, jsonrpsee::core::client::Error> {
-                    convert_error(self.runtime.block_on(self.async_client.$method_name($($param),*)))
+                fn $method_name(&self, $($param: $param_ty),*) -> $return_ty {
+                    self.runtime.block_on(self.async_client.$method_name($($param),*))
                 }
             )+
         }
