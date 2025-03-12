@@ -219,9 +219,10 @@ impl EnclaveApiServer for MockEnclaveServer {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
+    use std::{ops::Deref, time::Duration};
 
     use secp256k1::{rand, Secp256k1};
+    use tokio::time::sleep;
 
     use super::*;
     use crate::{client::tests::*, rpc::EnclaveApiClient, EnclaveClient};
@@ -233,6 +234,22 @@ mod tests {
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);
         sync_test_tx_io_encrypt_decrypt(&client);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_mock_server() {
+        // spawn a seperate thread for the server, otherwise the test will hang
+        let port = get_random_port();
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        println!("addr: {:?}", addr);
+        let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
+        let _ = sleep(Duration::from_secs(2));
+
+        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        test_health_check(&client);
+        test_get_public_key(&client);
+        test_get_eph_rng_keypair(&client);
+        test_tx_io_encrypt_decrypt(&client);
     }
 
     async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
