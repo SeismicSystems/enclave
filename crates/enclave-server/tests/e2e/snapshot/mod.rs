@@ -203,6 +203,7 @@ pub async fn run_prepare_encrypted_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+// this worked!
 #[tokio::test]
 pub async fn run_restore() -> Result<(), anyhow::Error> {
     assert!(is_sudo(), "Must be run as sudo");
