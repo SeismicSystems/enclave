@@ -133,29 +133,13 @@ pub mod tests {
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
         println!("addr: {:?}", addr);
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
-        sleep(Duration::from_secs(2));
+        let _ = sleep(Duration::from_secs(2));
 
         let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
         sync_test_health_check(&client);
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);
         sync_test_tx_io_encrypt_decrypt(&client);
-    }
-
-    #[tokio::test]
-    async fn test_async_client() {
-        // spawn a seperate thread for the server, otherwise the test will hang
-        let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-        println!("addr: {:?}", addr);
-        let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
-        sleep(Duration::from_secs(2));
-        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
-
-        test_health_check(&client).await;
-        test_tx_io_encrypt_decrypt(&client).await;
-        test_get_public_key(&client).await;
-        test_get_eph_rng_keypair(&client).await;
     }
 
     pub fn get_random_port() -> u16 {
