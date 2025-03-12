@@ -105,3 +105,37 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+/////////////////////////////////////////////////////////////////////////////////
+/// Manual testing helpers
+/// Useful for checking things work across machines
+/////////////////////////////////////////////////////////////////////////////////
+
+#[tokio::test]
+pub async fn run_restore() -> Result<(), anyhow::Error> {
+    assert!(is_sudo(), "Must be run as sudo");
+
+    let enclave_addr =
+        SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+    let enclave_client = EnclaveClient::new(format!(
+        "http://{}:{}",
+        enclave_addr.ip(),
+        enclave_addr.port()
+    ));
+
+    assert!(reth_is_running());
+    assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
+    let restore_req = RestoreFromEncryptedSnapshotRequest {};
+    let restore_resp = enclave_client
+        .restore_from_encrypted_snapshot(restore_req)
+        .await
+        .unwrap();
+    assert!(
+        restore_resp.success,
+        "Restore failed: {}",
+        restore_resp.error
+    );
+    //  restore_from_encrypted_snapshot(RETH_DATA_DIR, DATA_DISK_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE)?;
+    assert!(reth_is_running());
+    Ok(())
+}
