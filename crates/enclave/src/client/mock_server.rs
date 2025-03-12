@@ -113,7 +113,7 @@ impl EnclaveApiServer for MockEnclaveServer {
         let encrypted_data = ecdh_encrypt(
             &request.key,
             &get_unsecure_sample_secp256k1_sk(),
-            request.data,
+            &request.data,
             request.nonce,
         )
         .unwrap();
@@ -126,7 +126,7 @@ impl EnclaveApiServer for MockEnclaveServer {
         let decrypted_data = ecdh_decrypt(
             &request.key,
             &get_unsecure_sample_secp256k1_sk(),
-            request.data,
+            &request.data,
             request.nonce,
         )
         .map_err(|e| rpc_invalid_ciphertext_error(e))?;

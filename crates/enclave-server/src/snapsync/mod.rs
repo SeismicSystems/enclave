@@ -33,7 +33,7 @@ pub async fn build_snapsync_response(
     let encrypted_data = ecdh_encrypt(
         &client_signing_pk,
         &get_secp256k1_sk(),
-        snapsync_bytes,
+        &snapsync_bytes,
         nonce,
     )?;
 
