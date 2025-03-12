@@ -1,3 +1,5 @@
+use secp256k1::rand;
+use secp256k1::Secp256k1;
 #[cfg(test)]
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
@@ -21,11 +23,13 @@ fn get_random_port() -> u16 {
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
+    let secp = Secp256k1::new();
+    let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
     let data_to_encrypt = vec![72, 101, 108, 108, 111];
     let mut nonce = vec![0u8; 4]; // 4 leading zeros
     nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
     let encryption_request = IoEncryptionRequest {
-        key: get_unsecure_sample_secp256k1_pk(),
+        key: public_key,
         data: data_to_encrypt.clone(),
         nonce: nonce.clone().into(),
     };
@@ -37,7 +41,7 @@ async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     assert!(!encryption_response.encrypted_data.is_empty());
 
     let decryption_request = IoDecryptionRequest {
-        key: get_unsecure_sample_secp256k1_pk(),
+        key: public_key,
         data: encryption_response.encrypted_data,
         nonce: nonce.into(),
     };
@@ -70,19 +74,9 @@ async fn test_mock_server() {
     let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
     sleep(Duration::from_secs(2));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
-    println!("client: {:?}", client);
 
     test_health_check(&client).await;
     test_tx_io_encrypt_decrypt(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
-}
-
-#[test]
-fn test_mock_server_sync() {
-    // spawn a seperate thread for the server, otherwise the test will hang
-    let port = get_random_port();
-    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
-    println!("client: {:?}", client);
 }

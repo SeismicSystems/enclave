@@ -217,9 +217,57 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 }
 
-#[test]
-fn test_mock_client() {
-    let client = MockEnclaveClient {};
-    let res = client.health_check().unwrap();
-    assert_eq!(res, "OK");
+#[cfg(test)]
+mod tests {
+    use crate::nonce::Nonce;
+
+    use super::*;
+    use secp256k1::{rand, Secp256k1};
+
+    #[test]
+    fn test_mock_client() {
+        let client = MockEnclaveClient {};
+        let res = client.health_check().unwrap();
+        assert_eq!(res, "OK");
+
+        // Test get_public_key
+        let public_key = client.get_public_key().unwrap();
+        assert_eq!(public_key, get_unsecure_sample_secp256k1_pk());
+
+        // Test get_eph_rng_keypair
+        let keypair = client.get_eph_rng_keypair().unwrap();
+        assert!(!keypair.secret.to_bytes().is_empty());
+        assert!(!keypair.public.to_bytes().is_empty());
+
+        // Test encrypt and decrypt
+        test_mock_client_encrypt_decrypt();
+    }
+
+    fn test_mock_client_encrypt_decrypt() {
+        let client = MockEnclaveClient {};
+
+        let secp = Secp256k1::new();
+        let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
+
+        let data_to_encrypt = vec![1, 2, 3, 4, 5];
+        let nonce = Nonce::U64(12345678);
+
+        let encryption_request = IoEncryptionRequest {
+            key: public_key,
+            data: data_to_encrypt.clone(),
+            nonce: nonce.clone(),
+        };
+
+        let encryption_response = client.encrypt(encryption_request).unwrap();
+        assert!(!encryption_response.encrypted_data.is_empty());
+
+        let decryption_request = IoDecryptionRequest {
+            key: public_key,
+            data: encryption_response.encrypted_data,
+            nonce: nonce.clone(),
+        };
+
+        let decryption_response = client.decrypt(decryption_request).unwrap();
+        assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
+    }
 }
