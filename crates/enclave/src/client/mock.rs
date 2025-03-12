@@ -219,55 +219,63 @@ impl EnclaveApiServer for MockEnclaveServer {
 
 #[cfg(test)]
 mod tests {
-    use crate::nonce::Nonce;
+    use std::ops::Deref;
+
+    use secp256k1::{rand, Secp256k1};
 
     use super::*;
-    use secp256k1::{rand, Secp256k1};
+    use crate::{client::tests::*, rpc::EnclaveApiClient, EnclaveClient};
 
     #[test]
     fn test_mock_client() {
         let client = MockEnclaveClient {};
-        let res = client.health_check().unwrap();
-        assert_eq!(res, "OK");
-
-        // Test get_public_key
-        let public_key = client.get_public_key().unwrap();
-        assert_eq!(public_key, get_unsecure_sample_secp256k1_pk());
-
-        // Test get_eph_rng_keypair
-        let keypair = client.get_eph_rng_keypair().unwrap();
-        assert!(!keypair.secret.to_bytes().is_empty());
-        assert!(!keypair.public.to_bytes().is_empty());
-
-        // Test encrypt and decrypt
-        test_mock_client_encrypt_decrypt();
+        sync_test_health_check(&client);
+        sync_test_get_public_key(&client);
+        sync_test_get_eph_rng_keypair(&client);
+        sync_test_tx_io_encrypt_decrypt(&client);
     }
 
-    fn test_mock_client_encrypt_decrypt() {
-        let client = MockEnclaveClient {};
-
+    async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
+        // make the request struct
         let secp = Secp256k1::new();
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
-
-        let data_to_encrypt = vec![1, 2, 3, 4, 5];
-        let nonce = Nonce::U64(12345678);
-
+        let data_to_encrypt = vec![72, 101, 108, 108, 111];
+        let mut nonce = vec![0u8; 4]; // 4 leading zeros
+        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
         let encryption_request = IoEncryptionRequest {
             key: public_key,
             data: data_to_encrypt.clone(),
-            nonce: nonce.clone(),
+            nonce: nonce.clone().into(),
         };
 
-        let encryption_response = client.encrypt(encryption_request).unwrap();
+        // make the http request
+        let encryption_response = client.deref().encrypt(encryption_request).await.unwrap();
+
+        // check the response
         assert!(!encryption_response.encrypted_data.is_empty());
 
         let decryption_request = IoDecryptionRequest {
             key: public_key,
             data: encryption_response.encrypted_data,
-            nonce: nonce.clone(),
+            nonce: nonce.into(),
         };
 
         let decryption_response = client.decrypt(decryption_request).unwrap();
         assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
+    }
+
+    async fn test_health_check(client: &EnclaveClient) {
+        let resposne = client.deref().health_check().await.unwrap();
+        assert_eq!(resposne, "OK");
+    }
+
+    async fn test_get_public_key(client: &EnclaveClient) {
+        let res = client.deref().get_public_key().await.unwrap();
+        assert_eq!(res, get_unsecure_sample_secp256k1_pk());
+    }
+
+    async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
+        let res = client.deref().get_eph_rng_keypair().await.unwrap();
+        println!("eph_rng_keypair: {:?}", res);
     }
 }
