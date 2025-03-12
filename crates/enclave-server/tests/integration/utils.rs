@@ -43,9 +43,8 @@ pub async fn deploy_contract(
 ) -> Result<(), anyhow::Error> {
     // Read contract bytecode from Foundry JSON
     // This can be created with `forge build` and the looking in the `out` directory.
-    let file_content = fs::read_to_string(foundry_json_path).map_err(
-        |e| anyhow::anyhow!("Failed to read Foundry JSON file: {:?}", e),
-    )?;
+    let file_content = fs::read_to_string(foundry_json_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read Foundry JSON file: {:?}", e))?;
     let artifact: ContractArtifact = serde_json::from_str(&file_content)?;
     let bytecode_str = artifact.bytecode.object;
     let bytecode = Bytes::from(hex::decode(bytecode_str.trim_start_matches("0x"))?);
