@@ -42,8 +42,6 @@ pub fn compress_datadir(
         anyhow::bail!("Failed to compress datadir with tar:\n {:?}", output);
     }
 
-    println!("Compressed snapshot file at: {}", snapshot_path);
-
     Ok(())
 }
 
@@ -91,7 +89,6 @@ mod tests {
     #[test]
     fn test_compress_datadir() -> Result<(), anyhow::Error> {
         // Set up a temp dir
-        println!("Current dir: {:?}", std::env::current_dir().unwrap());
         let temp_data_dir = tempdir().unwrap();
         let temp_data_dir_path = temp_data_dir.path();
         let temp_snapshot_dir = tempdir().unwrap();
@@ -106,7 +103,6 @@ mod tests {
 
         // Create the snapshot
         compress_datadir(temp_data_dir.path().to_str().unwrap(), temp_snapshot_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
-        println!("test Snapshot path: {:?}", snapshot_path);
         assert!(Path::new(&snapshot_path).exists());
 
         // Confirm that we recover the original file

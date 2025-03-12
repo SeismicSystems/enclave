@@ -43,7 +43,6 @@ pub fn prepare_encrypted_snapshot(
     )?;
     stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
     compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-    println!("Compressed snapshot file: {}", snapshot_file);
     encrypt_snapshot(snapshot_dir, data_disk_dir, snapshot_file)?;
     fs::remove_dir_all(snapshot_dir).map_err(
         |e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e),

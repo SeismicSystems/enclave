@@ -52,7 +52,7 @@ pub async fn build_snapsync_response(
 /// Gathers the snapsync data
 /// Currently the snapsync data has the io private key and the private state
 ///
-/// TODO: get real private state data from [location TBD]
+/// TODO: Update this to have real private keys, no state (now handled by snapshot)
 fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
     let sample_private_state = format!("private state @ %{}", RETH_DB_DIR)
         .as_bytes()
