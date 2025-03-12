@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/enclave",
+    "crates/enclave/derive",
     "crates/enclave-server",
 ]
 
@@ -41,3 +42,9 @@ tokio = { version = "1.44", features = ["full"] }
 jsonrpsee = { version = "0.24", features = ["server", "client", "macros"] }
 tracing = { version = "0.1"}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "json"] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "2.0"
+
+seismic-enclave-derive = { path = "crates/enclave/derive" }
+seismic-enclave = { path = "crates/enclave" }
