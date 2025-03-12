@@ -22,6 +22,7 @@ pub async fn prepare_encrypted_snapshot_handler(
     let res = super::prepare_encrypted_snapshot(RETH_DB_DIR, DATA_DISK_DIR, SNAPSHOT_FILE, MDBX_FILE); 
     let resp = PrepareEncryptedSnapshotResponse {
         success: res.is_ok(),
+        error: res.err().map(|e| e.to_string()).unwrap_or_default(),
     };
     Ok(resp)
 }
@@ -38,6 +39,7 @@ pub async fn restore_from_encrypted_snapshot_handler(
     let res = super::restore_from_encrypted_snapshot(RETH_DB_DIR, DATA_DISK_DIR, SNAPSHOT_FILE);
     let resp = RestoreFromEncryptedSnapshotResponse {
         success: res.is_ok(),
+        error: res.err().map(|e| e.to_string()).unwrap_or_default(),
         // TODO: consider adding a blocknumber / other fieldsto the response
     }; 
     Ok(resp)
