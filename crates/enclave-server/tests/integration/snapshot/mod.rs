@@ -37,7 +37,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // set path to the contract's json file
     // this file can be recreated `forge build`
     // assumes test is run from the root of the enclave-server crate
-    let foundry_json_path = "tests/e2e/snapshot/UpgradeOperator.json";
+    let foundry_json_path = "tests/integration/snapshot/UpgradeOperator.json";
     let enclave_addr =
         SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
     let enclave_client = EnclaveClient::new(format!(

@@ -6,7 +6,7 @@ pub mod handlers;
 use crate::utils::supervisor::{start_reth, stop_reth};
 pub use check_operator::check_operator;
 use compress::{compress_datadir, decompress_datadir};
-use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for e2e testing
+use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for integration testing
 
 use std::fs;
 
