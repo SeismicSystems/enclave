@@ -246,13 +246,13 @@ mod tests {
         let _ = sleep(Duration::from_secs(2));
 
         let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
-        test_health_check(&client).await;
-        test_get_public_key(&client).await;
-        test_get_eph_rng_keypair(&client).await;
-        test_tx_io_encrypt_decrypt(&client).await;
+        async_test_health_check(&client).await;
+        async_test_get_public_key(&client).await;
+        async_test_get_eph_rng_keypair(&client).await;
+        async_test_tx_io_encrypt_decrypt(&client).await;
     }
 
-    async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
+    async fn async_test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
         // make the request struct
         let secp = Secp256k1::new();
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
@@ -281,17 +281,17 @@ mod tests {
         assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
     }
 
-    async fn test_health_check(client: &EnclaveClient) {
+    async fn async_test_health_check(client: &EnclaveClient) {
         let resposne = client.deref().health_check().await.unwrap();
         assert_eq!(resposne, "OK");
     }
 
-    async fn test_get_public_key(client: &EnclaveClient) {
+    async fn async_test_get_public_key(client: &EnclaveClient) {
         let res = client.deref().get_public_key().await.unwrap();
         assert_eq!(res, get_unsecure_sample_secp256k1_pk());
     }
 
-    async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
+    async fn async_test_get_eph_rng_keypair(client: &EnclaveClient) {
         let res = client.deref().get_eph_rng_keypair().await.unwrap();
         println!("eph_rng_keypair: {:?}", res);
     }
