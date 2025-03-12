@@ -6,7 +6,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
-use seismic_enclave_derive::derive_sync_client;
+use seismic_enclave_derive::derive_sync_client_trait;
 
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -37,7 +37,7 @@ pub trait BuildableServer {
     }
 }
 
-#[derive_sync_client] // get SyncEnclaveApi trait
+#[derive_sync_client_trait] // get SyncEnclaveApi trait
 #[rpc(client, server)] // get EnclaveApiClient EnclaveApiServer trait
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
