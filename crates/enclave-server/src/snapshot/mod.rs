@@ -42,15 +42,13 @@ pub fn prepare_encrypted_snapshot(
     snapshot_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
-    fs::create_dir_all(snapshot_dir).map_err(
-        |e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e),
-    )?;
+    fs::create_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
     stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
     compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
     encrypt_snapshot(snapshot_dir, data_disk_dir, snapshot_file)?;
-    fs::remove_dir_all(snapshot_dir).map_err(
-        |e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e),
-    )?;
+    fs::remove_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
     start_reth().expect("Failed to start reth during create_encrypted_snapshot");
     Ok(())
 }
@@ -81,15 +79,13 @@ pub fn restore_from_encrypted_snapshot(
     snapshot_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
-    fs::create_dir_all(snapshot_dir).map_err(
-        |e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e),
-    )?;
+    fs::create_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
     stop_reth()?;
     decrypt_snapshot(data_disk_dir, snapshot_dir, snapshot_file)?;
     decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-    fs::remove_dir_all(snapshot_dir).map_err(
-        |e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e),
-    )?;
+    fs::remove_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
     start_reth()?;
     Ok(())
 }

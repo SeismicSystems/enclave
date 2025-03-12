@@ -7,7 +7,6 @@ pub struct PrepareEncryptedSnapshotRequest {} // require auth token eventually
 pub struct PrepareEncryptedSnapshotResponse {
     pub success: bool,
     pub error: String,
-
     // Potentially add fields if useful:
     // file size
     // block number at snapshot point

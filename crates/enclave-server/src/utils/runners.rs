@@ -4,6 +4,8 @@
 //! and should be ignored in automated testing workflows
 
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
+use crate::snapshot::check_operator;
+use alloy_primitives::Bytes;
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -13,8 +15,6 @@ use seismic_enclave::request_types::genesis::GenesisData;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
-use alloy_primitives::Bytes;
-use crate::snapshot::check_operator;
 
 #[allow(dead_code)]
 #[allow(unused_imports)]
@@ -65,7 +65,6 @@ async fn see_default_config() {
     let config = Config::default();
     println!("{:?}", config);
 }
-
 
 #[tokio::test]
 #[ignore]
