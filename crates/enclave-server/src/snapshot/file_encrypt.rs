@@ -43,8 +43,6 @@ pub fn decrypt_snapshot(input_dir: &str, output_dir: &str, snapshot_file: &str) 
     Ok(())
 }
 
-// TODO: test that it overwrites the file if it already exists?
-// TODO: test the case where start/stop reth is fails
 #[cfg(test)]
 mod tests {
     use super::*;

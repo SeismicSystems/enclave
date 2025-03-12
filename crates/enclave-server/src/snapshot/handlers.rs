@@ -8,9 +8,7 @@ use seismic_enclave::{
     },
 };
 
-// use base64::{engine::general_purpose, Engine as _};
 use jsonrpsee::core::RpcResult;
-// use std::fs;
 use std::path::Path;
 
 // Prepares an encrypted snapshot of the reth database
@@ -40,7 +38,6 @@ pub async fn restore_from_encrypted_snapshot_handler(
     let resp = RestoreFromEncryptedSnapshotResponse {
         success: res.is_ok(),
         error: res.err().map(|e| e.to_string()).unwrap_or_default(),
-        // TODO: consider adding a blocknumber / other fieldsto the response
     }; 
     Ok(resp)
 }

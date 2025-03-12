@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::process::Command;
-use std::fs;
 
 /// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
 /// Compressed file is saved in the same directory as the original file so that access permissions are identical
@@ -80,7 +79,7 @@ pub fn decompress_datadir(data_dir: &str, snapshot_dir: &str, snapshot_file: &st
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::snapshot::{MDBX_FILE, SNAPSHOT_FILE};
+    use crate::snapshot::SNAPSHOT_FILE;
     use crate::utils::test_utils::{
         generate_dummy_file, read_first_n_bytes,
     };
@@ -89,9 +88,6 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
-
-    // TODO: make a second temp dir instead of SNAPSHOT_DIR
-    // TODO: check that appropriate files are excluded, included
     #[test]
     fn test_compress_datadir() -> Result<(), anyhow::Error> {
         // Set up a temp dir
@@ -101,7 +97,7 @@ mod tests {
         let temp_snapshot_dir = tempdir().unwrap();
         fs::create_dir(temp_data_dir_path.join("db"))?;
         let snapshot_path = &format!("{}/{}", temp_snapshot_dir.path().to_str().unwrap(), SNAPSHOT_FILE); 
-        let mdbx_path = temp_data_dir_path.join("db").join(MDBX_FILE);
+        let mdbx_path = temp_data_dir_path.join("db").join("mdbx.dat");
 
         // Generate a dummy database file (e.g., 10MB)
         generate_dummy_file(&mdbx_path, 10 * 1024 * 1024)?;

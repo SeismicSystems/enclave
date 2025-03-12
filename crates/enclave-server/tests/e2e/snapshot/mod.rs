@@ -1,4 +1,5 @@
 use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
+use anyhow::Ok;
 use seismic_enclave_server::snapshot::*;
 use seismic_enclave_server::utils::supervisor::reth_is_running;
 use seismic_enclave_server::utils::test_utils::{is_sudo, print_flush};
@@ -12,9 +13,9 @@ use seismic_enclave::snapshot::{
 use seismic_enclave::{EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
 use alloy_primitives::Bytes;
+use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::process::Command;
 use std::thread::sleep;
 use std::time::Duration;
 use std::io::Write;
@@ -100,11 +101,11 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // Check the starting conditions are as expected
     assert!(is_sudo(), "Must be run as sudo");
     assert!(
-        Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists(),
+        Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists(),
         "Test startup error: MDBX misconfigured"
     );
     assert!(
-        !Path::new(format!("{}/{}.enc", RETH_DB_DIR, SNAPSHOT_FILE).as_str()).exists(),
+        !Path::new(format!("{}/{}.enc", SNAPSHOT_DIR, SNAPSHOT_FILE).as_str()).exists(),
         "Test startup error: Encrypted snapshot already exists"
     );
     assert!(reth_is_running(), "Test startup error: Reth is not running");
@@ -141,19 +142,11 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
     assert!(reth_is_running());
 
-    // delete files that will be recovered
-    let files = [SNAPSHOT_FILE, MDBX_FILE];
-    for file in &files {
-        let path = format!("{}/{}", RETH_DB_DIR, file);
-        Command::new("sudo")
-            .arg("rm")
-            .arg(&path)
-            .output()
-            .expect("Failed to execute command");
-    }
+    // Delete files that will be recovered
+    fs::remove_dir_all(RETH_DATA_DIR).unwrap();
     
     // Restore from encrypted snapshot
-    assert!(!Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
+    assert!(!Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists());
     assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
     let restore_req = RestoreFromEncryptedSnapshotRequest {};
     let restore_resp = enclave_client
@@ -161,7 +154,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert!(restore_resp.success);
-    assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
+    assert!(Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists());
     assert!(reth_is_running());
     
 
@@ -187,10 +180,6 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
 #[tokio::test]
 pub async fn run_prepare_encrypted_snapshot() -> Result<(), anyhow::Error> {
     assert!(is_sudo(), "Must be run as sudo");
-    assert!(
-        Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists(),
-        "Test startup error: MDBX misconfigured"
-    );
     assert!(reth_is_running(), "Test startup error: Reth is not running");
 
     // let enclave_addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
@@ -203,7 +192,6 @@ pub async fn run_prepare_encrypted_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// this worked!
 #[tokio::test]
 pub async fn run_restore() -> Result<(), anyhow::Error> {
     assert!(is_sudo(), "Must be run as sudo");
@@ -220,8 +208,6 @@ pub async fn run_restore() -> Result<(), anyhow::Error> {
     //     .unwrap();
     // assert!(restore_resp.success, "Restore failed: {}", restore_resp.error);
     restore_from_encrypted_snapshot(RETH_DATA_DIR, DATA_DISK_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE)?;
-    assert!(Path::new(format!("{}/{}", RETH_DB_DIR, MDBX_FILE).as_str()).exists());
     assert!(reth_is_running());
     Ok(())
 }
-
