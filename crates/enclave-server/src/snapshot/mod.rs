@@ -41,11 +41,11 @@ pub const MDBX_FILE: &str = "mdbx.dat";
 pub fn prepare_encrypted_snapshot(
     reth_db_dir: &str,
     data_disk_dir: &str,
+    snapshot_dir: &str,
     snapshot_file: &str,
-    mdbx_file: &str,
 ) -> Result<(), anyhow::Error> {
     stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
-    compress_datadir(reth_db_dir, snapshot_file, mdbx_file)?;
+    compress_datadir(reth_db_dir, snapshot_dir, snapshot_file)?;
     println!("Compressed snapshot file: {}", snapshot_file);
     encrypt_snapshot(reth_db_dir, data_disk_dir, snapshot_file)?;
     // fs::remove_file(format!("{}/{}", reth_db_dir, snapshot_file))?; // remove the compressed file after encryption
@@ -72,11 +72,12 @@ pub fn prepare_encrypted_snapshot(
 pub fn restore_from_encrypted_snapshot(
     reth_db_dir: &str,
     data_disk_dir: &str,
+    snapshot_dir: &str,
     snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
     stop_reth()?;
     decrypt_snapshot(data_disk_dir, reth_db_dir, snapshot_file)?;
-    decompress_datadir(reth_db_dir, snapshot_file)?;
+    decompress_datadir(reth_db_dir, snapshot_dir, snapshot_file)?;
     // fs::remove_file(format!("{}/{}", reth_db_dir, snapshot_file))?; // remove the compressed file after decryption
     start_reth()?;
     Ok(())

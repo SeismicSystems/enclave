@@ -2,17 +2,15 @@ use std::path::Path;
 use std::process::Command;
 use std::fs;
 
-use super::{RETH_DATA_DIR, SNAPSHOT_DIR};
-
 /// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
 /// Compressed file is saved in the same directory as the original file so that access permissions are identical
 pub fn compress_datadir(
     data_dir: &str,
+    snapshot_dir: &str,
     snapshot_file: &str,
-    mdbx_file: &str,
 ) -> Result<(), anyhow::Error> {
-    fs::create_dir_all(SNAPSHOT_DIR).unwrap(); // TODO: error handling
-    let snapshot_path = &format!("{}/{}", SNAPSHOT_DIR, snapshot_file);
+    fs::create_dir_all(snapshot_dir).unwrap(); // TODO: error handling
+    let snapshot_path = &format!("{}/{}", snapshot_dir, snapshot_file);
 
     let exclude_items = [
         "discovery-secret",
@@ -46,12 +44,14 @@ pub fn compress_datadir(
         anyhow::bail!("Failed to compress mdbx with tar: {:?}", output);
     }
 
+    println!("Compressed snapshot file at: {}", snapshot_path);
+
     Ok(())
 }
 
 /// Restores the snapshot by extracting the `.tar.lz4` archive.
-pub fn decompress_datadir(data_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
-    let snapshot_path = format!("{}/{}", SNAPSHOT_DIR, snapshot_file);
+pub fn decompress_datadir(data_dir: &str, snapshot_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
+    let snapshot_path = format!("{}/{}", snapshot_dir, snapshot_file);
 
     // Confirm that the snapshot file exists
     if !Path::new(&snapshot_path).exists() {
@@ -97,11 +97,12 @@ mod tests {
     fn test_compress_datadir() -> Result<(), anyhow::Error> {
         // Set up a temp dir
         println!("Current dir: {:?}", std::env::current_dir().unwrap());
-        let temp_dir = tempdir().unwrap();
-        let temp_path = temp_dir.path();
-        fs::create_dir(temp_path.join("db"))?;
-        let snapshot_path = &format!("{}/{}", SNAPSHOT_DIR, SNAPSHOT_FILE); 
-        let mdbx_path = temp_path.join("db").join(MDBX_FILE);
+        let temp_data_dir = tempdir().unwrap();
+        let temp_data_dir_path = temp_data_dir.path();
+        let temp_snapshot_dir = tempdir().unwrap();
+        fs::create_dir(temp_data_dir_path.join("db"))?;
+        let snapshot_path = &format!("{}/{}", temp_snapshot_dir.path().to_str().unwrap(), SNAPSHOT_FILE); 
+        let mdbx_path = temp_data_dir_path.join("db").join(MDBX_FILE);
 
         // Generate a dummy database file (e.g., 10MB)
         generate_dummy_file(&mdbx_path, 10 * 1024 * 1024)?;
@@ -109,13 +110,14 @@ mod tests {
         let orig_leading_bytes = read_first_n_bytes(&mdbx_path.display().to_string(), 100).unwrap();
 
         // Create the snapshot
-        compress_datadir(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE, MDBX_FILE).unwrap();
+        compress_datadir(temp_data_dir.path().to_str().unwrap(), temp_snapshot_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        println!("test Snapshot path: {:?}", snapshot_path);
         assert!(Path::new(&snapshot_path).exists());
 
         // Confirm that we recover the original file
         fs::remove_file(&mdbx_path)?;
         assert!(!Path::new(&mdbx_path).exists());
-        decompress_datadir(temp_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
+        decompress_datadir(temp_data_dir.path().to_str().unwrap(), temp_snapshot_dir.path().to_str().unwrap(), SNAPSHOT_FILE).unwrap();
         assert!(Path::new(&mdbx_path).exists());
 
         // Check metadata of restored file matches the original
