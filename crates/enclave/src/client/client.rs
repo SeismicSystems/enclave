@@ -2,6 +2,7 @@ use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
     net::{IpAddr, Ipv4Addr},
     ops::Deref,
+    sync::OnceLock,
 };
 use tokio::runtime::{Handle, Runtime};
 
@@ -22,13 +23,15 @@ use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
+static GLOBAL_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
 /// A client for the enclave API.
 #[derive(Debug)]
 pub struct EnclaveClient {
     /// The inner HTTP client.
     async_client: HttpClient,
     /// The runtime for the client.
-    runtime: Handle,
+    handle: Handle,
 }
 
 impl Default for EnclaveClient {
@@ -56,7 +59,12 @@ impl EnclaveClient {
             .unwrap();
         Self {
             async_client: inner,
-            runtime: Handle::current(),
+            handle: Handle::try_current().unwrap_or_else(|_| {
+                GLOBAL_RUNTIME
+                    .get_or_init(|| Runtime::new().unwrap())
+                    .handle()
+                    .clone()
+            }),
         }
     }
 
@@ -71,7 +79,7 @@ macro_rules! impl_sync_client {
         impl SyncEnclaveApiClient for EnclaveClient {
             $(
                 fn $method_name(&self, $($param: $param_ty),*) -> $return_ty {
-                    self.runtime.block_on(self.async_client.$method_name($($param),*))
+                    self.handle.block_on(self.async_client.$method_name($($param),*))
                 }
             )+
         }

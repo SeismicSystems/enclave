@@ -68,7 +68,7 @@ async fn test_mock_server() {
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     println!("addr: {:?}", addr);
     let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
-    sleep(Duration::from_secs(4));
+    sleep(Duration::from_secs(2));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
     println!("client: {:?}", client);
 
@@ -76,4 +76,13 @@ async fn test_mock_server() {
     test_tx_io_encrypt_decrypt(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
+}
+
+#[test]
+fn test_mock_server_sync() {
+    // spawn a seperate thread for the server, otherwise the test will hang
+    let port = get_random_port();
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+    println!("client: {:?}", client);
 }
