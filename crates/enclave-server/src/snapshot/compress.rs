@@ -41,7 +41,7 @@ pub fn compress_datadir(
         .expect("Failed to execute tar command");
 
     if !output.status.success() {
-        anyhow::bail!("Failed to compress mdbx with tar: {:?}", output);
+        anyhow::bail!("Failed to compress datadir with tar:\n {:?}", output);
     }
 
     println!("Compressed snapshot file at: {}", snapshot_path);
