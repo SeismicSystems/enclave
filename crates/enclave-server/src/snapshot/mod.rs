@@ -15,23 +15,27 @@ pub const RETH_DATA_DIR: &str = "/home/azureuser/.reth"; // correct when running
 pub const SNAPSHOT_DIR: &str = "/tmp/snapshot";
 pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 
-/// Prepares an encrypted snapshot of the Reth database for download.
+/// Prepares an encrypted snapshot of the Reth database and stores it on a mounted data disk.
 ///
 /// This function performs the following steps:
 /// 1. Stops the Reth process to ensure the database is in a consistent state.
 /// 2. Compresses the database directory into a snapshot archive.
-/// 3. Encrypts the compressed snapshot.
-/// 4. Restarts the Reth process after the snapshot is created.
+/// 3. Encrypts the compressed snapshot using the snapshot key.
+/// 4. Removes the temporary unencrypted snapshot archive.
+/// 5. Restarts the Reth process after the snapshot is created.
 ///
-/// After running this function, the encrypted snapshot file can be served via a download endpoint.
+/// After running this function, the encrypted snapshot is stored in a mounted data disk
+/// (separate from the OS disk) for safe backup or transfer.
 ///
 /// # Arguments
-/// * `db_dir` - Path to the Reth database directory.
-/// * `snapshot_file` - Path to the final snapshot archive (will be created or overwritten).
-/// * `mdbx_file` - Path to the MDBX data file used during compression.
+/// * `reth_data_dir` - Path to the Reth database directory.
+/// * `data_disk_dir` - Path to the mounted data disk where the encrypted snapshot will be saved.
+/// * `snapshot_dir` - Path to a temporary directory used to hold the unencrypted snapshot archive.
+/// * `snapshot_file` - Filename of the snapshot archive (e.g., `snapshot.tar.lz4`).
 ///
 /// # Errors
-/// Returns an error if any step in the process (stopping Reth, compression, encryption, or restarting Reth) fails.
+/// Returns an error if any step in the process (stopping Reth, compression, encryption,
+/// removing temporary data, or restarting Reth) fails.
 pub fn prepare_encrypted_snapshot(
     reth_data_dir: &str,
     data_disk_dir: &str,
@@ -51,22 +55,26 @@ pub fn prepare_encrypted_snapshot(
     Ok(())
 }
 
-/// Restores the Reth database from an encrypted snapshot archive.
+/// Restores the Reth database from an encrypted snapshot stored on a mounted data disk.
 ///
 /// This function performs the following steps:
 /// 1. Stops the Reth process to allow safe restoration.
-/// 2. Decrypts the uploaded snapshot archive.
+/// 2. Decrypts the encrypted snapshot archive using the snapshot key.
 /// 3. Decompresses the decrypted archive into the database directory.
-/// 4. Restarts the Reth process once the database has been restored.
+/// 4. Removes the temporary snapshot data after restoration.
+/// 5. Restarts the Reth process with the restored database state.
 ///
-/// The encrypted snapshot must be uploaded via the relevant endpoint before calling this function.
+/// The encrypted snapshot must be available on the mounted data disk before calling this function.
 ///
 /// # Arguments
-/// * `db_dir` - Path to the Reth database directory where the snapshot will be restored.
-/// * `snapshot_file` - Path to the encrypted snapshot archive.
+/// * `reth_data_dir` - Path to the Reth database directory where the snapshot will be restored.
+/// * `data_disk_dir` - Path to the mounted data disk where the encrypted snapshot archive is located.
+/// * `snapshot_dir` - Temporary directory used during the decryption and decompression steps.
+/// * `snapshot_file` - Filename of the snapshot archive (e.g., `snapshot.tar.lz4`).
 ///
 /// # Errors
-/// Returns an error if any step in the process (stopping Reth, decryption, decompression, or restarting Reth) fails.
+/// Returns an error if any step in the process (stopping Reth, decryption, decompression,
+/// removing temporary data, or restarting Reth) fails.
 pub fn restore_from_encrypted_snapshot(
     reth_data_dir: &str,
     data_disk_dir: &str,

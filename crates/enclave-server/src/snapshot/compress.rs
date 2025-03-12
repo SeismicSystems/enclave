@@ -1,8 +1,25 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Creates a snapshot by compressing the `mdbx.dat` file into a `.tar.lz4` archive.
-/// Compressed file is saved in the same directory as the original file so that access permissions are identical
+/// Compresses the contents of a data directory (`data_dir`) into a `.tar.lz4` snapshot archive.
+/// 
+/// The archive is created using the `tar` command with LZ4 compression and stored in the
+/// `snapshot_dir` with the given `snapshot_file` name. Certain files and directories are
+/// excluded from the archive, such as reth networking secrets
+///
+/// # Arguments
+///
+/// * `data_dir` - Path to the data directory containing the MDBX database, static_files, and other runtime files.
+/// * `snapshot_dir` - Path to the directory where the snapshot archive should be saved.
+/// * `snapshot_file` - Filename for the resulting `.tar.lz4` archive (e.g., `snapshot.tar.lz4`).
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the compression succeeds, or an `anyhow::Error` if the `tar` command fails.
+///
+/// # Errors
+///
+/// This function returns an error if the `tar` command fails to execute or exits with a non-zero status.
 pub fn compress_datadir(
     data_dir: &str,
     snapshot_dir: &str,
@@ -45,7 +62,27 @@ pub fn compress_datadir(
     Ok(())
 }
 
-/// Restores the snapshot by extracting the `.tar.lz4` archive.
+/// Decompresses a `.tar.lz4` snapshot archive into a specified data directory (`data_dir`).
+///
+/// This function restores the contents of a previously created snapshot archive by extracting
+/// its contents using the `tar` command with LZ4 decompression. It is commonly used for
+/// restoring database state from a backup or test snapshot.
+///
+/// # Arguments
+///
+/// * `data_dir` - Path to the directory where the archive should be extracted.
+/// * `snapshot_dir` - Path to the directory where the snapshot archive is stored.
+/// * `snapshot_file` - Filename of the `.tar.lz4` snapshot archive to restore (e.g., `snapshot.tar.lz4`).
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the decompression succeeds, or an `anyhow::Error` if the file is missing or extraction fails.
+///
+/// # Errors
+///
+/// This function returns an error if:
+/// - The snapshot file does not exist at the specified path.
+/// - The `tar` command fails to execute or returns a non-zero exit status.
 pub fn decompress_datadir(data_dir: &str, snapshot_dir: &str, snapshot_file: &str) -> Result<(), anyhow::Error> {
     let snapshot_path = format!("{}/{}", snapshot_dir, snapshot_file);
 

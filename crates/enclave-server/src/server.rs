@@ -15,10 +15,8 @@ use seismic_enclave::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
 use seismic_enclave::snapshot::{
-    // DownloadEncryptedSnapshotRequest, DownloadEncryptedSnapshotResponse,
     PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
     RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-    // UploadEncryptedSnapshotRequest, UploadEncryptedSnapshotResponse,
 };
 use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use seismic_enclave::tx_io::{

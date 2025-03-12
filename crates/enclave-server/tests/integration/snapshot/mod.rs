@@ -7,8 +7,7 @@ use seismic_enclave_server::utils::test_utils::{is_sudo, print_flush};
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::snapshot::{
     PrepareEncryptedSnapshotRequest,
-    RestoreFromEncryptedSnapshotRequest, 
-    // PrepareEncryptedSnapshotResponse, RestoreFromEncryptedSnapshotResponse,
+    RestoreFromEncryptedSnapshotRequest,
 };
 use seismic_enclave::{EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 

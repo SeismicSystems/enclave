@@ -244,6 +244,20 @@ pub fn ecdh_decrypt(
     Ok(decrypted_data)
 }
 
+/// Encrypts a file using the provided AES key and saves the output with an embedded nonce.
+///
+/// This function reads the contents of the input file, generates a random nonce,
+/// encrypts the data using AES-GCM, and writes the nonce followed by the ciphertext
+/// into the specified output file. The nonce is required for decryption and must
+/// be stored along with the ciphertext.
+///
+/// # Arguments
+/// * `input_path` - Path to the plaintext input file.
+/// * `output_path` - Path where the encrypted file (nonce + ciphertext) will be written.
+/// * `key` - AES-256-GCM key used for encryption.
+///
+/// # Returns
+/// Returns `Ok(())` on success, or an error if reading, encryption, or writing fails.
 pub fn encrypt_file(
     input_path: &str,
     output_path: &str,
@@ -269,6 +283,18 @@ pub fn encrypt_file(
     Ok(())
 }
 
+// Decrypts a file previously encrypted with `encrypt_file`, using the provided AES key.
+///
+/// This function reads the encrypted file, extracts the nonce (prepended during encryption),
+/// decrypts the ciphertext using AES-GCM, and writes the decrypted plaintext to the specified output path.
+///
+/// # Arguments
+/// * `input_path` - Path to the encrypted file (must contain nonce + ciphertext).
+/// * `output_path` - Path where the decrypted file content will be written.
+/// * `key` - AES-256-GCM key used for decryption.
+///
+/// # Returns
+/// Returns `Ok(())` on success, or an error if reading, decryption, or writing fails.
 pub fn decrypt_file(
     input_path: &str,
     output_path: &str,
