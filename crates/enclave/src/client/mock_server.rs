@@ -21,6 +21,10 @@ use crate::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
     },
+    snapshot::{
+        PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+        RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+    },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
@@ -132,5 +136,19 @@ impl EnclaveApiServer for MockEnclaveServer {
 
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(get_unsecure_sample_schnorrkel_keypair())
+    }
+
+    async fn prepare_encrypted_snapshot(
+        &self,
+        _request: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+        unimplemented!("prepare_encrypted_snapshot not implemented for mock server")
+    }
+
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        _request: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        unimplemented!("restore_from_encrypted_snapshot not implemented for mock server")
     }
 }
