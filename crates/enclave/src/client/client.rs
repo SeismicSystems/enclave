@@ -27,7 +27,7 @@ pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 /// A client for the enclave API.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnclaveClient {
     /// The inner HTTP client.
     async_client: HttpClient,
