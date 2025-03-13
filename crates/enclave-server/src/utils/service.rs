@@ -11,8 +11,7 @@ const SEISMIC_RETH_SERVICE: &str = "reth";
 /// # Returns
 /// * `Result<Output, anyhow::Error>` - The command output or an error.
 fn service_command(action: &str, service: &str) -> Result<Output, anyhow::Error> {
-    let output = Command::new("sudo")
-        .arg("service")
+    let output = Command::new("service")
         .arg(service)
         .arg(action)
         .output()?;
