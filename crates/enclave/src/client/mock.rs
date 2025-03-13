@@ -241,6 +241,11 @@ impl EnclaveApiServer for MockEnclaveServer {
 }
 
 pub struct MockEnclaveClient;
+impl MockEnclaveClient {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 macro_rules! impl_mock_sync_client_trait {
     ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
