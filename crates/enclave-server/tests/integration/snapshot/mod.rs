@@ -1,8 +1,4 @@
 use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
-use anyhow::Ok;
-use seismic_enclave_server::snapshot::*;
-use seismic_enclave_server::utils::service::reth_is_running;
-use seismic_enclave_server::utils::test_utils::{is_sudo, print_flush};
 
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::snapshot::{
@@ -11,6 +7,12 @@ use seismic_enclave::snapshot::{
 use seismic_enclave::{
     EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
+use seismic_enclave_server::snapshot::*;
+#[cfg(not(feature = "supervisorctl"))]
+use seismic_enclave_server::utils::service::reth_is_running;
+#[cfg(feature = "supervisorctl")]
+use seismic_enclave_server::utils::supervisorctl::reth_is_running;
+use seismic_enclave_server::utils::test_utils::{is_sudo, print_flush};
 
 use alloy_primitives::Bytes;
 use std::fs;

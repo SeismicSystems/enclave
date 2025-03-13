@@ -13,6 +13,10 @@ description = "Seismic enclave backend"
 name = "seismic_enclave_server"
 path = "src/lib.rs"
 
+[features]
+default = []         # empty default, no supervisorctl, as yocto_builds do not include it
+supervisorctl = []
+
 [dependencies]
 seismic-enclave.workspace = true
 

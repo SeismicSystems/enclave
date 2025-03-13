@@ -1,5 +1,8 @@
-// pub mod supervisor;
+#[cfg(not(feature = "supervisorctl"))]
 pub mod service;
+#[cfg(feature = "supervisorctl")]
+pub mod supervisorctl;
+
 pub mod test_utils;
 
 /// tdx_evidence_helpers contains helpers for dealing with Vec<u8> evidence
