@@ -1,7 +1,7 @@
 use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
 use anyhow::Ok;
 use seismic_enclave_server::snapshot::*;
-use seismic_enclave_server::utils::supervisor::reth_is_running;
+use seismic_enclave_server::utils::service::reth_is_running;
 use seismic_enclave_server::utils::test_utils::{is_sudo, print_flush};
 
 use seismic_enclave::rpc::EnclaveApiClient;

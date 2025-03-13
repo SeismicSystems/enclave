@@ -3,7 +3,7 @@ mod compress;
 mod file_encrypt;
 pub mod handlers;
 
-use crate::utils::supervisor::{start_reth, stop_reth};
+use crate::utils::service::{start_reth, stop_reth};
 pub use check_operator::check_operator;
 use compress::{compress_datadir, decompress_datadir};
 use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for integration testing
