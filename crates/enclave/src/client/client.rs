@@ -15,6 +15,10 @@ use crate::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
     },
+    snapshot::{
+        PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+        RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+    },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
@@ -82,7 +86,7 @@ impl EnclaveClient {
     }
 }
 
-macro_rules! impl_sync_client {
+macro_rules! impl_sync_client_trait {
     ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
         impl SyncEnclaveApiClient for EnclaveClient {
             $(
@@ -94,7 +98,7 @@ macro_rules! impl_sync_client {
     };
 }
 
-impl_sync_client!(
+impl_sync_client_trait!(
     fn health_check(&self) -> Result<String, ClientError>,
     fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
     fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
@@ -106,6 +110,8 @@ impl_sync_client!(
     fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
+    fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
+    fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
 #[cfg(test)]
@@ -122,8 +128,10 @@ pub mod tests {
 
     #[test]
     fn test_client_sync_context() {
+        // testing if sync client can be created in a sync runtime
         let port = 1888;
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        let _ = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
     }
 
     #[tokio::test(flavor = "multi_thread")]

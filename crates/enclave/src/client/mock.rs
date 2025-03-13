@@ -21,6 +21,10 @@ use crate::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
     },
+    snapshot::{
+        PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+        RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+    },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
@@ -30,9 +34,19 @@ use super::{
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 
-pub struct MockEnclaveClient;
+pub struct MockEnclaveServer {
+    addr: SocketAddr,
+}
 
-impl MockEnclaveClient {
+impl MockEnclaveServer {
+    pub fn new(addr: impl Into<SocketAddr>) -> Self {
+        Self { addr: addr.into() }
+    }
+
+    pub fn new_from_addr_port(addr: String, port: u16) -> Self {
+        Self::new((IpAddr::from_str(&addr).unwrap(), port))
+    }
+
     /// Mock implementation of the health check method.
     pub fn health_check() -> String {
         "OK".to_string()
@@ -76,71 +90,53 @@ impl MockEnclaveClient {
     pub fn get_public_key() -> secp256k1::PublicKey {
         get_unsecure_sample_secp256k1_pk()
     }
-}
 
-impl SyncEnclaveApiClient for MockEnclaveClient {
-    fn health_check(&self) -> Result<String, ClientError> {
-        Ok(MockEnclaveClient::health_check())
+    /// Mock implementation of the sign method.
+    pub fn sign(_req: Secp256k1SignRequest) -> Secp256k1SignResponse {
+        unimplemented!("sign not implemented for mock server")
     }
 
-    fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError> {
-        Ok(MockEnclaveClient::get_eph_rng_keypair())
+    /// Mock implementation of the verify method.
+    pub fn verify(_req: Secp256k1VerifyRequest) -> Secp256k1VerifyResponse {
+        unimplemented!("verify not implemented for mock server")
     }
 
-    fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError> {
-        Ok(MockEnclaveClient::encrypt(req))
+    /// Mock implementation of the get_genesis_data method.
+    pub fn get_genesis_data() -> GenesisDataResponse {
+        unimplemented!("get_genesis_data not implemented for mock server")
     }
 
-    fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError> {
-        Ok(MockEnclaveClient::decrypt(req))
+    /// Mock implementation of the get_snapsync_backup method.
+    pub fn get_snapsync_backup(_req: SnapSyncRequest) -> SnapSyncResponse {
+        unimplemented!("get_snapsync_backup not implemented for mock server")
     }
 
-    fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError> {
-        Ok(MockEnclaveClient::get_public_key())
-    }
-
-    fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError> {
-        unimplemented!("genesis_get_data not implemented for mock server")
-    }
-
-    fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> Result<SnapSyncResponse, ClientError> {
-        unimplemented!("provide_snapsync_backup not implemented for mock server")
-    }
-
-    fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError> {
-        unimplemented!("secp256k1_sign not implemented for mock server")
-    }
-
-    fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError> {
-        unimplemented!("secp256k1_verify not implemented for mock server")
-    }
-
-    fn get_attestation_evidence(
-        &self,
+    /// Mock implementation of the get_attestation_evidence method.
+    pub fn get_attestation_evidence(
         _req: AttestationGetEvidenceRequest,
-    ) -> Result<AttestationGetEvidenceResponse, ClientError> {
-        unimplemented!("attestation_get_evidence not implemented for mock server")
+    ) -> AttestationGetEvidenceResponse {
+        unimplemented!("get_attestation_evidence not implemented for mock server")
     }
 
-    fn eval_attestation_evidence(
-        &self,
+    /// Mock implementation of the eval_attestation_evidence method.
+    pub fn eval_attestation_evidence(
         _req: AttestationEvalEvidenceRequest,
-    ) -> Result<AttestationEvalEvidenceResponse, ClientError> {
-        unimplemented!("attestation_eval_evidence not implemented for mock server")
-    }
-}
-
-pub struct MockEnclaveServer {
-    addr: SocketAddr,
-}
-
-impl MockEnclaveServer {
-    pub fn new(addr: impl Into<SocketAddr>) -> Self {
-        Self { addr: addr.into() }
+    ) -> AttestationEvalEvidenceResponse {
+        unimplemented!("eval_attestation_evidence not implemented for mock server")
     }
 
-    pub fn new_from_addr_port(addr: String, port: u16) -> Self {
-        Self::new((IpAddr::from_str(&addr).unwrap(), port))
+    /// Mock implementation of the prepare_encrypted_snapshot method.
+    pub fn prepare_encrypted_snapshot(
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> PrepareEncryptedSnapshotResponse {
+        unimplemented!("prepare_encrypted_snapshot not implemented for mock server")
+    }
+
+    /// Mock implementation of the restore_from_encrypted_snapshot method.
+    pub fn restore_from_encrypted_snapshot(
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RestoreFromEncryptedSnapshotResponse {
+        unimplemented!("restore_from_encrypted_snapshot not implemented for mock server")
     }
 }
 
@@ -166,56 +162,113 @@ impl BuildableServer for MockEnclaveServer {
 
 #[async_trait]
 impl EnclaveApiServer for MockEnclaveServer {
+    /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(MockEnclaveClient::get_public_key())
+        Ok(MockEnclaveServer::get_public_key())
     }
 
+    /// Handler for: `healthCheck`
     async fn health_check(&self) -> RpcResult<String> {
-        Ok(MockEnclaveClient::health_check())
+        Ok(MockEnclaveServer::health_check())
     }
 
+    /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
-        unimplemented!("genesis_get_data not implemented for mock server")
+        Ok(MockEnclaveServer::get_genesis_data())
     }
 
-    async fn get_snapsync_backup(&self, _request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
-        unimplemented!("provide_snapsync_backup not implemented for mock server")
+    /// Handler for: `getSnapsyncBackup`
+    async fn get_snapsync_backup(&self, request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
+        Ok(MockEnclaveServer::get_snapsync_backup(request))
     }
 
-    async fn sign(&self, _req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        unimplemented!("secp256k1_sign not implemented for mock server")
+    /// Handler for: `encrypt`
+    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+        Ok(MockEnclaveServer::encrypt(req))
     }
 
-    async fn verify(&self, _req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        unimplemented!("secp256k1_verify not implemented for mock server")
+    /// Handler for: `decrypt`
+    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
+        Ok(MockEnclaveServer::decrypt(req))
     }
 
+    /// Handler for: `getAttestationEvidence`
     async fn get_attestation_evidence(
         &self,
-        _req: AttestationGetEvidenceRequest,
+        req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
-        unimplemented!("attestation_get_evidence not implemented for mock server")
+        Ok(MockEnclaveServer::get_attestation_evidence(req))
     }
 
+    /// Handler for: `evalAttestationEvidence`
     async fn eval_attestation_evidence(
         &self,
-        _req: AttestationEvalEvidenceRequest,
+        req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
-        unimplemented!("attestation_eval_evidence not implemented for mock server")
+        Ok(MockEnclaveServer::eval_attestation_evidence(req))
     }
 
-    async fn encrypt(&self, request: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        Ok(MockEnclaveClient::encrypt(request))
+    /// Handler for: `sign`
+    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
+        Ok(MockEnclaveServer::sign(req))
     }
 
-    async fn decrypt(&self, request: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        Ok(MockEnclaveClient::decrypt(request))
+    /// Handler for: `verify`
+    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
+        Ok(MockEnclaveServer::verify(req))
     }
 
+    /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        Ok(MockEnclaveClient::get_eph_rng_keypair())
+        Ok(MockEnclaveServer::get_eph_rng_keypair())
+    }
+
+    /// Handler for: 'snapshot.prepare_encrypted_snapshot'
+    async fn prepare_encrypted_snapshot(
+        &self,
+        req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+        Ok(MockEnclaveServer::prepare_encrypted_snapshot(req))
+    }
+
+    /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        Ok(MockEnclaveServer::restore_from_encrypted_snapshot(req))
     }
 }
+
+pub struct MockEnclaveClient;
+
+macro_rules! impl_mock_sync_client_trait {
+    ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
+        impl SyncEnclaveApiClient for MockEnclaveClient {
+            $(
+                fn $method_name(&self, $($param: $param_ty),*) -> $return_ty {
+                    Ok(MockEnclaveServer::$method_name($($param),*))
+                }
+            )+
+        }
+    };
+}
+
+impl_mock_sync_client_trait!(
+    fn health_check(&self) -> Result<String, ClientError>,
+    fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
+    fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
+    fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> Result<SnapSyncResponse, ClientError>,
+    fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError>,
+    fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
+    fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
+    fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
+    fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
+    fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
+    fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
+    fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
+    fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
+);
 
 #[cfg(test)]
 mod tests {

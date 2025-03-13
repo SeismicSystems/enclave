@@ -138,7 +138,6 @@ serde_json = "1.0"
 sha2 = "0.10"
 strum = { version = "0.26", features = ["derive"] }
 tokio = { version = "1.44", features = ["full"] }
-jsonrpsee = { version = "0.24", features = ["server", "client", "macros"] }
 tracing = { version = "0.1"}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "json"] }
 proc-macro2 = "1.0"
