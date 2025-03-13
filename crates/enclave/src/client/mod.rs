@@ -5,8 +5,8 @@
 //! traits define the API and implementation for the TEE client.
 #![allow(async_fn_in_trait)]
 pub mod client;
-pub mod mock_server;
+pub mod mock;
 pub mod rpc;
 
 pub use client::*;
-pub use mock_server::*;
+pub use mock::*;
