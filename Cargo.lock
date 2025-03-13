@@ -317,7 +317,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d2cc5aeb8dfa1e451a49fac87bc4b86c5de40ebea153ed88e83eb92b8151e74"
 dependencies = [
  "alloy-consensus 0.11.1",
- "alloy-contract 0.11.1",
+ "alloy-contract",
  "alloy-core",
  "alloy-eips 0.11.1",
  "alloy-genesis",
@@ -409,26 +409,6 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde 0.11.1",
  "serde",
-]
-
-[[package]]
-name = "alloy-contract"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b668c78c4b1f12f474ede5a85e8ce550d0aa1ef7d49fd1d22855a43b960e725"
-dependencies = [
- "alloy-dyn-abi",
- "alloy-json-abi",
- "alloy-network 0.8.3",
- "alloy-network-primitives 0.8.3",
- "alloy-primitives",
- "alloy-provider 0.8.3",
- "alloy-rpc-types-eth 0.8.3",
- "alloy-sol-types",
- "alloy-transport 0.8.3",
- "futures",
- "futures-util",
- "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4553,7 +4533,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -6553,7 +6533,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "alloy",
- "alloy-contract 0.8.3",
+ "alloy-contract",
  "alloy-primitives",
  "alloy-provider 0.8.3",
  "alloy-sol-types",
@@ -8107,7 +8087,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
