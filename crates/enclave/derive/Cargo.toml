@@ -1,0 +1,18 @@
+[package]
+name = "seismic-enclave-derive"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Tools for building and interfacing with the Seismic enclave"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2.workspace = true
+quote.workspace = true
+syn = { version = "2.0", features = ["full"] }
