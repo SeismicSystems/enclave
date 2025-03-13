@@ -6,6 +6,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
+use seismic_enclave_derive::derive_sync_client_trait;
 
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -40,7 +41,8 @@ pub trait BuildableServer {
     }
 }
 
-#[rpc(client, server)]
+#[derive_sync_client_trait] // get SyncEnclaveApi trait
+#[rpc(client, server)] // get EnclaveApiClient EnclaveApiServer trait
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
@@ -56,37 +58,37 @@ pub trait EnclaveApi {
 
     /// Provides backup data for snapshot synchronization
     #[method(name = "getSnapsyncBackup")]
-    async fn get_snapsync_backup(&self, request: SnapSyncRequest) -> RpcResult<SnapSyncResponse>;
+    async fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> RpcResult<SnapSyncResponse>;
 
     /// Signs a message using secp256k1 private key
     #[method(name = "sign")]
-    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse>;
+    async fn sign(&self, _req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse>;
 
     /// Verifies a secp256k1 signature against a message
     #[method(name = "verify")]
-    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse>;
+    async fn verify(&self, _req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse>;
 
     /// Generates attestation evidence from the attestation authority
     #[method(name = "getAttestationEvidence")]
     async fn get_attestation_evidence(
         &self,
-        req: AttestationGetEvidenceRequest,
+        _req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse>;
 
     /// Evaluates provided attestation evidence
     #[method(name = "evalAttestationEvidence")]
     async fn eval_attestation_evidence(
         &self,
-        req: AttestationEvalEvidenceRequest,
+        _req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse>;
 
     /// Encrypts transaction data using ECDH and AES
     #[method(name = "encrypt")]
-    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse>;
+    async fn encrypt(&self, _req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse>;
 
     /// Decrypts transaction data using ECDH and AES
     #[method(name = "decrypt")]
-    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse>;
+    async fn decrypt(&self, _req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse>;
 
     /// Generates an ephemeral keypair
     #[method(name = "eph_rng.get_keypair")]
