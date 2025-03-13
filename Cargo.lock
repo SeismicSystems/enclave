@@ -6539,12 +6539,22 @@ dependencies = [
  "reqwest 0.12.14",
  "schnorrkel",
  "secp256k1",
+ "seismic-enclave-derive",
  "serde",
  "serde_json",
  "sha2",
  "strum 0.26.3",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "seismic-enclave-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
 ]
 
 [[package]]
