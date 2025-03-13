@@ -46,7 +46,7 @@ tracing-subscriber.workspace = true
 alloy-sol-types = { version = "0.8", default-features = false }
 alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
-alloy-provider = "0.8"
+alloy-provider = "0.11"
 
 [dev-dependencies]
 serial_test = "3.2.0"
