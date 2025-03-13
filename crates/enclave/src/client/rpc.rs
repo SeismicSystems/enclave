@@ -14,6 +14,10 @@ use crate::genesis::GenesisDataResponse;
 use crate::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
+use crate::snapshot::{
+    PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+    RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+};
 use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
@@ -89,4 +93,16 @@ pub trait EnclaveApi {
     /// Generates an ephemeral keypair
     #[method(name = "eph_rng.get_keypair")]
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
+
+    #[method(name = "snapshot.prepare_encrypted_snapshot")]
+    async fn prepare_encrypted_snapshot(
+        &self,
+        request: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse>;
+
+    #[method(name = "snapshot.restore_from_encrypted_snapshot")]
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        request: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse>;
 }

@@ -4,13 +4,17 @@ use aes_gcm::{
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
+use rand::RngCore;
 pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
+use std::{fs, io::Read, io::Write};
 
 use crate::request_types::nonce::Nonce;
+
+const AESGCM_NONCE_SIZE: usize = 12;
 
 /// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
 ///
@@ -205,6 +209,11 @@ pub fn get_unsecure_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
     mini_secret_key.expand(ExpansionMode::Uniform).into()
 }
 
+pub fn get_unsecure_sample_aesgcm_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
+    let key: aes_gcm::Key<aes_gcm::Aes256Gcm> = [0u8; 32].into();
+    key
+}
+
 /// Encrypts the provided data using an AES key derived from
 /// the provided public key and the provided private key
 pub fn ecdh_encrypt(
@@ -233,4 +242,80 @@ pub fn ecdh_decrypt(
         derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let decrypted_data = aes_decrypt(&aes_key, &data, nonce)?;
     Ok(decrypted_data)
+}
+
+/// Encrypts a file using the provided AES key and saves the output with an embedded nonce.
+///
+/// This function reads the contents of the input file, generates a random nonce,
+/// encrypts the data using AES-GCM, and writes the nonce followed by the ciphertext
+/// into the specified output file. The nonce is required for decryption and must
+/// be stored along with the ciphertext.
+///
+/// # Arguments
+/// * `input_path` - Path to the plaintext input file.
+/// * `output_path` - Path where the encrypted file (nonce + ciphertext) will be written.
+/// * `key` - AES-256-GCM key used for encryption.
+///
+/// # Returns
+/// Returns `Ok(())` on success, or an error if reading, encryption, or writing fails.
+pub fn encrypt_file(
+    input_path: &str,
+    output_path: &str,
+    key: &Key<Aes256Gcm>,
+) -> Result<(), anyhow::Error> {
+    let plaintext =
+        fs::read(input_path).map_err(|e| anyhow::anyhow!("Failed to read input file: {:?}", e))?;
+
+    // Generate a random nonce
+    let mut nonce_bytes = [0u8; AESGCM_NONCE_SIZE];
+    let mut rng = rand::rng();
+    rng.fill_bytes(&mut nonce_bytes);
+
+    // Encrypt the data
+    let ciphertext = aes_encrypt(key, &plaintext, nonce_bytes).expect("Encryption failed!");
+
+    // Save nonce + ciphertext together
+    let mut output_file = fs::File::create(output_path)
+        .map_err(|e| anyhow::anyhow!("Failed to create output file: {:?}", e))?;
+    output_file.write_all(&nonce_bytes)?; // Write nonce first
+    output_file.write_all(&ciphertext)?; // Write encrypted content
+
+    Ok(())
+}
+
+// Decrypts a file previously encrypted with `encrypt_file`, using the provided AES key.
+///
+/// This function reads the encrypted file, extracts the nonce (prepended during encryption),
+/// decrypts the ciphertext using AES-GCM, and writes the decrypted plaintext to the specified output path.
+///
+/// # Arguments
+/// * `input_path` - Path to the encrypted file (must contain nonce + ciphertext).
+/// * `output_path` - Path where the decrypted file content will be written.
+/// * `key` - AES-256-GCM key used for decryption.
+///
+/// # Returns
+/// Returns `Ok(())` on success, or an error if reading, decryption, or writing fails.
+pub fn decrypt_file(
+    input_path: &str,
+    output_path: &str,
+    key: &Key<Aes256Gcm>,
+) -> Result<(), anyhow::Error> {
+    let mut file = fs::File::open(input_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open input file: {:?}", e))?;
+    let mut file_data = Vec::new();
+    file.read_to_end(&mut file_data)?;
+
+    // Extract nonce (first 12 bytes)
+    if file_data.len() < AESGCM_NONCE_SIZE {
+        anyhow::bail!("File is too small to contain a nonce!");
+    }
+    let nonce_bytes: [u8; AESGCM_NONCE_SIZE] = file_data[..AESGCM_NONCE_SIZE].try_into().unwrap();
+    let ciphertext = &file_data[AESGCM_NONCE_SIZE..];
+
+    // Decrypt
+    let decrypted_data = aes_decrypt(key, ciphertext, nonce_bytes)?;
+
+    fs::write(output_path, decrypted_data)
+        .map_err(|e| anyhow::anyhow!("Failed to write output file: {:?}", e))?;
+    Ok(())
 }
