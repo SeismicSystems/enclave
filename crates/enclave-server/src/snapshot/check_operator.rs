@@ -55,7 +55,9 @@ pub async fn check_operator(
     // Specify the contract address
     let contract_address: Address = OPERATOR_ADDR
         .parse()
-        .expect("const OPERATOR_ADDR does not parse");
+        .map_err(
+            |e| anyhow::anyhow!("Unexpected Internal Error: Failed to parse UpgradeOperator contract address: {:?}", e),
+        )?; 
 
     // Instantiate the contract
     let contract = UpgradeOperator::new(contract_address, Arc::new(provider));
