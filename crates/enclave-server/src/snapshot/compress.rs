@@ -101,7 +101,13 @@ pub fn decompress_datadir(
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
         .current_dir(data_dir)
-        .args(["--use-compress-program=lz4", "-xvPf", &snapshot_path])
+        .args([
+            "--use-compress-program=lz4",
+            "--no-same-permissions",
+            "--no-same-owner",
+            "-xvPf",
+            &snapshot_path,
+        ])
         .output()
         .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
 
