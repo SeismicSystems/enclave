@@ -98,6 +98,14 @@ pub fn decompress_datadir(
         );
     }
 
+    // change the umask so that files can be written to by the user's group
+    // so that reth can write to the files
+    Command::new("umask")
+        .current_dir(data_dir)
+        .args(["0002"])
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
+
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
         .current_dir(data_dir)
@@ -108,6 +116,13 @@ pub fn decompress_datadir(
             "-xvPf",
             &snapshot_path,
         ])
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
+
+    // change the umask back
+    Command::new("umask")
+        .current_dir(data_dir)
+        .args(["0022"])
         .output()
         .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
 

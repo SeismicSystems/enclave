@@ -216,7 +216,7 @@ async fn run_client_ping() {
     let resp = client.health_check().unwrap();
     println!("resp: {:?}", resp);
 
-    let req = RestoreFromEncryptedSnapshotRequest {};
-    let resp = client.restore_from_encrypted_snapshot(req);
-    println!("resp: {:?}", resp);
+    // let req = RestoreFromEncryptedSnapshotRequest {};
+    // let resp = client.restore_from_encrypted_snapshot(req);
+    // println!("resp: {:?}", resp);
 }
