@@ -83,7 +83,7 @@ impl EnclaveApiServer for EnclaveServer {
 
     /// Handler for: `healthCheck`
     async fn health_check(&self) -> RpcResult<String> {
-        Ok("OK. really tar --no-same-permissions and --no-same-owner".into())
+        Ok("OK. health print umask".into())
     }
 
     /// Handler for: `getGenesisData`
