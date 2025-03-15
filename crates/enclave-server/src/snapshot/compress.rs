@@ -53,7 +53,7 @@ pub fn compress_datadir(
         .current_dir(data_dir) // run tar in the data_dir
         .args(&tar_args)
         .output()
-        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to compress snapshot with tar: {:?}", e))?;
 
     if !output.status.success() {
         anyhow::bail!("Failed to compress datadir with tar:\n {:?}", output);
