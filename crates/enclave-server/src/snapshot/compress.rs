@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::process::Command;
+use libc;
 
 /// Compresses the contents of a data directory (`data_dir`) into a `.tar.lz4` snapshot archive.
 ///
@@ -100,11 +101,7 @@ pub fn decompress_datadir(
 
     // change the umask so that files can be written to by the user's group
     // so that reth can write to the files
-    Command::new("umask")
-        .current_dir(data_dir)
-        .args(["0002"])
-        .output()
-        .map_err(|e| anyhow::anyhow!("Failed to change umask to 0002: {:?}", e))?;
+    let old_umask = unsafe { libc::umask(0o002) };
 
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
@@ -132,11 +129,9 @@ pub fn decompress_datadir(
     }
 
     // change the umask back
-    Command::new("umask")
-        .current_dir(data_dir)
-        .args(["0022"])
-        .output()
-        .map_err(|e| anyhow::anyhow!("Failed to change umask back to 0022: {:?}", e))?;
+    unsafe {
+        libc::umask(old_umask);
+    }
 
     Ok(())
 }

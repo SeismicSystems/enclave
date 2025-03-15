@@ -36,6 +36,7 @@ hex.workspace = true
 hkdf.workspace = true
 jsonrpsee.workspace = true
 kbs-types.workspace = true
+libc.workspace = true
 log.workspace = true
 once_cell.workspace = true
 routerify.workspace = true
