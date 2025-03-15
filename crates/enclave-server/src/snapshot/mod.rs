@@ -86,11 +86,9 @@ pub fn restore_from_encrypted_snapshot(
         .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
     stop_reth()?;
     decrypt_snapshot(data_disk_dir, snapshot_dir, snapshot_file)?;
-    // making it here
     decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
     fs::remove_dir_all(snapshot_dir)
         .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
-    // not making it here
     start_reth()?;
     Ok(())
 }
