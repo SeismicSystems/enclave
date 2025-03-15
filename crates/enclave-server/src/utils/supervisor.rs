@@ -25,14 +25,14 @@ fn supervisorctl_command(action: &str, service: &str) -> Result<Output, anyhow::
 /// Stops the `reth` service using `supervisorctl`.
 pub fn stop_reth() -> Result<(), anyhow::Error> {
     supervisorctl_command("stop", SEISMIC_RETH_SERVICE)
-         .map_err(|e| anyhow::anyhow!("supervisorctl stop reth failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("supervisorctl stop reth failed: {}", e))?;
     Ok(())
 }
 
 /// Starts the `reth` service using `supervisorctl`.
 pub fn start_reth() -> Result<(), anyhow::Error> {
     supervisorctl_command("start", SEISMIC_RETH_SERVICE)
-         .map_err(|e| anyhow::anyhow!("supervisorctl start reth failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("supervisorctl start reth failed: {}", e))?;
     Ok(())
 }
 
@@ -42,8 +42,8 @@ pub fn start_reth() -> Result<(), anyhow::Error> {
 /// * `bool` - `true` if the service is running, otherwise `false`.
 pub fn reth_is_running() -> bool {
     let output = supervisorctl_command("status", SEISMIC_RETH_SERVICE)
-         .map_err(|e| anyhow::anyhow!("supervisorctl status reth failed: {}", e))
-         .unwrap();
+        .map_err(|e| anyhow::anyhow!("supervisorctl status reth failed: {}", e))
+        .unwrap();
     let stdout = std::str::from_utf8(&output.stdout)
         .map_err(|_| "Failed to parse command output".to_string())
         .unwrap();
