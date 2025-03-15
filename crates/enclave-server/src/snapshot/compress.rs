@@ -104,34 +104,39 @@ pub fn decompress_datadir(
         .current_dir(data_dir)
         .args(["0002"])
         .output()
-        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to change umask to 0002: {:?}", e))?;
 
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
-        .current_dir(data_dir)
-        .args([
-            "--use-compress-program=lz4",
-            "--no-same-permissions",
-            "--no-same-owner",
-            "-xvPf",
-            &snapshot_path,
-        ])
-        .output()
-        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
+    .current_dir(data_dir)
+    .args([
+        "--use-compress-program=lz4",
+        "--no-same-permissions",
+        "--no-same-owner",
+        "-xvPf",
+        &snapshot_path,
+    ])
+    .output()
+    .map_err(|e| anyhow::anyhow!("Failed to spwan tar process: {:?}", e))?;
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+    
+        return Err(anyhow::anyhow!(
+            "tar extraction failed.\nExit code: {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            stdout,
+            stderr,
+        ));
+    }
 
     // change the umask back
     Command::new("umask")
         .current_dir(data_dir)
         .args(["0022"])
         .output()
-        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "Failed to decompress snapshot with tar: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+        .map_err(|e| anyhow::anyhow!("Failed to change umask back to 0022: {:?}", e))?;
 
     Ok(())
 }

@@ -83,7 +83,7 @@ impl EnclaveApiServer for EnclaveServer {
 
     /// Handler for: `healthCheck`
     async fn health_check(&self) -> RpcResult<String> {
-        Ok("OK. health print umask".into())
+        Ok("OK. clearer compress errors".into())
     }
 
     /// Handler for: `getGenesisData`
