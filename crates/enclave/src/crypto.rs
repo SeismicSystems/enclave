@@ -309,9 +309,9 @@ pub fn decrypt_file(
     if file_data.len() < AESGCM_NONCE_SIZE {
         anyhow::bail!("File is too small to contain a nonce!");
     }
-    let nonce_bytes: [u8; AESGCM_NONCE_SIZE] = file_data[..AESGCM_NONCE_SIZE].try_into().map_err(
-        |e| anyhow::anyhow!("Unexpected error casting nonce bytes: {:?}", e),
-    )?;
+    let nonce_bytes: [u8; AESGCM_NONCE_SIZE] = file_data[..AESGCM_NONCE_SIZE]
+        .try_into()
+        .map_err(|e| anyhow::anyhow!("Unexpected error casting nonce bytes: {:?}", e))?;
     let ciphertext = &file_data[AESGCM_NONCE_SIZE..];
 
     // Decrypt

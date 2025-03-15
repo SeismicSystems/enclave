@@ -108,21 +108,21 @@ pub fn decompress_datadir(
 
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
-    .current_dir(data_dir)
-    .args([
-        "--use-compress-program=lz4",
-        "--no-same-permissions",
-        "--no-same-owner",
-        "-xvPf",
-        &snapshot_path,
-    ])
-    .output()
-    .map_err(|e| anyhow::anyhow!("Failed to spwan tar process: {:?}", e))?;
+        .current_dir(data_dir)
+        .args([
+            "--use-compress-program=lz4",
+            "--no-same-permissions",
+            "--no-same-owner",
+            "-xvPf",
+            &snapshot_path,
+        ])
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to spwan tar process: {:?}", e))?;
 
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
         return Err(anyhow::anyhow!(
             "tar extraction failed.\nExit code: {}\nstdout:\n{}\nstderr:\n{}",
             output.status,
