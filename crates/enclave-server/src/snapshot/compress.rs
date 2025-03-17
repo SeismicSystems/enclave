@@ -1,6 +1,6 @@
+use libc;
 use std::path::Path;
 use std::process::Command;
-use libc;
 
 /// Compresses the contents of a data directory (`data_dir`) into a `.tar.lz4` snapshot archive.
 ///

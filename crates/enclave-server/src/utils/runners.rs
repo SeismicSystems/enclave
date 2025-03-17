@@ -82,8 +82,8 @@ async fn get_mrtd() {
 #[tokio::test(flavor = "multi_thread")]
 async fn run_client_ping() {
     use seismic_enclave::rpc::SyncEnclaveApiClient;
-    use seismic_enclave::EnclaveClient;
     use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
+    use seismic_enclave::EnclaveClient;
 
     let url = "http://yocto-1.seismicdev.net:7878";
     // let url = "http://127.0.0.1:7878";
