@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key,
 };
 use anyhow::anyhow;
@@ -14,7 +14,7 @@ use std::{fs, io::Read, io::Write};
 
 use crate::request_types::nonce::Nonce;
 
-const AESGCM_NONCE_SIZE: usize = 12;
+const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
 
 /// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
 ///
@@ -26,11 +26,11 @@ const AESGCM_NONCE_SIZE: usize = 12;
 ///
 /// # Returns
 /// A `GenericArray<u8, N>` where `N` is the expected nonce size for AES-GCM encryption.
-pub fn u64_to_generic_u8_array(nonce: u64) -> GenericArray<u8, <Aes256Gcm as AeadCore>::NonceSize> {
-    let mut nonce_bytes = nonce.to_be_bytes().to_vec();
-    let crypto_nonce_size = GenericArray::<u8, <Aes256Gcm as AeadCore>::NonceSize>::default().len();
-    nonce_bytes.resize(crypto_nonce_size, 0); // pad to the expected size
-    GenericArray::clone_from_slice(&nonce_bytes)
+pub fn u64_to_be_bytes_array(nonce: u64) -> [u8; AESGCM_NONCE_SIZE] {
+    let nonce_bytes = nonce.to_be_bytes().to_vec();
+    let mut padded_nonce_bytes = [0u8; AESGCM_NONCE_SIZE];
+    padded_nonce_bytes[AESGCM_NONCE_SIZE - nonce_bytes.len()..].copy_from_slice(&nonce_bytes);
+    padded_nonce_bytes
 }
 
 /// Encrypts plaintext using AES-256 GCM with a 92-bit nonce.
