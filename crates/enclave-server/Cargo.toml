@@ -13,6 +13,10 @@ description = "Seismic enclave backend"
 name = "seismic_enclave_server"
 path = "src/lib.rs"
 
+[features]
+default = []         # empty default, no supervisorctl, as yocto_builds do not include it
+supervisorctl = []
+
 [dependencies]
 seismic-enclave.workspace = true
 
@@ -32,6 +36,7 @@ hex.workspace = true
 hkdf.workspace = true
 jsonrpsee.workspace = true
 kbs-types.workspace = true
+libc.workspace = true
 log.workspace = true
 once_cell.workspace = true
 routerify.workspace = true

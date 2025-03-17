@@ -2,16 +2,20 @@ mod check_operator;
 mod compress;
 mod file_encrypt;
 pub mod handlers;
-
-use crate::utils::supervisor::{start_reth, stop_reth};
 pub use check_operator::check_operator;
 use compress::{compress_datadir, decompress_datadir};
 use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for integration testing
 
+#[cfg(not(feature = "supervisorctl"))]
+use crate::utils::service::{start_reth, stop_reth};
+#[cfg(feature = "supervisorctl")]
+use crate::utils::supervisorctl::{start_reth, stop_reth};
+
 use std::fs;
 
 pub const DATA_DISK_DIR: &str = "/mnt/datadisk";
-pub const RETH_DATA_DIR: &str = "/home/azureuser/.reth"; // correct when running reth with `cargo run`
+// pub const RETH_DATA_DIR: &str = "/home/azureuser/.reth"; // correct when running reth with `cargo run` on devbox
+pub const RETH_DATA_DIR: &str = "/persistent/reth"; // correct when running with yocto builds
 pub const SNAPSHOT_DIR: &str = "/tmp/snapshot";
 pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 
@@ -44,12 +48,12 @@ pub fn prepare_encrypted_snapshot(
 ) -> Result<(), anyhow::Error> {
     fs::create_dir_all(snapshot_dir)
         .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
-    stop_reth().expect("Failed to stop reth during create_encrypted_snapshot");
+    stop_reth()?;
     compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
     encrypt_snapshot(snapshot_dir, data_disk_dir, snapshot_file)?;
     fs::remove_dir_all(snapshot_dir)
         .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
-    start_reth().expect("Failed to start reth during create_encrypted_snapshot");
+    start_reth()?;
     Ok(())
 }
 
