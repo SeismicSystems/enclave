@@ -78,3 +78,22 @@ async fn get_mrtd() {
         .await
         .unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_client_ping() {
+    use seismic_enclave::rpc::SyncEnclaveApiClient;
+    use seismic_enclave::EnclaveClient;
+    use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
+
+    let url = "http://yocto-1.seismicdev.net:7878";
+    // let url = "http://127.0.0.1:7878";
+    let client = EnclaveClient::new(url);
+
+    // // health check
+    // let resp = client.health_check().unwrap();
+    // println!("resp: {:?}", resp);
+
+    let req = RestoreFromEncryptedSnapshotRequest {};
+    let resp = client.restore_from_encrypted_snapshot(req);
+    println!("resp: {:?}", resp);
+}

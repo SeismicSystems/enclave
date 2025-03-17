@@ -14,7 +14,8 @@ use crate::utils::supervisorctl::{start_reth, stop_reth};
 use std::fs;
 
 pub const DATA_DISK_DIR: &str = "/mnt/datadisk";
-pub const RETH_DATA_DIR: &str = "/persistent/reth"; // correct when running reth with `cargo run`
+// pub const RETH_DATA_DIR: &str = "/home/azureuser/.reth"; // correct when running reth with `cargo run` on devbox
+pub const RETH_DATA_DIR: &str = "/persistent/reth"; // correct when running with yocto builds
 pub const SNAPSHOT_DIR: &str = "/tmp/snapshot";
 pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 
