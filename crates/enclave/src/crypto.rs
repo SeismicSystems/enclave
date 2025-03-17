@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key,
 };
 use anyhow::anyhow;
@@ -14,7 +14,7 @@ use std::{fs, io::Read, io::Write};
 
 use crate::request_types::nonce::Nonce;
 
-const AESGCM_NONCE_SIZE: usize = 12;
+const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
 
 /// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
 ///
