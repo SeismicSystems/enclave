@@ -1,3 +1,4 @@
+use libc;
 use std::path::Path;
 use std::process::Command;
 
@@ -98,18 +99,38 @@ pub fn decompress_datadir(
         );
     }
 
+    // change the umask so that files can be written to by the user's group
+    // so that reth can write to the files
+    let old_umask = unsafe { libc::umask(0o002) };
+
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
         .current_dir(data_dir)
-        .args(["--use-compress-program=lz4", "-xvPf", &snapshot_path])
+        .args([
+            "--use-compress-program=lz4",
+            "--no-same-permissions",
+            "--no-same-owner",
+            "-xvPf",
+            &snapshot_path,
+        ])
         .output()
-        .map_err(|e| anyhow::anyhow!("Failed to decompress snapshot with tar: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to spwan tar process: {:?}", e))?;
 
     if !output.status.success() {
-        anyhow::bail!(
-            "Failed to decompress snapshot with tar: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        return Err(anyhow::anyhow!(
+            "tar extraction failed.\nExit code: {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            stdout,
+            stderr,
+        ));
+    }
+
+    // change the umask back
+    unsafe {
+        libc::umask(old_umask);
     }
 
     Ok(())
