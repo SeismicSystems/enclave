@@ -4,7 +4,7 @@ use aes_gcm::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::u64_to_generic_u8_array;
+use crate::u64_to_be_bytes_array;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -35,7 +35,7 @@ impl From<[u8; 12]> for Nonce {
 impl Into<Vec<u8>> for Nonce {
     fn into(self) -> Vec<u8> {
         match self {
-            Self::U64(value) => u64_to_generic_u8_array(value).to_vec(),
+            Self::U64(value) => u64_to_be_bytes_array(value).to_vec(),
             Self::Vec(value) => value,
             Self::Bytes(value) => value.to_vec(),
         }
