@@ -4,6 +4,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     ops::Deref,
     sync::OnceLock,
+    time::Duration,
 };
 use tokio::runtime::{Handle, Runtime};
 
@@ -41,10 +42,15 @@ pub struct EnclaveClient {
 
 impl Default for EnclaveClient {
     fn default() -> Self {
-        Self::new(format!(
+        let url = format!(
             "http://{}:{}",
             ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        ))
+        );
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(Duration::from_secs(5))
+            .build(url)
+            .unwrap();
+        Self::new_from_client(async_client)
     }
 }
 
