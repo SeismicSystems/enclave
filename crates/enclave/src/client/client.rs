@@ -4,6 +4,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     ops::Deref,
     sync::OnceLock,
+    time::Duration,
 };
 use tokio::runtime::{Handle, Runtime};
 
@@ -41,10 +42,15 @@ pub struct EnclaveClient {
 
 impl Default for EnclaveClient {
     fn default() -> Self {
-        Self::new(format!(
+        let url = format!(
             "http://{}:{}",
             ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        ))
+        );
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(Duration::from_secs(5))
+            .build(url)
+            .unwrap();
+        Self::new_from_client(async_client)
     }
 }
 
@@ -59,15 +65,19 @@ impl Deref for EnclaveClient {
 impl EnclaveClient {
     /// Create a new enclave client.
     pub fn new(url: impl AsRef<str>) -> Self {
-        let inner = jsonrpsee::http_client::HttpClientBuilder::default()
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
             .build(url)
             .unwrap();
+        Self::new_from_client(async_client)
+    }
+
+    pub fn new_from_client(async_client: HttpClient) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
             let runtime = ENCLAVE_CLIENT_RUNTIME.get_or_init(|| Runtime::new().unwrap());
             runtime.handle().clone()
         });
         Self {
-            async_client: inner,
+            async_client,
             handle,
         }
     }
