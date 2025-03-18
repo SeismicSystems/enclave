@@ -116,7 +116,9 @@ impl_sync_client_trait!(
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{get_unsecure_sample_secp256k1_pk, rpc::BuildableServer, MockEnclaveServer};
+    use crate::{
+        get_unsecure_sample_secp256k1_pk, nonce::Nonce, rpc::BuildableServer, MockEnclaveServer,
+    };
 
     use super::*;
     use secp256k1::{rand, Secp256k1};
@@ -163,12 +165,11 @@ pub mod tests {
         let secp = Secp256k1::new();
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let mut nonce = vec![0u8; 4]; // 4 leading zeros
-        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+        let nonce = Nonce::new_rand();
         let encryption_request = IoEncryptionRequest {
             key: public_key,
             data: data_to_encrypt.clone(),
-            nonce: nonce.clone().into(),
+            nonce: nonce.clone(),
         };
 
         // make the http request
@@ -180,7 +181,7 @@ pub mod tests {
         let decryption_request = IoDecryptionRequest {
             key: public_key,
             data: encryption_response.encrypted_data,
-            nonce: nonce.into(),
+            nonce: nonce.clone(),
         };
 
         let decryption_response = client.decrypt(decryption_request).unwrap();

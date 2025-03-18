@@ -1,6 +1,8 @@
 use kbs_types::Tee;
 use serde::{Deserialize, Serialize};
 
+use super::nonce::Nonce;
+
 /// Struct representing the request to SnapSync
 ///
 /// # Fields
@@ -26,7 +28,7 @@ pub struct SnapSyncResponse {
     pub server_attestation: Vec<u8>,
     pub server_signing_pk: Vec<u8>,
     pub encrypted_data: Vec<u8>,
-    pub nonce: Vec<u8>,
+    pub nonce: Nonce,
     pub signature: Vec<u8>,
 }
 
