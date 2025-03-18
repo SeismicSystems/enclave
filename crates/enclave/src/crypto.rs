@@ -52,10 +52,10 @@ pub fn aes_encrypt(
     plaintext: &[u8],
     nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    let nonce_array = nonce.into().try_into()?;
+    let nonce_array: Nonce = nonce.into();
     let cipher = Aes256Gcm::new(key);
     cipher
-        .encrypt(&nonce_array, plaintext)
+        .encrypt(&nonce_array.into(), plaintext)
         .map_err(|e| anyhow!("AES encryption failed: {:?}", e))
 }
 
@@ -80,11 +80,11 @@ pub fn aes_decrypt(
     ciphertext: &[u8],
     nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    let nonce_array = nonce.into().try_into()?;
+    let nonce_array: Nonce = nonce.into();
     let cipher = Aes256Gcm::new(key);
 
     cipher
-        .decrypt(&nonce_array, ciphertext)
+        .decrypt(&nonce_array.into(), ciphertext)
         .map_err(|e| anyhow!("AES decryption failed: {:?}", e))
 }
 
@@ -265,17 +265,15 @@ pub fn encrypt_file(
         fs::read(input_path).map_err(|e| anyhow::anyhow!("Failed to read input file: {:?}", e))?;
 
     // Generate a random nonce
-    let mut nonce_bytes = [0u8; AESGCM_NONCE_SIZE];
-    let mut rng = rand::rng();
-    rng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::new_rand();
 
     // Encrypt the data
-    let ciphertext = aes_encrypt(key, &plaintext, nonce_bytes).expect("Encryption failed!");
+    let ciphertext = aes_encrypt(key, &plaintext, nonce.clone()).expect("Encryption failed!");
 
     // Save nonce + ciphertext together
     let mut output_file = fs::File::create(output_path)
         .map_err(|e| anyhow::anyhow!("Failed to create output file: {:?}", e))?;
-    output_file.write_all(&nonce_bytes)?; // Write nonce first
+    output_file.write_all(&nonce.0)?; // Write nonce first
     output_file.write_all(&ciphertext)?; // Write encrypted content
 
     Ok(())
