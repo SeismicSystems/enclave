@@ -4,7 +4,6 @@ use aes_gcm::{
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
-use rand::RngCore;
 pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
