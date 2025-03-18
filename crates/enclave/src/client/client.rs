@@ -28,8 +28,65 @@ use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
-
+pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+pub struct EnclaveClientBuilder {
+    addr: Option<String>,
+    port: Option<u16>,
+    timeout: Option<Duration>,
+    url: Option<String>,
+}
+
+impl EnclaveClientBuilder {
+    pub fn new() -> Self {
+        Self {
+            addr: None,
+            port: None,
+            timeout: None,
+            url: None,
+        }
+    }
+
+    pub fn addr(mut self, addr: impl Into<String>) -> Self {
+        self.addr = Some(addr.into());
+        self
+    }
+
+    pub fn port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn url(mut self, url: impl Into<String>) -> Self {
+        self.url = Some(url.into());
+        self
+    }
+
+    pub fn build(self) -> EnclaveClient {
+        let url = self.url.unwrap_or_else(|| {
+            format!(
+                "http://{}:{}",
+                self.addr
+                    .unwrap_or_else(|| ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string()),
+                self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
+            )
+        });
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(
+                self.timeout
+                    .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
+            )
+            .build(url)
+            .unwrap();
+        EnclaveClient::new_from_client(async_client)
+    }
+}
 
 /// A client for the enclave API.
 #[derive(Debug, Clone)]
@@ -63,12 +120,18 @@ impl Deref for EnclaveClient {
 }
 
 impl EnclaveClient {
+    pub fn builder() -> EnclaveClientBuilder {
+        EnclaveClientBuilder::new()
+    }
+
+    /// Create a new enclave client from an address and port.
+    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
+        EnclaveClientBuilder::new().addr(addr).port(port).build()
+    }
+
     /// Create a new enclave client.
     pub fn new(url: impl AsRef<str>) -> Self {
-        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
-            .build(url)
-            .unwrap();
-        Self::new_from_client(async_client)
+        EnclaveClientBuilder::new().url(url.as_ref()).build()
     }
 
     pub fn new_from_client(async_client: HttpClient) -> Self {
@@ -80,11 +143,6 @@ impl EnclaveClient {
             async_client,
             handle,
         }
-    }
-
-    /// Create a new enclave client from an address and port.
-    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
-        Self::new(format!("http://{}:{}", addr.into(), port))
     }
 
     /// Block on a future with the runtime.
