@@ -12,9 +12,7 @@ use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::{fs, io::Read, io::Write};
 
-use crate::request_types::nonce::Nonce;
-
-const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
+use crate::nonce::{Nonce, AESGCM_NONCE_SIZE};
 
 /// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
 ///
