@@ -44,7 +44,7 @@ pub async fn build_snapsync_response(
         server_attestation: attestation,
         server_signing_pk: server_signing_pk_bytes,
         encrypted_data,
-        nonce: nonce.to_vec(),
+        nonce: nonce.into(),
         signature,
     })
 }

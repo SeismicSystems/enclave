@@ -56,14 +56,13 @@ pub async fn tx_io_decrypt_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+    use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
     #[tokio::test]
     async fn test_io_encryption() {
         // Prepare encryption request body
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let mut nonce = vec![0u8; 4]; // 4 leading zeros
-        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+        let nonce = Nonce::new_rand();
         let req = IoEncryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: data_to_encrypt.clone(),
@@ -79,7 +78,7 @@ mod tests {
         let req = IoDecryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: res.encrypted_data,
-            nonce: nonce.into(),
+            nonce: nonce.clone(),
         };
 
         let res = tx_io_decrypt_handler(req).await.unwrap();
@@ -92,12 +91,11 @@ mod tests {
     #[tokio::test]
     async fn test_decrypt_invalid_ciphertext() {
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut nonce = vec![0u8; 4]; // 4 leading zeros
-        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+        let nonce = Nonce::new_rand();
         let decryption_request = IoDecryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: bad_ciphertext,
-            nonce: nonce.into(),
+            nonce: nonce.clone(),
         };
         let res = tx_io_decrypt_handler(decryption_request).await;
 
