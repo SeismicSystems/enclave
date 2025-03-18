@@ -4,6 +4,7 @@ use sha2::digest::{consts::U12, generic_array::GenericArray};
 
 pub const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
 
+/// The intermediate type to represent a nonce in the enclave
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Nonce(pub [u8; AESGCM_NONCE_SIZE]);
 
