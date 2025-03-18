@@ -129,6 +129,11 @@ impl EnclaveClient {
         EnclaveClientBuilder::new().url(url.as_ref()).build()
     }
 
+    /// Create a new enclave client from an address and port.
+    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
+        EnclaveClientBuilder::new().addr(addr).port(port).build()
+    }
+
     pub fn new_from_client(async_client: HttpClient) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
             let runtime = ENCLAVE_CLIENT_RUNTIME.get_or_init(|| Runtime::new().unwrap());
@@ -138,11 +143,6 @@ impl EnclaveClient {
             async_client,
             handle,
         }
-    }
-
-    /// Create a new enclave client from an address and port.
-    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
-        EnclaveClientBuilder::new().addr(addr).port(port).build()
     }
 
     /// Block on a future with the runtime.
