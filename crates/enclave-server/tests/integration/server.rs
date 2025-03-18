@@ -24,8 +24,7 @@ use std::time::Duration;
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
     let data_to_encrypt = vec![72, 101, 108, 108, 111];
-    let mut nonce = vec![0u8; 4]; // 4 leading zeros
-    nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+    let nonce = Nonce::new_rand();
     let encryption_request = IoEncryptionRequest {
         key: get_unsecure_sample_secp256k1_pk(),
         data: data_to_encrypt.clone(),
