@@ -7,6 +7,7 @@ pub mod snapshot; // pub for integration testing
 mod snapsync;
 mod tx_io;
 pub mod utils;
+pub mod key_manager;
 
 use seismic_enclave::{
     get_unsecure_sample_aesgcm_key, get_unsecure_sample_schnorrkel_keypair,
