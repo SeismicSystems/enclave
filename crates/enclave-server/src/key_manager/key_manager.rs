@@ -142,31 +142,22 @@ impl KeyManager {
     /// Create a new KeyManager with test shares (for development only)
     pub fn new_with_test_shares() -> Self {
         KeyManager {
-            master_key: Secret::new(get_unsecure_sample_secp256k1_sk().as_ref()),
+            master_key: Secret::new(*get_unsecure_sample_secp256k1_sk().as_ref()),
             purpose_keys: HashMap::new(),
         }
     }
 
-    /// Derive a deterministic TEE share from MRTD
-    fn derive_tee_share() -> Result<Secret> {
-        match get_tdx_quote() {
-            Ok(quote) => {
-                let mrtd = quote.rtmr_3();
-                let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
-                let mut share = [0u8; 32];
-                hk.expand(b"tee-share-for-key-derivation", &mut share)
-                    .map_err(|_| anyhow!("HKDF expand failed"))?;
-                
-                log::info!("Derived TEE share from TDX MRTD measurement");
-                return Ok(Secret::new(share));
-            }
-            Err(e) => {
-                log::warn!("Failed to get TDX quote: {}", e);
-                e
-            }
-        }
-    }
 
+    fn derive_tee_share() -> Result<Secret> {
+        let mrtd = get_tdx_quote()?.rtmr_3();
+
+        let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
+        let mut share = [0u8; 32];
+        hk.expand(b"tee-share-for-key-derivation", &mut share)
+            .map_err(|_| anyhow!("HKDF expand failed"))?;
+
+        Ok(Secret::new(share))
+    }
 
     /// Get a purpose-specific key
     pub fn get_key(&mut self, purpose: &str) -> Result<Key> {
