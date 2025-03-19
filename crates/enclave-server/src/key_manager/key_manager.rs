@@ -6,15 +6,11 @@ use sha2::Sha256;
 use std::collections::HashMap;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::utils::tdx_evidence_helpers::{get_tdx_quote, parse_tdx_quote, Evidence};
+use crate::utils::tdx_evidence_helpers::get_tdx_quote;
 
 // Constants
-const TEST_ENV_SEED: &[u8] = b"devnet-test-environment-seed-for-development-only";
 const TEE_INFO_SALT: &[u8] = b"devnet-tee-info-salt-v1";
 const MASTER_KEY_INFO: &[u8] = b"devnet-master-key-derivation-v1";
-
-// Quote parsing constants
-const QUOTE_HEADER_SIZE: usize = 48;
 
 //Key purpose Constants
 pub const PURPOSE_AES: &str = "SEISMIC-AES";
@@ -153,6 +149,7 @@ impl KeyManager {
 
     fn derive_tee_share() -> Result<Secret> {
         let binding = get_tdx_quote()?;
+        // Right now, below is a vec of 0s
         let mrtd = binding.rtmr_3();
 
         let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
@@ -212,7 +209,7 @@ mod tests {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
                 id: "share-seismic".to_string(),
-                share: [u8; 32],
+                share: [1u8; 32],
             })
             .build()
             .unwrap();
