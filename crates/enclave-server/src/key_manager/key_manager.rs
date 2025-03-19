@@ -212,7 +212,7 @@ mod tests {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
                 id: "share-seismic".to_string(),
-                share: vec![1u8; 32],
+                share: [1u8; 32],
             })
             .build()
             .unwrap();
