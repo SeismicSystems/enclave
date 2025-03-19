@@ -6,6 +6,7 @@ use sha2::Sha256;
 use std::collections::HashMap;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use az_tdx_vtpm::is_tdx_cvm;
 use crate::utils::tdx_evidence_helpers::get_tdx_quote;
 
 // Constants
@@ -91,6 +92,7 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new_with_shares(operator_shares: &[OperatorShare]) -> Result<Self> {
+        assert!(is_tdx_cvm(), "TDX CVM is required for key manager");
         if operator_shares.len() != 1 {
             return Err(anyhow!(
                 "At least one operator share is required in production"
