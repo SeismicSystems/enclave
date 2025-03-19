@@ -51,7 +51,7 @@ impl AsRef<[u8]> for Secret {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatorShare {
     pub id: String,
-    pub share: [u32; 8],
+    pub share: [u8; 32],
 }
 
 #[derive(Debug, Clone)]
@@ -212,7 +212,7 @@ mod tests {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
                 id: "share-seismic".to_string(),
-                share: [1u8; 32],
+                share: [u8; 32],
             })
             .build()
             .unwrap();
