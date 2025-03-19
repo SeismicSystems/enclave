@@ -201,36 +201,8 @@ impl KeyManager {
         Ok(key)
     }
 
-    /// Get encryption key
-    pub fn get_aes_key(&mut self, expiry_seconds: Option<u64>) -> Result<Key> {
-        self.get_key(PURPOSE_AES, expiry_seconds)
-    }
-
-    /// Generate test operator shares (for development only)
-    pub fn generate_test_shares(count: usize) -> Vec<OperatorShare> {
-        if Self::is_tdx_environment() {
-            log::warn!("Generating test shares in TDX environment - NOT SECURE");
-        }
-
-        // Use a different RNG interface that's easier to work with
-        use rand::{thread_rng, RngCore};
-        let mut rng = thread_rng();
-
-        (0..count)
-            .map(|i| {
-                let mut bytes = vec![0u8; 32];
-                rng.fill_bytes(&mut bytes);
-
-                OperatorShare {
-                    id: format!("test-share-{}", i + 1),
-                    share: hex::encode(bytes),
-                }
-            })
-            .collect()
-=======
-    pub fn get_aes_key(&mut self) -> Result<Key> {
+     pub fn get_aes_key(&mut self) -> Result<Key> {
         self.get_key(PURPOSE_AES,)
->>>>>>> 90e21f4 (wip)
     }
 }
 
