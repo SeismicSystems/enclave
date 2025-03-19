@@ -92,7 +92,7 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new_with_shares(operator_shares: &[OperatorShare]) -> Result<Self> {
-        assert!(is_tdx_cvm(), "TDX CVM is required for key manager");
+        assert!(is_tdx_cvm()?, "TDX CVM is required for key manager");
         if operator_shares.len() != 1 {
             return Err(anyhow!(
                 "At least one operator share is required in production"
