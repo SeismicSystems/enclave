@@ -149,7 +149,8 @@ impl KeyManager {
 
 
     fn derive_tee_share() -> Result<Secret> {
-        let mrtd = get_tdx_quote()?.rtmr_3();
+        let binding = get_tdx_quote()?;
+        let mrtd = binding.rtmr_3();
 
         let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
         let mut share = [0u8; 32];
