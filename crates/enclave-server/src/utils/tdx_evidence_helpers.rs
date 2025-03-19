@@ -10,6 +10,16 @@ use az_tdx_vtpm::vtpm::Quote as TpmQuote;
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
 
+pub(crate) fn get_tdx_quote() -> Result<Quote> {
+    let td_report = report::get_report()
+        .map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
+    
+    let td_quote = imds::get_td_quote(&td_report)
+        .map_err(|e| anyhow!("Failed to get TD quote: {}", e))?;
+    
+    Ok(parse_tdx_quote(td_quote))
+}
+
 /// Takes in tdx_evidence as a vec<u8>, as it is returned by coco libs,
 /// and prints out the claim as a string
 /// Currrently this does not check the cc_eventlog or the aa_eventlog
