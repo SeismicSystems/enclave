@@ -165,16 +165,15 @@ impl KeyManager {
                             log::warn!("Failed to parse TDX quote: {}", e);
                         }
                     }
-                    Err(e) => {
-                        log::warn!("Failed to parse TDX quote: {}", e);
-                    }
-                },
+                }
                 Err(e) => {
                     log::warn!("Failed to get TDX evidence: {}", e);
                 }
             }
         }
-        Err(anyhow!("Not running in TDX environment - using TEST values (not secure for production)"))
+        Err(anyhow!(
+            "Not running in TDX environment - using TEST values (not secure for production)"
+        ))
     }
 
     /// Derive a test TEE share
