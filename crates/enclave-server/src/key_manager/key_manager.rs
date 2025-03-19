@@ -51,7 +51,7 @@ impl AsRef<[u8]> for Secret {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatorShare {
     pub id: String,
-    pub share: Vec<u8>, 
+    pub share: [u32; 8],
 }
 
 #[derive(Debug, Clone)]
@@ -105,8 +105,11 @@ impl KeyManager {
 
         let mut share_bytes = Vec::with_capacity(operator_shares.len());
         for share in operator_shares {
-            let bytes = hex::decode(&share.share)
-                .map_err(|_| anyhow!("Invalid share format: {}", share.id))?;
+            let bytes = share
+                .share
+                .iter()
+                .flat_map(|&x| x.to_be_bytes())
+                .collect::<Vec<u8>>();
             share_bytes.push(bytes);
         }
 
