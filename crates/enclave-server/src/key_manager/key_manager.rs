@@ -118,9 +118,11 @@ impl KeyManager {
     }
 
     /// Create a new KeyManager with test shares (for development only)
-    pub fn new_with_test_shares(count: usize) -> Result<Self> {
-        let test_shares = Self::generate_test_shares(count);
-        Self::new_with_shares(&test_shares)
+    pub fn new_with_test_shares() -> Self {
+        KeyManager {
+            master_key: get_unsecure_sample_secp256k1_sk().to_vec(),
+            purpose_keys: HashMap::new(),
+        }
     }
 
     /// Check if we're running in a TDX environment
@@ -147,17 +149,21 @@ impl KeyManager {
     fn derive_tee_share() -> Result<Vec<u8>> {
         if Self::is_tdx_environment() {
             match Self::get_tdx_evidence() {
-                Ok(evidence) => match parse_tdx_quote(&evidence.td_quote) {
-                    Ok(quote) => {
-                        let mrtd = quote.get_mrtd();
-
-                        let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
-                        let mut share = vec![0u8; 32];
-                        hk.expand(b"tee-share-for-key-derivation", &mut share)
-                            .map_err(|_| anyhow!("HKDF expand failed"))?;
-
-                        log::info!("Derived TEE share from TDX MRTD measurement");
-                        return Ok(share);
+                Ok(evidence) => {
+                    match parse_tdx_quote(&evidence.td_quote) {
+                        Ok(quote) => {
+                            let mrtd = quote.get_rtmr_3();
+                            let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
+                            let mut share = vec![0u8; 32];
+                            hk.expand(b"tee-share-for-key-derivation", &mut share)
+                                .map_err(|_| anyhow!("HKDF expand failed"))?;
+                            
+                            log::info!("Derived TEE share from TDX MRTD measurement");
+                            return Ok(share);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to parse TDX quote: {}", e);
+                        }
                     }
                     Err(e) => {
                         log::warn!("Failed to parse TDX quote: {}", e);
@@ -168,12 +174,7 @@ impl KeyManager {
                 }
             }
         }
-
-        // Not in TDX environment, use test values
-        log::warn!(
-            "Not running in TDX environment - using TEST values (not secure for production)"
-        );
-        Self::derive_test_tee_share()
+        Err(anyhow!("Not running in TDX environment - using TEST values (not secure for production)"))
     }
 
     /// Derive a test TEE share
@@ -182,12 +183,10 @@ impl KeyManager {
     }
 
     /// Get a purpose-specific key
-    pub fn get_key(&mut self, purpose: &str, expiry_seconds: Option<u64>) -> Result<Key> {
+    pub fn get_key(&mut self, purpose: &str) -> Result<Key> {
         // Check if we have a valid cached key
         if let Some(key) = self.purpose_keys.get(purpose) {
-            if key.is_valid() {
-                return Ok(key.clone());
-            }
+            return Ok(key.clone());
         }
 
         // Use HKDF to derive the purpose-specific key
@@ -196,13 +195,7 @@ impl KeyManager {
         let mut derived_key = vec![0u8; 32];
         hk.expand(&purpose_info, &mut derived_key)
             .map_err(|_| anyhow!("HKDF expand failed for purpose key"))?;
-
-        // Create key with or without expiration
-        let key = match expiry_seconds {
-            Some(seconds) => Key::new_with_expiry(derived_key, seconds),
-            None => Key::new(derived_key),
-        };
-
+        
         // Cache it
         self.purpose_keys.insert(purpose.to_string(), key.clone());
 
@@ -235,6 +228,10 @@ impl KeyManager {
                 }
             })
             .collect()
+=======
+    pub fn get_aes_key(&mut self) -> Result<Key> {
+        self.get_key(PURPOSE_AES,)
+>>>>>>> 90e21f4 (wip)
     }
 }
 
@@ -245,15 +242,12 @@ mod tests {
 
     #[test]
     fn test_key_manager_direct_constructor() {
-        // Generate test shares for development
-        let test_shares = KeyManager::generate_test_shares(3);
-
         // Create a key manager instance directly
-        let mut key_manager = KeyManager::new_with_shares(&test_shares).unwrap();
-
+        let mut key_manager = KeyManager::new_with_test_shares().unwrap();
+        
         // Get an AES key
-        let aes_key = key_manager.get_aes_key(Some(3600)).unwrap();
-
+        let aes_key = key_manager.get_aes_key().unwrap();
+        
         // Ensure the key is valid
         assert!(aes_key.is_valid());
 
@@ -266,32 +260,16 @@ mod tests {
         // Create a key manager using the builder pattern
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
-                id: "share-1".to_string(),
+                id: "share-seismic".to_string(),
                 share: hex::encode(vec![1u8; 32]),
-            })
-            .with_operator_share(OperatorShare {
-                id: "share-2".to_string(),
-                share: hex::encode(vec![2u8; 32]),
             })
             .build()
             .unwrap();
 
         // Get an AES key
-        let aes_key = key_manager.get_aes_key(None).unwrap();
-
+        let aes_key = key_manager.get_aes_key().unwrap();
+        
         // Key should have 32 bytes (256 bits)
         assert_eq!(aes_key.bytes.len(), 32);
-    }
-
-    #[test]
-    fn test_key_manager_with_test_shares() {
-        // Create a key manager with test shares
-        let mut key_manager = KeyManager::new_with_test_shares(2).unwrap();
-
-        // Get an AES key with expiry
-        let aes_key = key_manager.get_aes_key(Some(3600)).unwrap();
-
-        // Key should be valid
-        assert!(aes_key.is_valid());
     }
 }
