@@ -1,14 +1,9 @@
 use anyhow::{anyhow, Result};
 use hkdf::Hkdf;
-use scroll::Pread;
 use seismic_enclave::get_unsecure_sample_secp256k1_sk;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use std::sync::RwLock;
-use std::time::{Duration, SystemTime};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::utils::tdx_evidence_helpers::{get_tdx_quote, parse_tdx_quote, Evidence};
@@ -100,7 +95,7 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new_with_shares(operator_shares: &[OperatorShare]) -> Result<Self> {
-        if operator_shares.len() != 1 && Self::is_tdx_environment() {
+        if operator_shares.len() != 1 {
             return Err(anyhow!(
                 "At least one operator share is required in production"
             ));
@@ -146,18 +141,15 @@ impl KeyManager {
 
     /// Create a new KeyManager with test shares (for development only)
     pub fn new_with_test_shares() -> Self {
-        let sk = get_unsecure_sample_secp256k1_sk();
-        let sk_bytes = [0u8; 32];         
-        
         KeyManager {
-            master_key: Secret::new(sk_bytes),
+            master_key: Secret::new(get_unsecure_sample_secp256k1_sk().as_ref()),
             purpose_keys: HashMap::new(),
         }
     }
 
     /// Derive a deterministic TEE share from MRTD
     fn derive_tee_share() -> Result<Secret> {
-        match Self::get_tdx_quote() {
+        match get_tdx_quote() {
             Ok(quote) => {
                 let mrtd = quote.rtmr_3();
                 let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
@@ -170,6 +162,7 @@ impl KeyManager {
             }
             Err(e) => {
                 log::warn!("Failed to get TDX quote: {}", e);
+                e
             }
         }
     }
@@ -214,9 +207,6 @@ mod tests {
         // Get an AES key
         let aes_key = key_manager.get_aes_key().unwrap();
         
-        // Ensure the key is valid
-        assert!(aes_key);
-
         // Key should have 32 bytes (256 bits)
         assert_eq!(aes_key.bytes.len(), 32);
     }
@@ -227,7 +217,7 @@ mod tests {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
                 id: "share-seismic".to_string(),
-                share: hex::encode(vec![1u8; 32]),  // Fixed to use hex::encode
+                share: vec![1u8; 32],
             })
             .build()
             .unwrap();
