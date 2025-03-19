@@ -66,7 +66,7 @@ impl KeyManagerBuilder {
 
 // Key manager state
 pub struct KeyManager {
-    master_key: Vec<u8>,
+    master_key: secp256k1::SecretKey,
     purpose_keys: HashMap<String, Key>,
 }
 
@@ -152,7 +152,7 @@ impl KeyManager {
                 Ok(evidence) => {
                     match parse_tdx_quote(&evidence.td_quote) {
                         Ok(quote) => {
-                            let mrtd = quote.get_rtmr_3();
+                            let mrtd = quote.rtmr_3();
                             let hk = Hkdf::<Sha256>::new(Some(TEE_INFO_SALT), mrtd);
                             let mut share = vec![0u8; 32];
                             hk.expand(b"tee-share-for-key-derivation", &mut share)
@@ -177,7 +177,7 @@ impl KeyManager {
     }
 
     /// Derive a test TEE share
-    fn derive_test_tee_share() -> Result<Vec<u8>> {
+    fn derive_test_tee_share() -> Result<secp256k1::SecretKey> {
         &get_unsecure_sample_secp256k1_sk()
     }
 
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn test_key_manager_direct_constructor() {
         // Create a key manager instance directly
-        let mut key_manager = KeyManager::new_with_test_shares().unwrap();
+        let mut key_manager = KeyManager::new_with_test_shares();
         
         // Get an AES key
         let aes_key = key_manager.get_aes_key().unwrap();
@@ -232,7 +232,7 @@ mod tests {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
                 id: "share-seismic".to_string(),
-                share: hex::encode(vec![1u8; 32]),
+                share: vec![1u8; 32],
             })
             .build()
             .unwrap();
