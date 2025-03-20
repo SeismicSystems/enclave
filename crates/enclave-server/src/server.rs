@@ -30,7 +30,7 @@ use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 pub struct EnclaveServer {
@@ -89,36 +89,62 @@ impl BuildableServer for EnclaveServer {
 impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
+        debug!(target: "rpc::enclave", "Serving getPublicKey");
         Ok(get_secp256k1_pk())
     }
 
     /// Handler for: `healthCheck`
     async fn health_check(&self) -> RpcResult<String> {
+        debug!(target: "rpc::enclave", "Serving healthCheck");
         Ok("OK".into())
     }
 
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         debug!(target: "rpc::enclave", "Serving getGenesisData");
-        genesis_get_data_handler().await
+        match genesis_get_data_handler().await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to get genesis data: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `getSnapsyncBackup`
     async fn get_snapsync_backup(&self, request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
         debug!(target: "rpc::enclave", "Serving getSnapsyncBackup");
-        provide_snapsync_handler(request).await
+        match provide_snapsync_handler(request).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to get snapsync backup: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `encrypt`
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         debug!(target: "rpc::enclave", "Serving encrypt");
-        tx_io_encrypt_handler(req).await
+        match tx_io_encrypt_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to encrypt data: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
-        tx_io_decrypt_handler(req).await
+        match tx_io_decrypt_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to decrypt data: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `getAttestationEvidence`
@@ -127,7 +153,13 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving getAttestationEvidence");
-        attestation_get_evidence_handler(req).await
+        match attestation_get_evidence_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to get attestation evidence: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `evalAttestationEvidence`
@@ -136,19 +168,37 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
-        attestation_eval_evidence_handler(req).await
+        match attestation_eval_evidence_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to evaluate attestation evidence: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `sign`
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         debug!(target: "rpc::enclave", "Serving sign");
-        secp256k1_sign_handler(req).await
+        match secp256k1_sign_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to sign data: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: `verify`
     async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
         debug!(target: "rpc::enclave", "Serving verify");
-        secp256k1_verify_handler(req).await
+        match secp256k1_verify_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to verify signature: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: 'eph_rng.get_keypair'
@@ -163,7 +213,13 @@ impl EnclaveApiServer for EnclaveServer {
         req: PrepareEncryptedSnapshotRequest,
     ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
         debug!(target: "rpc::enclave", "Serving snapshot.prepare_encrypted_snapshot");
-        prepare_encrypted_snapshot_handler(req).await
+        match prepare_encrypted_snapshot_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to prepare encrypted snapshot: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
@@ -172,7 +228,13 @@ impl EnclaveApiServer for EnclaveServer {
         req: RestoreFromEncryptedSnapshotRequest,
     ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
         debug!(target: "rpc::enclave", "Serving snapshot.restore_from_encrypted_snapshot");
-        restore_from_encrypted_snapshot_handler(req).await
+        match restore_from_encrypted_snapshot_handler(req).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Failed to restore from encrypted snapshot: {}", e);
+                Err(e)
+            }
+        }
     }
 }
 

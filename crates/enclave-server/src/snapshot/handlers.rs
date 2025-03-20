@@ -9,6 +9,7 @@ use seismic_enclave::{
 
 use jsonrpsee::core::RpcResult;
 use std::path::Path;
+use tracing::error;
 
 /// Prepares an encrypted snapshot of the Reth database for backup or migration.
 ///
@@ -35,7 +36,13 @@ pub async fn prepare_encrypted_snapshot_handler(
     );
     let resp = PrepareEncryptedSnapshotResponse {
         success: res.is_ok(),
-        error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        error: res
+            .err()
+            .map(|e| {
+                error!("Failed to prepare encrypted snapshot: {}", e);
+                e.to_string()
+            })
+            .unwrap_or_default(),
     };
     Ok(resp)
 }
@@ -60,6 +67,10 @@ pub async fn restore_from_encrypted_snapshot_handler(
 ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
     let encrypted_snapshot_path = format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE);
     if !Path::new(&encrypted_snapshot_path).exists() {
+        error!(
+            "Encrypted snapshot file not found at {}",
+            encrypted_snapshot_path
+        );
         return Err(rpc_missing_snapshot_error());
     }
     let res = super::restore_from_encrypted_snapshot(
@@ -70,7 +81,13 @@ pub async fn restore_from_encrypted_snapshot_handler(
     );
     let resp = RestoreFromEncryptedSnapshotResponse {
         success: res.is_ok(),
-        error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        error: res
+            .err()
+            .map(|e| {
+                error!("Failed to restore from encrypted snapshot: {}", e);
+                e.to_string()
+            })
+            .unwrap_or_default(),
     };
     Ok(resp)
 }

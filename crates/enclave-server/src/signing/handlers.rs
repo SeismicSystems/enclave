@@ -1,4 +1,5 @@
 use jsonrpsee::core::RpcResult;
+use tracing::error;
 
 use super::{enclave_sign, get_secp256k1_pk};
 use seismic_enclave::request_types::signing::*;
@@ -20,7 +21,13 @@ pub async fn secp256k1_sign_handler(
     request: Secp256k1SignRequest,
 ) -> RpcResult<Secp256k1SignResponse> {
     // sign the message
-    let signature = enclave_sign(&request.msg).map_err(|e| rpc_bad_argument_error(e))?;
+    let signature = match enclave_sign(&request.msg) {
+        Ok(sig) => sig,
+        Err(e) => {
+            error!("Failed to sign message: {}", e);
+            return Err(rpc_bad_argument_error(e));
+        }
+    };
     Ok(Secp256k1SignResponse { sig: signature })
 }
 
@@ -41,8 +48,13 @@ pub async fn secp256k1_verify_handler(
 ) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
     let pk = get_secp256k1_pk();
-    let verified = secp256k1_verify(&request.msg, &request.sig, pk)
-        .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
+    let verified = match secp256k1_verify(&request.msg, &request.sig, pk) {
+        Ok(verified) => verified,
+        Err(e) => {
+            error!("Failed to verify signature: {}", e);
+            return Err(rpc_bad_argument_error(anyhow::anyhow!(e)));
+        }
+    };
 
     Ok(Secp256k1VerifyResponse { verified })
 }

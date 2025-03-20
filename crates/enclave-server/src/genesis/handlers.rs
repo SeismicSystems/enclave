@@ -1,7 +1,10 @@
 use jsonrpsee::core::RpcResult;
+use tracing::error;
 
 use super::att_genesis_data;
-use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
+use seismic_enclave::{
+    request_types::genesis::*, rpc_bad_argument_error, rpc_internal_server_error,
+};
 
 /// Handles request to get genesis data.
 ///
@@ -11,9 +14,16 @@ use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
 pub async fn genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
-    let (genesis_data, evidence) = att_genesis_data()
-        .await
-        .map_err(|e| rpc_bad_argument_error(e))?;
+    let (genesis_data, evidence) = match att_genesis_data().await {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to get genesis data: {}", e);
+            return Err(rpc_internal_server_error(anyhow::anyhow!(
+                "Failed to get genesis data: {}",
+                e
+            )));
+        }
+    };
 
     // Return the evidence as a response
     Ok(GenesisDataResponse {

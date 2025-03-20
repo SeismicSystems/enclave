@@ -1,10 +1,8 @@
+use anyhow;
 use jsonrpsee::core::RpcResult;
+use seismic_enclave::crypto::{ecdh_decrypt, ecdh_encrypt};
 use seismic_enclave::request_types::tx_io::*;
-use seismic_enclave::rpc_bad_argument_error;
-use seismic_enclave::{
-    crypto::{ecdh_decrypt, ecdh_encrypt},
-    rpc_invalid_ciphertext_error,
-};
+use seismic_enclave::{rpc_bad_argument_error, rpc_internal_server_error};
 use tracing::error;
 
 use crate::get_secp256k1_sk;
@@ -27,7 +25,10 @@ pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncr
         Ok(data) => data,
         Err(e) => {
             error!("Failed to encrypt data: {}", e);
-            return Err(rpc_bad_argument_error(e));
+            return Err(rpc_bad_argument_error(anyhow::anyhow!(
+                "Failed to encrypt data: {}",
+                e
+            )));
         }
     };
 
@@ -58,7 +59,10 @@ pub async fn tx_io_decrypt_handler(
         Ok(data) => data,
         Err(e) => {
             error!("Failed to decrypt data: {}", e);
-            return Err(rpc_invalid_ciphertext_error(e));
+            return Err(rpc_bad_argument_error(anyhow::anyhow!(
+                "Failed to decrypt data: {}",
+                e
+            )));
         }
     };
 
@@ -116,7 +120,7 @@ mod tests {
             res.err()
                 .unwrap()
                 .to_string()
-                .contains("Invalid ciphertext"),
+                .contains("Failed to decrypt data"),
             true
         );
     }
