@@ -6570,6 +6570,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "bytes",
+ "clap",
  "hkdf",
  "jsonrpsee",
  "kbs-types",
@@ -6585,6 +6586,7 @@ dependencies = [
  "strum 0.26.3",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6614,6 +6616,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "bytes",
+ "clap",
  "env_logger 0.11.7",
  "hex",
  "hkdf",

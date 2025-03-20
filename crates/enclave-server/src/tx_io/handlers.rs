@@ -1,9 +1,11 @@
 use jsonrpsee::core::RpcResult;
 use seismic_enclave::request_types::tx_io::*;
+use seismic_enclave::rpc_bad_argument_error;
 use seismic_enclave::{
     crypto::{ecdh_decrypt, ecdh_encrypt},
     rpc_invalid_ciphertext_error,
 };
+use tracing::error;
 
 use crate::get_secp256k1_sk;
 
@@ -21,7 +23,13 @@ use crate::get_secp256k1_sk;
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
 pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
-    let encrypted_data = ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce).unwrap();
+    let encrypted_data = match ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce) {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to encrypt data: {}", e);
+            return Err(rpc_bad_argument_error(e));
+        }
+    };
 
     Ok(IoEncryptionResponse { encrypted_data })
 }
@@ -33,8 +41,7 @@ pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncr
 ///   Should be a JSON-encoded `IoDecryptionRequest`.
 ///
 /// # Returns
-/// A `Result` containing an HTTP response with the decrypted data, or an error of type `Infallible`.
-/// The response body is JSON-encoded and contains the decrypted data as part of an `IoDecryptionResponse`.
+/// A `Result` containing an HTTP response with the decrypted data, or an error of type `Infallible`.  /// The response body is JSON-encoded and contains the decrypted data as part of an `IoDecryptionResponse`.
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
@@ -42,13 +49,18 @@ pub async fn tx_io_decrypt_handler(
     request: IoDecryptionRequest,
 ) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
-    let decrypted_data = ecdh_decrypt(
+    let decrypted_data = match ecdh_decrypt(
         &request.key,
         &get_secp256k1_sk(),
         &request.data,
         request.nonce,
-    )
-    .map_err(|e| rpc_invalid_ciphertext_error(e))?;
+    ) {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to decrypt data: {}", e);
+            return Err(rpc_invalid_ciphertext_error(e));
+        }
+    };
 
     Ok(IoDecryptionResponse { decrypted_data })
 }

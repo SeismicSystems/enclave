@@ -51,6 +51,17 @@ impl EnclaveServer {
     pub fn new_from_addr_port(addr: String, port: u16) -> Self {
         Self::new((IpAddr::from_str(&addr).unwrap(), port))
     }
+
+    pub fn with_addr(mut self, addr: &str) -> Self {
+        let ip_addr = IpAddr::from_str(addr).unwrap();
+        self.addr = SocketAddr::new(ip_addr, self.addr.port());
+        self
+    }
+
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.addr = SocketAddr::new(self.addr.ip(), port);
+        self
+    }
 }
 
 impl Default for EnclaveServer {
