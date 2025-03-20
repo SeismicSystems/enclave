@@ -2,7 +2,7 @@ use anyhow;
 use jsonrpsee::core::RpcResult;
 use seismic_enclave::crypto::{ecdh_decrypt, ecdh_encrypt};
 use seismic_enclave::request_types::tx_io::*;
-use seismic_enclave::{rpc_bad_argument_error, rpc_internal_server_error};
+use seismic_enclave::rpc_bad_argument_error;
 use tracing::error;
 
 use crate::get_secp256k1_sk;

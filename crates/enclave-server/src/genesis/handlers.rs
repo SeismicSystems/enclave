@@ -2,9 +2,7 @@ use jsonrpsee::core::RpcResult;
 use tracing::error;
 
 use super::att_genesis_data;
-use seismic_enclave::{
-    request_types::genesis::*, rpc_bad_argument_error, rpc_internal_server_error,
-};
+use seismic_enclave::{request_types::genesis::*, rpc_internal_server_error};
 
 /// Handles request to get genesis data.
 ///
