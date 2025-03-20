@@ -112,6 +112,7 @@ readme = "README.md"
 [workspace.dependencies]
 seismic-enclave-derive = { path = "crates/enclave/derive" }
 seismic-enclave = { path = "crates/enclave" }
+seismic-enclave-server = { path = "crates/enclave-server" }
 
 aes-gcm = "0.10"
 anyhow = "1.0"

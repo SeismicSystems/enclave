@@ -56,7 +56,10 @@ pub async fn attestation_eval_evidence_handler(
         Ok(as_token) => as_token,
         Err(e) => {
             error!("Failed to evaluate attestation evidence: {}", e);
-            return Err(rpc_bad_evidence_error(e));
+            return Err(rpc_bad_evidence_error(anyhow::anyhow!(
+                "Failed to evaluate attestation evidence: {}",
+                e
+            )));
         }
     };
 
@@ -65,7 +68,8 @@ pub async fn attestation_eval_evidence_handler(
         Err(e) => {
             error!("Failed to parse AS token: {}", e);
             return Err(rpc_bad_argument_error(anyhow::anyhow!(
-                "Error while parsing AS token: {e}"
+                "Failed to parse AS token: {}",
+                e
             )));
         }
     };

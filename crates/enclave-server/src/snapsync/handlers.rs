@@ -1,6 +1,7 @@
 use attestation_service::HashAlgorithm;
 use jsonrpsee::core::RpcResult;
 use sha2::{Digest, Sha256};
+use tracing::error;
 
 use super::build_snapsync_response;
 use crate::coco_as::eval_att_evidence;
@@ -37,6 +38,10 @@ pub async fn provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<Sna
     match eval_result {
         Ok(_) => (),
         Err(e) => {
+            error!(
+                "Failed to evaluate attestation evidence for snapsync: {}",
+                e
+            );
             return Err(rpc_bad_evidence_error(e));
         }
     };
@@ -44,13 +49,20 @@ pub async fn provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<Sna
     // Get the SnapSync data
     let client_signing_pk = match secp256k1::PublicKey::from_slice(&request.client_signing_pk) {
         Ok(pk) => pk,
-        Err(_) => {
+        Err(e) => {
+            error!("Failed to deserialize client signing public key: {}", e);
             return Err(rpc_bad_argument_error(anyhow::anyhow!(
                 "Unable to deserialize the client signing public key"
             )));
         }
     };
-    let response_body: SnapSyncResponse = build_snapsync_response(client_signing_pk).await.unwrap();
+    let response_body = match build_snapsync_response(client_signing_pk).await {
+        Ok(response) => response,
+        Err(e) => {
+            error!("Failed to build snapsync response: {}", e);
+            return Err(rpc_bad_argument_error(e));
+        }
+    };
 
     // return the response
     Ok(response_body)
