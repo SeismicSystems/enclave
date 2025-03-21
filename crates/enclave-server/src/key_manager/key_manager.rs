@@ -217,7 +217,7 @@ impl KeyManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use serial_test::serial;
 
     #[test]
     fn test_secret_from_vec_valid() {
