@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::str::FromStr;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
 use hkdf::Hkdf;
@@ -70,6 +71,20 @@ impl AsRef<[u8]> for Secret {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatorShare {
     pub share: [u8; 32],
+}
+
+impl FromStr for OperatorShare {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = hex::decode(s).map_err(|e| e.to_string())?;
+        if bytes.len() != 32 {
+            return Err(format!("Expected 32 bytes, got {}", bytes.len()));
+        }
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes);
+        Ok(OperatorShare { share: arr })
+    }
 }
 
 #[derive(Debug, Clone)]
