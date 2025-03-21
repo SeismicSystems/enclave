@@ -286,7 +286,7 @@ mod tests {
             .err()
             .unwrap()
             .to_string()
-            .contains("Exactly one operator share"));
+            .contains("At least one operator share is required in production"));
     }
 
     #[test]
