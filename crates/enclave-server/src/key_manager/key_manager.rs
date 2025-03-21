@@ -204,7 +204,7 @@ impl KeyManager {
             .map_err(|_| anyhow!("HKDF expand failed for purpose key"))?;
         
         let key = Key::new(derived_key);
-        self.purpose_keys.insert(purpose.to_string(), key.clone());
+        self.purpose_keys.insert(purpose, key.clone());
 
         Ok(key)
     }
@@ -229,8 +229,14 @@ mod tests {
     #[test]
     fn test_secret_from_vec_invalid_length() {
         let vec_16 = vec![1u8; 16];
-        let err = Secret::from_vec(vec_16).unwrap_err();
-        assert!(err.to_string().contains("Invalid secret size"));
+        let res = Secret::from_vec(vec_16);
+
+        assert!(res.is_err(), "Expected error for invalid secret size");
+
+        if let Err(e) = res {
+            let msg = e.to_string();
+            assert!(msg.contains("Invalid secret size"), "Unexpected error message: {}", msg);
+        }
     }
 
     #[test]
