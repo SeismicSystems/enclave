@@ -247,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_manager_builder_single_share() {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
@@ -290,6 +291,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_purpose_specific_keys_are_consistent() {
         let mut key_manager = KeyManager::new_with_test_shares();
         let key_a = key_manager.get_key(KeyPurpose::Aes).unwrap();
