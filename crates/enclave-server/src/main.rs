@@ -18,6 +18,10 @@ struct Args {
     /// The port to bind the server to
     #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_PORT)]
     port: u16,
+
+    /// The port to bind the server to
+    #[arg(long)]
+    operator_share: Option<[u8;32]>,
 }
 
 /// Initializes a server with the given address and handlers
@@ -31,12 +35,17 @@ async fn main() {
     let args = Args::parse();
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
-    let handle = EnclaveServer::default()
-        .with_addr(&args.addr.to_string())
-        .with_port(args.port)
-        .start()
-        .await
-        .unwrap();
+
+    let mut builder = EnclaveServer::builder()
+        .with_addr(&args.addr)
+        .with_port(args.port);
+
+    if let Some(share_bytes) = args.operator_share {
+        builder = builder.with_operator_share(OperatorShare { share: share_bytes });
+    }
+
+    let server = builder.build()?;
+    let handle = server.start().await?;
 
     handle.stopped().await;
 }

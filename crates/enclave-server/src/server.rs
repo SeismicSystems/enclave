@@ -1,6 +1,7 @@
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
+use crate::key_manager::key_manager::KeyManager;
 use crate::signing::handlers::*;
 use crate::snapshot::handlers::*;
 use crate::snapsync::handlers::*;
@@ -33,8 +34,16 @@ use std::str::FromStr;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+/// The main server struct, with everything needed to run.
 pub struct EnclaveServer {
     addr: SocketAddr,
+    key_manager: KeyManager, 
+}
+
+/// A builder that lets us configure the server address and optionally add operator shares.
+pub struct EnclaveServerBuilder {
+    addr: Option<SocketAddr>,
+    operator_shares: Vec<OperatorShare>,
 }
 
 impl EnclaveServer {
@@ -44,14 +53,26 @@ impl EnclaveServer {
         Ok(())
     }
 
-    pub fn new(addr: impl Into<SocketAddr>) -> Self {
-        Self { addr: addr.into() }
+    /// Create a new builder with default address and no shares.
+    pub fn builder() -> EnclaveServerBuilder {
+        EnclaveServerBuilder::default()
     }
 
+    /// Provide direct constructor if you *really* want to skip the builder. 
+    /// By default, this will do a "test" KeyManager.
+    pub fn new(addr: impl Into<SocketAddr>) -> Self {
+        Self {
+            addr: addr.into(),
+            key_manager: KeyManager::new_with_test_shares(),
+        }
+    }
+
+    /// Example constructor from IP/port strings.
     pub fn new_from_addr_port(addr: String, port: u16) -> Self {
         Self::new((IpAddr::from_str(&addr).unwrap(), port))
     }
 
+    /// If you want to keep chainable `with_addr` / `with_port` on the server itself:
     pub fn with_addr(mut self, addr: &str) -> Self {
         let ip_addr = IpAddr::from_str(addr).unwrap();
         self.addr = SocketAddr::new(ip_addr, self.addr.port());
@@ -64,9 +85,71 @@ impl EnclaveServer {
     }
 }
 
+/// By default, we create a server on 0.0.0.0:4242 with a test KeyManager.
 impl Default for EnclaveServer {
     fn default() -> Self {
         Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))
+    }
+}
+
+/// Implementation of our new builder.
+impl Default for EnclaveServerBuilder {
+    fn default() -> Self {
+        Self {
+            addr: Some(SocketAddr::new(
+                ENCLAVE_DEFAULT_ENDPOINT_ADDR.parse().unwrap(),
+                ENCLAVE_DEFAULT_ENDPOINT_PORT,
+            )),
+            operator_shares: Vec::new(),
+        }
+    }
+}
+
+impl EnclaveServerBuilder {
+    pub fn with_addr(mut self, addr: &str) -> Self {
+        let ip_addr = IpAddr::from_str(addr).unwrap();
+        if let Some(curr) = self.addr {
+            self.addr = Some(SocketAddr::new(ip_addr, curr.port()));
+        } else {
+            self.addr = Some(SocketAddr::new(ip_addr, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+        }
+        self
+    }
+
+    pub fn with_port(mut self, port: u16) -> Self {
+        if let Some(curr) = self.addr {
+            self.addr = Some(SocketAddr::new(curr.ip(), port));
+        } else {
+            self.addr = Some(SocketAddr::new(
+                ENCLAVE_DEFAULT_ENDPOINT_ADDR.parse().unwrap(),
+                port,
+            ));
+        }
+        self
+    }
+
+    /// Add an operator share; if present, we'll treat as production mode.
+    pub fn with_operator_share(mut self, share: OperatorShare) -> Self {
+        self.operator_shares.push(share);
+        self
+    }
+
+    /// Build the final `EnclaveServer` object.
+    pub fn build(self) -> Result<EnclaveServer> {
+        let final_addr = self.addr.ok_or_else(|| {
+            anyhow!("No address found in builder (should not happen if default is set)")
+        })?;
+
+        let key_manager = if !self.operator_shares.is_empty() {
+            KeyManager::new_with_shares(&self.operator_shares)?
+        } else {
+            KeyManager::new_with_test_shares()
+        };
+
+        Ok(EnclaveServer {
+            addr: final_addr,
+            key_manager,
+        })
     }
 }
 
