@@ -112,14 +112,12 @@ impl KeyManager {
             share_bytes.push(bytes);
         }
 
-        // Combine TEE share with operator shares using HKDF.
         let mut combined_input = Vec::new();
         combined_input.extend_from_slice(tee_share.as_ref());
         for share in &share_bytes {
             combined_input.extend_from_slice(share);
         }
 
-        // Use HKDF to derive the master key.
         let hk = Hkdf::<Sha256>::new(None, &combined_input);
         let mut master_key_bytes = [0u8; 32];
         hk.expand(MASTER_KEY_DOMAIN_INFO, &mut master_key_bytes)
@@ -174,7 +172,6 @@ impl KeyManager {
 
     /// Get a purpose-specific key.
     pub fn get_key(&mut self, purpose: &str) -> Result<Key> {
-        // Return a cached key if available.
         if let Some(key) = self.purpose_keys.get(purpose) {
             return Ok(key.clone());
         }
@@ -196,26 +193,21 @@ impl KeyManager {
     }
 }
 
-// Example usage
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_key_manager_direct_constructor() {
-        // Create a key manager instance directly.
         let mut key_manager = KeyManager::new_with_test_shares();
         
-        // Get an AES key.
         let aes_key = key_manager.get_aes_key().unwrap();
         
-        // Key should have 32 bytes (256 bits).
         assert_eq!(aes_key.bytes.len(), 32);
     }
 
     #[test]
     fn test_key_manager_builder() {
-        // Create a key manager using the builder pattern.
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
                 id: "share-seismic".to_string(),
@@ -224,10 +216,8 @@ mod tests {
             .build()
             .unwrap();
 
-        // Get an AES key.
         let aes_key = key_manager.get_aes_key().unwrap();
         
-        // Key should have 32 bytes (256 bits).
         assert_eq!(aes_key.bytes.len(), 32);
     }
 }
