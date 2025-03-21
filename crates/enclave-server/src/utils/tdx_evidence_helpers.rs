@@ -400,6 +400,7 @@ impl QuoteV5Type {
     }
 }
 
+#[derive(Debug)]
 pub enum QuoteV5Body {
     Tdx10(ReportBody2),
     Tdx15(ReportBody2v15),
@@ -414,6 +415,7 @@ impl fmt::Display for QuoteV5Body {
     }
 }
 
+#[derive(Debug)]
 pub enum Quote {
     /// TD Quote Payload(Version 4)
     /// First 632 bytes of TD Quote
@@ -455,6 +457,7 @@ macro_rules! body_field {
 impl Quote {
     body_field!(report_data);
     body_field!(mr_config_id);
+    body_field!(mr_td);
     body_field!(rtmr_0);
     body_field!(rtmr_1);
     body_field!(rtmr_2);
