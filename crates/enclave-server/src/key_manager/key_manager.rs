@@ -16,7 +16,7 @@ const TEE_DOMAIN_SEPARATOR: &[u8] = b"devnet-tee-domain-separator-v1";
 const MASTER_KEY_DOMAIN_INFO: &[u8] = b"devnet-master-key-derivation-v1";
 
 // Key purpose Constant
-pub const PURPOSE_AES: &str = "SEISMIC-AES";
+pub const PURPOSE_AES: &str = "SEISMIC-PURPOSE-AES";
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct Secret(pub [u8; 32]);
