@@ -154,7 +154,7 @@ impl KeyManager {
 
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
-        rng.fill_bytes(&mut rng_bytes);
+        rng.try_fill_bytes(&mut rng_bytes)?;
 
         // Combine the MRTD measurement with the 32-byte RNG output.
         // Concatenation preserves the entropy from both sources.
