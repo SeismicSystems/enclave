@@ -1,5 +1,6 @@
 use clap::arg;
 use clap::Parser;
+use seismic_enclave_server::key_manager::key_manager::OperatorShare;
 use std::net::IpAddr;
 use tracing::info;
 
@@ -19,9 +20,9 @@ struct Args {
     #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_PORT)]
     port: u16,
 
-    /// the other operator share for generating the master key 
+    /// the other operator share for generating the master key, in hexadecimals 
     #[arg(long)]
-    operator_share: Option<[u8;32]>,
+    operator_share: Option<OperatorShare>,
 }
 
 /// Initializes a server with the given address and handlers
@@ -40,12 +41,12 @@ async fn main() {
         .with_addr(&args.addr)
         .with_port(args.port);
 
-    if let Some(share_bytes) = args.operator_share {
-        builder = builder.with_operator_share(OperatorShare { share: share_bytes });
+    if let Some(op_share) = args.operator_share {
+        builder = builder.with_operator_share(op_share);
     }
 
-    let server = builder.build()?;
-    let handle = server.start().await?;
+    let server = builder.build().unwrap();
+    let handle = server.start().await.unwrap();
 
     handle.stopped().await;
 }

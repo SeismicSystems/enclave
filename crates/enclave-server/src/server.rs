@@ -106,8 +106,7 @@ impl Default for EnclaveServerBuilder {
 }
 
 impl EnclaveServerBuilder {
-    pub fn with_addr(mut self, addr: &str) -> Self {
-        let ip_addr = IpAddr::from_str(addr).unwrap();
+    pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
         if let Some(curr) = self.addr {
             self.addr = Some(SocketAddr::new(ip_addr, curr.port()));
         } else {
