@@ -400,6 +400,7 @@ impl QuoteV5Type {
     }
 }
 
+#[derive(Debug)]
 pub enum QuoteV5Body {
     Tdx10(ReportBody2),
     Tdx15(ReportBody2v15),
@@ -414,6 +415,7 @@ impl fmt::Display for QuoteV5Body {
     }
 }
 
+#[derive(Debug)]
 pub enum Quote {
     /// TD Quote Payload(Version 4)
     /// First 632 bytes of TD Quote
