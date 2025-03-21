@@ -157,13 +157,10 @@ impl KeyManager {
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;
 
-        // Combine the MRTD measurement with the 32-byte RNG output.
-        // Concatenation preserves the entropy from both sources.
         let mut combined_input = Vec::with_capacity(mrtd.len() + rng_bytes.len());
         combined_input.extend_from_slice(mrtd);
         combined_input.extend_from_slice(&rng_bytes);
 
-        // Use HKDF to extract a uniformly random 32-byte secret from the combined input.
         let hk = Hkdf::<Sha256>::new(Some(TEE_DOMAIN_SEPARATOR), &combined_input);
         let mut share = [0u8; 32];
         hk.expand(b"tee-share-for-key-derivation", &mut share)
@@ -182,7 +179,6 @@ impl KeyManager {
             return Ok(key.clone());
         }
 
-        // Derive the purpose-specific key using HKDF.
         let purpose_info = format!("devnet-{}-key-v1", purpose).into_bytes();
         let hk = Hkdf::<Sha256>::new(None, self.master_key.as_ref());
         let mut derived_key = vec![0u8; 32];
