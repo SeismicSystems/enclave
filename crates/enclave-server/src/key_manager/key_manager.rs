@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::str::FromStr;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
 use hkdf::Hkdf;
