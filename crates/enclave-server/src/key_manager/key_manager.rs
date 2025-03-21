@@ -11,12 +11,33 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use az_tdx_vtpm::is_tdx_cvm;
 use crate::utils::tdx_evidence_helpers::get_tdx_quote;
 
-// Constants
-const TEE_DOMAIN_SEPARATOR: &[u8] = b"devnet-tee-domain-separator-v1";
-const MASTER_KEY_DOMAIN_INFO: &[u8] = b"devnet-master-key-derivation-v1";
+// MasterKey Constants
+const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
+const MASTER_KEY_DOMAIN_INFO: &[u8] = b"seismic-master-key-derivation";
 
-// Key purpose Constant
-pub const PURPOSE_AES: &str = "SEISMIC-PURPOSE-AES";
+// KeyPurpose constants
+const PREFIX: &str = "seismic-purpose";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KeyPurpose {
+    Aes,
+    RngPrecompile,
+}
+
+impl KeyPurpose {
+    fn label(&self) -> &'static str {
+        match self {
+            KeyPurpose::Aes => "aes",
+            KeyPurpose::RngPrecompile => "rng-precompile",
+        }
+    }
+
+    pub fn domain_separator(&self) -> Vec<u8> {
+        format!("{PREFIX}-{}", self.label()).into_bytes()
+    }
+}
+
+
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct Secret(pub [u8; 32]);
@@ -48,7 +69,6 @@ impl AsRef<[u8]> for Secret {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatorShare {
-    pub id: String,
     pub share: [u8; 32],
 }
 
@@ -88,12 +108,14 @@ impl KeyManagerBuilder {
 // Key manager state.
 pub struct KeyManager {
     master_key: Secret,
-    purpose_keys: HashMap<String, Key>,
+    //no-thread-safety yet
+    purpose_keys: HashMap<KeyPurpose, Key>,
 }
 
 impl KeyManager {
     pub fn new_with_shares(operator_shares: &[OperatorShare]) -> Result<Self> {
         assert!(is_tdx_cvm()?, "TDX CVM is required for key manager");
+        
         if operator_shares.len() != 1 {
             return Err(anyhow!(
                 "At least one operator share is required in production"
@@ -171,15 +193,14 @@ impl KeyManager {
     }
 
     /// Get a purpose-specific key.
-    pub fn get_key(&mut self, purpose: &str) -> Result<Key> {
-        if let Some(key) = self.purpose_keys.get(purpose) {
+    fn get_key(&mut self, purpose: KeyPurpose) -> Result<Key> {
+        if let Some(key) = self.purpose_keys.get(&purpose) {
             return Ok(key.clone());
         }
 
-        let purpose_info = format!("devnet-{}-key-v1", purpose).into_bytes();
         let hk = Hkdf::<Sha256>::new(None, self.master_key.as_ref());
         let mut derived_key = vec![0u8; 32];
-        hk.expand(&purpose_info, &mut derived_key)
+        hk.expand(&purpose.domain_separator(), &mut derived_key)
             .map_err(|_| anyhow!("HKDF expand failed for purpose key"))?;
         
         let key = Key::new(derived_key);
@@ -189,7 +210,7 @@ impl KeyManager {
     }
 
     pub fn get_aes_key(&mut self) -> Result<Key> {
-        self.get_key(PURPOSE_AES)
+        self.get_key(KeyPurpose::Aes)
     }
 }
 
@@ -197,27 +218,76 @@ impl KeyManager {
 mod tests {
     use super::*;
 
+
+    #[test]
+    fn test_secret_from_vec_valid() {
+        let vec_32 = vec![1u8; 32];
+        let secret = Secret::from_vec(vec_32).unwrap();
+        assert_eq!(secret.as_ref().len(), 32);
+    }
+
+    #[test]
+    fn test_secret_from_vec_invalid_length() {
+        let vec_16 = vec![1u8; 16];
+        let err = Secret::from_vec(vec_16).unwrap_err();
+        assert!(err.to_string().contains("Invalid secret size"));
+    }
+
     #[test]
     fn test_key_manager_direct_constructor() {
         let mut key_manager = KeyManager::new_with_test_shares();
-        
         let aes_key = key_manager.get_aes_key().unwrap();
-        
         assert_eq!(aes_key.bytes.len(), 32);
     }
 
     #[test]
-    fn test_key_manager_builder() {
+    fn test_key_manager_builder_single_share() {
         let mut key_manager = KeyManager::builder()
             .with_operator_share(OperatorShare {
-                id: "share-seismic".to_string(),
                 share: [1u8; 32],
             })
             .build()
             .unwrap();
 
         let aes_key = key_manager.get_aes_key().unwrap();
-        
         assert_eq!(aes_key.bytes.len(), 32);
+    }
+
+    #[test]
+    fn test_key_manager_builder_no_shares() {
+        let result = KeyManager::builder().build();
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("At least one operator share"));
+    }
+
+    #[test]
+    fn test_key_manager_builder_multiple_shares_fails() {
+        let result = KeyManager::builder()
+            .with_operator_share(OperatorShare {
+                share: [1u8; 32],
+            })
+            .with_operator_share(OperatorShare {
+                share: [2u8; 32],
+            })
+            .build();
+
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Exactly one operator share"));
+    }
+
+    #[test]
+    fn test_purpose_specific_keys_are_consistent() {
+        let mut key_manager = KeyManager::new_with_test_shares();
+        let key_a = key_manager.get_key(KeyPurpose::Aes).unwrap();
+        let key_b = key_manager.get_key(KeyPurpose::Aes).unwrap();
+        assert_eq!(key_a.bytes, key_b.bytes);
     }
 }
