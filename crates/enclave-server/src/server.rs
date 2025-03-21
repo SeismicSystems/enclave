@@ -1,7 +1,7 @@
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
-use crate::key_manager::key_manager::KeyManager;
+use crate::key_manager::key_manager::{KeyManager, OperatorShare};
 use crate::signing::handlers::*;
 use crate::snapshot::handlers::*;
 use crate::snapsync::handlers::*;
@@ -25,7 +25,7 @@ use seismic_enclave::tx_io::{
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
@@ -97,7 +97,7 @@ impl Default for EnclaveServerBuilder {
     fn default() -> Self {
         Self {
             addr: Some(SocketAddr::new(
-                ENCLAVE_DEFAULT_ENDPOINT_ADDR.parse().unwrap(),
+                ENCLAVE_DEFAULT_ENDPOINT_ADDR,
                 ENCLAVE_DEFAULT_ENDPOINT_PORT,
             )),
             operator_shares: Vec::new(),
@@ -121,7 +121,7 @@ impl EnclaveServerBuilder {
             self.addr = Some(SocketAddr::new(curr.ip(), port));
         } else {
             self.addr = Some(SocketAddr::new(
-                ENCLAVE_DEFAULT_ENDPOINT_ADDR.parse().unwrap(),
+                ENCLAVE_DEFAULT_ENDPOINT_ADDR,
                 port,
             ));
         }

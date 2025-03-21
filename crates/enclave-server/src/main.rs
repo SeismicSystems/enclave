@@ -19,7 +19,7 @@ struct Args {
     #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_PORT)]
     port: u16,
 
-    /// The port to bind the server to
+    /// the other operator share for generating the master key 
     #[arg(long)]
     operator_share: Option<[u8;32]>,
 }
