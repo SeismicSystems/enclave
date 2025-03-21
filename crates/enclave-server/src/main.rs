@@ -36,9 +36,8 @@ async fn main() {
     let args = Args::parse();
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
-
     let mut builder = EnclaveServer::builder()
-        .with_addr(&args.addr)
+        .with_addr(args.addr)
         .with_port(args.port);
 
     if let Some(op_share) = args.operator_share {
