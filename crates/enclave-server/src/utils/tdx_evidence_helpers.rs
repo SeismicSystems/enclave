@@ -455,6 +455,7 @@ macro_rules! body_field {
 impl Quote {
     body_field!(report_data);
     body_field!(mr_config_id);
+    body_field!(mr_td);
     body_field!(rtmr_0);
     body_field!(rtmr_1);
     body_field!(rtmr_2);

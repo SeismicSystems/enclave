@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
+use rand::TryRngCore;
 use hkdf::Hkdf;
 use seismic_enclave::get_unsecure_sample_secp256k1_sk;
 use serde::{Deserialize, Serialize};
@@ -150,7 +151,7 @@ impl KeyManager {
 
     fn derive_tee_share() -> Result<Secret> {
         let binding = get_tdx_quote()?;
-        let mrtd = binding.mrtd();
+        let mrtd = binding.mr_td();
 
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
