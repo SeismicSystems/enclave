@@ -26,6 +26,7 @@ attestation-service = { git = "https://github.com/confidential-containers/truste
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
 
 aes-gcm.workspace = true
+zeroize.workspace = true
 anyhow.workspace = true
 az-tdx-vtpm.workspace = true
 base64.workspace = true
@@ -50,6 +51,7 @@ tokio.workspace = true
 schnorrkel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+rand.workspace = true
 alloy-sol-types = { version = "0.8", default-features = false }
 alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
