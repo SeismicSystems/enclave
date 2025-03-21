@@ -1,9 +1,11 @@
 use jsonrpsee::core::RpcResult;
 use seismic_enclave::request_types::tx_io::*;
+use seismic_enclave::rpc_bad_argument_error;
 use seismic_enclave::{
     crypto::{ecdh_decrypt, ecdh_encrypt},
     rpc_invalid_ciphertext_error,
 };
+use tracing::error;
 
 use crate::get_secp256k1_sk;
 
@@ -21,7 +23,13 @@ use crate::get_secp256k1_sk;
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
 pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
-    let encrypted_data = ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce).unwrap();
+    let encrypted_data = match ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce) {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to encrypt data: {}", e);
+            return Err(rpc_bad_argument_error(e));
+        }
+    };
 
     Ok(IoEncryptionResponse { encrypted_data })
 }
@@ -33,8 +41,7 @@ pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncr
 ///   Should be a JSON-encoded `IoDecryptionRequest`.
 ///
 /// # Returns
-/// A `Result` containing an HTTP response with the decrypted data, or an error of type `Infallible`.
-/// The response body is JSON-encoded and contains the decrypted data as part of an `IoDecryptionResponse`.
+/// A `Result` containing an HTTP response with the decrypted data, or an error of type `Infallible`.  /// The response body is JSON-encoded and contains the decrypted data as part of an `IoDecryptionResponse`.
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
@@ -42,13 +49,18 @@ pub async fn tx_io_decrypt_handler(
     request: IoDecryptionRequest,
 ) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
-    let decrypted_data = ecdh_decrypt(
+    let decrypted_data = match ecdh_decrypt(
         &request.key,
         &get_secp256k1_sk(),
         &request.data,
         request.nonce,
-    )
-    .map_err(|e| rpc_invalid_ciphertext_error(e))?;
+    ) {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to decrypt data: {}", e);
+            return Err(rpc_invalid_ciphertext_error(e));
+        }
+    };
 
     Ok(IoDecryptionResponse { decrypted_data })
 }
@@ -56,14 +68,13 @@ pub async fn tx_io_decrypt_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+    use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
     #[tokio::test]
     async fn test_io_encryption() {
         // Prepare encryption request body
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let mut nonce = vec![0u8; 4]; // 4 leading zeros
-        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+        let nonce = Nonce::new_rand();
         let req = IoEncryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: data_to_encrypt.clone(),
@@ -79,7 +90,7 @@ mod tests {
         let req = IoDecryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: res.encrypted_data,
-            nonce: nonce.into(),
+            nonce: nonce.clone(),
         };
 
         let res = tx_io_decrypt_handler(req).await.unwrap();
@@ -92,12 +103,11 @@ mod tests {
     #[tokio::test]
     async fn test_decrypt_invalid_ciphertext() {
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut nonce = vec![0u8; 4]; // 4 leading zeros
-        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+        let nonce = Nonce::new_rand();
         let decryption_request = IoDecryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: bad_ciphertext,
-            nonce: nonce.into(),
+            nonce: nonce.clone(),
         };
         let res = tx_io_decrypt_handler(decryption_request).await;
 

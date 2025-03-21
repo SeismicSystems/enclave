@@ -19,6 +19,7 @@ supervisorctl = []
 
 [dependencies]
 seismic-enclave.workspace = true
+clap = { version = "4.5", features = ["derive"] }
 
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}

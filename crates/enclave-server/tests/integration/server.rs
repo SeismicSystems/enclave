@@ -9,6 +9,7 @@ use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
 use seismic_enclave::coco_as::HashAlgorithm;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::signing::Secp256k1SignRequest;
@@ -24,12 +25,11 @@ use std::time::Duration;
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
     let data_to_encrypt = vec![72, 101, 108, 108, 111];
-    let mut nonce = vec![0u8; 4]; // 4 leading zeros
-    nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+    let nonce = Nonce::new_rand();
     let encryption_request = IoEncryptionRequest {
         key: get_unsecure_sample_secp256k1_pk(),
         data: data_to_encrypt.clone(),
-        nonce: nonce.clone().into(),
+        nonce: nonce.clone(),
     };
 
     // make the http request
@@ -41,7 +41,7 @@ async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     let decryption_request = IoDecryptionRequest {
         key: get_unsecure_sample_secp256k1_pk(),
         data: encryption_response.encrypted_data,
-        nonce: nonce.into(),
+        nonce: nonce.clone(),
     };
 
     let decryption_response = client.decrypt(decryption_request).await.unwrap();

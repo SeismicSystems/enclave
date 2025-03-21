@@ -1,4 +1,5 @@
 use jsonrpsee::core::RpcResult;
+use tracing::error;
 
 use super::attest;
 use seismic_enclave::request_types::coco_aa::*;
@@ -22,9 +23,13 @@ pub async fn attestation_get_evidence_handler(
     req: AttestationGetEvidenceRequest,
 ) -> RpcResult<AttestationGetEvidenceResponse> {
     // Get the evidence from the attestation agent
-    let evidence = attest(req.runtime_data.as_slice())
-        .await
-        .map_err(|e| rpc_bad_argument_error(e))?;
+    let evidence = match attest(req.runtime_data.as_slice()).await {
+        Ok(evidence) => evidence,
+        Err(e) => {
+            error!("Failed to get attestation evidence: {}", e);
+            return Err(rpc_bad_argument_error(e));
+        }
+    };
 
     // Return the evidence as a response
     Ok(AttestationGetEvidenceResponse { evidence })
