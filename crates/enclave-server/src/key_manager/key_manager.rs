@@ -68,25 +68,6 @@ impl AsRef<[u8]> for Secret {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OperatorShare {
-    pub share: [u8; 32],
-}
-
-impl FromStr for OperatorShare {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = hex::decode(s).map_err(|e| e.to_string())?;
-        if bytes.len() != 32 {
-            return Err(format!("Expected 32 bytes, got {}", bytes.len()));
-        }
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes);
-        Ok(OperatorShare { share: arr })
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Key {
     pub bytes: Vec<u8>,
@@ -98,28 +79,6 @@ impl Key {
     }
 }
 
-pub struct KeyManagerBuilder {
-    operator_shares: Vec<OperatorShare>,
-}
-
-impl KeyManagerBuilder {
-    pub fn new() -> Self {
-        Self {
-            operator_shares: Vec::new(),
-        }
-    }
-
-    // For now, there is one other share at most.
-    pub fn with_operator_share(mut self, share: OperatorShare) -> Self {
-        self.operator_shares.push(share);
-        self
-    }
-
-    pub fn build(self) -> Result<KeyManager> {
-        KeyManager::new_with_shares(&self.operator_shares)
-    }
-}
-
 // Key manager state.
 pub struct KeyManager {
     master_key: Secret,
@@ -128,84 +87,16 @@ pub struct KeyManager {
 }
 
 impl KeyManager {
-    pub fn new_with_shares(operator_shares: &[OperatorShare]) -> Result<Self> {
-        if operator_shares.len() != 1 {
-            return Err(anyhow!(
-                "At least one operator share is required in production"
-            ));
-        }
-    
-        //Below test consumes a TPM access, which is single-threaded. 
-        assert!(is_tdx_cvm()?, "TDX CVM is required for key manager");
-
-        let tee_share = Self::derive_tee_share()?;
-
-        let mut share_bytes = Vec::with_capacity(operator_shares.len());
-        for share in operator_shares {
-            let bytes = share
-                .share
-                .iter()
-                .flat_map(|&x| x.to_be_bytes())
-                .collect::<Vec<u8>>();
-            share_bytes.push(bytes);
-        }
-
-        let mut combined_input = Vec::new();
-        combined_input.extend_from_slice(tee_share.as_ref());
-        for share in &share_bytes {
-            combined_input.extend_from_slice(share);
-        }
-
-        let hk = Hkdf::<Sha256>::new(None, &combined_input);
+    pub fn new() -> Result<Self> {
+        let hk = Hkdf::<Sha256>::new(None, &[]);
         let mut master_key_bytes = [0u8; 32];
         hk.expand(MASTER_KEY_DOMAIN_INFO, &mut master_key_bytes)
             .map_err(|_| anyhow!("HKDF expand failed for master key"))?;
-
-        log::info!(
-            "Key manager initialized with TEE share and {} operator shares",
-            operator_shares.len()
-        );
 
         Ok(Self {
             master_key: Secret::new(master_key_bytes),
             purpose_keys: HashMap::new(),
         })
-    }
-
-    /// Create a builder for the KeyManager.
-    pub fn builder() -> KeyManagerBuilder {
-        KeyManagerBuilder::new()
-    }
-
-    /// Create a new KeyManager with test shares (for development only).
-    pub fn new_with_test_shares() -> Self {
-        KeyManager {
-            master_key: Secret::new(*get_unsecure_sample_secp256k1_sk().as_ref()),
-            purpose_keys: HashMap::new(),
-        }
-    }
-
-    fn derive_tee_share() -> Result<Secret> {
-        let binding = get_tdx_quote()?;
-        let mrtd = binding.mr_td();
-
-        let mut rng = OsRng;
-        let mut rng_bytes = [0u8; 32];
-        rng.try_fill_bytes(&mut rng_bytes)?;
-
-        let mut combined_input = Vec::with_capacity(mrtd.len() + rng_bytes.len());
-        combined_input.extend_from_slice(mrtd);
-        combined_input.extend_from_slice(&rng_bytes);
-
-        let hk = Hkdf::<Sha256>::new(Some(TEE_DOMAIN_SEPARATOR), &combined_input);
-        let mut share = [0u8; 32];
-        hk.expand(b"tee-share-for-key-derivation", &mut share)
-            .map_err(|_| anyhow!("HKDF expand failed"))?;
-
-        rng_bytes.zeroize();
-        combined_input.zeroize();
-
-        Ok(Secret::new(share))
     }
 
     /// Get a purpose-specific key.
@@ -257,59 +148,15 @@ mod tests {
 
     #[test]
     fn test_key_manager_direct_constructor() {
-        let mut key_manager = KeyManager::new_with_test_shares();
+        let mut key_manager = KeyManager::new().unwrap();
         let aes_key = key_manager.get_aes_key().unwrap();
         assert_eq!(aes_key.bytes.len(), 32);
-    }
-
-    #[test]
-    #[serial]
-    fn test_key_manager_builder_single_share() {
-        let mut key_manager = KeyManager::builder()
-            .with_operator_share(OperatorShare {
-                share: [1u8; 32],
-            })
-            .build()
-            .unwrap();
-
-        let aes_key = key_manager.get_aes_key().unwrap();
-        assert_eq!(aes_key.bytes.len(), 32);
-    }
-
-    #[test]
-    fn test_key_manager_builder_no_shares() {
-        let result = KeyManager::builder().build();
-        assert!(result.is_err());
-        assert!(result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("At least one operator share"));
-    }
-
-    #[test]
-    fn test_key_manager_builder_multiple_shares_fails() {
-        let result = KeyManager::builder()
-            .with_operator_share(OperatorShare {
-                share: [1u8; 32],
-            })
-            .with_operator_share(OperatorShare {
-                share: [2u8; 32],
-            })
-            .build();
-
-        assert!(result.is_err());
-        assert!(result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("At least one operator share is required in production"));
     }
 
     #[test]
     #[serial]
     fn test_purpose_specific_keys_are_consistent() {
-        let mut key_manager = KeyManager::new_with_test_shares();
+        let mut key_manager = KeyManager::new().unwrap();
         let key_a = key_manager.get_key(KeyPurpose::Aes).unwrap();
         let key_b = key_manager.get_key(KeyPurpose::Aes).unwrap();
         assert_eq!(key_a.bytes, key_b.bytes);

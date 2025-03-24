@@ -1,7 +1,7 @@
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
-use crate::key_manager::key_manager::{KeyManager, OperatorShare};
+use crate::key_manager::key_manager::KeyManager;
 use crate::signing::handlers::*;
 use crate::snapshot::handlers::*;
 use crate::snapsync::handlers::*;
@@ -43,7 +43,6 @@ pub struct EnclaveServer {
 /// A builder that lets us configure the server address and optionally add operator shares.
 pub struct EnclaveServerBuilder {
     addr: Option<SocketAddr>,
-    operator_shares: Vec<OperatorShare>,
 }
 
 impl EnclaveServer {
@@ -63,7 +62,7 @@ impl EnclaveServer {
     pub fn new(addr: impl Into<SocketAddr>) -> Self {
         Self {
             addr: addr.into(),
-            key_manager: KeyManager::new_with_test_shares(),
+            key_manager: KeyManager::new().unwrap(),
         }
     }
 
@@ -100,7 +99,6 @@ impl Default for EnclaveServerBuilder {
                 ENCLAVE_DEFAULT_ENDPOINT_ADDR,
                 ENCLAVE_DEFAULT_ENDPOINT_PORT,
             )),
-            operator_shares: Vec::new(),
         }
     }
 }
@@ -127,23 +125,13 @@ impl EnclaveServerBuilder {
         self
     }
 
-    /// Add an operator share; if present, we'll treat as production mode.
-    pub fn with_operator_share(mut self, share: OperatorShare) -> Self {
-        self.operator_shares.push(share);
-        self
-    }
-
     /// Build the final `EnclaveServer` object.
     pub fn build(self) -> Result<EnclaveServer> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_manager = if !self.operator_shares.is_empty() {
-            KeyManager::new_with_shares(&self.operator_shares)?
-        } else {
-            KeyManager::new_with_test_shares()
-        };
+        let key_manager = KeyManager::new()?;
 
         Ok(EnclaveServer {
             addr: final_addr,
