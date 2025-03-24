@@ -13,6 +13,7 @@ const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
 const MASTER_KEY_DOMAIN_INFO: &[u8] = b"seismic-master-key-derivation";
 
 // KeyPurpose constants
+const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
 const PREFIX: &str = "seismic-purpose";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
@@ -60,16 +61,11 @@ impl KeyManager {
         Ok(())
     }
 
-    // TODO: double check this uses hk correctly, e.g. if string should be in salt or info
-    // TODO: consider adding a constant useful for rotation, ex epoch to the info field
+    // TODO: consider adding a constant useful for rotation, ex epoch, to the info field
     fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key> {
-        let ikm = self.master_key.as_ref();
-        let purpose_salt = purpose.domain_separator();
-        let info = [];
-
-        let hk = Hkdf::<Sha256>::new(Some(&purpose_salt), &ikm);
+        let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), &self.master_key.as_ref());
         let mut derived_key = vec![0u8; 32];
-        hk.expand(&info, &mut derived_key)
+        hk.expand(&purpose.domain_separator(), &mut derived_key)
             .expect("32 is a valid length for Sha256 to output");
         let key = Key::new(derived_key);
         self.purpose_keys.insert(purpose, key.clone());
