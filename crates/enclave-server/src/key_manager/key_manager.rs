@@ -43,50 +43,37 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new(master_key_bytes: [u8; 32]) -> Result<Self> {
-        let purpose_keys = Self::derive_all_purpose_keys(&mut master_key_bytes.clone())?;
         Ok(Self {
             master_key: Secret::new(master_key_bytes),
-            purpose_keys,
+            purpose_keys: HashMap::new(), // purpose keys are derived on demand
         })
     }
 
-    fn derive_all_purpose_keys(master_key_bytes: &mut [u8]) -> Result<HashMap<KeyPurpose, Key>> {
-        let mut purpose_keys: HashMap<KeyPurpose, Key> = HashMap::new();
-        for purpose in KeyPurpose::iter() {
-            let key = Self::derive_purpose_key(master_key_bytes, purpose)?;
-            purpose_keys.insert(purpose, key);
-        }
-        Ok(purpose_keys)
-    }
-
-    // TODO: double check this uses hk correctly
-    fn derive_purpose_key(master_key_bytes: &mut [u8], purpose: KeyPurpose) -> Result<Key> {
-        let purpose_salt = purpose.label().as_bytes();
-        let ikm = master_key_bytes;
-        let info = [];
-        let hk = Hkdf::<Sha256>::new(Some(purpose_salt), &ikm);
-        let mut okm = [0u8; 32];
-        hk.expand(&info, &mut okm)
-            .expect("32 is a valid length for Sha256 to output");
-        Ok(Key::new(okm.to_vec()))
-    }
-
     /// Get a purpose-specific key.
+    /// Derives the key if it doesn't exist yet
     fn get_key(&mut self, purpose: KeyPurpose) -> Result<Key> {
         if let Some(key) = self.purpose_keys.get(&purpose) {
             return Ok(key.clone());
+        } else {
+            self.derive_purpose_key(purpose)
         }
+    }  
 
-        let hk = Hkdf::<Sha256>::new(None, self.master_key.as_ref());
+    // TODO: double check this uses hk correctly, e.g. if string should be in salt or info
+    fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key> {
+        let ikm = self.master_key.as_ref();
+        let purpose_salt = purpose.domain_separator();
+        let info = [];
+
+        let hk = Hkdf::<Sha256>::new(Some(&purpose_salt), &ikm);
         let mut derived_key = vec![0u8; 32];
-        hk.expand(&purpose.domain_separator(), &mut derived_key)
-            .map_err(|_| anyhow!("HKDF expand failed for purpose key"))?;
-
+        hk.expand(&info, &mut derived_key)
+            .expect("32 is a valid length for Sha256 to output");
         let key = Key::new(derived_key);
         self.purpose_keys.insert(purpose, key.clone());
 
         Ok(key)
-    }
+    }  
 
     pub fn get_aes_key(&mut self) -> Result<Key> {
         self.get_key(KeyPurpose::Aes)
