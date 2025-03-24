@@ -46,7 +46,7 @@ impl Key {
     }
 }
 
-pub trait NetworkKeyProvider {
+pub trait NetworkKeyProvider: Sync {
     /// Loads a secp256k1 private key
     fn get_secp256k1_sk(&self) -> secp256k1::SecretKey;
 
@@ -59,7 +59,6 @@ pub trait NetworkKeyProvider {
     /// Generates an AES-GCM encryption key for snapshot encryption.
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
 }
-
 
 mod tests {
     use super::*;

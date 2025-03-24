@@ -1,12 +1,12 @@
 use crate::key_manager::{Key, Secret};
 
+use crate::key_manager::NetworkKeyProvider;
 use anyhow::Result;
 use hkdf::Hkdf;
 use sha2::Sha256;
 use std::collections::HashMap;
-use strum_macros::EnumIter;
 use strum::IntoEnumIterator;
-use crate::key_manager::NetworkKeyProvider;
+use strum_macros::EnumIter;
 
 // MasterKey Constants
 const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
@@ -19,7 +19,7 @@ const PREFIX: &str = "seismic-purpose";
 pub enum KeyPurpose {
     Snapshot,
     RngPrecompile,
-    Secp256k1, // TODO: rename to tx_io?
+    Secp256k1,  // TODO: rename to tx_io?
     Schnorrkel, // todo: rename to  RNG precompile?
 }
 
@@ -77,46 +77,53 @@ impl KeyManager {
         self.purpose_keys.insert(purpose, key.clone());
 
         Ok(key)
-    }  
+    }
 
     /// Get a purpose-specific key.
-    /// Derives the key if it doesn't exist yet
+    /// Error if key does not exist yet
     fn get_key(&self, purpose: KeyPurpose) -> Result<Key> {
         if let Some(key) = self.purpose_keys.get(&purpose) {
             return Ok(key.clone());
         } else {
             anyhow::bail!("KeyManager does not have a key for purpose {:?}", purpose);
         }
-    } 
+    }
 }
 
-// TODO: implement NetworkKeyProvider for KeyManager
-// TODO: replace get_key KeyPurpose
 impl NetworkKeyProvider for KeyManager {
     fn get_secp256k1_sk(&self) -> secp256k1::SecretKey {
-        let key = self.get_key(KeyPurpose::Secp256k1)
+        let key = self
+            .get_key(KeyPurpose::Secp256k1)
             .expect("KeyManager should always have a snapshot key");
-        secp256k1::SecretKey::from_slice(&key.bytes).expect("retrieved secp256k1 secret key should be valid")
+        secp256k1::SecretKey::from_slice(&key.bytes)
+            .expect("retrieved secp256k1 secret key should be valid")
     }
 
     fn get_secp256k1_pk(&self) -> secp256k1::PublicKey {
-        let key = self.get_key(KeyPurpose::Secp256k1)
+        let key = self
+            .get_key(KeyPurpose::Secp256k1)
             .expect("KeyManager should always have a snapshot key");
-        let sk = secp256k1::SecretKey::from_slice(&key.bytes).expect("retrieved secp256k1 secret key should be valid");
+        let sk = secp256k1::SecretKey::from_slice(&key.bytes)
+            .expect("retrieved secp256k1 secret key should be valid");
         let pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
         pk
     }
 
     fn get_schnorrkel_keypair(&self) -> schnorrkel::keys::Keypair {
-        let mini_key_bytes = self.get_key(KeyPurpose::Schnorrkel)
+        let mini_key_bytes = self
+            .get_key(KeyPurpose::Schnorrkel)
             .expect("KeyManager should always have a snapshot key");
-        let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes.bytes.as_slice())
-            .expect("mini_secret_key should be valid");
-        mini_secret_key.expand(schnorrkel::ExpansionMode::Uniform).into()
+        let mini_secret_key =
+            schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes.bytes.as_slice())
+                .expect("mini_secret_key should be valid");
+        mini_secret_key
+            .expand(schnorrkel::ExpansionMode::Uniform)
+            .into()
     }
 
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
-        let key = self.get_key(KeyPurpose::Snapshot)
+        let key = self
+            .get_key(KeyPurpose::Snapshot)
             .expect("KeyManager should always have a snapshot key");
         let bytes: [u8; 32] = key.bytes.try_into().expect("Key should be 32 bytes");
         bytes.into()
@@ -131,7 +138,7 @@ mod tests {
     fn test_all_purpose_keys_are_initialized() {
         let master_key_bytes = [0u8; 32];
         let key_manager = KeyManager::new(master_key_bytes).unwrap();
-        
+
         for purpose in KeyPurpose::iter() {
             let key = key_manager.get_key(purpose).unwrap();
             assert!(!key.bytes.is_empty());
@@ -146,5 +153,4 @@ mod tests {
         let key_b = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
         assert_eq!(key_a.bytes, key_b.bytes);
     }
-
 }

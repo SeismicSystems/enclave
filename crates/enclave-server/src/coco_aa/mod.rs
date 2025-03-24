@@ -1,13 +1,13 @@
 pub mod handlers;
 
-use crate::get_secp256k1_pk;
-
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use once_cell::sync::OnceCell;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
+
+use crate::key_manager;
 
 pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 
@@ -42,8 +42,10 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 
 /// Makes an attestation with a hash of a Secp256k1 public key as the runtime data
 /// returns (attestation, signing_pk)
-pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-    let signing_pk = get_secp256k1_pk();
+pub async fn attest_signing_pk(
+    kp: &dyn key_manager::NetworkKeyProvider,
+) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
+    let signing_pk = kp.get_secp256k1_pk();
     let signing_pk_bytes = signing_pk.serialize();
     let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
 

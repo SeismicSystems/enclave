@@ -1,5 +1,7 @@
 use jsonrpsee::core::RpcResult;
 
+use crate::key_manager::NetworkKeyProvider;
+
 use super::att_genesis_data;
 use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 
@@ -10,8 +12,11 @@ use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 /// Along with an attestation of such data that can be verified with the attestation/as/eval_evidence endpoint
 ///
 /// Currently uses hardcoded values for testing purposes, which will be updated later
-pub async fn genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
-    let (genesis_data, evidence) = att_genesis_data()
+pub async fn genesis_get_data_handler(
+    kp: &dyn NetworkKeyProvider,
+) -> RpcResult<GenesisDataResponse> {
+    let io_pk = kp.get_secp256k1_pk();
+    let (genesis_data, evidence) = att_genesis_data(io_pk)
         .await
         .map_err(|e| rpc_bad_argument_error(e))?;
 
@@ -27,28 +32,30 @@ pub async fn genesis_get_data_handler() -> RpcResult<GenesisDataResponse> {
 mod tests {
     use super::*;
     use crate::coco_as::handlers::attestation_eval_evidence_handler;
+    use crate::key_manager::builder::KeyManagerBuilder;
     use crate::{
         coco_aa::init_coco_aa, coco_as::init_as_policies, coco_as::init_coco_as,
         coco_as::into_original::*, utils::test_utils::is_sudo,
     };
+    use seismic_enclave::request_types::coco_as::Data as ApiData;
+    use seismic_enclave::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
+
+    use attestation_service::Data as OriginalData;
+    use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
     use kbs_types::Tee;
     use seismic_enclave::request_types::coco_as::*;
     use serial_test::serial;
     use sha2::{Digest, Sha256};
-
-    use attestation_service::Data as OriginalData;
-    use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-    use seismic_enclave::request_types::coco_as::Data as ApiData;
-    use seismic_enclave::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
 
     #[tokio::test]
     #[serial(attestation_agent)]
     async fn test_genesis_get_data_handler_success_basic() {
         // Initialize ATTESTATION_AGENT
         init_coco_aa().expect("Failed to initialize AttestationAgent");
+        let kp = KeyManagerBuilder::build_mock().unwrap();
 
         // Call the handler
-        let res = genesis_get_data_handler().await.unwrap();
+        let res = genesis_get_data_handler(&kp).await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 
@@ -70,7 +77,8 @@ mod tests {
             .expect("Failed to initialize AS policies");
 
         // Make a genesis data request
-        let res = genesis_get_data_handler().await.unwrap();
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let res = genesis_get_data_handler(&kp).await.unwrap();
 
         // Submit the genesis data to the attestation service
         let bytes = res.data.to_bytes().unwrap();
