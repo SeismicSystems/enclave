@@ -8,10 +8,6 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-// MasterKey Constants
-const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
-const MASTER_KEY_DOMAIN_INFO: &[u8] = b"seismic-master-key-derivation";
-
 // KeyPurpose constants
 const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
 const PREFIX: &str = "seismic-purpose";
