@@ -36,18 +36,18 @@ impl KeyManagerBuilder {
         }
     }
 
-    // For now, there is one other share at most.
-    pub fn with_operator_share(mut self, share: OperatorShare) -> Self {
-        self.operator_shares.push(share);
-        self
-    }
+    // // For now, there is one other share at most.
+    // pub fn with_operator_share(mut self, share: OperatorShare) -> Self {
+    //     self.operator_shares.push(share);
+    //     self
+    // }
 
-    pub fn build_from_operator_shares(self) -> Result<KeyManager> {
-        let master_key_bytes = [0u8; 32];
-        // TODO: derive master key from shares
-        let km = KeyManager::new(master_key_bytes)?;
-        Ok(km)
-    }
+    // pub fn build_from_operator_shares(self) -> Result<KeyManager> {
+    //     let master_key_bytes = [0u8; 32];
+    //     // TODO: derive master key from shares
+    //     let km = KeyManager::new(master_key_bytes)?;
+    //     Ok(km)
+    // }
 
     pub fn build_from_os_rng() -> Result<KeyManager> {
         let mut rng = OsRng;

@@ -59,3 +59,32 @@ pub trait NetworkKeyProvider {
     /// Generates an AES-GCM encryption key for snapshot encryption.
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
 }
+
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_secret_from_vec_valid() {
+        let vec_32 = vec![1u8; 32];
+        let secret = Secret::from_vec(vec_32).unwrap();
+        assert_eq!(secret.as_ref().len(), 32);
+    }
+
+    #[test]
+    fn test_secret_from_vec_invalid_length() {
+        let vec_16 = vec![1u8; 16];
+        let res = Secret::from_vec(vec_16);
+
+        assert!(res.is_err(), "Expected error for invalid secret size");
+
+        if let Err(e) = res {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("Invalid secret size"),
+                "Unexpected error message: {}",
+                msg
+            );
+        }
+    }
+}
