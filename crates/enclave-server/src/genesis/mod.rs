@@ -31,6 +31,3 @@ async fn att_genesis_data() -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
     Ok((genesis_data, evidence))
 }
 
-fn initialize_keymanager() -> Result<()> {
-    
-}

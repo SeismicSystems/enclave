@@ -1,6 +1,7 @@
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
+use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::signing::handlers::*;
 use crate::snapshot::handlers::*;
@@ -58,11 +59,12 @@ impl EnclaveServer {
     }
 
     /// Provide direct constructor if you *really* want to skip the builder. 
-    /// By default, this will do a "test" KeyManager.
+    /// By default, this will do a "mock" KeyManager.
+    /// TODO: replace mock with real builder
     pub fn new(addr: impl Into<SocketAddr>) -> Self {
         Self {
             addr: addr.into(),
-            key_manager: KeyManager::new().unwrap(),
+            key_manager: KeyManagerBuilder::mock().unwrap(),
         }
     }
 
@@ -131,7 +133,7 @@ impl EnclaveServerBuilder {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_manager = KeyManager::new()?;
+        let key_manager = KeyManagerBuilder::mock()?; // TODO: replace with real thing
 
         Ok(EnclaveServer {
             addr: final_addr,

@@ -11,6 +11,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use az_tdx_vtpm::is_tdx_cvm;
 use crate::utils::tdx_evidence_helpers::get_tdx_quote;
+use crate::key_manager::{Secret, Key};
 
 // MasterKey Constants
 const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
@@ -39,47 +40,6 @@ impl KeyPurpose {
     }
 }
 
-
-
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
-pub struct Secret(pub [u8; 32]);
-
-impl Secret {
-    pub fn new(data: [u8; 32]) -> Self {
-        Secret(data)
-    }
-
-    pub fn empty() -> Self {
-        Secret([0u8; 32])
-    }
-    
-    pub fn from_vec(vec: Vec<u8>) -> Result<Self> {
-        if vec.len() != 32 {
-            return Err(anyhow!("Invalid secret size: expected 32 bytes, got {}", vec.len()));
-        }
-        let mut data = [0u8; 32];
-        data.copy_from_slice(&vec);
-        Ok(Secret(data))
-    }
-}
-
-impl AsRef<[u8]> for Secret {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Key {
-    pub bytes: Vec<u8>,
-}
-
-impl Key {
-    fn new(bytes: Vec<u8>) -> Self {
-        Self { bytes }
-    }
-}
-
 // Key manager state.
 pub struct KeyManager {
     master_key: Secret,
@@ -88,9 +48,8 @@ pub struct KeyManager {
 }
 
 impl KeyManager {
-    pub fn new() -> Result<Self> {
-        let mut master_key_bytes = [0u8; 32];
-        let purpose_keys = Self::derive_purpose_keys(&mut master_key_bytes)?;
+    pub fn new(master_key_bytes: [u8; 32]) -> Result<Self> {
+        let purpose_keys = Self::derive_purpose_keys(&mut master_key_bytes.clone())?;
         Ok(Self {
             master_key: Secret::new(master_key_bytes),
             purpose_keys,
@@ -154,7 +113,8 @@ mod tests {
 
     #[test]
     fn test_key_manager_direct_constructor() {
-        let mut key_manager = KeyManager::new().unwrap();
+        let master_key_bytes = [0u8; 32];
+        let mut key_manager = KeyManager::new(master_key_bytes).unwrap();
         let aes_key = key_manager.get_aes_key().unwrap();
         assert_eq!(aes_key.bytes.len(), 32);
     }
@@ -162,7 +122,8 @@ mod tests {
     #[test]
     #[serial]
     fn test_purpose_specific_keys_are_consistent() {
-        let mut key_manager = KeyManager::new().unwrap();
+        let master_key_bytes = [0u8; 32];
+        let mut key_manager = KeyManager::new(master_key_bytes).unwrap();
         let key_a = key_manager.get_key(KeyPurpose::Aes).unwrap();
         let key_b = key_manager.get_key(KeyPurpose::Aes).unwrap();
         assert_eq!(key_a.bytes, key_b.bytes);
