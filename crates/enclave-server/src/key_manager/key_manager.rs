@@ -19,7 +19,8 @@ const PREFIX: &str = "seismic-purpose";
 pub enum KeyPurpose {
     Snapshot,
     RngPrecompile,
-    // TODO: IO keys, Snapshot keys
+    Secp256k1, // TODO: rename to tx_io?
+    Schnorrkel, // todo: rename to  RNG precompile?
 }
 
 impl KeyPurpose {
@@ -27,6 +28,7 @@ impl KeyPurpose {
         match self {
             KeyPurpose::Snapshot => "snapshot",
             KeyPurpose::RngPrecompile => "rng-precompile",
+            _ => panic!("unimplimented key purpose"), // TODO: should not panic
         }
     }
 
@@ -88,16 +90,30 @@ impl KeyManager {
 }
 
 // TODO: implement NetworkKeyProvider for KeyManager
+// TODO: replace get_key KeyPurpose
 impl NetworkKeyProvider for KeyManager {
     fn get_secp256k1_sk(&self) -> secp256k1::SecretKey {
-        todo!()
+        let key = self.get_key(KeyPurpose::Secp256k1)
+            .expect("KeyManager should always have a snapshot key");
+        secp256k1::SecretKey::from_slice(&key.bytes).expect("retrieved secp256k1 secret key should be valid")
     }
+
     fn get_secp256k1_pk(&self) -> secp256k1::PublicKey {
-        todo!()
+        let key = self.get_key(KeyPurpose::Secp256k1)
+            .expect("KeyManager should always have a snapshot key");
+        let sk = secp256k1::SecretKey::from_slice(&key.bytes).expect("retrieved secp256k1 secret key should be valid");
+        let pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
+        pk
     }
+
     fn get_schnorrkel_keypair(&self) -> schnorrkel::keys::Keypair {
-        todo!()
+        let mini_key_bytes = self.get_key(KeyPurpose::Schnorrkel)
+            .expect("KeyManager should always have a snapshot key");
+        let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes.bytes.as_slice())
+            .expect("mini_secret_key should be valid");
+        mini_secret_key.expand(schnorrkel::ExpansionMode::Uniform).into()
     }
+
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
         let key = self.get_key(KeyPurpose::Snapshot)
             .expect("KeyManager should always have a snapshot key");
