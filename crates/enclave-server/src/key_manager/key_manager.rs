@@ -23,6 +23,7 @@ const PREFIX: &str = "seismic-purpose";
 pub enum KeyPurpose {
     Aes,
     RngPrecompile,
+    // TODO: IO keys 
 }
 
 impl KeyPurpose {
@@ -88,15 +89,20 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new() -> Result<Self> {
-        let hk = Hkdf::<Sha256>::new(None, &[]);
         let mut master_key_bytes = [0u8; 32];
-        hk.expand(MASTER_KEY_DOMAIN_INFO, &mut master_key_bytes)
-            .map_err(|_| anyhow!("HKDF expand failed for master key"))?;
-
+        let purpose_keys = Self::derive_purpose_keys(&mut master_key_bytes)?;
         Ok(Self {
             master_key: Secret::new(master_key_bytes),
-            purpose_keys: HashMap::new(),
+            purpose_keys,
         })
+    }
+
+    fn derive_purpose_keys(master_key_bytes: &mut[u8]) -> Result<HashMap<KeyPurpose, Key>> {
+        let hk = Hkdf::<Sha256>::new(None, &[]);
+        hk.expand(MASTER_KEY_DOMAIN_INFO, master_key_bytes) // note: lost zeroize gaurentees
+            .map_err(|_| anyhow!("HKDF expand failed for master key"))?;
+        // TODO: derive purpose keys
+        Ok(HashMap::new())
     }
 
     /// Get a purpose-specific key.
