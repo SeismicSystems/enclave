@@ -4,6 +4,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     ops::Deref,
     sync::OnceLock,
+    time::Duration,
 };
 use tokio::runtime::{Handle, Runtime};
 
@@ -27,8 +28,65 @@ use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
-
+pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+pub struct EnclaveClientBuilder {
+    addr: Option<String>,
+    port: Option<u16>,
+    timeout: Option<Duration>,
+    url: Option<String>,
+}
+
+impl EnclaveClientBuilder {
+    pub fn new() -> Self {
+        Self {
+            addr: None,
+            port: None,
+            timeout: None,
+            url: None,
+        }
+    }
+
+    pub fn addr(mut self, addr: impl Into<String>) -> Self {
+        self.addr = Some(addr.into());
+        self
+    }
+
+    pub fn port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn url(mut self, url: impl Into<String>) -> Self {
+        self.url = Some(url.into());
+        self
+    }
+
+    pub fn build(self) -> EnclaveClient {
+        let url = self.url.unwrap_or_else(|| {
+            format!(
+                "http://{}:{}",
+                self.addr
+                    .unwrap_or_else(|| ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string()),
+                self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
+            )
+        });
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(
+                self.timeout
+                    .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
+            )
+            .build(url)
+            .unwrap();
+        EnclaveClient::new_from_client(async_client)
+    }
+}
 
 /// A client for the enclave API.
 #[derive(Debug, Clone)]
@@ -41,10 +99,15 @@ pub struct EnclaveClient {
 
 impl Default for EnclaveClient {
     fn default() -> Self {
-        Self::new(format!(
+        let url = format!(
             "http://{}:{}",
             ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        ))
+        );
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(Duration::from_secs(5))
+            .build(url)
+            .unwrap();
+        Self::new_from_client(async_client)
     }
 }
 
@@ -57,24 +120,29 @@ impl Deref for EnclaveClient {
 }
 
 impl EnclaveClient {
+    pub fn builder() -> EnclaveClientBuilder {
+        EnclaveClientBuilder::new()
+    }
+
     /// Create a new enclave client.
     pub fn new(url: impl AsRef<str>) -> Self {
-        let inner = jsonrpsee::http_client::HttpClientBuilder::default()
-            .build(url)
-            .unwrap();
+        EnclaveClientBuilder::new().url(url.as_ref()).build()
+    }
+
+    /// Create a new enclave client from an address and port.
+    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
+        EnclaveClientBuilder::new().addr(addr).port(port).build()
+    }
+
+    pub fn new_from_client(async_client: HttpClient) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
             let runtime = ENCLAVE_CLIENT_RUNTIME.get_or_init(|| Runtime::new().unwrap());
             runtime.handle().clone()
         });
         Self {
-            async_client: inner,
+            async_client,
             handle,
         }
-    }
-
-    /// Create a new enclave client from an address and port.
-    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
-        Self::new(format!("http://{}:{}", addr.into(), port))
     }
 
     /// Block on a future with the runtime.
@@ -116,7 +184,9 @@ impl_sync_client_trait!(
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{get_unsecure_sample_secp256k1_pk, rpc::BuildableServer, MockEnclaveServer};
+    use crate::{
+        get_unsecure_sample_secp256k1_pk, nonce::Nonce, rpc::BuildableServer, MockEnclaveServer,
+    };
 
     use super::*;
     use secp256k1::{rand, Secp256k1};
@@ -163,12 +233,11 @@ pub mod tests {
         let secp = Secp256k1::new();
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let mut nonce = vec![0u8; 4]; // 4 leading zeros
-        nonce.extend_from_slice(&(12345678u64).to_be_bytes()); // Append the 8-byte u64
+        let nonce = Nonce::new_rand();
         let encryption_request = IoEncryptionRequest {
             key: public_key,
             data: data_to_encrypt.clone(),
-            nonce: nonce.clone().into(),
+            nonce: nonce.clone(),
         };
 
         // make the http request
@@ -180,7 +249,7 @@ pub mod tests {
         let decryption_request = IoDecryptionRequest {
             key: public_key,
             data: encryption_response.encrypted_data,
-            nonce: nonce.into(),
+            nonce: nonce.clone(),
         };
 
         let decryption_response = client.decrypt(decryption_request).unwrap();
