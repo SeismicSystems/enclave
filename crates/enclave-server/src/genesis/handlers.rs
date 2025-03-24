@@ -15,7 +15,7 @@ use seismic_enclave::{request_types::genesis::*, rpc_bad_argument_error};
 pub async fn genesis_get_data_handler(
     kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<GenesisDataResponse> {
-    let io_pk = kp.get_secp256k1_pk();
+    let io_pk = kp.get_tx_io_pk();
     let (genesis_data, evidence) = att_genesis_data(io_pk)
         .await
         .map_err(|e| rpc_bad_argument_error(e))?;

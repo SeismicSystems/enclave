@@ -43,7 +43,7 @@ pub async fn secp256k1_verify_handler(
     kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
-    let pk = kp.get_secp256k1_pk();
+    let pk = kp.get_tx_io_pk();
     let verified = secp256k1_verify(&request.msg, &request.sig, pk)
         .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 

@@ -161,7 +161,7 @@ impl BuildableServer for EnclaveServer {
 impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(self.key_manager.get_secp256k1_pk())
+        Ok(self.key_manager.get_tx_io_pk())
     }
 
     /// Handler for: `healthCheck`
@@ -226,7 +226,7 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        Ok(self.key_manager.get_schnorrkel_keypair())
+        Ok(self.key_manager.get_rng_keypair())
     }
 
     /// Handler for: 'snapshot.prepare_encrypted_snapshot'

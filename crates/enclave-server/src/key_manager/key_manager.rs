@@ -19,8 +19,7 @@ const PREFIX: &str = "seismic-purpose";
 pub enum KeyPurpose {
     Snapshot,
     RngPrecompile,
-    Secp256k1,  // TODO: rename to tx_io?
-    Schnorrkel, // todo: rename to  RNG precompile?
+    TxIo,
 }
 
 impl KeyPurpose {
@@ -28,8 +27,7 @@ impl KeyPurpose {
         match self {
             KeyPurpose::Snapshot => "snapshot",
             KeyPurpose::RngPrecompile => "rng-precompile",
-            KeyPurpose::Secp256k1 => "secp256k1",
-            KeyPurpose::Schnorrkel => "schnorrkel",
+            KeyPurpose::TxIo => "tx-io",
         }
     }
 
@@ -91,17 +89,17 @@ impl KeyManager {
 }
 
 impl NetworkKeyProvider for KeyManager {
-    fn get_secp256k1_sk(&self) -> secp256k1::SecretKey {
+    fn get_tx_io_sk(&self) -> secp256k1::SecretKey {
         let key = self
-            .get_key(KeyPurpose::Secp256k1)
+            .get_key(KeyPurpose::TxIo)
             .expect("KeyManager should always have a snapshot key");
         secp256k1::SecretKey::from_slice(&key.bytes)
             .expect("retrieved secp256k1 secret key should be valid")
     }
 
-    fn get_secp256k1_pk(&self) -> secp256k1::PublicKey {
+    fn get_tx_io_pk(&self) -> secp256k1::PublicKey {
         let key = self
-            .get_key(KeyPurpose::Secp256k1)
+            .get_key(KeyPurpose::TxIo)
             .expect("KeyManager should always have a snapshot key");
         let sk = secp256k1::SecretKey::from_slice(&key.bytes)
             .expect("retrieved secp256k1 secret key should be valid");
@@ -109,9 +107,9 @@ impl NetworkKeyProvider for KeyManager {
         pk
     }
 
-    fn get_schnorrkel_keypair(&self) -> schnorrkel::keys::Keypair {
+    fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair {
         let mini_key_bytes = self
-            .get_key(KeyPurpose::Schnorrkel)
+            .get_key(KeyPurpose::RngPrecompile)
             .expect("KeyManager should always have a snapshot key");
         let mini_secret_key =
             schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes.bytes.as_slice())

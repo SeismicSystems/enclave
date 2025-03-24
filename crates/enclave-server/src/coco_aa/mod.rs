@@ -45,7 +45,7 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 pub async fn attest_signing_pk(
     kp: &dyn key_manager::NetworkKeyProvider,
 ) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-    let signing_pk = kp.get_secp256k1_pk();
+    let signing_pk = kp.get_tx_io_pk();
     let signing_pk_bytes = signing_pk.serialize();
     let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
 

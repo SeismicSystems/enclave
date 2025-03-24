@@ -46,15 +46,16 @@ impl Key {
     }
 }
 
+// TODO: fix doc comments
 pub trait NetworkKeyProvider: Sync {
     /// Loads a secp256k1 private key
-    fn get_secp256k1_sk(&self) -> secp256k1::SecretKey;
+    fn get_tx_io_sk(&self) -> secp256k1::SecretKey;
 
     /// Loads a secp256k1 public key
-    fn get_secp256k1_pk(&self) -> secp256k1::PublicKey;
+    fn get_tx_io_pk(&self) -> secp256k1::PublicKey;
 
     /// Loads a Schnorrkel keypair
-    fn get_schnorrkel_keypair(&self) -> schnorrkel::keys::Keypair;
+    fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair;
 
     /// Generates an AES-GCM encryption key for snapshot encryption.
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
