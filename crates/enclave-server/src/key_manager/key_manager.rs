@@ -126,25 +126,6 @@ impl NetworkKeyProvider for KeyManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
-
-    // #[test]
-    // fn test_key_manager_direct_constructor() {
-    //     let master_key_bytes = [0u8; 32];
-    //     let mut key_manager = KeyManager::new(master_key_bytes).unwrap();
-    //     let aes_key = key_manager.get_snapshot_key();
-    //     assert_eq!(aes_key.bytes.len(), 32);
-    // }
-
-    #[test]
-    #[serial]
-    fn test_purpose_specific_keys_are_consistent() {
-        let master_key_bytes = [0u8; 32];
-        let key_manager = KeyManager::new(master_key_bytes).unwrap();
-        let key_a = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
-        let key_b = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
-        assert_eq!(key_a.bytes, key_b.bytes);
-    }
 
     #[test]
     fn test_all_purpose_keys_are_initialized() {
@@ -156,4 +137,15 @@ mod tests {
             assert!(!key.bytes.is_empty());
         }
     }
+
+    #[test]
+    fn test_purpose_specific_keys_are_consistent() {
+        let master_key_bytes = [0u8; 32];
+        let key_manager = KeyManager::new(master_key_bytes).unwrap();
+        let key_a = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
+        let key_b = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
+        assert_eq!(key_a.bytes, key_b.bytes);
+    }
+
+    
 }
