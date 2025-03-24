@@ -1,17 +1,9 @@
+use crate::key_manager::{Key, Secret};
+
 use anyhow::{anyhow, Result};
-use std::str::FromStr;
-use rand::rngs::OsRng;
-use rand::TryRngCore;
 use hkdf::Hkdf;
-use seismic_enclave::get_unsecure_sample_secp256k1_sk;
-use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
-use az_tdx_vtpm::is_tdx_cvm;
-use crate::utils::tdx_evidence_helpers::get_tdx_quote;
-use crate::key_manager::{Secret, Key};
 
 // MasterKey Constants
 const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
@@ -24,7 +16,7 @@ const PREFIX: &str = "seismic-purpose";
 pub enum KeyPurpose {
     Aes,
     RngPrecompile,
-    // TODO: IO keys 
+    // TODO: IO keys
 }
 
 impl KeyPurpose {
@@ -56,7 +48,7 @@ impl KeyManager {
         })
     }
 
-    fn derive_purpose_keys(master_key_bytes: &mut[u8]) -> Result<HashMap<KeyPurpose, Key>> {
+    fn derive_purpose_keys(master_key_bytes: &mut [u8]) -> Result<HashMap<KeyPurpose, Key>> {
         let hk = Hkdf::<Sha256>::new(None, &[]);
         hk.expand(MASTER_KEY_DOMAIN_INFO, master_key_bytes) // note: lost zeroize gaurentees
             .map_err(|_| anyhow!("HKDF expand failed for master key"))?;
@@ -74,7 +66,7 @@ impl KeyManager {
         let mut derived_key = vec![0u8; 32];
         hk.expand(&purpose.domain_separator(), &mut derived_key)
             .map_err(|_| anyhow!("HKDF expand failed for purpose key"))?;
-        
+
         let key = Key::new(derived_key);
         self.purpose_keys.insert(purpose, key.clone());
 
@@ -107,7 +99,11 @@ mod tests {
 
         if let Err(e) = res {
             let msg = e.to_string();
-            assert!(msg.contains("Invalid secret size"), "Unexpected error message: {}", msg);
+            assert!(
+                msg.contains("Invalid secret size"),
+                "Unexpected error message: {}",
+                msg
+            );
         }
     }
 

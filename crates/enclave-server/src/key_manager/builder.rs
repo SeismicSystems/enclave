@@ -1,20 +1,10 @@
-use anyhow::{anyhow, Result};
-use std::str::FromStr;
+use anyhow::Result;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
-use hkdf::Hkdf;
-use seismic_enclave::get_unsecure_sample_secp256k1_sk;
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
-use std::collections::HashMap;
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
-use az_tdx_vtpm::is_tdx_cvm;
-use crate::utils::tdx_evidence_helpers::get_tdx_quote;
-
+use std::str::FromStr;
 
 use crate::key_manager::key_manager::KeyManager;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatorShare {
@@ -68,7 +58,7 @@ impl KeyManagerBuilder {
         Ok(km)
     }
 
-    pub fn mock() -> Result<KeyManager> {
+    pub fn build_mock() -> Result<KeyManager> {
         let km = KeyManager::new([0u8; 32])?;
         Ok(km)
     }

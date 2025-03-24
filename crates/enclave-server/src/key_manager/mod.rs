@@ -1,9 +1,8 @@
-pub mod key_manager;
 pub mod builder;
+pub mod key_manager;
 
 use anyhow::{anyhow, Result};
 use zeroize::{Zeroize, ZeroizeOnDrop};
-
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct Secret(pub [u8; 32]);
@@ -16,10 +15,13 @@ impl Secret {
     pub fn empty() -> Self {
         Secret([0u8; 32])
     }
-    
+
     pub fn from_vec(vec: Vec<u8>) -> Result<Self> {
         if vec.len() != 32 {
-            return Err(anyhow!("Invalid secret size: expected 32 bytes, got {}", vec.len()));
+            return Err(anyhow!(
+                "Invalid secret size: expected 32 bytes, got {}",
+                vec.len()
+            ));
         }
         let mut data = [0u8; 32];
         data.copy_from_slice(&vec);

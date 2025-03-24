@@ -38,7 +38,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer {
     addr: SocketAddr,
-    key_manager: KeyManager, 
+    key_manager: KeyManager,
 }
 
 /// A builder that lets us configure the server address and optionally add operator shares.
@@ -58,13 +58,13 @@ impl EnclaveServer {
         EnclaveServerBuilder::default()
     }
 
-    /// Provide direct constructor if you *really* want to skip the builder. 
+    /// Provide direct constructor if you *really* want to skip the builder.
     /// By default, this will do a "mock" KeyManager.
     /// TODO: replace mock with real builder
     pub fn new(addr: impl Into<SocketAddr>) -> Self {
         Self {
             addr: addr.into(),
-            key_manager: KeyManagerBuilder::mock().unwrap(),
+            key_manager: KeyManagerBuilder::build_mock().unwrap(),
         }
     }
 
@@ -119,10 +119,7 @@ impl EnclaveServerBuilder {
         if let Some(curr) = self.addr {
             self.addr = Some(SocketAddr::new(curr.ip(), port));
         } else {
-            self.addr = Some(SocketAddr::new(
-                ENCLAVE_DEFAULT_ENDPOINT_ADDR,
-                port,
-            ));
+            self.addr = Some(SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
         }
         self
     }
@@ -133,7 +130,7 @@ impl EnclaveServerBuilder {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_manager = KeyManagerBuilder::mock()?; // TODO: replace with real thing
+        let key_manager = KeyManagerBuilder::build_mock()?; // TODO: replace with real thing
 
         Ok(EnclaveServer {
             addr: final_addr,

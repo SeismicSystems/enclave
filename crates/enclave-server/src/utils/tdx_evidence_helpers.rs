@@ -7,17 +7,16 @@ use log::debug;
 use serde_json::{Map, Value};
 pub type TeeEvidenceParsedClaim = serde_json::Value;
 use az_tdx_vtpm::vtpm::Quote as TpmQuote;
-use az_tdx_vtpm::{report, imds};
+use az_tdx_vtpm::{imds, report};
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
 
 pub(crate) fn get_tdx_quote() -> Result<Quote> {
-    let td_report = report::get_report()
-        .map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
-    
-    let td_quote = imds::get_td_quote(&td_report)
-        .map_err(|e| anyhow!("Failed to get TD quote: {}", e))?;
-    
+    let td_report = report::get_report().map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
+
+    let td_quote =
+        imds::get_td_quote(&td_report).map_err(|e| anyhow!("Failed to get TD quote: {}", e))?;
+
     parse_tdx_quote(td_quote.as_slice())
 }
 
