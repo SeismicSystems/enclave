@@ -59,12 +59,13 @@ impl EnclaveServer {
     }
 
     /// Provide direct constructor if you *really* want to skip the builder.
-    /// By default, this will do a "mock" KeyManager.
-    /// TODO: replace mock with real builder
+    /// By default, this will do a "OsRng" KeyManager.
     pub fn new(addr: impl Into<SocketAddr>) -> Self {
         Self {
             addr: addr.into(),
-            key_manager: KeyManagerBuilder::build_mock().unwrap(),
+            key_manager: KeyManagerBuilder::build_from_os_rng().map_err(
+                |e| anyhow!("Failed to build key manager: {}", e),
+            ).unwrap(),
         }
     }
 
@@ -130,7 +131,9 @@ impl EnclaveServerBuilder {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_manager = KeyManagerBuilder::build_mock()?; // TODO: replace with real thing
+        let key_manager = KeyManagerBuilder::build_from_os_rng().map_err(
+            |e| anyhow!("Failed to build key manager: {}", e),
+        )?;
 
         Ok(EnclaveServer {
             addr: final_addr,

@@ -44,7 +44,7 @@ impl KeyManagerBuilder {
 
     // pub fn build_from_operator_shares(self) -> Result<KeyManager> {
     //     let master_key_bytes = [0u8; 32];
-    //     // TODO: derive master key from shares
+    //     // derive master key from shares
     //     let km = KeyManager::new(master_key_bytes)?;
     //     Ok(km)
     // }
