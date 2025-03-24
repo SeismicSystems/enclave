@@ -147,5 +147,4 @@ mod tests {
         assert_eq!(key_a.bytes, key_b.bytes);
     }
 
-    
 }
