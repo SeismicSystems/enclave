@@ -1,10 +1,14 @@
+use crate::key_manager::key_manager::KeyManager;
+
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use crate::key_manager::key_manager::KeyManager;
+// MasterKey Constants
+const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
+const MASTER_KEY_DOMAIN_INFO: &[u8] = b"seismic-master-key-derivation";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatorShare {
