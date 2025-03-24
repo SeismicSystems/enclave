@@ -4,6 +4,8 @@ use anyhow::{anyhow, Result};
 use hkdf::Hkdf;
 use sha2::Sha256;
 use std::collections::HashMap;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 // MasterKey Constants
 const TEE_DOMAIN_SEPARATOR: &[u8] = b"seismic-tee-domain-separator";
@@ -12,11 +14,11 @@ const MASTER_KEY_DOMAIN_INFO: &[u8] = b"seismic-master-key-derivation";
 // KeyPurpose constants
 const PREFIX: &str = "seismic-purpose";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum KeyPurpose {
     Aes,
     RngPrecompile,
-    // TODO: IO keys
+    // TODO: IO keys, Snapshot keys
 }
 
 impl KeyPurpose {
@@ -41,19 +43,32 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new(master_key_bytes: [u8; 32]) -> Result<Self> {
-        let purpose_keys = Self::derive_purpose_keys(&mut master_key_bytes.clone())?;
+        let purpose_keys = Self::derive_all_purpose_keys(&mut master_key_bytes.clone())?;
         Ok(Self {
             master_key: Secret::new(master_key_bytes),
             purpose_keys,
         })
     }
 
-    fn derive_purpose_keys(master_key_bytes: &mut [u8]) -> Result<HashMap<KeyPurpose, Key>> {
-        let hk = Hkdf::<Sha256>::new(None, &[]);
-        hk.expand(MASTER_KEY_DOMAIN_INFO, master_key_bytes) // note: lost zeroize gaurentees
-            .map_err(|_| anyhow!("HKDF expand failed for master key"))?;
-        // TODO: derive purpose keys
-        Ok(HashMap::new())
+    fn derive_all_purpose_keys(master_key_bytes: &mut [u8]) -> Result<HashMap<KeyPurpose, Key>> {
+        let mut purpose_keys: HashMap<KeyPurpose, Key> = HashMap::new();
+        for purpose in KeyPurpose::iter() {
+            let key = Self::derive_purpose_key(master_key_bytes, purpose)?;
+            purpose_keys.insert(purpose, key);
+        }
+        Ok(purpose_keys)
+    }
+
+    // TODO: double check this uses hk correctly
+    fn derive_purpose_key(master_key_bytes: &mut [u8], purpose: KeyPurpose) -> Result<Key> {
+        let purpose_salt = purpose.label().as_bytes();
+        let ikm = master_key_bytes;
+        let info = [];
+        let hk = Hkdf::<Sha256>::new(Some(purpose_salt), &ikm);
+        let mut okm = [0u8; 32];
+        hk.expand(&info, &mut okm)
+            .expect("32 is a valid length for Sha256 to output");
+        Ok(Key::new(okm.to_vec()))
     }
 
     /// Get a purpose-specific key.
