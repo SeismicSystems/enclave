@@ -61,6 +61,7 @@ pub trait NetworkKeyProvider: Sync {
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
