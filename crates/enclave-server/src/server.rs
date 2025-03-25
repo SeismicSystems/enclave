@@ -41,7 +41,8 @@ pub struct EnclaveServer {
     key_manager: KeyManager,
 }
 
-/// A builder that lets us configure the server address and optionally add operator shares.
+/// A builder that lets us configure the server address
+/// In the future, this may also configure the key manager
 pub struct EnclaveServerBuilder {
     addr: Option<SocketAddr>,
 }
@@ -53,7 +54,7 @@ impl EnclaveServer {
         Ok(())
     }
 
-    /// Create a new builder with default address and no shares.
+    /// Create a new builder with default address
     pub fn builder() -> EnclaveServerBuilder {
         EnclaveServerBuilder::default()
     }
@@ -87,7 +88,7 @@ impl EnclaveServer {
     }
 }
 
-/// By default, we create a server on 0.0.0.0:4242 with a test KeyManager.
+/// By default, we create a server on 0.0.0.0:7878 with a OsRng KeyManager.
 impl Default for EnclaveServer {
     fn default() -> Self {
         Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))

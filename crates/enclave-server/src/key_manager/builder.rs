@@ -3,35 +3,26 @@ use crate::key_manager::key_manager::KeyManager;
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
-use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OperatorShare {
-    pub share: [u8; 32],
-}
-
-impl FromStr for OperatorShare {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = hex::decode(s).map_err(|e| e.to_string())?;
-        if bytes.len() != 32 {
-            return Err(format!("Expected 32 bytes, got {}", bytes.len()));
-        }
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes);
-        Ok(OperatorShare { share: arr })
-    }
-}
-
+/// A builder for creating instances of [`KeyManager`].
+///
+/// Provides methods to create either a secure, randomly initialized key manager
+/// or a deterministic mock version for testing purposes.
 pub struct KeyManagerBuilder {}
 
 impl KeyManagerBuilder {
+    /// Creates a new instance of the `KeyManagerBuilder`.
     pub fn new() -> Self {
         Self {}
     }
 
+    /// Builds a [`KeyManager`] using cryptographically secure random bytes
+    /// sourced from the operating system's RNG.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the random number generator fails or if the
+    /// `KeyManager` fails to initialize.
     pub fn build_from_os_rng() -> Result<KeyManager> {
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
@@ -41,6 +32,9 @@ impl KeyManagerBuilder {
         Ok(km)
     }
 
+    /// Builds a mock [`KeyManager`] initialized with zeroed bytes.
+    ///
+    /// This method is intended for testing and non-production use.
     pub fn build_mock() -> Result<KeyManager> {
         let km = KeyManager::new([0u8; 32])?;
         Ok(km)

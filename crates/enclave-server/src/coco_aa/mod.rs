@@ -1,13 +1,13 @@
 pub mod handlers;
 
+use crate::key_manager;
+
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use once_cell::sync::OnceCell;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-
-use crate::key_manager;
 
 pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
 

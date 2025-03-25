@@ -8,10 +8,12 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-// KeyPurpose constants
+/// Salt used during HKDF key derivation for purpose-specific keys.
 const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
+/// Prefix used in domain separation when deriving purpose-specific keys.
 const PREFIX: &str = "seismic-purpose";
 
+/// Enum representing the intended usage ("purpose") of a derived key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum KeyPurpose {
     Snapshot,
@@ -20,6 +22,7 @@ pub enum KeyPurpose {
 }
 
 impl KeyPurpose {
+    /// Returns the short string label for the purpose.
     fn label(&self) -> &'static str {
         match self {
             KeyPurpose::Snapshot => "snapshot",
@@ -28,12 +31,16 @@ impl KeyPurpose {
         }
     }
 
+    /// Returns the domain separator for this purpose, used in HKDF expansion.
     pub fn domain_separator(&self) -> Vec<u8> {
         format!("{PREFIX}-{}", self.label()).into_bytes()
     }
 }
 
-// Key manager state.
+/// Key manager for handling purpose-specific derived keys from a single master key.
+///
+/// Keys are derived using HKDF-SHA256 with domain separation.
+/// This struct supports retrieving keys. See KeyPurpose for the intended usages
 pub struct KeyManager {
     master_key: Secret,
     //no-thread-safety yet
@@ -41,6 +48,13 @@ pub struct KeyManager {
 }
 
 impl KeyManager {
+    /// Constructs a new `KeyManager` from a 32-byte master key.
+    ///
+    /// This will immediately derive all known purpose keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key derivation fails.
     pub fn new(master_key_bytes: [u8; 32]) -> Result<Self> {
         let mut km = Self {
             master_key: Secret::new(master_key_bytes),
@@ -50,6 +64,7 @@ impl KeyManager {
         Ok(km)
     }
 
+    /// Iterates over KeyPurpose and derives all purpose keys.
     fn derive_all_purpose_keys(&mut self) -> Result<()> {
         for purpose in KeyPurpose::iter() {
             self.derive_purpose_key(purpose)?;
@@ -57,7 +72,11 @@ impl KeyManager {
         Ok(())
     }
 
-    // TODO: consider adding a constant useful for rotation, ex epoch, to the info field
+    /// Derives a key for a specific `KeyPurpose` and stores it internally.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if HKDF expansion fails (though this is unlikely with correct parameters).
     fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key> {
         let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), &self.master_key.as_ref());
         let mut derived_key = vec![0u8; 32];
@@ -69,8 +88,11 @@ impl KeyManager {
         Ok(key)
     }
 
-    /// Get a purpose-specific key.
-    /// Error if key does not exist yet
+    /// Retrieves a previously derived key for a given purpose.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key has not been derived.
     fn get_key(&self, purpose: KeyPurpose) -> Result<Key> {
         if let Some(key) = self.purpose_keys.get(&purpose) {
             return Ok(key.clone());
@@ -81,6 +103,7 @@ impl KeyManager {
 }
 
 impl NetworkKeyProvider for KeyManager {
+    /// Retrieves the secp256k1 secret key for transaction I/O signing.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey {
         let key = self
             .get_key(KeyPurpose::TxIo)
@@ -89,6 +112,7 @@ impl NetworkKeyProvider for KeyManager {
             .expect("retrieved secp256k1 secret key should be valid")
     }
 
+    /// Retrieves the secp256k1 public key corresponding to the TxIo secret key.
     fn get_tx_io_pk(&self) -> secp256k1::PublicKey {
         let key = self
             .get_key(KeyPurpose::TxIo)
@@ -99,6 +123,7 @@ impl NetworkKeyProvider for KeyManager {
         pk
     }
 
+    /// Retrieves the Schnorrkel keypair used for randomness generation.
     fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair {
         let mini_key_bytes = self
             .get_key(KeyPurpose::RngPrecompile)
@@ -111,6 +136,7 @@ impl NetworkKeyProvider for KeyManager {
             .into()
     }
 
+    /// Retrieves the AES-256-GCM encryption key used for snapshot operations.
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
         let key = self
             .get_key(KeyPurpose::Snapshot)

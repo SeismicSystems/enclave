@@ -4,18 +4,27 @@ pub mod key_manager;
 use anyhow::{anyhow, Result};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+/// A secure wrapper around a 32-byte master secret key.
+///
+/// Implements [`Zeroize`] and [`ZeroizeOnDrop`] to ensure the memory is cleared
+/// when the value is dropped or explicitly zeroized.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct Secret(pub [u8; 32]);
 
 impl Secret {
+    /// Creates a new `Secret` from a 32-byte array.
     pub fn new(data: [u8; 32]) -> Self {
         Secret(data)
     }
 
+    /// Returns a `Secret` filled with zeros.
     pub fn empty() -> Self {
         Secret([0u8; 32])
     }
 
+    /// Constructs a `Secret` from a `Vec<u8>`.
+    ///
+    /// Returns an error if the vector is not exactly 32 bytes.
     pub fn from_vec(vec: Vec<u8>) -> Result<Self> {
         if vec.len() != 32 {
             return Err(anyhow!(
@@ -35,29 +44,37 @@ impl AsRef<[u8]> for Secret {
     }
 }
 
+/// Represents a derived key used for specific cryptographic purposes.
+///
+/// Typically created via HKDF derivation from a master [`Secret`].
 #[derive(Debug, Clone)]
 pub struct Key {
     pub bytes: Vec<u8>,
 }
 
 impl Key {
+    /// Creates a new `Key` from the given byte vector.
+    ///
+    /// This is primarily used internally by the key manager when deriving keys.
     fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
 }
 
-// TODO: fix doc comments
+/// Trait for providing access to derived keys used in networking and other runtime logic.
+///
+/// Used to abstract over how keys are retrieved (e.g., real or mocked key managers).
 pub trait NetworkKeyProvider: Sync {
-    /// Loads a secp256k1 private key
+    /// Retrieves the secp256k1 secret key used for transaction I/O.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey;
 
-    /// Loads a secp256k1 public key
+    /// Retrieves the secp256k1 public key corresponding to the transaction I/O secret key.
     fn get_tx_io_pk(&self) -> secp256k1::PublicKey;
 
-    /// Loads a Schnorrkel keypair
+    /// Retrieves the Schnorrkel keypair used for generating randomness.
     fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair;
 
-    /// Generates an AES-GCM encryption key for snapshot encryption.
+    /// Retrieves the AES-256-GCM encryption key used for snapshot encryption.
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
 }
 
