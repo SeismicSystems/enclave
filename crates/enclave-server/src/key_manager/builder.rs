@@ -25,13 +25,11 @@ impl FromStr for OperatorShare {
     }
 }
 
-pub struct KeyManagerBuilder {
-}
+pub struct KeyManagerBuilder {}
 
 impl KeyManagerBuilder {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 
     pub fn build_from_os_rng() -> Result<KeyManager> {

@@ -26,8 +26,7 @@ pub async fn tx_io_encrypt_handler(
     kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
-    let encrypted_data = match ecdh_encrypt(&req.key, &kp.get_tx_io_sk(), &req.data, req.nonce)
-    {
+    let encrypted_data = match ecdh_encrypt(&req.key, &kp.get_tx_io_sk(), &req.data, req.nonce) {
         Ok(data) => data,
         Err(e) => {
             error!("Failed to encrypt data: {}", e);

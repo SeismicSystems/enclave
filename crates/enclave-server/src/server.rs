@@ -63,9 +63,9 @@ impl EnclaveServer {
     pub fn new(addr: impl Into<SocketAddr>) -> Self {
         Self {
             addr: addr.into(),
-            key_manager: KeyManagerBuilder::build_from_os_rng().map_err(
-                |e| anyhow!("Failed to build key manager: {}", e),
-            ).unwrap(),
+            key_manager: KeyManagerBuilder::build_from_os_rng()
+                .map_err(|e| anyhow!("Failed to build key manager: {}", e))
+                .unwrap(),
         }
     }
 
@@ -131,9 +131,8 @@ impl EnclaveServerBuilder {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_manager = KeyManagerBuilder::build_from_os_rng().map_err(
-            |e| anyhow!("Failed to build key manager: {}", e),
-        )?;
+        let key_manager = KeyManagerBuilder::build_from_os_rng()
+            .map_err(|e| anyhow!("Failed to build key manager: {}", e))?;
 
         Ok(EnclaveServer {
             addr: final_addr,
