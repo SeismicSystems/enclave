@@ -1,3 +1,5 @@
+#![allow(warnings)] // TODO: remove
+
 pub mod handlers;
 
 use crate::coco_aa::attest_signing_pk;
