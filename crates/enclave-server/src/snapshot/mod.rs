@@ -6,6 +6,7 @@ pub use check_operator::check_operator;
 use compress::{compress_datadir, decompress_datadir};
 use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for integration testing
 
+use crate::key_manager::NetworkKeyProvider;
 #[cfg(not(feature = "supervisorctl"))]
 use crate::utils::service::{start_reth, stop_reth};
 #[cfg(feature = "supervisorctl")]
@@ -41,6 +42,7 @@ pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 /// Returns an error if any step in the process (stopping Reth, compression, encryption,
 /// removing temporary data, or restarting Reth) fails.
 pub fn prepare_encrypted_snapshot(
+    kp: &dyn NetworkKeyProvider,
     reth_data_dir: &str,
     data_disk_dir: &str,
     snapshot_dir: &str,
@@ -50,7 +52,7 @@ pub fn prepare_encrypted_snapshot(
         .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
     stop_reth()?;
     compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-    encrypt_snapshot(snapshot_dir, data_disk_dir, snapshot_file)?;
+    encrypt_snapshot(kp, snapshot_dir, data_disk_dir, snapshot_file)?;
     fs::remove_dir_all(snapshot_dir)
         .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
     start_reth()?;
@@ -78,6 +80,7 @@ pub fn prepare_encrypted_snapshot(
 /// Returns an error if any step in the process (stopping Reth, decryption, decompression,
 /// removing temporary data, or restarting Reth) fails.
 pub fn restore_from_encrypted_snapshot(
+    kp: &dyn NetworkKeyProvider,
     reth_data_dir: &str,
     data_disk_dir: &str,
     snapshot_dir: &str,
@@ -86,7 +89,7 @@ pub fn restore_from_encrypted_snapshot(
     fs::create_dir_all(snapshot_dir)
         .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
     stop_reth()?;
-    decrypt_snapshot(data_disk_dir, snapshot_dir, snapshot_file)?;
+    decrypt_snapshot(kp, data_disk_dir, snapshot_dir, snapshot_file)?;
     decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
     fs::remove_dir_all(snapshot_dir)
         .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;

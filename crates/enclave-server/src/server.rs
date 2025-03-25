@@ -1,11 +1,13 @@
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
+use crate::key_manager::builder::KeyManagerBuilder;
+use crate::key_manager::key_manager::KeyManager;
+use crate::key_manager::NetworkKeyProvider;
 use crate::signing::handlers::*;
 use crate::snapshot::handlers::*;
 use crate::snapsync::handlers::*;
 use crate::tx_io::handlers::*;
-use crate::{get_schnorrkel_keypair, get_secp256k1_pk};
 
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -24,7 +26,7 @@ use seismic_enclave::tx_io::{
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
@@ -33,8 +35,16 @@ use std::str::FromStr;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+/// The main server struct, with everything needed to run.
 pub struct EnclaveServer {
     addr: SocketAddr,
+    key_manager: KeyManager,
+}
+
+/// A builder that lets us configure the server address
+/// In the future, this may also configure the key manager
+pub struct EnclaveServerBuilder {
+    addr: Option<SocketAddr>,
 }
 
 impl EnclaveServer {
@@ -44,14 +54,28 @@ impl EnclaveServer {
         Ok(())
     }
 
-    pub fn new(addr: impl Into<SocketAddr>) -> Self {
-        Self { addr: addr.into() }
+    /// Create a new builder with default address
+    pub fn builder() -> EnclaveServerBuilder {
+        EnclaveServerBuilder::default()
     }
 
+    /// Provide direct constructor if you *really* want to skip the builder.
+    /// By default, this will do a "OsRng" KeyManager.
+    pub fn new(addr: impl Into<SocketAddr>) -> Self {
+        Self {
+            addr: addr.into(),
+            key_manager: KeyManagerBuilder::build_from_os_rng()
+                .map_err(|e| anyhow!("Failed to build key manager: {}", e))
+                .unwrap(),
+        }
+    }
+
+    /// Example constructor from IP/port strings.
     pub fn new_from_addr_port(addr: String, port: u16) -> Self {
         Self::new((IpAddr::from_str(&addr).unwrap(), port))
     }
 
+    /// If you want to keep chainable `with_addr` / `with_port` on the server itself:
     pub fn with_addr(mut self, addr: &str) -> Self {
         let ip_addr = IpAddr::from_str(addr).unwrap();
         self.addr = SocketAddr::new(ip_addr, self.addr.port());
@@ -64,9 +88,57 @@ impl EnclaveServer {
     }
 }
 
+/// By default, we create a server on 0.0.0.0:7878 with a OsRng KeyManager.
 impl Default for EnclaveServer {
     fn default() -> Self {
         Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))
+    }
+}
+
+/// Implementation of our new builder.
+impl Default for EnclaveServerBuilder {
+    fn default() -> Self {
+        Self {
+            addr: Some(SocketAddr::new(
+                ENCLAVE_DEFAULT_ENDPOINT_ADDR,
+                ENCLAVE_DEFAULT_ENDPOINT_PORT,
+            )),
+        }
+    }
+}
+
+impl EnclaveServerBuilder {
+    pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
+        if let Some(curr) = self.addr {
+            self.addr = Some(SocketAddr::new(ip_addr, curr.port()));
+        } else {
+            self.addr = Some(SocketAddr::new(ip_addr, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+        }
+        self
+    }
+
+    pub fn with_port(mut self, port: u16) -> Self {
+        if let Some(curr) = self.addr {
+            self.addr = Some(SocketAddr::new(curr.ip(), port));
+        } else {
+            self.addr = Some(SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        }
+        self
+    }
+
+    /// Build the final `EnclaveServer` object.
+    pub fn build(self) -> Result<EnclaveServer> {
+        let final_addr = self.addr.ok_or_else(|| {
+            anyhow!("No address found in builder (should not happen if default is set)")
+        })?;
+
+        let key_manager = KeyManagerBuilder::build_from_os_rng()
+            .map_err(|e| anyhow!("Failed to build key manager: {}", e))?;
+
+        Ok(EnclaveServer {
+            addr: final_addr,
+            key_manager,
+        })
     }
 }
 
@@ -89,7 +161,7 @@ impl BuildableServer for EnclaveServer {
 impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(get_secp256k1_pk())
+        Ok(self.key_manager.get_tx_io_pk())
     }
 
     /// Handler for: `healthCheck`
@@ -100,7 +172,7 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         debug!(target: "rpc::enclave", "Serving getGenesisData");
-        genesis_get_data_handler().await
+        genesis_get_data_handler(&self.key_manager).await
     }
 
     /// Handler for: `getSnapsyncBackup`
@@ -112,13 +184,13 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `encrypt`
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         debug!(target: "rpc::enclave", "Serving encrypt");
-        tx_io_encrypt_handler(req).await
+        tx_io_encrypt_handler(req, &self.key_manager).await
     }
 
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
-        tx_io_decrypt_handler(req).await
+        tx_io_decrypt_handler(req, &self.key_manager).await
     }
 
     /// Handler for: `getAttestationEvidence`
@@ -142,19 +214,19 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `sign`
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         debug!(target: "rpc::enclave", "Serving sign");
-        secp256k1_sign_handler(req).await
+        secp256k1_sign_handler(req, &self.key_manager).await
     }
 
     /// Handler for: `verify`
     async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
         debug!(target: "rpc::enclave", "Serving verify");
-        secp256k1_verify_handler(req).await
+        secp256k1_verify_handler(req, &self.key_manager).await
     }
 
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        Ok(get_schnorrkel_keypair())
+        Ok(self.key_manager.get_rng_keypair())
     }
 
     /// Handler for: 'snapshot.prepare_encrypted_snapshot'
@@ -163,7 +235,7 @@ impl EnclaveApiServer for EnclaveServer {
         req: PrepareEncryptedSnapshotRequest,
     ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
         debug!(target: "rpc::enclave", "Serving snapshot.prepare_encrypted_snapshot");
-        prepare_encrypted_snapshot_handler(req).await
+        prepare_encrypted_snapshot_handler(req, &self.key_manager).await
     }
 
     /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
@@ -172,7 +244,7 @@ impl EnclaveApiServer for EnclaveServer {
         req: RestoreFromEncryptedSnapshotRequest,
     ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
         debug!(target: "rpc::enclave", "Serving snapshot.restore_from_encrypted_snapshot");
-        restore_from_encrypted_snapshot_handler(req).await
+        restore_from_encrypted_snapshot_handler(req, &self.key_manager).await
     }
 }
 

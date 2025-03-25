@@ -31,12 +31,12 @@ async fn main() {
     let args = Args::parse();
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
-    let handle = EnclaveServer::default()
-        .with_addr(&args.addr.to_string())
-        .with_port(args.port)
-        .start()
-        .await
-        .unwrap();
+    let builder = EnclaveServer::builder()
+        .with_addr(args.addr)
+        .with_port(args.port);
+
+    let server = builder.build().unwrap();
+    let handle = server.start().await.unwrap();
 
     handle.stopped().await;
 }
