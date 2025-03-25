@@ -1,13 +1,13 @@
-use jsonrpsee::core::RpcResult;
+use crate::key_manager::NetworkKeyProvider;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc_bad_argument_error;
 use seismic_enclave::{
     crypto::{ecdh_decrypt, ecdh_encrypt},
     rpc_invalid_ciphertext_error,
 };
-use tracing::error;
 
-use crate::get_secp256k1_sk;
+use jsonrpsee::core::RpcResult;
+use tracing::error;
 
 /// Handles an IO encryption request, encrypting the provided data using AES.
 ///
@@ -21,9 +21,12 @@ use crate::get_secp256k1_sk;
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
-pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+pub async fn tx_io_encrypt_handler(
+    req: IoEncryptionRequest,
+    kp: &dyn NetworkKeyProvider,
+) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
-    let encrypted_data = match ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce) {
+    let encrypted_data = match ecdh_encrypt(&req.key, &kp.get_tx_io_sk(), &req.data, req.nonce) {
         Ok(data) => data,
         Err(e) => {
             error!("Failed to encrypt data: {}", e);
@@ -47,11 +50,12 @@ pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncr
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
 pub async fn tx_io_decrypt_handler(
     request: IoDecryptionRequest,
+    kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
     let decrypted_data = match ecdh_decrypt(
         &request.key,
-        &get_secp256k1_sk(),
+        &kp.get_tx_io_sk(),
         &request.data,
         request.nonce,
     ) {
@@ -68,6 +72,7 @@ pub async fn tx_io_decrypt_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::key_manager::builder::KeyManagerBuilder;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
     #[tokio::test]
@@ -80,8 +85,9 @@ mod tests {
             data: data_to_encrypt.clone(),
             nonce: nonce.clone().into(),
         };
+        let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let res = tx_io_encrypt_handler(req).await.unwrap();
+        let res = tx_io_encrypt_handler(req, &kp).await.unwrap();
 
         println!("Encrypted data: {:?}", res.encrypted_data);
 
@@ -93,7 +99,7 @@ mod tests {
             nonce: nonce.clone(),
         };
 
-        let res = tx_io_decrypt_handler(req).await.unwrap();
+        let res = tx_io_decrypt_handler(req, &kp).await.unwrap();
 
         println!("Decrypted data: {:?}", res.decrypted_data);
 
@@ -109,7 +115,8 @@ mod tests {
             data: bad_ciphertext,
             nonce: nonce.clone(),
         };
-        let res = tx_io_decrypt_handler(decryption_request).await;
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let res = tx_io_decrypt_handler(decryption_request, &kp).await;
 
         assert_eq!(res.is_err(), true);
         assert_eq!(
