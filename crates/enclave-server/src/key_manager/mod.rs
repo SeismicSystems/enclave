@@ -1,7 +1,6 @@
 pub mod builder;
 pub mod key_manager;
 
-use anyhow::{anyhow, Result};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A secure wrapper around a 32-byte master secret key.
@@ -25,12 +24,9 @@ impl Secret {
     /// Constructs a `Secret` from a `Vec<u8>`.
     ///
     /// Returns an error if the vector is not exactly 32 bytes.
-    pub fn from_vec(vec: Vec<u8>) -> Result<Self> {
+    pub fn from_vec(vec: Vec<u8>) -> Result<Self, anyhow::Error> {
         if vec.len() != 32 {
-            return Err(anyhow!(
-                "Invalid secret size: expected 32 bytes, got {}",
-                vec.len()
-            ));
+            anyhow::bail!("Invalid secret size: expected 32 bytes, got {}", vec.len());
         }
         let mut data = [0u8; 32];
         data.copy_from_slice(&vec);

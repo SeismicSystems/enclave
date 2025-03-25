@@ -1,7 +1,6 @@
 use crate::key_manager::{Key, Secret};
 
 use crate::key_manager::NetworkKeyProvider;
-use anyhow::Result;
 use hkdf::Hkdf;
 use sha2::Sha256;
 use std::collections::HashMap;
@@ -55,7 +54,7 @@ impl KeyManager {
     /// # Errors
     ///
     /// Returns an error if key derivation fails.
-    pub fn new(master_key_bytes: [u8; 32]) -> Result<Self> {
+    pub fn new(master_key_bytes: [u8; 32]) -> Result<Self, anyhow::Error> {
         let mut km = Self {
             master_key: Secret::new(master_key_bytes),
             purpose_keys: HashMap::new(), // purpose keys are derived on demand
@@ -65,7 +64,7 @@ impl KeyManager {
     }
 
     /// Iterates over KeyPurpose and derives all purpose keys.
-    fn derive_all_purpose_keys(&mut self) -> Result<()> {
+    fn derive_all_purpose_keys(&mut self) -> Result<(), anyhow::Error> {
         for purpose in KeyPurpose::iter() {
             self.derive_purpose_key(purpose)?;
         }
@@ -77,7 +76,7 @@ impl KeyManager {
     /// # Errors
     ///
     /// Returns an error if HKDF expansion fails (though this is unlikely with correct parameters).
-    fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key> {
+    fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
         let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), &self.master_key.as_ref());
         let mut derived_key = vec![0u8; 32];
         hk.expand(&purpose.domain_separator(), &mut derived_key)
@@ -93,7 +92,7 @@ impl KeyManager {
     /// # Errors
     ///
     /// Returns an error if the key has not been derived.
-    fn get_key(&self, purpose: KeyPurpose) -> Result<Key> {
+    fn get_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
         if let Some(key) = self.purpose_keys.get(&purpose) {
             return Ok(key.clone());
         } else {
