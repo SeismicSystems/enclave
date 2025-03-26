@@ -105,7 +105,7 @@ mod tests {
         let attestation_agent = SeismicAttestationAgent::new(None);
         attestation_agent.init().await.unwrap();
 
-        let res = attestation_agent.attest_genesis_data.await.unwrap();
+        let res = attestation_agent.attest_genesis_data().await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 
