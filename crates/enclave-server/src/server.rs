@@ -6,7 +6,6 @@ use crate::coco_aa::init_coco_aa;
 use crate::coco_as::init_coco_as;
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
-use crate::key_manager::NetworkKeyProvider;
 
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -15,17 +14,11 @@ use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
 use seismic_enclave::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
-use seismic_enclave::snapshot::{
-    PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
-    RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-};
-use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
-use anyhow::{anyhow, Result};
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;

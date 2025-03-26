@@ -4,11 +4,10 @@ use log::error;
 use secp256k1::PublicKey;
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
-use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk, rpc_bad_argument_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify};
+use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify};
 
 use crate::api::traits::CryptoApi;
 use crate::key_manager::NetworkKeyProvider;
-use crate::signing::enclave_sign;
 
 /// Implementation of cryptographic operations API
 pub struct CryptoService;
