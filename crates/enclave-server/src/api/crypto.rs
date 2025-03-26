@@ -3,10 +3,9 @@ use log::error;
 use secp256k1::PublicKey;
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
-use seismic_enclave::{ecdh_encrypt, get_unsecure_sample_secp256k1_pk, secp256k1_verify, get_unsecure_sample_secp256k1_sk};
+use seismic_enclave::{ecdh_encrypt, get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk, rpc_bad_argument_error, rpc_invalid_ciphertext_error, secp256k1_verify};
 
 use crate::api::traits::CryptoApi;
-use crate::api::error::{rpc_bad_argument_error, rpc_invalid_ciphertext_error};
 use crate::key_manager::NetworkKeyProvider;
 use crate::signing::enclave_sign;
 
@@ -80,5 +79,98 @@ impl CryptoApi for CryptoService {
     
     async fn get_eph_rng_keypair(&self, kp: &dyn NetworkKeyProvider) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(self.kp.get_rng_keypair())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::key_manager::builder::KeyManagerBuilder;
+
+    #[tokio::test]
+    async fn test_secp256k1_sign() {
+        // Prepare sign request body
+        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
+        let sign_request = Secp256k1SignRequest {
+            msg: msg_to_sign.clone(),
+        };
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+
+        let res = secp256k1_sign_handler(sign_request, &kp).await.unwrap();
+        assert!(!res.sig.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_secp256k1_verify() {
+        // Prepare sign request to get a valid signature
+        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
+        let sign_request = Secp256k1SignRequest {
+            msg: msg_to_sign.clone(),
+        };
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+
+        let res = secp256k1_sign_handler(sign_request, &kp).await.unwrap();
+
+        // Prepare verify request body
+        let verify_request = Secp256k1VerifyRequest {
+            msg: msg_to_sign,
+            sig: res.sig,
+        };
+
+        let res = secp256k1_verify_handler(verify_request, &kp).await.unwrap();
+        assert_eq!(res.verified, true);
+    }
+    
+    #[tokio::test]
+    async fn test_io_encryption() {
+        // Prepare encryption request body
+        let data_to_encrypt = vec![72, 101, 108, 108, 111];
+        let nonce = Nonce::new_rand();
+        let req = IoEncryptionRequest {
+            key: get_unsecure_sample_secp256k1_pk(),
+            data: data_to_encrypt.clone(),
+            nonce: nonce.clone().into(),
+        };
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+
+        let res = tx_io_encrypt_handler(req, &kp).await.unwrap();
+
+        println!("Encrypted data: {:?}", res.encrypted_data);
+
+        // check that decryption returns the original data
+        // Prepare decrypt request body
+        let req = IoDecryptionRequest {
+            key: get_unsecure_sample_secp256k1_pk(),
+            data: res.encrypted_data,
+            nonce: nonce.clone(),
+        };
+
+        let res = tx_io_decrypt_handler(req, &kp).await.unwrap();
+
+        println!("Decrypted data: {:?}", res.decrypted_data);
+
+        assert_eq!(res.decrypted_data, data_to_encrypt);
+    }
+
+    #[tokio::test]
+    async fn test_decrypt_invalid_ciphertext() {
+        let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let nonce = Nonce::new_rand();
+        let decryption_request = IoDecryptionRequest {
+            key: get_unsecure_sample_secp256k1_pk(),
+            data: bad_ciphertext,
+            nonce: nonce.clone(),
+        };
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let res = tx_io_decrypt_handler(decryption_request, &kp).await;
+
+        assert_eq!(res.is_err(), true);
+        assert_eq!(
+            res.err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid ciphertext"),
+            true
+        );
     }
 }

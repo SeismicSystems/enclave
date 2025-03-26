@@ -1,5 +1,3 @@
-pub mod handlers;
-
 use crate::coco_aa::ATTESTATION_AGENT;
 use seismic_enclave::request_types::genesis::*;
 

@@ -1,5 +1,3 @@
-pub mod handlers;
-
 use crate::key_manager;
 
 use anyhow::{anyhow, Result};
