@@ -37,7 +37,7 @@ pub async fn attestation_get_evidence_handler(
 
 #[cfg(test)]
 mod tests {
-    use crate::{coco_aa::init_coco_aa, utils::test_utils::is_sudo};
+    use crate::{coco_aa::{init_coco_aa, SeismicAttestationAgent}, utils::test_utils::is_sudo};
 
     use super::*;
 
@@ -49,7 +49,7 @@ mod tests {
         // NOTE: This test will run with the Sample TEE Type
         // because it doesn't run with sudo privileges
 
-        init_coco_aa().expect("Failed to initialize AttestationAgent");
+        let attestation_agent = SeismicAttestationAgent::new(None).init().await.unwrap();
 
         // Mock a valid AttestationGetEvidenceRequest
         let runtime_data = "nonce".as_bytes(); // Example runtime data
@@ -58,7 +58,7 @@ mod tests {
         };
 
         // Call the handler
-        let res = attestation_get_evidence_handler(evidence_request)
+        let res = attestation_agent.get_evidence(evidence_request)
             .await
             .unwrap();
 
@@ -74,8 +74,8 @@ mod tests {
             panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
-        init_coco_aa().expect("Failed to initialize AttestationAgent");
-
+        let attestation_agent = SeismicAttestationAgent::new(None).init().await.unwrap();
+        
         // Make requests with different runtime data and see they are different
         let runtime_data_1 = "nonce1".as_bytes();
         let evidence_request_1 = AttestationGetEvidenceRequest {
@@ -87,10 +87,10 @@ mod tests {
             runtime_data: runtime_data_2.to_vec(),
         };
 
-        let res_1 = attestation_get_evidence_handler(evidence_request_1)
+        let res_1 = attestation_agent.get_evidence(evidence_request_1)
             .await
             .unwrap();
-        let res_2 = attestation_get_evidence_handler(evidence_request_2)
+        let res_2 = attestation_agent.get_evidence(evidence_request_2)
             .await
             .unwrap();
 

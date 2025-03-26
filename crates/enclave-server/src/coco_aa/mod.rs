@@ -38,6 +38,25 @@ impl SeismicAttestationAgent {
 
         Ok((att, signing_pk))
     }
+
+    async fn attest_genesis_data(io_pk: secp256k1::PublicKey) -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
+        // For now the genesis data is just the public key of the IO encryption keypair
+        // But this is expected to change in the future
+        let genesis_data = GenesisData { io_pk };
+
+        // hash the genesis data and attest to it
+        let genesis_data_bytes = genesis_data.to_bytes()?;
+        let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
+
+        // Get the evidence from the attestation agent
+        let evidence = self 
+            .get_evidence(&hash_bytes)
+            .await
+            .map_err(|e| format!("Error while getting evidence: {:?}", e))
+            .unwrap();
+
+        Ok((genesis_data, evidence))
+    }
 }
 
 #[async_trait]
@@ -74,4 +93,53 @@ impl AttestationAPIs for SeismicAttestationAgent {
     fn get_tee_type(&self) -> Tee {
         self.inner.get_tee_type()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[serial(attestation_agent)]
+    async fn test_genesis_get_data_handler_success_basic() {
+        let attestation_agent = SeismicAttestationAgent::new(None).init().await.unwrap();
+
+        let res = attestation_agent.attest_genesis_data.await.unwrap();
+        assert!(!res.evidence.is_empty());
+    }
+
+    //#[tokio::test]
+    //#[serial(attestation_agent, attestation_service)]
+    //async fn test_genesis_get_data_handler_evidence_verifies() {
+    //    // handle set up permissions
+    //    if !is_sudo() {
+    //        panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+    //    }
+
+    //    // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
+    //    let attestation_agent = SeismicAttestationAgent::new(None).init().await.unwrap();
+    //    init_as_policies()
+    //        .await
+    //        .expect("Failed to initialize AS policies");
+
+    //    // Make a genesis data request
+    //    let res = genesis_get_data_handler().await.unwrap();
+
+    //    // Submit the genesis data to the attestation service
+    //    let bytes = res.data.to_bytes().unwrap();
+    //    let genesis_data_hash: [u8; 32] = Sha256::digest(bytes).into();
+
+    //    let tdx_eval_request = AttestationEvalEvidenceRequest {
+    //        evidence: res.evidence,
+    //        tee: Tee::AzTdxVtpm,
+    //        runtime_data: Some(ApiData::Raw(genesis_data_hash.to_vec())), // Check that the genesis data hash matches the evidence report_data
+    //        runtime_data_hash_algorithm: None,
+    //        policy_ids: vec!["allow".to_string()],
+    //    };
+    //    let res = attestation_eval_evidence_handler(tdx_eval_request)
+    //        .await
+    //        .unwrap();
+
+    //    assert!(res.eval);
+    //}
 }
