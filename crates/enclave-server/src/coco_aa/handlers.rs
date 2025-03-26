@@ -38,7 +38,7 @@ pub async fn attestation_get_evidence_handler(
 #[cfg(test)]
 mod tests {
     use crate::{coco_aa::{init_coco_aa, SeismicAttestationAgent}, utils::test_utils::is_sudo};
-
+    use attestation_agent::AttestationAPIs;
     use super::*;
 
     use serial_test::serial;
