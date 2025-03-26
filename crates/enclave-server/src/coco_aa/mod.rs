@@ -104,8 +104,7 @@ mod tests {
     async fn test_genesis_get_data_handler_success_basic() {
         let attestation_agent = SeismicAttestationAgent::new(None);
         attestation_agent.init().await.unwrap();
-
-        let res = attestation_agent.attest_genesis_data().await.unwrap();
+        let res = attestation_agent.attest_genesis_data(get_secp256k1_pk()).await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 
