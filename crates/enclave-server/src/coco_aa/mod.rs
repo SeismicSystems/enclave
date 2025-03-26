@@ -9,45 +9,69 @@ use once_cell::sync::OnceCell;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-pub static ATTESTATION_AGENT: OnceCell<Arc<AttestationAgent>> = OnceCell::new();
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-// initializes the AttestationAgent
-// which is reponsible for generating attestations
-pub fn init_coco_aa() -> Result<()> {
-    // Check if the service is already initialized
-    // This helps with multithreaded testing
-    if ATTESTATION_AGENT.get().is_some() {
-        // AttestationAgent is already initialized, so we skip re-initialization.
-        return Ok(());
+pub struct SeismicAttestationAgent {
+    inner: AttestationAgent,
+    quote_mutex: Mutex<()>,  
+}
+
+impl SeismicAttestationAgent {
+    /// Create a new SeismicAttestationAgent wrapper
+    pub fn new(config_path: Option<&str>) -> Self {
+        Self {
+            inner: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
+            quote_mutex: Mutex::new(()),
+        }
     }
 
-    let config_path = None;
-    let coco_aa = AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent");
-    ATTESTATION_AGENT
-        .set(Arc::new(coco_aa))
-        .map_err(|_| anyhow::anyhow!("Failed to set AttestationAgent"))?;
+    pub async fn init(&self) -> Result<()> {
+        self.inner.init()
+    }
 
-    Ok(())
+    pub async fn attest_signing_pk(&self, signing_pk: secp256k1::PublicKey) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
+        let signing_pk_bytes = signing_pk.serialize();
+        let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
+
+        let att = self.get_evidence(pk_hash.as_slice()).await?;
+
+        Ok((att, signing_pk))
+    }
 }
 
-pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-    let coco_aa = ATTESTATION_AGENT.get().unwrap();
-    let evidence = coco_aa
-        .get_evidence(runtime_data)
-        .await
-        .map_err(|e| anyhow!("Error while getting evidence: {:?}", e))?;
+#[async_trait]
+impl AttestationAPIs for SeismicAttestationAgent {
+    /// Get attestation Token (delegates to inner)
+    async fn get_token(&self, token_type: &str) -> Result<Vec<u8>> {
+        self.inner.get_token(token_type).await
+    }
 
-    Ok(evidence)
-}
+    /// Get TEE hardware signed evidence with concurrency protection
+    async fn get_evidence(&self, runtime_data: &[u8]) -> Result<Vec<u8>> {
+        let _lock = self.quote_mutex.lock().await;
+        
+        self.inner.get_evidence(runtime_data).await
+    }
 
-/// Makes an attestation with a hash of a Secp256k1 public key as the runtime data
-/// returns (attestation, signing_pk)
-pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-    let signing_pk = get_secp256k1_pk();
-    let signing_pk_bytes = signing_pk.serialize();
-    let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
+    /// Extend runtime measurement (delegates to inner)
+    async fn extend_runtime_measurement(
+        &self,
+        domain: &str,
+        operation: &str,
+        content: &str,
+        register_index: Option<u64>,
+    ) -> Result<()> {
+        self.inner.extend_runtime_measurement(domain, operation, content, register_index).await
+    }
 
-    let att = attest(pk_hash.as_slice()).await?;
+    /// Bind initdata (delegates to inner)
+    async fn bind_init_data(&self, init_data: &[u8]) -> Result<InitDataResult> {
+        self.inner.bind_init_data(init_data).await
+    }
 
-    Ok((att, signing_pk))
+    /// Get TEE type (delegates to inner)
+    fn get_tee_type(&self) -> Tee {
+        self.inner.get_tee_type()
+    }
 }

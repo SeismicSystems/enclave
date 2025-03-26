@@ -24,6 +24,7 @@ clap = { version = "4.5", features = ["derive"] }
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
+#attester = { git = "https://github.com/confidential-containers/guest-components", rev = "e6999a3", features = ["az-tdx-vtpm-attester"] }
 
 aes-gcm.workspace = true
 anyhow.workspace = true
