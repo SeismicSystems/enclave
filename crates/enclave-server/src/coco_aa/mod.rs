@@ -39,7 +39,7 @@ impl SeismicAttestationAgent {
         Ok((att, signing_pk))
     }
 
-    pub async fn attest_genesis_data(io_pk: secp256k1::PublicKey) -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
+    pub async fn attest_genesis_data(&self, io_pk: secp256k1::PublicKey) -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
         // For now the genesis data is just the public key of the IO encryption keypair
         // But this is expected to change in the future
         let genesis_data = GenesisData { io_pk };
