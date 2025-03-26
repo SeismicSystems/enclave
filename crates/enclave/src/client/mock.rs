@@ -91,11 +91,6 @@ impl MockEnclaveServer {
         unimplemented!("sign not implemented for mock server")
     }
 
-    /// Mock implementation of the verify method.
-    pub fn verify(_req: Secp256k1VerifyRequest) -> Secp256k1VerifyResponse {
-        unimplemented!("verify not implemented for mock server")
-    }
-
     /// Mock implementation of the get_genesis_data method.
     pub fn get_genesis_data() -> GenesisDataResponse {
         unimplemented!("get_genesis_data not implemented for mock server")
@@ -185,11 +180,6 @@ impl EnclaveApiServer for MockEnclaveServer {
         Ok(MockEnclaveServer::sign(req))
     }
 
-    /// Handler for: `verify`
-    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        Ok(MockEnclaveServer::verify(req))
-    }
-
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(MockEnclaveServer::get_eph_rng_keypair())
@@ -224,7 +214,6 @@ impl_mock_sync_client_trait!(
     fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
     fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
-    fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
 );

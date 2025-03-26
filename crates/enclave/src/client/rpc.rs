@@ -55,10 +55,6 @@ pub trait EnclaveApi {
     #[method(name = "sign")]
     async fn sign(&self, _req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse>;
 
-    /// Verifies a secp256k1 signature against a message
-    #[method(name = "verify")]
-    async fn verify(&self, _req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse>;
-
     /// Generates attestation evidence from the attestation authority
     #[method(name = "getAttestationEvidence")]
     async fn get_attestation_evidence(

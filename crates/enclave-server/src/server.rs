@@ -7,7 +7,7 @@ use crate::coco_as::init_coco_as;
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -208,12 +208,6 @@ impl EnclaveApiServer for EnclaveServer {
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         debug!(target: "rpc::enclave", "Serving sign");
         self.crypto_service.secp256k1_sign(&self.key_manager, req).await
-    }
-
-    /// Handler for: `verify`
-    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        debug!(target: "rpc::enclave", "Serving verify");
-        self.crypto_service.secp256k1_verify(&self.key_manager, req).await
     }
 
     /// Handler for: 'eph_rng.get_keypair'

@@ -145,7 +145,6 @@ async fn test_server_requests() {
     test_tx_io_encrypt_decrypt(&client).await;
     test_attestation_get_evidence(&client).await;
     test_attestation_eval_evidence(&client).await;
-    test_secp256k1_sign_verify(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
 }

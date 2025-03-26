@@ -29,17 +29,6 @@ impl CryptoApi for CryptoService {
         Ok(Secp256k1SignResponse { sig: signature })
     }
 
-    async fn secp256k1_verify(
-        &self,
-        kp: &dyn NetworkKeyProvider,
-        req: Secp256k1VerifyRequest,
-    ) -> RpcResult<Secp256k1VerifyResponse> {
-        let verified = secp256k1_verify(&req.msg, &req.sig, kp.get_tx_io_pk())
-            .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
-        
-        Ok(Secp256k1VerifyResponse { verified })
-    }
-
     async fn encrypt(
         &self,
         kp: &dyn NetworkKeyProvider,

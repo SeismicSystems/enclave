@@ -38,13 +38,6 @@ pub trait CryptoApi {
         req: Secp256k1SignRequest,
     ) -> RpcResult<Secp256k1SignResponse>;
     
-    /// Verify a signature using secp256k1
-    async fn secp256k1_verify(
-        &self,
-        kp: &dyn NetworkKeyProvider,
-        req: Secp256k1VerifyRequest,
-    ) -> RpcResult<Secp256k1VerifyResponse>;
-    
     /// Encrypt data
     async fn encrypt(
         &self,
