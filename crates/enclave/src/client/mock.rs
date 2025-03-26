@@ -21,11 +21,6 @@ use crate::{
         Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
         Secp256k1VerifyResponse,
     },
-    snapshot::{
-        PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
-        RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-    },
-    snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
@@ -106,10 +101,6 @@ impl MockEnclaveServer {
         unimplemented!("get_genesis_data not implemented for mock server")
     }
 
-    /// Mock implementation of the get_snapsync_backup method.
-    pub fn get_snapsync_backup(_req: SnapSyncRequest) -> SnapSyncResponse {
-        unimplemented!("get_snapsync_backup not implemented for mock server")
-    }
 
     /// Mock implementation of the get_attestation_evidence method.
     pub fn get_attestation_evidence(
@@ -123,20 +114,6 @@ impl MockEnclaveServer {
         _req: AttestationEvalEvidenceRequest,
     ) -> AttestationEvalEvidenceResponse {
         unimplemented!("eval_attestation_evidence not implemented for mock server")
-    }
-
-    /// Mock implementation of the prepare_encrypted_snapshot method.
-    pub fn prepare_encrypted_snapshot(
-        _req: PrepareEncryptedSnapshotRequest,
-    ) -> PrepareEncryptedSnapshotResponse {
-        unimplemented!("prepare_encrypted_snapshot not implemented for mock server")
-    }
-
-    /// Mock implementation of the restore_from_encrypted_snapshot method.
-    pub fn restore_from_encrypted_snapshot(
-        _req: RestoreFromEncryptedSnapshotRequest,
-    ) -> RestoreFromEncryptedSnapshotResponse {
-        unimplemented!("restore_from_encrypted_snapshot not implemented for mock server")
     }
 }
 
@@ -175,11 +152,6 @@ impl EnclaveApiServer for MockEnclaveServer {
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         Ok(MockEnclaveServer::get_genesis_data())
-    }
-
-    /// Handler for: `getSnapsyncBackup`
-    async fn get_snapsync_backup(&self, request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
-        Ok(MockEnclaveServer::get_snapsync_backup(request))
     }
 
     /// Handler for: `encrypt`
@@ -223,21 +195,6 @@ impl EnclaveApiServer for MockEnclaveServer {
         Ok(MockEnclaveServer::get_eph_rng_keypair())
     }
 
-    /// Handler for: 'snapshot.prepare_encrypted_snapshot'
-    async fn prepare_encrypted_snapshot(
-        &self,
-        req: PrepareEncryptedSnapshotRequest,
-    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
-        Ok(MockEnclaveServer::prepare_encrypted_snapshot(req))
-    }
-
-    /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
-    async fn restore_from_encrypted_snapshot(
-        &self,
-        req: RestoreFromEncryptedSnapshotRequest,
-    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
-        Ok(MockEnclaveServer::restore_from_encrypted_snapshot(req))
-    }
 }
 
 pub struct MockEnclaveClient;
@@ -263,7 +220,6 @@ impl_mock_sync_client_trait!(
     fn health_check(&self) -> Result<String, ClientError>,
     fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
     fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
-    fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> Result<SnapSyncResponse, ClientError>,
     fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError>,
     fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
     fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
@@ -271,8 +227,6 @@ impl_mock_sync_client_trait!(
     fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
-    fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
-    fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
 #[cfg(test)]
