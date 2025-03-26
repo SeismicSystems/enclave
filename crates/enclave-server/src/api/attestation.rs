@@ -5,7 +5,7 @@ use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::{rpc_bad_argument_error, rpc_bad_evidence_error};
 
 use crate::coco_as::{eval_att_evidence, parse_as_token_claims};
-use crate::coco_as::into_original::{IntoOriginalData, OriginalData, OriginalHashAlgorithm, IntoOriginalHashAlgorithm};
+use crate::coco_as::into_original::{IntoOriginalData, OriginalData, OriginalHashAlgorithm, IntoOriginalHashAlgorithm, ApiData};
 use crate::{api::traits::AttestationApi, key_manager::NetworkKeyProvider};
 use crate::coco_aa::attest;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
@@ -381,7 +381,8 @@ mod tests {
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
         // Call the handler
-        let res = genesis_get_data_handler(&kp).await.unwrap();
+        let attestation_service = AttestationService;
+        let res = attestation_service.genesis_get_data_handler(&kp).await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 
@@ -404,7 +405,8 @@ mod tests {
 
         // Make a genesis data request
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let res = genesis_get_data_handler(&kp).await.unwrap();
+        let attestation_service = AttestationService;
+        let res = attestation_service.genesis_get_data_handler(&kp).await.unwrap();
 
         // Submit the genesis data to the attestation service
         let bytes = res.data.to_bytes().unwrap();
@@ -417,7 +419,6 @@ mod tests {
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["allow".to_string()],
         };
-        let attestation_service = AttestationService;
         let res = attestation_service.attestation_eval_evidence(tdx_eval_request)
             .await
             .unwrap();

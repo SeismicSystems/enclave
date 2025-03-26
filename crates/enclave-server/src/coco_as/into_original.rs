@@ -5,7 +5,7 @@
 
 pub use attestation_service::Data as OriginalData;
 pub use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-use seismic_enclave::request_types::coco_as::Data as ApiData;
+pub use seismic_enclave::request_types::coco_as::Data as ApiData;
 use seismic_enclave::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
 
 pub trait IntoOriginalData {
