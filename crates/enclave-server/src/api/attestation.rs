@@ -99,11 +99,15 @@ impl AttestationApi for AttestationService {
 
 #[cfg(test)]
 mod tests {
-    use crate::{coco_aa::init_coco_aa, utils::test_utils::is_sudo};
+    use crate::{coco_aa::init_coco_aa, utils::test_utils::{is_sudo, read_vector_txt}};
 
     use super::*;
 
     use serial_test::serial;
+    use std::env;
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use kbs_types::Tee;
+    use serde_json::Value;
 
     #[tokio::test]
     #[serial(attestation_agent)]
