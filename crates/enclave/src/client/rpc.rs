@@ -14,11 +14,6 @@ use crate::genesis::GenesisDataResponse;
 use crate::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
-use crate::snapshot::{
-    PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
-    RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-};
-use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
