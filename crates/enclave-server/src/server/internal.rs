@@ -92,7 +92,6 @@ impl EnclaveInternalServerConfig {
         let middleware =
             tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
 
-        // By default, both http and ws are enabled.
         let server = server_config
             .set_http_middleware(middleware)
             .build(socket_addr)
