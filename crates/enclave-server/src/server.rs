@@ -1,3 +1,6 @@
+use crate::api::attestation::AttestationService;
+use crate::api::crypto::CryptoService;
+use crate::api::traits::CryptoApi;
 use crate::coco_aa::{handlers::*, init_coco_aa};
 use crate::coco_as::{handlers::*, init_coco_as};
 use crate::genesis::handlers::*;
@@ -39,6 +42,8 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 pub struct EnclaveServer {
     addr: SocketAddr,
     key_manager: KeyManager,
+    attestation_service: AttestationService,
+    crypto_service: CryptoService,
 }
 
 /// A builder that lets us configure the server address
@@ -67,6 +72,8 @@ impl EnclaveServer {
             key_manager: KeyManagerBuilder::build_from_os_rng()
                 .map_err(|e| anyhow!("Failed to build key manager: {}", e))
                 .unwrap(),
+            attestation_service: AttestationService,
+            crypto_service: CryptoService,
         }
     }
 
@@ -138,6 +145,8 @@ impl EnclaveServerBuilder {
         Ok(EnclaveServer {
             addr: final_addr,
             key_manager,
+            attestation_service,
+            crypto_service,
         })
     }
 }
@@ -161,7 +170,7 @@ impl BuildableServer for EnclaveServer {
 impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(self.key_manager.get_tx_io_pk())
+        self.crypto_service.get_public_key(self.key_manager.as_ref()).await
     }
 
     /// Handler for: `healthCheck`
@@ -172,25 +181,19 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         debug!(target: "rpc::enclave", "Serving getGenesisData");
-        genesis_get_data_handler(&self.key_manager).await
-    }
-
-    /// Handler for: `getSnapsyncBackup`
-    async fn get_snapsync_backup(&self, request: SnapSyncRequest) -> RpcResult<SnapSyncResponse> {
-        debug!(target: "rpc::enclave", "Serving getSnapsyncBackup");
-        provide_snapsync_handler(request).await
+        self.attestation_service.genesis_get_data_handler(self.key_manager.as_ref()).await
     }
 
     /// Handler for: `encrypt`
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         debug!(target: "rpc::enclave", "Serving encrypt");
-        tx_io_encrypt_handler(req, &self.key_manager).await
+        self.crypto_service.encrypt(&self.key_manager, req).await
     }
 
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
-        tx_io_decrypt_handler(req, &self.key_manager).await
+        self.crypto_service.decrypt(&self.key_manager, req).await
     }
 
     /// Handler for: `getAttestationEvidence`
@@ -199,7 +202,7 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving getAttestationEvidence");
-        attestation_get_evidence_handler(req).await
+        self.attestation_service.get_attestation_evidence(req).await
     }
 
     /// Handler for: `evalAttestationEvidence`
@@ -208,43 +211,25 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
-        attestation_eval_evidence_handler(req).await
+        self.attestation_service.attestation_eval_evidence_handler(req).await
     }
 
     /// Handler for: `sign`
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         debug!(target: "rpc::enclave", "Serving sign");
-        secp256k1_sign_handler(req, &self.key_manager).await
+        self.crypto_service.secp256k1_sign(&self.key_manager, req).await
     }
 
     /// Handler for: `verify`
     async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
         debug!(target: "rpc::enclave", "Serving verify");
-        secp256k1_verify_handler(req, &self.key_manager).await
+        self.crypto_service.secp256k1_verify(&self.key_manager, req).await
     }
 
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        Ok(self.key_manager.get_rng_keypair())
-    }
-
-    /// Handler for: 'snapshot.prepare_encrypted_snapshot'
-    async fn prepare_encrypted_snapshot(
-        &self,
-        req: PrepareEncryptedSnapshotRequest,
-    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
-        debug!(target: "rpc::enclave", "Serving snapshot.prepare_encrypted_snapshot");
-        prepare_encrypted_snapshot_handler(req, &self.key_manager).await
-    }
-
-    /// Handler for: 'snapshot.restore_from_encrypted_snapshot'
-    async fn restore_from_encrypted_snapshot(
-        &self,
-        req: RestoreFromEncryptedSnapshotRequest,
-    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
-        debug!(target: "rpc::enclave", "Serving snapshot.restore_from_encrypted_snapshot");
-        restore_from_encrypted_snapshot_handler(req, &self.key_manager).await
+        self.crypto_service.get_eph_rng_keypair(&self.key_manager)
     }
 }
 
