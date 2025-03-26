@@ -9,13 +9,23 @@ use jsonrpsee::{
 use std::net::SocketAddr;
 use tower::layer::util::Identity;
 
+use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use seismic_enclave::key_stuff::public::EnclavePublicAPIServer;
+use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
 
 // Implements the EnclavePublicAPIServer trait, i.e. the expected endpoints
 pub struct EnclavePublicServer {
     key_manager: KeyManager,
+}
+impl EnclavePublicServer {
+    pub fn new() -> Self {
+        Self {
+            // TODO: use real key manager
+            key_manager: KeyManagerBuilder::build_mock().unwrap(),
+        }
+    }
 }
 #[async_trait]
 impl EnclavePublicAPIServer for EnclavePublicServer {
@@ -74,6 +84,13 @@ pub struct EnclavePublicServerConfig {
     pub(crate) server_config: ServerBuilder<Identity, Identity>,
 }
 impl EnclavePublicServerConfig {
+    pub fn default() -> Self {
+        Self {
+            socket_addr: SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, 1002),
+            server_config: ServerBuilder::new(),
+        }
+    }
+
     /// Returns the address the server will listen on.
     pub const fn address(&self) -> SocketAddr {
         self.socket_addr
@@ -89,18 +106,13 @@ impl EnclavePublicServerConfig {
             server_config,
         } = self;
 
-        let server = server_config
-            .build(socket_addr)
-            .await?;
+        let server = server_config.build(socket_addr).await?;
 
         let local_addr = server.local_addr()?;
 
         let handle = server.start(module.inner.clone());
 
-        Ok(EnclavePublicHandle {
-            handle,
-            local_addr,
-        })
+        Ok(EnclavePublicHandle { handle, local_addr })
     }
 }
 
@@ -118,8 +130,12 @@ impl EnclavePublicHandle {
     }
 
     /// Tell the server to stop without waiting for the server to stop.
-    pub fn stop(self) -> Result<(), AlreadyStoppedError> {
+    pub fn stop(&self) -> Result<(), AlreadyStoppedError> {
         self.handle.stop()
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.handle.is_stopped()
     }
 
     /// Returns the url to the http server
@@ -128,9 +144,7 @@ impl EnclavePublicHandle {
     }
 
     /// Returns a default http client connected to the server,
-    pub fn http_client(
-        &self,
-    ) -> jsonrpsee::http_client::HttpClient<HttpBackend> {
+    pub fn http_client(&self) -> jsonrpsee::http_client::HttpClient<HttpBackend> {
         jsonrpsee::http_client::HttpClientBuilder::default()
             .build(self.http_url())
             .expect("Failed to create http client")

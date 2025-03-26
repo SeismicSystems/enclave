@@ -8,24 +8,31 @@ use jsonrpsee::{
 };
 use reth_rpc_layer::AuthClientLayer;
 use reth_rpc_layer::AuthClientService;
+use reth_rpc_layer::AuthLayer;
+use reth_rpc_layer::JwtAuthValidator;
 use reth_rpc_layer::JwtSecret;
 use std::net::SocketAddr;
-use tracing::debug;
 use tower::layer::util::Identity;
-use reth_rpc_layer::JwtAuthValidator;
-use reth_rpc_layer::AuthLayer;
+use tracing::debug;
 
-use seismic_enclave::key_stuff::internal::EnclaveInternalAPIServer;
-use seismic_enclave::tx_io::{
-    IoDecryptionRequest, IoDecryptionResponse,
-};
+use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::tx_io::handlers::tx_io_decrypt_handler;
-
+use seismic_enclave::key_stuff::internal::EnclaveInternalAPIServer;
+use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse};
+use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
 
 // Implements the EnclaveInternalAPIServer trait, i.e. the expected endpoints
 pub struct EnclaveInternalServer {
     key_manager: KeyManager,
+}
+impl EnclaveInternalServer {
+    pub fn new() -> Self {
+        Self {
+            // TODO: use real key manager
+            key_manager: KeyManagerBuilder::build_mock().unwrap(),
+        }
+    }
 }
 #[async_trait]
 impl EnclaveInternalAPIServer for EnclaveInternalServer {
@@ -37,18 +44,21 @@ impl EnclaveInternalAPIServer for EnclaveInternalServer {
 }
 
 // The RPC module for the enclave internal server
-// Takes in the EnclaveInternalAPIServer trait converts it 
+// Takes in the EnclaveInternalAPIServer trait converts it
 // to a generic RPC module so that it can be grouped with other RPC modules
 // With a EnclaveInternalServerConfig, defines a convenience function for starting the server
 pub struct EnclaveInternalRPCModule {
-   inner: RpcModule<()>
+    inner: RpcModule<()>,
 }
 impl EnclaveInternalRPCModule {
-    pub fn new<EnclaveInternalServer>(internal_server: EnclaveInternalServer) -> Self 
-    where EnclaveInternalServer: EnclaveInternalAPIServer
+    pub fn new<EnclaveInternalServer>(internal_server: EnclaveInternalServer) -> Self
+    where
+        EnclaveInternalServer: EnclaveInternalAPIServer,
     {
         let mut module = RpcModule::new(());
-        module.merge(internal_server.into_rpc()).expect("No conflicting methods");
+        module
+            .merge(internal_server.into_rpc())
+            .expect("No conflicting methods");
         Self { inner: module }
     }
 
@@ -79,14 +89,30 @@ pub struct EnclaveInternalServerConfig {
     pub(crate) server_config: ServerBuilder<Identity, Identity>,
 }
 impl EnclaveInternalServerConfig {
+    pub fn new_from_jwt_secret(secret: JwtSecret) -> Self {
+        // TODO: make const for port
+        let socket_addr = SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, 1001);
+        Self {
+            socket_addr,
+            secret,
+            server_config: ServerBuilder::new(),
+        }
+    }
     /// Returns the address the server will listen on.
     pub const fn address(&self) -> SocketAddr {
         self.socket_addr
     }
 
     /// Convenience function to start a server in one step.
-    pub async fn start(self, module: EnclaveInternalRPCModule) -> Result<EnclaveInternalHandle, anyhow::Error> {
-        let Self { socket_addr, secret, server_config,} = self;
+    pub async fn start(
+        self,
+        module: EnclaveInternalRPCModule,
+    ) -> Result<EnclaveInternalHandle, anyhow::Error> {
+        let Self {
+            socket_addr,
+            secret,
+            server_config,
+        } = self;
 
         // Create auth middleware.
         let middleware =
@@ -97,16 +123,17 @@ impl EnclaveInternalServerConfig {
             .build(socket_addr)
             .await?;
 
-        let local_addr = server
-            .local_addr()?;
+        let local_addr = server.local_addr()?;
 
         let handle = server.start(module.inner.clone());
 
-        Ok(EnclaveInternalHandle { handle, local_addr, secret})
+        Ok(EnclaveInternalHandle {
+            handle,
+            local_addr,
+            secret,
+        })
     }
 }
-
-
 
 // EnclaveInternalHandle is a handle for a spawned enclave internal RPC server
 #[derive(Debug, Clone)]
@@ -123,8 +150,12 @@ impl EnclaveInternalHandle {
     }
 
     /// Tell the server to stop without waiting for the server to stop.
-    pub fn stop(self) -> Result<(), AlreadyStoppedError> {
+    pub fn stop(&self) -> Result<(), AlreadyStoppedError> {
         self.handle.stop()
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.handle.is_stopped()
     }
 
     /// Returns the url to the http server

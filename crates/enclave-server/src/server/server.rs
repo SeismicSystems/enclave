@@ -156,24 +156,20 @@ impl BuildableServer for EnclaveServer {
         BuildableServer::start_rpc_server(self).await
     }
 
-    async fn start_rpc_server(self) -> Result<ServerHandle>
-    {
+    async fn start_rpc_server(self) -> Result<ServerHandle> {
         // TODO: clean this up
-        use reth_rpc_layer::{AuthLayer, JwtAuthValidator};
         use jsonrpsee::server::ServerBuilder;
+        use reth_rpc_layer::{AuthLayer, JwtAuthValidator};
 
         let addr = self.addr();
         let http_middleware =
-            tower::ServiceBuilder::new().layer(
-                AuthLayer::new(JwtAuthValidator::new(secret))
-            );
+            tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
         let rpc_server = ServerBuilder::new()
             .set_http_middleware(http_middleware)
             .build(addr)
             .await?;
         let module = self.methods();
-        
-        
+
         let server_handle = rpc_server.start(module);
         info!(target: "rpc::enclave", "Server started at {}", addr);
         Ok(server_handle)

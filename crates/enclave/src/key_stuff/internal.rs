@@ -1,4 +1,3 @@
-
 /// JSON-RPC Trait for Server and Client
 use anyhow::Result;
 use jsonrpsee::core::RpcResult;

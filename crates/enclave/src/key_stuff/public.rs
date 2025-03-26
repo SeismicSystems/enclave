@@ -15,4 +15,3 @@ pub trait EnclavePublicAPI {
     #[method(name = "getPublicKey")]
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey>;
 }
-

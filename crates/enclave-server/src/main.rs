@@ -28,15 +28,17 @@ async fn main() {
     }
     init_tracing();
 
-    let args = Args::parse();
-    info!("Enclave server starting on {}:{}", args.addr, args.port);
+    // let args = Args::parse();
+    // info!("Enclave server starting on {}:{}", args.addr, args.port);
 
-    let builder = EnclaveServer::builder()
-        .with_addr(args.addr)
-        .with_port(args.port);
+    // let builder = EnclaveServer::builder()
+    //     .with_addr(args.addr)
+    //     .with_port(args.port);
 
-    let server = builder.build().unwrap();
-    let handle = server.start().await.unwrap();
+    // let server = builder.build().unwrap();
+    // let handle = server.start().await.unwrap();
+
+    let handle = server::build_default().await.unwrap();
 
     handle.stopped().await;
 }
