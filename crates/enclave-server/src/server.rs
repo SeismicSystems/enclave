@@ -1,6 +1,7 @@
 use crate::api::attestation::AttestationService;
 use crate::api::crypto::CryptoService;
 use crate::api::traits::CryptoApi;
+use crate::api::traits::AttestationApi;
 use crate::coco_aa::init_coco_aa;
 use crate::coco_as::init_coco_as;
 use crate::key_manager::builder::KeyManagerBuilder;
@@ -165,7 +166,7 @@ impl BuildableServer for EnclaveServer {
 impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        self.crypto_service.get_public_key(self.key_manager.as_ref()).await
+        self.crypto_service.get_public_key(&self.key_manager).await
     }
 
     /// Handler for: `healthCheck`
@@ -176,7 +177,7 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         debug!(target: "rpc::enclave", "Serving getGenesisData");
-        self.attestation_service.genesis_get_data_handler(self.key_manager.as_ref()).await
+        self.attestation_service.genesis_get_data_handler(&self.key_manager).await
     }
 
     /// Handler for: `encrypt`

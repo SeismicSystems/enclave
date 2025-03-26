@@ -4,7 +4,7 @@ use log::error;
 use secp256k1::PublicKey;
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
-use seismic_enclave::{ecdh_encrypt, get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk, rpc_bad_argument_error, rpc_invalid_ciphertext_error, secp256k1_verify};
+use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk, rpc_bad_argument_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify};
 
 use crate::api::traits::CryptoApi;
 use crate::key_manager::NetworkKeyProvider;
@@ -25,7 +25,7 @@ impl CryptoApi for CryptoService {
         req: Secp256k1SignRequest,
     ) -> RpcResult<Secp256k1SignResponse> {
         let sk = kp.get_tx_io_sk();
-        let signature = secp256k1_sign_digest(data, sk)
+        let signature = secp256k1_sign_digest(&req.msg, sk)
             .map_err(|e| anyhow!("Internal Error while signing the message: {:?}", e))?;
         Ok(Secp256k1SignResponse { sig: signature })
     }
@@ -79,7 +79,7 @@ impl CryptoApi for CryptoService {
     }
     
     async fn get_eph_rng_keypair(&self, kp: &dyn NetworkKeyProvider) -> RpcResult<schnorrkel::keys::Keypair> {
-        Ok(self.kp.get_rng_keypair())
+        Ok(kp.get_rng_keypair())
     }
 }
 
