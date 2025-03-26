@@ -1,9 +1,8 @@
-use super::enclave_sign;
-use crate::key_manager::NetworkKeyProvider;
+use jsonrpsee::core::RpcResult;
+
+use super::{enclave_sign, get_secp256k1_pk};
 use seismic_enclave::request_types::signing::*;
 use seismic_enclave::{crypto::*, rpc_bad_argument_error};
-
-use jsonrpsee::core::RpcResult;
 
 /// Handles request to sign a message using secp256k1.
 ///
@@ -19,10 +18,9 @@ use jsonrpsee::core::RpcResult;
 /// The function may panic if parsing the request body or signing the message fails.
 pub async fn secp256k1_sign_handler(
     request: Secp256k1SignRequest,
-    kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<Secp256k1SignResponse> {
     // sign the message
-    let signature = enclave_sign(kp, &request.msg).map_err(|e| rpc_bad_argument_error(e))?;
+    let signature = enclave_sign(&request.msg).map_err(|e| rpc_bad_argument_error(e))?;
     Ok(Secp256k1SignResponse { sig: signature })
 }
 
@@ -40,10 +38,9 @@ pub async fn secp256k1_sign_handler(
 /// The function may panic if parsing the request body or verifying the signature fails.
 pub async fn secp256k1_verify_handler(
     request: Secp256k1VerifyRequest,
-    kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<Secp256k1VerifyResponse> {
     // verify the signature
-    let pk = kp.get_tx_io_pk();
+    let pk = get_secp256k1_pk();
     let verified = secp256k1_verify(&request.msg, &request.sig, pk)
         .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
@@ -53,7 +50,6 @@ pub async fn secp256k1_verify_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key_manager::builder::KeyManagerBuilder;
 
     #[tokio::test]
     async fn test_secp256k1_sign() {
@@ -62,9 +58,8 @@ mod tests {
         let sign_request = Secp256k1SignRequest {
             msg: msg_to_sign.clone(),
         };
-        let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let res = secp256k1_sign_handler(sign_request, &kp).await.unwrap();
+        let res = secp256k1_sign_handler(sign_request).await.unwrap();
         assert!(!res.sig.is_empty());
     }
 
@@ -75,9 +70,7 @@ mod tests {
         let sign_request = Secp256k1SignRequest {
             msg: msg_to_sign.clone(),
         };
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-
-        let res = secp256k1_sign_handler(sign_request, &kp).await.unwrap();
+        let res = secp256k1_sign_handler(sign_request).await.unwrap();
 
         // Prepare verify request body
         let verify_request = Secp256k1VerifyRequest {
@@ -85,7 +78,7 @@ mod tests {
             sig: res.sig,
         };
 
-        let res = secp256k1_verify_handler(verify_request, &kp).await.unwrap();
+        let res = secp256k1_verify_handler(verify_request).await.unwrap();
         assert_eq!(res.verified, true);
     }
 }

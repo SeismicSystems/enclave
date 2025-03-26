@@ -59,76 +59,74 @@ pub async fn provide_snapsync_handler(request: SnapSyncRequest) -> RpcResult<Sna
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use seismic_enclave::aes_decrypt;
-    // use seismic_enclave::derive_aes_key;
-    // use seismic_enclave::get_unsecure_sample_secp256k1_sk;
-    // use seismic_enclave::secp256k1_verify;
+    use seismic_enclave::aes_decrypt;
+    use seismic_enclave::derive_aes_key;
+    use seismic_enclave::get_unsecure_sample_secp256k1_sk;
+    use seismic_enclave::secp256k1_verify;
 
-    use crate::key_manager::builder::KeyManagerBuilder;
+    use kbs_types::Tee;
+    use secp256k1::ecdh::SharedSecret;
+    use serial_test::serial;
+
     use crate::{
         coco_aa::attest_signing_pk, coco_aa::init_coco_aa, coco_as::init_as_policies,
         coco_as::init_coco_as, utils::test_utils::is_sudo,
     };
 
-    use kbs_types::Tee;
-    // use secp256k1::ecdh::SharedSecret;
-    use serial_test::serial;
+    #[serial(attestation_agent, attestation_service)]
+    #[tokio::test]
+    async fn test_snapsync_handler() {
+        // handle set up permissions
+        if !is_sudo() {
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+        }
 
-    // #[serial(attestation_agent, attestation_service)]
-    // #[tokio::test]
-    // async fn test_snapsync_handler() {
-    //     // handle set up permissions
-    //     if !is_sudo() {
-    //         panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-    //     }
+        // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
+        init_coco_aa().expect("Failed to initialize AttestationAgent");
+        init_coco_as(None)
+            .await
+            .expect("Failed to initialize AttestationService");
+        init_as_policies()
+            .await
+            .expect("Failed to initialize AS policies");
 
-    //     // Initialize ATTESTATION_AGENT and ATTESTATION_SERVICE
-    //     init_coco_aa().expect("Failed to initialize AttestationAgent");
-    //     init_coco_as(None)
-    //         .await
-    //         .expect("Failed to initialize AttestationService");
-    //     init_as_policies()
-    //         .await
-    //         .expect("Failed to initialize AS policies");
-    //     let kp = KeyManagerBuilder::build_mock().unwrap();
+        // Get sample attestation and keys to make the test request
+        let client_sk = get_unsecure_sample_secp256k1_sk();
+        let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
+        let client_signing_pk = signing_pk.serialize().to_vec();
 
-    //     // Get sample attestation and keys to make the test request
-    //     let client_sk = get_unsecure_sample_secp256k1_sk();
-    //     let (attestation, signing_pk) = attest_signing_pk(&kp).await.unwrap();
-    //     let client_signing_pk = signing_pk.serialize().to_vec();
+        // Make the request
+        let snap_sync_request = SnapSyncRequest {
+            client_attestation: attestation,
+            client_signing_pk,
+            tee: Tee::AzTdxVtpm,
+            policy_ids: vec!["allow".to_string()],
+        };
 
-    //     // Make the request
-    //     let snap_sync_request = SnapSyncRequest {
-    //         client_attestation: attestation,
-    //         client_signing_pk,
-    //         tee: Tee::AzTdxVtpm,
-    //         policy_ids: vec!["allow".to_string()],
-    //     };
+        let snapsync_response = provide_snapsync_handler(snap_sync_request).await.unwrap();
 
-    //     let snapsync_response = provide_snapsync_handler(snap_sync_request).await.unwrap();
+        // Check that you can decrypt the response successfully
+        let server_pk =
+            secp256k1::PublicKey::from_slice(&snapsync_response.server_signing_pk).unwrap();
+        let shared_secret = SharedSecret::new(&server_pk, &client_sk);
+        let aes_key = derive_aes_key(&shared_secret).unwrap();
+        let decrypted_bytes: Vec<u8> = aes_decrypt(
+            &aes_key,
+            &snapsync_response.encrypted_data,
+            snapsync_response.nonce.clone(),
+        )
+        .unwrap();
+        let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes).unwrap();
 
-    //     // Check that you can decrypt the response successfully
-    //     let server_pk =
-    //         secp256k1::PublicKey::from_slice(&snapsync_response.server_signing_pk).unwrap();
-    //     let shared_secret = SharedSecret::new(&server_pk, &client_sk);
-    //     let aes_key = derive_aes_key(&shared_secret).unwrap();
-    //     let decrypted_bytes: Vec<u8> = aes_decrypt(
-    //         &aes_key,
-    //         &snapsync_response.encrypted_data,
-    //         snapsync_response.nonce.clone(),
-    //     )
-    //     .unwrap();
-    //     let _: SnapSyncData = SnapSyncData::from_bytes(&decrypted_bytes).unwrap();
-
-    //     // Check that the signature is valid
-    //     let verified = secp256k1_verify(
-    //         &snapsync_response.encrypted_data,
-    //         &snapsync_response.signature,
-    //         server_pk,
-    //     )
-    //     .expect("Internal error while verifying the signature");
-    //     assert!(verified);
-    // }
+        // Check that the signature is valid
+        let verified = secp256k1_verify(
+            &snapsync_response.encrypted_data,
+            &snapsync_response.signature,
+            server_pk,
+        )
+        .expect("Internal error while verifying the signature");
+        assert!(verified);
+    }
 
     // test that it rejects a bad attestation (ex wrong public key)
     #[tokio::test]
@@ -147,10 +145,9 @@ mod tests {
         init_as_policies()
             .await
             .expect("Failed to initialize AS policies");
-        let kp = KeyManagerBuilder::build_mock().unwrap();
 
         // Get sample attestation and keys to make the test request
-        let (attestation, signing_pk) = attest_signing_pk(&kp).await.unwrap();
+        let (attestation, signing_pk) = attest_signing_pk().await.unwrap();
         let client_signing_pk = signing_pk.serialize().to_vec();
         let mut wrong_pk = client_signing_pk.clone();
         wrong_pk[0] = !wrong_pk[0];
