@@ -11,16 +11,29 @@ use reth_rpc_layer::AuthClientService;
 use reth_rpc_layer::AuthLayer;
 use reth_rpc_layer::JwtAuthValidator;
 use reth_rpc_layer::JwtSecret;
+use seismic_enclave::client::ENCLAVE_DEFAULT_INTERNAL_PORT;
 use std::net::SocketAddr;
 use tower::layer::util::Identity;
 use tracing::debug;
 
+use crate::coco_aa::{handlers::*, init_coco_aa};
+use crate::coco_as::{handlers::*, init_coco_as};
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
-use crate::tx_io::handlers::tx_io_decrypt_handler;
-use seismic_enclave::key_stuff::internal::EnclaveInternalAPIServer;
-use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse};
-use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use crate::key_manager::NetworkKeyProvider;
+use crate::signing::handlers::*;
+use crate::tx_io::handlers::*;
+
+use seismic_enclave::client::internal::EnclaveInternalAPIServer;
+use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
+use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
+use seismic_enclave::signing::{
+    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
+};
+use seismic_enclave::tx_io::{
+    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
+};
 
 // Implements the EnclaveInternalAPIServer trait, i.e. the expected endpoints
 pub struct EnclaveInternalServer {
@@ -36,10 +49,52 @@ impl EnclaveInternalServer {
 }
 #[async_trait]
 impl EnclaveInternalAPIServer for EnclaveInternalServer {
+    /// Handler for: `encrypt`
+    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+        debug!(target: "rpc::enclave", "Serving encrypt");
+        tx_io_encrypt_handler(req, &self.key_manager).await
+    }
+
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
         tx_io_decrypt_handler(req, &self.key_manager).await
+    }
+
+    /// Handler for: `sign`
+    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
+        debug!(target: "rpc::enclave", "Serving sign");
+        secp256k1_sign_handler(req, &self.key_manager).await
+    }
+
+    /// Handler for: `verify`
+    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
+        debug!(target: "rpc::enclave", "Serving verify");
+        secp256k1_verify_handler(req, &self.key_manager).await
+    }
+
+    /// Handler for: `getAttestationEvidence`
+    async fn get_attestation_evidence(
+        &self,
+        req: AttestationGetEvidenceRequest,
+    ) -> RpcResult<AttestationGetEvidenceResponse> {
+        debug!(target: "rpc::enclave", "Serving getAttestationEvidence");
+        attestation_get_evidence_handler(req).await
+    }
+
+    /// Handler for: `evalAttestationEvidence`
+    async fn eval_attestation_evidence(
+        &self,
+        req: AttestationEvalEvidenceRequest,
+    ) -> RpcResult<AttestationEvalEvidenceResponse> {
+        debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
+        attestation_eval_evidence_handler(req).await
+    }
+
+    /// Handler for: 'eph_rng.get_keypair'
+    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
+        debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
+        Ok(self.key_manager.get_rng_keypair())
     }
 }
 
@@ -91,7 +146,8 @@ pub struct EnclaveInternalServerConfig {
 impl EnclaveInternalServerConfig {
     pub fn new_from_jwt_secret(secret: JwtSecret) -> Self {
         // TODO: make const for port
-        let socket_addr = SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, 1001);
+        let socket_addr =
+            SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_INTERNAL_PORT);
         Self {
             socket_addr,
             secret,

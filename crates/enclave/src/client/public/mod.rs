@@ -4,8 +4,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use seismic_enclave_derive::derive_sync_client_trait;
 
-#[derive_sync_client_trait] // get SyncEnclaveApi trait
-#[rpc(client, server)] // get EnclaveApiClient EnclaveApiServer trait
+#[derive_sync_client_trait] // get Sync Api trait
+#[rpc(client, server)] // get ApiClient ApiServer traits
 pub trait EnclavePublicAPI {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]

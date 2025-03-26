@@ -6,13 +6,14 @@ use jsonrpsee::{
     http_client::transport::HttpBackend,
     server::{AlreadyStoppedError, RpcModule},
 };
+use seismic_enclave::client::ENCLAVE_DEFAULT_PUBLIC_PORT;
 use std::net::SocketAddr;
 use tower::layer::util::Identity;
 
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
-use seismic_enclave::key_stuff::public::EnclavePublicAPIServer;
+use seismic_enclave::client::public::EnclavePublicAPIServer;
 use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
 
 // Implements the EnclavePublicAPIServer trait, i.e. the expected endpoints
@@ -86,7 +87,10 @@ pub struct EnclavePublicServerConfig {
 impl EnclavePublicServerConfig {
     pub fn default() -> Self {
         Self {
-            socket_addr: SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, 1002),
+            socket_addr: SocketAddr::new(
+                ENCLAVE_DEFAULT_ENDPOINT_ADDR,
+                ENCLAVE_DEFAULT_PUBLIC_PORT,
+            ),
             server_config: ServerBuilder::new(),
         }
     }

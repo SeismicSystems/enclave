@@ -4,8 +4,9 @@ use std::net::IpAddr;
 use tracing::info;
 
 use seismic_enclave::client::rpc::BuildableServer;
-use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use seismic_enclave_server::server::{init_tracing, EnclaveServer};
+use seismic_enclave::client::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+// use seismic_enclave_server::server::{init_tracing, EnclaveServer};
+use seismic_enclave_server::server::{build_default, init_tracing};
 
 /// Command line arguments for the enclave server
 #[derive(Parser, Debug)]
@@ -38,7 +39,7 @@ async fn main() {
     // let server = builder.build().unwrap();
     // let handle = server.start().await.unwrap();
 
-    let handle = server::build_default().await.unwrap();
+    let handle = build_default().await.unwrap();
 
     handle.stopped().await;
 }

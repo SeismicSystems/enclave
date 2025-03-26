@@ -9,5 +9,3 @@ pub use errors::*;
 pub use request_types::*;
 
 pub use secp256k1::*;
-
-pub mod key_stuff;
