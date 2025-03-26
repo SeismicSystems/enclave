@@ -15,11 +15,13 @@ pub trait AttestationApi {
     ) -> RpcResult<AttestationGetEvidenceResponse>;
 
     async fn genesis_get_data_handler(
+        &self,
         kp: &dyn NetworkKeyProvider,
     ) -> RpcResult<GenesisDataResponse>; 
 
     async fn attestation_eval_evidence_handler(
-    request: AttestationEvalEvidenceRequest,
+        &self,
+        request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse>; 
 }
 
