@@ -27,7 +27,7 @@ impl SeismicAttestationAgent {
     }
 
     pub async fn init(&self) -> Result<()> {
-        self.inner.init()
+        self.inner.init().await
     }
 
     pub async fn attest_signing_pk(&self, signing_pk: secp256k1::PublicKey) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
