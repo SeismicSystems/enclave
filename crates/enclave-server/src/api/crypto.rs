@@ -87,7 +87,7 @@ mod tests {
 
         let crypto_service = CryptoService;
 
-        let res = crypto_service.secp256k1_sign(sign_request, &kp).await.unwrap();
+        let res = crypto_service.secp256k1_sign(&kp, sign_request).await.unwrap();
         assert!(!res.sig.is_empty());
     }
 
@@ -104,7 +104,7 @@ mod tests {
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
         let crypto_service = CryptoService;
-        let res = crypto_service.encrypt(req, &kp).await.unwrap();
+        let res = crypto_service.encrypt(&kp, req).await.unwrap();
 
         // check that decryption returns the original data
         // Prepare decrypt request body
@@ -114,7 +114,7 @@ mod tests {
             nonce: nonce.clone(),
         };
 
-        let res = crypto_service.decrypt(req, &kp).await.unwrap();
+        let res = crypto_service.decrypt(&kp, req).await.unwrap();
 
         assert_eq!(res.decrypted_data, data_to_encrypt);
     }
@@ -130,7 +130,7 @@ mod tests {
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let crypto_service = CryptoService;
-        let res = crypto_service.decrypt(decryption_request, &kp).await;
+        let res = crypto_service.decrypt(&kp, decryption_request).await;
 
         assert_eq!(res.is_err(), true);
         assert_eq!(
