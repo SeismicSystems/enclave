@@ -49,7 +49,8 @@ mod tests {
         // NOTE: This test will run with the Sample TEE Type
         // because it doesn't run with sudo privileges
 
-        let attestation_agent = SeismicAttestationAgent::new(None).init().await.unwrap();
+        let attestation_agent = SeismicAttestationAgent::new(None);
+        attestation_agent.init().await.unwrap();
 
         // Mock a valid AttestationGetEvidenceRequest
         let runtime_data = "nonce".as_bytes(); // Example runtime data
@@ -74,7 +75,8 @@ mod tests {
             panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
         }
 
-        let attestation_agent = SeismicAttestationAgent::new(None).init().await.unwrap();
+        let attestation_agent = SeismicAttestationAgent::new(None);
+        attestation_agent.init().await.unwrap();
         
         // Make requests with different runtime data and see they are different
         let runtime_data_1 = "nonce1".as_bytes();
