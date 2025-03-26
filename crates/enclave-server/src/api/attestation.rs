@@ -1,10 +1,12 @@
 use log::error;
 use jsonrpsee::core::{async_trait, RpcResult};
+use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::rpc_bad_argument_error;
 
-use crate::api::traits::AttestationApi;
+use crate::{api::traits::AttestationApi, key_manager::NetworkKeyProvider};
 use crate::coco_aa::attest;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
+use crate::genesis::att_genesis_data;
 
 /// Implementation of attestation API
 pub struct AttestationService;

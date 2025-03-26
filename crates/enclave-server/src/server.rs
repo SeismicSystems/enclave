@@ -1,6 +1,8 @@
 use crate::api::attestation::AttestationService;
 use crate::api::crypto::CryptoService;
 use crate::api::traits::CryptoApi;
+use crate::coco_aa::init_coco_aa;
+use crate::coco_as::init_coco_as;
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
@@ -138,8 +140,8 @@ impl EnclaveServerBuilder {
         Ok(EnclaveServer {
             addr: final_addr,
             key_manager,
-            attestation_service,
-            crypto_service,
+            attestation_service: AttestationService,
+            crypto_service: CryptoService,
         })
     }
 }

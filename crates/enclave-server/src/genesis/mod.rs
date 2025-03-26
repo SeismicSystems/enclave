@@ -4,7 +4,7 @@ use seismic_enclave::request_types::genesis::*;
 use attestation_agent::AttestationAPIs;
 use sha2::{Digest, Sha256};
 
-async fn att_genesis_data(
+pub async fn att_genesis_data(
     io_pk: secp256k1::PublicKey,
 ) -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
     // For now the genesis data is just the public key of the IO encryption keypair
