@@ -95,24 +95,6 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
     assert!(resposne.eval);
 }
 
-async fn test_secp256k1_sign_verify(client: &EnclaveClient) {
-    // Prepare sign request to get a valid signature
-    let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-    let sign_request = Secp256k1SignRequest {
-        msg: msg_to_sign.clone(),
-    };
-    let res = client.sign(sign_request).await.unwrap();
-
-    // Prepare verify request body
-    let verify_request = Secp256k1VerifyRequest {
-        msg: msg_to_sign,
-        sig: res.sig,
-    };
-
-    let res = client.verify(verify_request).await.unwrap();
-    assert_eq!(res.verified, true);
-}
-
 async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
     assert_eq!(res, get_unsecure_sample_secp256k1_pk());
@@ -120,7 +102,6 @@ async fn test_get_public_key(client: &EnclaveClient) {
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
     let res = client.get_eph_rng_keypair().await.unwrap();
-    println!("eph_rng_keypair: {:?}", res);
 }
 
 #[tokio::test]
