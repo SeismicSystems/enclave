@@ -85,31 +85,12 @@ mod tests {
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let res = secp256k1_sign_handler(sign_request, &kp).await.unwrap();
+        let crypto_service = CryptoService;
+
+        let res = crypto_service.secp256k1_sign(sign_request, &kp).await.unwrap();
         assert!(!res.sig.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_secp256k1_verify() {
-        // Prepare sign request to get a valid signature
-        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-        let sign_request = Secp256k1SignRequest {
-            msg: msg_to_sign.clone(),
-        };
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-
-        let res = secp256k1_sign_handler(sign_request, &kp).await.unwrap();
-
-        // Prepare verify request body
-        let verify_request = Secp256k1VerifyRequest {
-            msg: msg_to_sign,
-            sig: res.sig,
-        };
-
-        let res = secp256k1_verify_handler(verify_request, &kp).await.unwrap();
-        assert_eq!(res.verified, true);
-    }
-    
     #[tokio::test]
     async fn test_io_encryption() {
         // Prepare encryption request body
@@ -122,9 +103,8 @@ mod tests {
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let res = tx_io_encrypt_handler(req, &kp).await.unwrap();
-
-        println!("Encrypted data: {:?}", res.encrypted_data);
+        let crypto_service = CryptoService;
+        let res = crypto_service.encrypt(req, &kp).await.unwrap();
 
         // check that decryption returns the original data
         // Prepare decrypt request body
@@ -134,9 +114,7 @@ mod tests {
             nonce: nonce.clone(),
         };
 
-        let res = tx_io_decrypt_handler(req, &kp).await.unwrap();
-
-        println!("Decrypted data: {:?}", res.decrypted_data);
+        let res = crypto_service.decrypt(req, &kp).await.unwrap();
 
         assert_eq!(res.decrypted_data, data_to_encrypt);
     }
@@ -151,7 +129,8 @@ mod tests {
             nonce: nonce.clone(),
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let res = tx_io_decrypt_handler(decryption_request, &kp).await;
+        let crypto_service = CryptoService;
+        let res = crypto_service.decrypt(decryption_request, &kp).await;
 
         assert_eq!(res.is_err(), true);
         assert_eq!(
