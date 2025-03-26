@@ -26,7 +26,7 @@ impl CryptoApi for CryptoService {
     ) -> RpcResult<Secp256k1SignResponse> {
         let sk = kp.get_tx_io_sk();
         let signature = secp256k1_sign_digest(&req.msg, sk)
-            .map_err(|e| anyhow!("Internal Error while signing the message: {:?}", e))?;
+            .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
         Ok(Secp256k1SignResponse { sig: signature })
     }
 

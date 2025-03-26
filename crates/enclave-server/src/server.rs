@@ -225,7 +225,7 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        self.crypto_service.get_eph_rng_keypair(&self.key_manager)
+        self.crypto_service.get_eph_rng_keypair(&self.key_manager).await
     }
 }
 
