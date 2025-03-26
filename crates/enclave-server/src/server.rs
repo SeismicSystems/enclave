@@ -1,16 +1,9 @@
 use crate::api::attestation::AttestationService;
 use crate::api::crypto::CryptoService;
 use crate::api::traits::CryptoApi;
-use crate::coco_aa::{handlers::*, init_coco_aa};
-use crate::coco_as::{handlers::*, init_coco_as};
-use crate::genesis::handlers::*;
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
-use crate::signing::handlers::*;
-use crate::snapshot::handlers::*;
-use crate::snapsync::handlers::*;
-use crate::tx_io::handlers::*;
 
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};

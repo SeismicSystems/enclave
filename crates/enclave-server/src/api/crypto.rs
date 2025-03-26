@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use secp256k1::PublicKey;

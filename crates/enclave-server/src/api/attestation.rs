@@ -2,7 +2,7 @@ use log::error;
 use jsonrpsee::core::{async_trait, RpcResult};
 use seismic_enclave::rpc_bad_argument_error;
 
-use crate::api::traits::{AttestationApi, RpcResult};
+use crate::api::traits::AttestationApi;
 use crate::coco_aa::attest;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 
@@ -26,7 +26,7 @@ impl AttestationApi for AttestationService {
         Ok(AttestationGetEvidenceResponse { evidence })
     }
 
-    pub async fn genesis_get_data_handler(
+    async fn genesis_get_data_handler(
         kp: &dyn NetworkKeyProvider,
     ) -> RpcResult<GenesisDataResponse> {
         let io_pk = kp.get_tx_io_pk();
@@ -41,7 +41,7 @@ impl AttestationApi for AttestationService {
         })
     }
 
-    pub async fn attestation_eval_evidence_handler(
+    async fn attestation_eval_evidence_handler(
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
