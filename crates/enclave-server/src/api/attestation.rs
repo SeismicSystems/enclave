@@ -217,7 +217,7 @@ mod tests {
         let attestation_service = AttestationService;
         
         // Call the handler
-        let eval_evidence_response = attestation_service.attestation_eval_handler(eval_request)
+        let eval_evidence_response = attestation_service.attestation_eval_evidence(eval_request)
             .await
             .unwrap();
 
