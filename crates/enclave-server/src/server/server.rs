@@ -164,7 +164,9 @@ impl BuildableServer for EnclaveServer {
 
         let addr = self.addr();
         let http_middleware =
-            tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
+            tower::ServiceBuilder::new().layer(
+                AuthLayer::new(JwtAuthValidator::new(secret))
+            );
         let rpc_server = ServerBuilder::new()
             .set_http_middleware(http_middleware)
             .build(addr)
