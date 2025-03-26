@@ -32,6 +32,7 @@ impl AttestationApi for AttestationService {
     }
 
     async fn genesis_get_data_handler(
+        &self,
         kp: &dyn NetworkKeyProvider,
     ) -> RpcResult<GenesisDataResponse> {
         let io_pk = kp.get_tx_io_pk();
@@ -47,6 +48,7 @@ impl AttestationApi for AttestationService {
     }
 
     async fn attestation_eval_evidence_handler(
+        &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
