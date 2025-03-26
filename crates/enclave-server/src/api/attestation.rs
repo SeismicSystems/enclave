@@ -47,7 +47,7 @@ impl AttestationApi for AttestationService {
         })
     }
 
-    async fn attestation_eval_evidence_handler(
+    async fn attestation_eval_evidence(
         &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
@@ -122,9 +122,10 @@ mod tests {
         let evidence_request = AttestationGetEvidenceRequest {
             runtime_data: runtime_data.to_vec(),
         };
-
+        
+        let attestation_service = AttestationService;
         // Call the handler
-        let res = attestation_get_evidence_handler(evidence_request)
+        let res = attestation_service.get_attestation_evidence(evidence_request)
             .await
             .unwrap();
 
@@ -152,11 +153,13 @@ mod tests {
         let evidence_request_2 = AttestationGetEvidenceRequest {
             runtime_data: runtime_data_2.to_vec(),
         };
+        
+        let attestation_service = AttestationService;
 
-        let res_1 = attestation_get_evidence_handler(evidence_request_1)
+        let res_1 = attestation_service.get_attestation_evidence(evidence_request_1)
             .await
             .unwrap();
-        let res_2 = attestation_get_evidence_handler(evidence_request_2)
+        let res_2 = attestation_service.get_attestation_evidence(evidence_request_2)
             .await
             .unwrap();
 
@@ -211,8 +214,10 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
+        let attestation_service = AttestationService;
+        
         // Call the handler
-        let eval_evidence_response = attestation_eval_evidence_handler(eval_request)
+        let eval_evidence_response = attestation_service.attestation_eval_handler(eval_request)
             .await
             .unwrap();
 
@@ -253,7 +258,8 @@ mod tests {
         };
 
         // Call the handler
-        let eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request)
+        let attestation_service = AttestationService;
+        let eval_evidence_response = attestation_service.attestation_eval_evidence(tdx_eval_request)
             .await
             .unwrap();
 
@@ -298,8 +304,9 @@ mod tests {
             policy_ids: vec!["deny".to_string()],
         };
 
+        let attestation_service = AttestationService;
         // Call the handler
-        let eval_evidence_response = attestation_eval_evidence_handler(eval_request).await;
+        let eval_evidence_response = attestation_service.attestation_eval_evidence(eval_request).await;
 
         assert!(
             eval_evidence_response.is_err(),
@@ -337,7 +344,8 @@ mod tests {
             policy_ids: vec![test_policy_id.clone()],
         };
 
-        let _eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request)
+        let attestation_service = AttestationService;
+        let _eval_evidence_response = attestation_service.attestation_eval_evidence(tdx_eval_request)
             .await
             .unwrap();
 
@@ -355,8 +363,8 @@ mod tests {
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["yocto".to_string()],
         };
-
-        let eval_evidence_response = attestation_eval_evidence_handler(tdx_eval_request).await;
+        let attestation_service = AttestationService;
+        let eval_evidence_response = attestation_service.attestation_eval_evidence(tdx_eval_request).await;
         let expected_err_msg = format!("Reject by policy {test_policy_id}");
         let err_msg = eval_evidence_response.err().unwrap().to_string();
         assert!(
@@ -409,7 +417,8 @@ mod tests {
             runtime_data_hash_algorithm: None,
             policy_ids: vec!["allow".to_string()],
         };
-        let res = attestation_eval_evidence_handler(tdx_eval_request)
+        let attestation_service = AttestationService;
+        let res = attestation_service.attestation_eval_evidence(tdx_eval_request)
             .await
             .unwrap();
 

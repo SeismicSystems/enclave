@@ -201,7 +201,7 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
-        self.attestation_service.attestation_eval_evidence_handler(req).await
+        self.attestation_service.attestation_eval_evidence(req).await
     }
 
     /// Handler for: `sign`

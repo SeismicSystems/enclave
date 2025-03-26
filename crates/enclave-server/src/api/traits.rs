@@ -19,7 +19,7 @@ pub trait AttestationApi {
         kp: &dyn NetworkKeyProvider,
     ) -> RpcResult<GenesisDataResponse>; 
 
-    async fn attestation_eval_evidence_handler(
+    async fn attestation_eval_evidence(
         &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse>; 
