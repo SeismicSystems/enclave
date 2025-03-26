@@ -138,11 +138,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 strum = { version = "0.26", features = ["derive"] }
-strum_macros = "0.26"
 tokio = { version = "1.44", features = ["full"] }
 tracing = { version = "0.1"}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "json"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
-zeroize = "1.8.1"

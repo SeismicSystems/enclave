@@ -1,6 +1,6 @@
 pub mod handlers;
 
-use crate::key_manager;
+use crate::get_secp256k1_pk;
 
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
@@ -42,10 +42,8 @@ pub async fn attest(runtime_data: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 
 /// Makes an attestation with a hash of a Secp256k1 public key as the runtime data
 /// returns (attestation, signing_pk)
-pub async fn attest_signing_pk(
-    kp: &dyn key_manager::NetworkKeyProvider,
-) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-    let signing_pk = kp.get_tx_io_pk();
+pub async fn attest_signing_pk() -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
+    let signing_pk = get_secp256k1_pk();
     let signing_pk_bytes = signing_pk.serialize();
     let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
 

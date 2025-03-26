@@ -1,5 +1,4 @@
 use super::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
-use crate::snapshot::NetworkKeyProvider;
 use seismic_enclave::{
     rpc_missing_snapshot_error,
     snapshot::{
@@ -27,10 +26,8 @@ use std::path::Path;
 /// Returns a [`PrepareEncryptedSnapshotResponse`] containing a `success` flag and an optional `error` string.
 pub async fn prepare_encrypted_snapshot_handler(
     _request: PrepareEncryptedSnapshotRequest,
-    kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
     let res = super::prepare_encrypted_snapshot(
-        kp,
         RETH_DATA_DIR,
         DATA_DISK_DIR,
         SNAPSHOT_DIR,
@@ -60,14 +57,12 @@ pub async fn prepare_encrypted_snapshot_handler(
 /// Returns a [`RestoreFromEncryptedSnapshotResponse`] containing a `success` flag and an optional `error` string.
 pub async fn restore_from_encrypted_snapshot_handler(
     _request: RestoreFromEncryptedSnapshotRequest,
-    kp: &dyn NetworkKeyProvider,
 ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
     let encrypted_snapshot_path = format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE);
     if !Path::new(&encrypted_snapshot_path).exists() {
         return Err(rpc_missing_snapshot_error());
     }
     let res = super::restore_from_encrypted_snapshot(
-        kp,
         RETH_DATA_DIR,
         DATA_DISK_DIR,
         SNAPSHOT_DIR,

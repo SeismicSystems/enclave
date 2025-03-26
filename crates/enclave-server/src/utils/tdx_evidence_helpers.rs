@@ -7,18 +7,8 @@ use log::debug;
 use serde_json::{Map, Value};
 pub type TeeEvidenceParsedClaim = serde_json::Value;
 use az_tdx_vtpm::vtpm::Quote as TpmQuote;
-use az_tdx_vtpm::{imds, report};
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
-
-pub(crate) fn get_tdx_quote() -> Result<Quote> {
-    let td_report = report::get_report().map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
-
-    let td_quote =
-        imds::get_td_quote(&td_report).map_err(|e| anyhow!("Failed to get TD quote: {}", e))?;
-
-    parse_tdx_quote(td_quote.as_slice())
-}
 
 /// Takes in tdx_evidence as a vec<u8>, as it is returned by coco libs,
 /// and prints out the claim as a string
@@ -399,7 +389,6 @@ impl QuoteV5Type {
     }
 }
 
-#[derive(Debug)]
 pub enum QuoteV5Body {
     Tdx10(ReportBody2),
     Tdx15(ReportBody2v15),
@@ -414,7 +403,6 @@ impl fmt::Display for QuoteV5Body {
     }
 }
 
-#[derive(Debug)]
 pub enum Quote {
     /// TD Quote Payload(Version 4)
     /// First 632 bytes of TD Quote
@@ -456,7 +444,6 @@ macro_rules! body_field {
 impl Quote {
     body_field!(report_data);
     body_field!(mr_config_id);
-    body_field!(mr_td);
     body_field!(rtmr_0);
     body_field!(rtmr_1);
     body_field!(rtmr_2);

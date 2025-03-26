@@ -1,4 +1,4 @@
-use crate::key_manager::NetworkKeyProvider;
+use crate::get_snapshot_key;
 use seismic_enclave::crypto::{decrypt_file, encrypt_file};
 
 use std::path::Path;
@@ -27,7 +27,6 @@ use std::path::Path;
 /// - The input snapshot file does not exist.
 /// - Encryption fails due to an internal error in the encryption process.
 pub fn encrypt_snapshot(
-    kp: &dyn NetworkKeyProvider,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -43,7 +42,7 @@ pub fn encrypt_snapshot(
         );
     }
 
-    let snapshot_key = kp.get_snapshot_key();
+    let snapshot_key = get_snapshot_key();
     encrypt_file(&input_path, &output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to encrypt snapshot file: {:?}", e))?;
 
@@ -73,7 +72,6 @@ pub fn encrypt_snapshot(
 /// - The encrypted snapshot file does not exist.
 /// - Decryption fails due to an incorrect or unavailable key, or an internal decryption error.
 pub fn decrypt_snapshot(
-    kp: &dyn NetworkKeyProvider,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -89,7 +87,7 @@ pub fn decrypt_snapshot(
         );
     }
 
-    let snapshot_key = kp.get_snapshot_key();
+    let snapshot_key = get_snapshot_key();
     decrypt_file(&input_path, &output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to decrypt snapshot file: {:?}", e))?;
 
@@ -99,7 +97,6 @@ pub fn decrypt_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key_manager::builder::KeyManagerBuilder;
     use crate::snapshot::SNAPSHOT_FILE;
     use crate::utils::test_utils::{generate_dummy_file, read_first_n_bytes};
 
@@ -110,8 +107,6 @@ mod tests {
 
     #[test]
     fn test_encrypt_snapshot() -> Result<(), Error> {
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-
         // Set up a temp dir
         let temp_dir = tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -127,7 +122,6 @@ mod tests {
 
         // Create the encrypted snapshot
         encrypt_snapshot(
-            &kp,
             temp_path.to_str().unwrap(),
             temp_path.to_str().unwrap(),
             SNAPSHOT_FILE,
@@ -139,7 +133,6 @@ mod tests {
         fs::remove_file(&snapshot_path)?;
         assert!(!Path::new(&snapshot_path).exists());
         decrypt_snapshot(
-            &kp,
             temp_path.to_str().unwrap(),
             temp_path.to_str().unwrap(),
             SNAPSHOT_FILE,
