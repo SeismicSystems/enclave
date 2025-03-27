@@ -4,6 +4,7 @@ use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::client::ENCLAVE_DEFAULT_PUBLIC_PORT;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
@@ -14,8 +15,9 @@ use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave::signing::Secp256k1SignRequest;
 use seismic_enclave::signing::Secp256k1VerifyRequest;
+use seismic_enclave_server::server::build_default;
 use seismic_enclave_server::server::init_tracing;
-use seismic_enclave_server::server::EnclaveServer;
+// use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use serial_test::serial;
 use std::net::SocketAddr;
@@ -134,13 +136,16 @@ async fn test_server_requests() {
     }
 
     // spawn a seperate thread for the server, otherwise the test will hang
-    let port = get_random_port();
+    let port = ENCLAVE_DEFAULT_PUBLIC_PORT;
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let _server_handle = EnclaveServer::new(addr).start().await.unwrap();
+    let _server_handle = build_default().await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 
+    println!("starting tests");
+    println!("test_health_check");
     test_health_check(&client).await;
+    println!("test_genesis_get_data");
     test_genesis_get_data(&client).await;
     test_tx_io_encrypt_decrypt(&client).await;
     test_attestation_get_evidence(&client).await;

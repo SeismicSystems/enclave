@@ -79,21 +79,21 @@ async fn get_mrtd() {
         .unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn run_client_ping() {
-    use seismic_enclave::rpc::SyncEnclaveApiClient;
-    use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
-    use seismic_enclave::EnclaveClient;
+// #[tokio::test(flavor = "multi_thread")]
+// async fn run_client_ping() {
+//     use seismic_enclave::rpc::SyncEnclaveApiClient;
+//     use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
+//     use seismic_enclave::EnclaveClient;
 
-    let url = "http://yocto-1.seismicdev.net:7878";
-    // let url = "http://127.0.0.1:7878";
-    let client = EnclaveClient::new(url);
+//     let url = "http://yocto-1.seismicdev.net:7878";
+//     // let url = "http://127.0.0.1:7878";
+//     let client = EnclaveClient::new(url);
 
-    // // health check
-    // let resp = client.health_check().unwrap();
-    // println!("resp: {:?}", resp);
+//     // // health check
+//     // let resp = client.health_check().unwrap();
+//     // println!("resp: {:?}", resp);
 
-    let req = RestoreFromEncryptedSnapshotRequest {};
-    let resp = client.restore_from_encrypted_snapshot(req);
-    println!("resp: {:?}", resp);
-}
+//     let req = RestoreFromEncryptedSnapshotRequest {};
+//     let resp = client.restore_from_encrypted_snapshot(req);
+//     println!("resp: {:?}", resp);
+// }

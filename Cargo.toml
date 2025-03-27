@@ -146,3 +146,8 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
 zeroize = "1.8.1"
+
+reth-rpc-layer = { git = "https://github.com/SeismicSystems/seismic-reth", package = "reth-rpc-layer" }
+tower = "0.4"
+tower-http = "0.6"
+hyper = "1.6"
