@@ -59,6 +59,11 @@ alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
 alloy-provider = "0.8"
 
+tower.workspace = true
+jsonwebtoken.workspace = true
+jsonrpsee-core.workspace = true
+http.workspace = true
+
 [dev-dependencies]
 serial_test = "3.2.0"
 tempfile = "3.17.1"
