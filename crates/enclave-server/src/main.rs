@@ -31,7 +31,8 @@ async fn main() {
     let args = Args::parse();
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
-    let builder = EnclaveServer::builder()
+    // Use type parameter for the key provider (e.g., DefaultKeyProvider)
+    let builder = EnclaveServer::<DefaultKeyProvider>::builder()
         .with_addr(args.addr)
         .with_port(args.port);
 

@@ -1,7 +1,5 @@
-use crate::api::attestation::AttestationService;
-use crate::api::crypto::CryptoService;
-use crate::api::traits::CryptoApi;
-use crate::api::traits::AttestationApi;
+use crate::api::traits::TeeServiceApi;
+use crate::api::tee_service::TeeService;
 use crate::coco_aa::init_coco_aa;
 use crate::coco_as::init_coco_as;
 use crate::key_manager::builder::KeyManagerBuilder;
@@ -29,82 +27,32 @@ use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 /// The main server struct, with everything needed to run.
-pub struct EnclaveServer {
+pub struct EnclaveServer<K: NetworkKeyProvider + Send + Sync + 'static> {
     addr: SocketAddr,
-    key_manager: KeyManager,
-    attestation_service: AttestationService,
-    crypto_service: CryptoService,
+    tee_service: Arc<TeeService<K>>,
 }
 
-/// A builder that lets us configure the server address
-/// In the future, this may also configure the key manager
-pub struct EnclaveServerBuilder {
+/// A builder that lets us configure the server
+pub struct EnclaveServerBuilder<K: NetworkKeyProvider + Send + Sync + 'static> {
     addr: Option<SocketAddr>,
+    key_provider: Option<Arc<K>>,
+    attestation_config_path: Option<String>,
 }
 
-impl EnclaveServer {
-    pub async fn init_attestation() -> Result<()> {
-        init_coco_aa()?;
-        init_coco_as(None).await?;
-        Ok(())
-    }
-
-    /// Create a new builder with default address
-    pub fn builder() -> EnclaveServerBuilder {
-        EnclaveServerBuilder::default()
-    }
-
-    /// Provide direct constructor if you *really* want to skip the builder.
-    /// By default, this will do a "OsRng" KeyManager.
-    pub fn new(addr: impl Into<SocketAddr>) -> Self {
-        Self {
-            addr: addr.into(),
-            key_manager: KeyManagerBuilder::build_from_os_rng()
-                .map_err(|e| anyhow!("Failed to build key manager: {}", e))
-                .unwrap(),
-            attestation_service: AttestationService,
-            crypto_service: CryptoService,
-        }
-    }
-
-    /// Example constructor from IP/port strings.
-    pub fn new_from_addr_port(addr: String, port: u16) -> Self {
-        Self::new((IpAddr::from_str(&addr).unwrap(), port))
-    }
-
-    /// If you want to keep chainable `with_addr` / `with_port` on the server itself:
-    pub fn with_addr(mut self, addr: &str) -> Self {
-        let ip_addr = IpAddr::from_str(addr).unwrap();
-        self.addr = SocketAddr::new(ip_addr, self.addr.port());
-        self
-    }
-
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.addr = SocketAddr::new(self.addr.ip(), port);
-        self
-    }
-}
-
-/// By default, we create a server on 0.0.0.0:7878 with a OsRng KeyManager.
-impl Default for EnclaveServer {
-    fn default() -> Self {
-        Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))
-    }
-}
-
-/// Implementation of our new builder.
-impl Default for EnclaveServerBuilder {
+impl<K: NetworkKeyProvider + Send + Sync + 'static> Default for EnclaveServerBuilder<K> {
     fn default() -> Self {
         Self {
             addr: Some(SocketAddr::new(
                 ENCLAVE_DEFAULT_ENDPOINT_ADDR,
                 ENCLAVE_DEFAULT_ENDPOINT_PORT,
             )),
+            key_provider: None,
+            attestation_config_path: None,
         }
     }
 }
 
-impl EnclaveServerBuilder {
+impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
     pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
         if let Some(curr) = self.addr {
             self.addr = Some(SocketAddr::new(ip_addr, curr.port()));
@@ -123,25 +71,62 @@ impl EnclaveServerBuilder {
         self
     }
 
+    pub fn with_key_provider(mut self, key_provider: Arc<K>) -> Self {
+        self.key_provider = Some(key_provider);
+        self
+    }
+
+    pub fn with_attestation_config(mut self, config_path: impl Into<String>) -> Self {
+        self.attestation_config_path = Some(config_path.into());
+        self
+    }
+
     /// Build the final `EnclaveServer` object.
-    pub fn build(self) -> Result<EnclaveServer> {
+    pub fn build(self) -> Result<EnclaveServer<K>> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_manager = KeyManagerBuilder::build_from_os_rng()
-            .map_err(|e| anyhow!("Failed to build key manager: {}", e))?;
+        let key_provider = self.key_provider.ok_or_else(|| {
+            anyhow!("No key provider supplied to builder")
+        })?;
+       
+        // Initialize TeeService with the key provider
+        let config_path = self.attestation_config_path.as_deref();
+        let tee_service = Arc::new(
+            TeeService::with_default_attestation(key_provider, config_path)
+                .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
+        );
 
         Ok(EnclaveServer {
             addr: final_addr,
-            key_manager,
-            attestation_service: AttestationService,
-            crypto_service: CryptoService,
+            tee_service,
         })
     }
 }
 
-impl BuildableServer for EnclaveServer {
+
+impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
+    /// Create a new builder with default address
+    pub fn builder() -> EnclaveServerBuilder<K> {
+        EnclaveServerBuilder::default()
+    }
+    
+    /// Simplified constructor if you want to skip the builder
+    pub fn new(addr: impl Into<SocketAddr>, key_provider: Arc<K>) -> Result<Self> {
+        let tee_service = Arc::new(
+            TeeService::with_default_attestation(key_provider, None)
+                .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
+        );
+        
+        Ok(Self {
+            addr: addr.into(),
+            tee_service,
+        })
+    }
+}
+
+impl<K: NetworkKeyProvider + Send + Sync + 'static> BuildableServer for EnclaveServer<K> {
     fn addr(&self) -> SocketAddr {
         self.addr
     }
@@ -151,16 +136,16 @@ impl BuildableServer for EnclaveServer {
     }
 
     async fn start(self) -> Result<ServerHandle> {
-        Self::init_attestation().await?;
+        // No need for separate attestation init as TeeService handles this
         BuildableServer::start_rpc_server(self).await
     }
 }
 
 #[async_trait]
-impl EnclaveApiServer for EnclaveServer {
+impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveApiServer for EnclaveServer<K> {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        self.crypto_service.get_public_key(&self.key_manager).await
+        self.tee_service.get_public_key().await
     }
 
     /// Handler for: `healthCheck`
@@ -171,19 +156,19 @@ impl EnclaveApiServer for EnclaveServer {
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         debug!(target: "rpc::enclave", "Serving getGenesisData");
-        self.attestation_service.genesis_get_data_handler(&self.key_manager).await
+        self.tee_service.genesis_get_data_handler().await
     }
 
     /// Handler for: `encrypt`
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         debug!(target: "rpc::enclave", "Serving encrypt");
-        self.crypto_service.encrypt(&self.key_manager, req).await
+        self.tee_service.encrypt(req).await
     }
 
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
-        self.crypto_service.decrypt(&self.key_manager, req).await
+        self.tee_service.decrypt(req).await
     }
 
     /// Handler for: `getAttestationEvidence`
@@ -192,7 +177,7 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving getAttestationEvidence");
-        self.attestation_service.get_attestation_evidence(req).await
+        self.tee_service.get_attestation_evidence(req).await
     }
 
     /// Handler for: `evalAttestationEvidence`
@@ -201,19 +186,19 @@ impl EnclaveApiServer for EnclaveServer {
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
-        self.attestation_service.attestation_eval_evidence(req).await
+        self.tee_service.attestation_eval_evidence(req).await
     }
 
     /// Handler for: `sign`
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         debug!(target: "rpc::enclave", "Serving sign");
-        self.crypto_service.secp256k1_sign(&self.key_manager, req).await
+        self.tee_service.secp256k1_sign(req).await
     }
 
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        self.crypto_service.get_eph_rng_keypair(&self.key_manager).await
+        self.tee_service.get_eph_rng_keypair().await
     }
 }
 

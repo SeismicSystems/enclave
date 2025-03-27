@@ -4,53 +4,39 @@ use seismic_enclave::{coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvi
 
 use crate::key_manager::NetworkKeyProvider;
 
-/// Attestation API trait
 #[async_trait]
-pub trait AttestationApi {
-    /// Get attestation evidence
+pub trait TeeServiceApi {
+    // Crypto operations
+    async fn get_public_key(&self) -> RpcResult<PublicKey>;
+    
+    async fn secp256k1_sign(
+        &self,
+        req: Secp256k1SignRequest,
+    ) -> RpcResult<Secp256k1SignResponse>;
+    
+    async fn encrypt(
+        &self,
+        req: IoEncryptionRequest,
+    ) -> RpcResult<IoEncryptionResponse>;
+    
+    async fn decrypt(
+        &self,
+        req: IoDecryptionRequest,
+    ) -> RpcResult<IoDecryptionResponse>;
+    
+    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
+    
+    // Attestation operations
     async fn get_attestation_evidence(
         &self,
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse>;
-
-    async fn genesis_get_data_handler(
-        &self,
-        kp: &dyn NetworkKeyProvider,
-    ) -> RpcResult<GenesisDataResponse>; 
-
+    
+    async fn genesis_get_data_handler(&self) -> RpcResult<GenesisDataResponse>; 
+    
     async fn attestation_eval_evidence(
         &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse>; 
-}
-
-/// Cryptographic operations API trait
-#[async_trait]
-pub trait CryptoApi {
-    /// Get the public key
-    async fn get_public_key(&self,  kp: &dyn NetworkKeyProvider) -> RpcResult<PublicKey>;
-    
-    /// Sign a message using secp256k1
-    async fn secp256k1_sign(
-        &self,
-        kp: &dyn NetworkKeyProvider,
-        req: Secp256k1SignRequest,
-    ) -> RpcResult<Secp256k1SignResponse>;
-    
-    /// Encrypt data
-    async fn encrypt(
-        &self,
-        kp: &dyn NetworkKeyProvider,
-        req: IoEncryptionRequest,
-    ) -> RpcResult<IoEncryptionResponse>;
-    
-    /// Decrypt data
-    async fn decrypt(
-        &self,
-        kp: &dyn NetworkKeyProvider,
-        req: IoDecryptionRequest,
-    ) -> RpcResult<IoDecryptionResponse>;
-
-    async fn get_eph_rng_keypair(&self, kp: &dyn NetworkKeyProvider) -> RpcResult<schnorrkel::keys::Keypair>;
 }
 
