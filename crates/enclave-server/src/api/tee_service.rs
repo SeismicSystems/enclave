@@ -36,7 +36,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
 
     // Factory method to create with default configuration
     pub fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
-        let attestation_agent = Arc::new(SeismicAttestationAgent::new(config_path));
+        let mut attestation_agent = SeismicAttestationAgent::new(config_path);
         
         // Initialize the attestation agent
         // Note: This is blocking for simplicity - in production code, you might want
@@ -44,7 +44,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(attestation_agent.init())?;
         
-        Ok(Self::new(Arc::new(key_provider), attestation_agent))
+        Ok(Self::new(Arc::new(key_provider), Arc::new(attestation_agent)))
     }
 }
 
@@ -117,7 +117,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_quote_error("Issue in getting the evidence"));
+                return Err(rpc_bad_quote_error(anyhow::anyhow!("Issue in getting the evidence")));
             }
         };
         
@@ -132,7 +132,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             Ok(result) => result,
             Err(e) => {
                 error!("Failed to attest genesis data: {}", e);
-                return Err(rpc_bad_genesis_error("Issue in attesting genesis data"));
+                return Err(rpc_bad_genesis_error(anyhow::anyhow!("Issue in attesting genesis data")));
             }
         };
 
