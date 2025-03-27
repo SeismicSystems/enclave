@@ -99,7 +99,7 @@ impl AttestationApi for AttestationService {
 
 #[cfg(test)]
 mod tests {
-    use crate::{coco_aa::init_coco_aa,coco_as::init_coco_as, utils::test_utils::{is_sudo, read_vector_txt}};
+    use crate::{coco_aa::init_coco_aa, coco_as::{init_coco_as, Data, HashAlgorithm}, utils::test_utils::{is_sudo, read_vector_txt}};
 
     use super::*;
 
@@ -110,7 +110,6 @@ mod tests {
     use serde_json::Value;
     use sha2::{Digest, Sha256};
     use crate::key_manager::builder::KeyManagerBuilder;
-    use attestation_service::{Data, HashAlgorithm};
 
     #[tokio::test]
     #[serial(attestation_agent)]
