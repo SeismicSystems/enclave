@@ -13,8 +13,7 @@ use crate::{
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     genesis::GenesisDataResponse,
     signing::{
-        Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
-        Secp256k1VerifyResponse,
+        Secp256k1SignRequest, Secp256k1SignResponse,
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };

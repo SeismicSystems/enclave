@@ -12,7 +12,7 @@ use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceRespon
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
 use crate::signing::{
-    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
+    Secp256k1SignRequest, Secp256k1SignResponse
 };
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,

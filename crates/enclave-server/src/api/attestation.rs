@@ -5,7 +5,7 @@ use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::{rpc_bad_argument_error, rpc_bad_evidence_error};
 
 use crate::coco_as::{eval_att_evidence, parse_as_token_claims};
-use crate::coco_as::into_original::{IntoOriginalData, OriginalData, OriginalHashAlgorithm, IntoOriginalHashAlgorithm, ApiData};
+use crate::coco_as::into_original::{IntoOriginalData, OriginalData, OriginalHashAlgorithm, IntoOriginalHashAlgorithm};
 use crate::{api::traits::AttestationApi, key_manager::NetworkKeyProvider};
 use crate::coco_aa::attest;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
