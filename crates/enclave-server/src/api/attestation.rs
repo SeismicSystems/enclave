@@ -99,9 +99,9 @@ impl AttestationApi for AttestationService {
 
 #[cfg(test)]
 mod tests {
-    use crate::{coco_aa::init_coco_aa, coco_as::{init_coco_as, Data, HashAlgorithm}, utils::test_utils::{is_sudo, read_vector_txt}};
-
+    use crate::{coco_aa::init_coco_aa, coco_as::init_coco_as, utils::test_utils::{is_sudo, read_vector_txt}};
     use super::*;
+    use seismic_enclave::coco_as::{Data, HashAlgorithm};
 
     use serial_test::serial;
     use std::env;
