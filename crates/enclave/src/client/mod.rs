@@ -28,4 +28,5 @@ pub const ENCLAVE_DEFAULT_OPERATOR_PORT: u16 = 7880;
 pub const ENCLAVE_DEFAULT_PUBLIC_PORT: u16 = 7881;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 
+// TODO: Clarify what this is for
 pub static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();

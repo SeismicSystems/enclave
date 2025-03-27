@@ -96,18 +96,6 @@ impl<ClientT: BuildableClient> EnclaveClientBuilder<ClientT> {
     }
 }
 
-// macro_rules! impl_sync_client_trait {
-//     ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
-//         impl SyncEnclaveApiClient for EnclaveClient {
-//             $(
-//                 fn $method_name(&self, $($param: $param_ty),*) -> $return_ty {
-//                     self.block_on_with_runtime(self.async_client.$method_name($($param),*))
-//                 }
-//             )+
-//         }
-//     };
-// }
-
 // impl_sync_client_trait!(
 //     fn health_check(&self) -> Result<String, ClientError>,
 //     fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
