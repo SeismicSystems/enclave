@@ -37,7 +37,7 @@ async fn main() {
         .with_addr(args.addr)
         .with_port(args.port);
 
-    let server = builder.build().unwrap();
+    let server = builder.build().await.unwrap();
     let handle = server.start().await.unwrap();
 
     handle.stopped().await;
