@@ -63,6 +63,7 @@ tower.workspace = true
 jsonwebtoken.workspace = true
 jsonrpsee-core.workspace = true
 http.workspace = true
+pin-project.workspace = true
 
 [dev-dependencies]
 serial_test = "3.2.0"

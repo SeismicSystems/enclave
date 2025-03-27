@@ -1,4 +1,5 @@
 mod middleware;
+mod auth_future;
 
 use middleware::JwtAuthMiddleware;
 
@@ -14,12 +15,11 @@ pub type HttpRequest<T = HttpBody> = jsonrpsee_core::http_helpers::Request<T>;
 pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AccessLevel {
+pub enum AccessLevel {
     Public,
     Operator,
     Internal,
 }
-
 
 #[derive(Clone)]
 pub struct JwtAuthLayer {

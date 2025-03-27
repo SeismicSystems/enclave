@@ -6628,6 +6628,7 @@ dependencies = [
  "libc",
  "log",
  "once_cell",
+ "pin-project",
  "rand 0.9.0",
  "reqwest 0.12.14",
  "routerify",
