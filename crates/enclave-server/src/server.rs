@@ -84,7 +84,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
     }
 
     /// Build the final `EnclaveServer` object.
-    pub fn build(self) -> Result<EnclaveServer<K>> {
+    pub async fn build(self) -> Result<EnclaveServer<K>> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
@@ -116,7 +116,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
+    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
         let tee_service = Arc::new(
             TeeService::with_default_attestation(key_provider, None)
                 .await
