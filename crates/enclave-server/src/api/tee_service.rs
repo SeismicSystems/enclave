@@ -1,21 +1,20 @@
+use std::sync::Arc;
+
 use log::error;
 use jsonrpsee::core::{async_trait, RpcResult};
 use seismic_enclave::coco_as::{ASCoreTokenClaims, AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
-use seismic_enclave::{rpc_bad_argument_error, rpc_bad_evidence_error};
 
 use crate::coco_as::{eval_att_evidence, parse_as_token_claims};
 use crate::coco_as::into_original::{IntoOriginalData, OriginalData, OriginalHashAlgorithm, IntoOriginalHashAlgorithm};
-use crate::{api::traits::AttestationApi, key_manager::NetworkKeyProvider};
+use crate::key_manager::NetworkKeyProvider;
 use crate::coco_aa::attest;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::genesis::att_genesis_data;
 
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
-use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
-
-use crate::key_manager::NetworkKeyProvider;
+use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
 
 use super::seismic_attestation_agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
@@ -35,7 +34,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
     }
 
     // Factory method to create with default configuration
-    pub fn with_default_attestation<K: NetworkKeyProvider>(key_provider: K, config_path: Option<&str>) -> Result<TeeServiceApi<K>, anyhow::Error> {
+    pub fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
         let attestation_agent = Arc::new(SeismicAttestationAgent::new(config_path));
         
         // Initialize the attestation agent
@@ -117,7 +116,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_argument_error(anyhow::anyhow!(e)));
+                return Err(anyhow::anyhow!("Issue in getting the evidence").into());
             }
         };
         
@@ -132,7 +131,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             Ok(result) => result,
             Err(e) => {
                 error!("Failed to attest genesis data: {}", e);
-                return Err(rpc_bad_argument_error(anyhow::anyhow!(e)));
+                return Err(anyhow::anyhow!("Issue in attesting genesis data").into());
             }
         };
 
