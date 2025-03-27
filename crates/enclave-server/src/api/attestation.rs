@@ -108,6 +108,7 @@ mod tests {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use kbs_types::Tee;
     use serde_json::Value;
+    use sha2::{Digest, Sha256};
 
     #[tokio::test]
     #[serial(attestation_agent)]
