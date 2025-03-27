@@ -1,3 +1,4 @@
+use jsonrpsee::core::async_trait;
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
@@ -24,7 +25,7 @@ impl SeismicAttestationAgent {
         }
     }
 
-    pub async fn init(&self) -> Result<()> {
+    pub async fn init(&mut self) -> Result<()> {
         self.inner.init().await
     }
 

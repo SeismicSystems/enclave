@@ -37,7 +37,7 @@ pub struct EnclaveServer<K: NetworkKeyProvider + Send + Sync + 'static> {
 /// A builder that lets us configure the server
 pub struct EnclaveServerBuilder<K: NetworkKeyProvider + Send + Sync + 'static> {
     addr: Option<SocketAddr>,
-    key_provider: Option<Arc<K>>,
+    key_provider: Option<K>,
     attestation_config_path: Option<String>,
 }
 
@@ -73,7 +73,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
         self
     }
 
-    pub fn with_key_provider(mut self, key_provider: Arc<K>) -> Self {
+    pub fn with_key_provider(mut self, key_provider: K) -> Self {
         self.key_provider = Some(key_provider);
         self
     }
@@ -115,7 +115,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub fn new(addr: impl Into<SocketAddr>, key_provider: Arc<K>) -> Result<Self> {
+    pub fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
         let tee_service = Arc::new(
             TeeService::with_default_attestation(key_provider, None)
                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,

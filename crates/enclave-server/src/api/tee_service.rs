@@ -35,7 +35,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
     }
 
     // Factory method to create with default configuration
-    pub fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
+    pub fn with_default_attestation<K: NetworkKeyProvider>(key_provider: K, config_path: Option<&str>) -> Result<TeeServiceApi<K>, anyhow::Error> {
         let attestation_agent = Arc::new(SeismicAttestationAgent::new(config_path));
         
         // Initialize the attestation agent
@@ -106,19 +106,18 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
         Ok(self.key_provider.get_rng_keypair())
     }
     
-    // Attestation operations implementations
+    // Attestation operations implementations - now using SeismicAttestationAgent
     async fn get_attestation_evidence(
         &self,
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
-        // Acquire lock for thread-sensitive operations
-        let _lock = self.quote_mutex.lock().await;
-        
-        let evidence = match attest(req.runtime_data.as_slice()).await {
+        // Use SeismicAttestationAgent's mutex-protected get_evidence method
+        // The mutex handling is already implemented in the agent
+        let evidence = match self.attestation_agent.get_evidence(req.runtime_data.as_slice()).await {
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_argument_error(e));
+                return Err(rpc_bad_argument_error(anyhow::anyhow!(e)));
             }
         };
         
@@ -128,12 +127,14 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
     async fn genesis_get_data_handler(&self) -> RpcResult<GenesisDataResponse> {
         let io_pk = self.key_provider.get_tx_io_pk();
         
-        // Acquire lock for thread-sensitive operations
-        let _lock = self.quote_mutex.lock().await;
-        
-        let (genesis_data, evidence) = att_genesis_data(io_pk)
-            .await
-            .map_err(|e| rpc_bad_argument_error(e))?;
+        // Use the agent's attest_genesis_data method which handles the mutex internally
+        let (genesis_data, evidence) = match self.attestation_agent.attest_genesis_data(io_pk).await {
+            Ok(result) => result,
+            Err(e) => {
+                error!("Failed to attest genesis data: {}", e);
+                return Err(rpc_bad_argument_error(anyhow::anyhow!(e)));
+            }
+        };
 
         Ok(GenesisDataResponse {
             data: genesis_data,
@@ -288,6 +289,7 @@ mod tests {
             runtime_data: runtime_data.to_vec(),
         };
         
+        let kp = KeyManagerBuilder::build_mock().unwrap();
         let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
         
         // Call the handler
@@ -320,6 +322,7 @@ mod tests {
             runtime_data: runtime_data_2.to_vec(),
         };
         
+        let kp = KeyManagerBuilder::build_mock().unwrap();
         let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
 
         let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
@@ -380,6 +383,7 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
+        let kp = KeyManagerBuilder::build_mock().unwrap();
         let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
         
         // Call the handler
@@ -424,6 +428,7 @@ mod tests {
         };
 
         // Call the handler
+        let kp = KeyManagerBuilder::build_mock().unwrap();
         let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
         let eval_evidence_response = tee_service.attestation_eval_evidence(tdx_eval_request)
             .await
@@ -470,6 +475,7 @@ mod tests {
             policy_ids: vec!["deny".to_string()],
         };
 
+        let kp = KeyManagerBuilder::build_mock().unwrap();
         let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
         // Call the handler
         let eval_evidence_response = tee_service.attestation_eval_evidence(eval_request).await;
@@ -510,6 +516,7 @@ mod tests {
             policy_ids: vec![test_policy_id.clone()],
         };
 
+        let kp = KeyManagerBuilder::build_mock().unwrap();
         let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
         let _eval_evidence_response = tee_service.attestation_eval_evidence(tdx_eval_request)
             .await
