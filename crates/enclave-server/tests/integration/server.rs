@@ -12,6 +12,8 @@ use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
+use seismic_enclave_server::key_manager::builder::KeyManagerBuilder;
+use seismic_enclave_server::key_manager::key_manager::KeyManager;
 use seismic_enclave_server::server::init_tracing;
 use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
@@ -115,7 +117,8 @@ async fn test_server_requests() {
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let _server_handle = EnclaveServer::new(addr).start().await.unwrap();
+    let kp = KeyManagerBuilder::build_mock().unwrap();
+    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 
