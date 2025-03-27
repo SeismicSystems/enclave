@@ -109,6 +109,7 @@ mod tests {
     use kbs_types::Tee;
     use serde_json::Value;
     use sha2::{Digest, Sha256};
+    use crate::key_manager::builder::KeyManagerBuilder;
 
     #[tokio::test]
     #[serial(attestation_agent)]
