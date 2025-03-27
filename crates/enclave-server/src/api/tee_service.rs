@@ -35,7 +35,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
     }
 
     // Factory method to create with default configuration
-    pub fn with_default_attestation(key_provider: Arc<K>, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
+    pub fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
         let attestation_agent = Arc::new(SeismicAttestationAgent::new(config_path));
         
         // Initialize the attestation agent
@@ -51,7 +51,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
 #[async_trait]
 impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService<K> {
     // Crypto operations implementations
-    async fn get_public_key(&self) -> RpcResult<PublicKey> {
+    async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
         Ok(self.key_provider.get_tx_io_pk())
     }
 

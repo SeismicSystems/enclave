@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
+use attestation_agent::InitDataResult;
+use kbs_types::Tee;
 use once_cell::sync::OnceCell;
+use seismic_enclave::genesis::GenesisData;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct SeismicAttestationAgent {
