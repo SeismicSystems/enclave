@@ -35,7 +35,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
     }
 
     // Factory method to create with default configuration
-    pub fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
+    pub async fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
         let mut attestation_agent = SeismicAttestationAgent::new(config_path);
         
         attestation_agent.init().await?;
