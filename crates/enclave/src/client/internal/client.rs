@@ -1,10 +1,9 @@
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
-use std::{future::Future, ops::Deref, time::Duration};
+use std::{ops::Deref, time::Duration};
 use tokio::runtime::{Handle, Runtime};
 
 use super::{EnclaveInternalAPIClient, SyncEnclaveInternalAPIClient};
-use crate::client::client::BuildableClient;
-use crate::client::client::EnclaveClientBuilder;
+use crate::client::builder::BuildableClient;
 use crate::client::{
     ENCLAVE_CLIENT_RUNTIME, ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_INTERNAL_PORT,
 };
@@ -40,7 +39,6 @@ impl Default for EnclaveInternalClient {
         Self::new_from_client(async_client)
     }
 }
-
 impl Deref for EnclaveInternalClient {
     type Target = HttpClient;
 
@@ -62,28 +60,9 @@ impl BuildableClient for EnclaveInternalClient {
     fn default_port() -> u16 {
         ENCLAVE_DEFAULT_INTERNAL_PORT
     }
-}
-impl EnclaveInternalClient {
-    pub fn builder() -> EnclaveClientBuilder<Self> {
-        EnclaveClientBuilder::new()
-    }
 
-    /// Create a new enclave client.
-    pub fn new(url: impl AsRef<str>) -> Self {
-        EnclaveClientBuilder::new().url(url.as_ref()).build()
-    }
-
-    /// Create a new enclave client from an address and port.
-    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
-        EnclaveClientBuilder::new().addr(addr).port(port).build()
-    }
-
-    /// Block on a future with the runtime.
-    pub fn block_on_with_runtime<F, T>(&self, future: F) -> T
-    where
-        F: Future<Output = T>,
-    {
-        tokio::task::block_in_place(|| self.handle.block_on(future))
+    fn get_handle(&self) -> &Handle {
+        &self.handle
     }
 }
 

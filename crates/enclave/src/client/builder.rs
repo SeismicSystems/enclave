@@ -1,12 +1,40 @@
 use jsonrpsee::http_client::HttpClient;
 use std::marker::PhantomData;
 use std::time::Duration;
+use std::future::Future;
+use tokio::runtime::Handle;
 
 use crate::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_TIMEOUT_SECONDS};
 
 pub trait BuildableClient: Sized {
+    /// Creates the client handle and returns the client struct
     fn new_from_client(async_client: HttpClient) -> Self;
+    /// Get the default port for the client type
     fn default_port() -> u16;
+    /// Get the handle for the client runtime.
+    fn get_handle(&self) -> &Handle;
+
+    /// Get the builder for the client type
+    fn builder() -> EnclaveClientBuilder<Self> {
+        EnclaveClientBuilder::new()
+    }
+
+    /// Create a new enclave client.
+    fn new(url: impl AsRef<str>) -> Self {
+        EnclaveClientBuilder::new().url(url.as_ref()).build()
+    }
+
+    /// Create a new enclave client from an address and port.
+    fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
+        EnclaveClientBuilder::new().addr(addr).port(port).build()
+    }
+    /// Block on a future with the runtime.
+    fn block_on_with_runtime<F, T>(&self, future: F) -> T
+    where
+        F: Future<Output = T>,
+    {
+        tokio::task::block_in_place(|| self.get_handle().block_on(future))
+    }
 }
 
 pub struct EnclaveClientBuilder<T: BuildableClient> {

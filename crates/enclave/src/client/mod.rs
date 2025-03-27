@@ -11,7 +11,7 @@ pub mod rpc;
 // pub use client::*;
 // pub use mock::*;
 
-pub mod client;
+pub mod builder;
 pub mod internal;
 pub mod operator;
 pub mod public;
