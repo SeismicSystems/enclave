@@ -1,5 +1,6 @@
 use clap::arg;
 use clap::Parser;
+use seismic_enclave_server::key_manager::key_manager::KeyManager;
 use std::net::IpAddr;
 use tracing::info;
 
@@ -32,7 +33,7 @@ async fn main() {
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
-    let builder = EnclaveServer::<DefaultKeyProvider>::builder()
+    let builder = EnclaveServer::<KeyManager>::builder()
         .with_addr(args.addr)
         .with_port(args.port);
 
