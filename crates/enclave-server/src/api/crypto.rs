@@ -75,7 +75,7 @@ impl CryptoApi for CryptoService {
 mod tests {
     use super::*;
     use crate::key_manager::builder::KeyManagerBuilder;
-    use seismic_enclave::{Nonce, get_unsecure_sample_secp256k1_pk};
+    use seismic_enclave::{nonce::Nonce, get_unsecure_sample_secp256k1_pk};
 
     #[tokio::test]
     async fn test_secp256k1_sign() {
