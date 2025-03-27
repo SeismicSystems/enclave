@@ -1,6 +1,8 @@
 mod auth_future;
 mod middleware;
+// mod method_parse;
 
+use http::method;
 use middleware::JwtAuthMiddleware;
 
 use jsonwebtoken::DecodingKey;
@@ -33,11 +35,23 @@ impl JwtAuthLayer {
         method_roles: HashMap<String, AccessRole>,
         role_keys: HashMap<AccessRole, DecodingKey>,
     ) -> Self {
+        // TODO: consider validating that the maps are complete
         Self {
             method_roles,
             role_keys,
         }
     }
+
+    // pub fn default() -> Self {
+    //     let method_roles = HashMap::from([
+    //         (method::GET, AccessRole::Public),
+    //         (method::POST, AccessRole::Operator),
+    //         (method::PUT, AccessRole::Operator),
+    //         (method::DELETE, AccessRole::Operator),
+    //     ]);
+        
+    //     Self::new(HashMap::new(), HashMap::new())
+    // }
 }
 impl<S> Layer<S> for JwtAuthLayer {
     type Service = JwtAuthMiddleware<S>;
