@@ -118,7 +118,7 @@ async fn test_server_requests() {
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
-    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp).start().await.unwrap();
+    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp).unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 
