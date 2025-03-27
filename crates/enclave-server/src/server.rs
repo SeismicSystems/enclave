@@ -97,6 +97,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
         let config_path = self.attestation_config_path.as_deref();
         let tee_service = Arc::new(
             TeeService::with_default_attestation(key_provider, config_path)
+                .await
                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
         );
 
@@ -118,6 +119,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
     pub fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
         let tee_service = Arc::new(
             TeeService::with_default_attestation(key_provider, None)
+                .await
                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
         );
         

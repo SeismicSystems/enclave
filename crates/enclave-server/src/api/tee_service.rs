@@ -38,11 +38,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
     pub fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
         let mut attestation_agent = SeismicAttestationAgent::new(config_path);
         
-        // Initialize the attestation agent
-        // Note: This is blocking for simplicity - in production code, you might want
-        // to handle this differently or ensure it's already initialized
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(attestation_agent.init())?;
+        attestation_agent.init().await?;
         
         Ok(Self::new(Arc::new(key_provider), Arc::new(attestation_agent)))
     }
@@ -217,7 +213,7 @@ mod tests {
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
 
         let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
         assert!(!res.sig.is_empty());
@@ -235,7 +231,7 @@ mod tests {
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         
         let res = tee_service.encrypt(req).await.unwrap();
 
@@ -262,7 +258,7 @@ mod tests {
             nonce: nonce.clone(),
         };
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         let res = tee_service.decrypt(decryption_request).await;
 
         assert_eq!(res.is_err(), true);
@@ -290,7 +286,7 @@ mod tests {
         };
         
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         
         // Call the handler
         let res = tee_service.get_attestation_evidence(evidence_request)
@@ -323,7 +319,7 @@ mod tests {
         };
         
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
 
         let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
             .await
@@ -384,7 +380,7 @@ mod tests {
         };
 
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         
         // Call the handler
         let eval_evidence_response = tee_service.attestation_eval_evidence(eval_request)
@@ -429,7 +425,7 @@ mod tests {
 
         // Call the handler
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         let eval_evidence_response = tee_service.attestation_eval_evidence(tdx_eval_request)
             .await
             .unwrap();
@@ -476,7 +472,7 @@ mod tests {
         };
 
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         // Call the handler
         let eval_evidence_response = tee_service.attestation_eval_evidence(eval_request).await;
 
@@ -517,7 +513,7 @@ mod tests {
         };
 
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         let _eval_evidence_response = tee_service.attestation_eval_evidence(tdx_eval_request)
             .await
             .unwrap();
@@ -553,7 +549,7 @@ mod tests {
         let kp = KeyManagerBuilder::build_mock().unwrap();
 
         // Call the handler
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         let res = tee_service.genesis_get_data_handler().await.unwrap();
         assert!(!res.evidence.is_empty());
     }
@@ -577,7 +573,7 @@ mod tests {
 
         // Make a genesis data request
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).unwrap();
+        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
         let res = tee_service.genesis_get_data_handler().await.unwrap();
 
         // Submit the genesis data to the attestation service
