@@ -1,9 +1,10 @@
-use super::HttpResponse;
 use pin_project::pin_project;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
+
+use super::HttpResponse;
 
 /// A future representing the response of an RPC request
 #[pin_project]
