@@ -12,8 +12,6 @@ use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
-use seismic_enclave::signing::Secp256k1SignRequest;
-use seismic_enclave::signing::Secp256k1VerifyRequest;
 use seismic_enclave_server::server::init_tracing;
 use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
