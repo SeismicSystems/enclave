@@ -1,10 +1,10 @@
-mod middleware;
 mod auth_future;
+mod middleware;
 
 use middleware::JwtAuthMiddleware;
 
-use std::collections::HashMap;
 use jsonwebtoken::DecodingKey;
+use std::collections::HashMap;
 use tower::Layer;
 
 /// Default HTTP body for the client.
@@ -14,43 +14,39 @@ pub type HttpRequest<T = HttpBody> = jsonrpsee_core::http_helpers::Request<T>;
 /// HTTP response with default body.
 pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AccessLevel {
+/// Security Roles defined for different endpoints
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AccessRole {
     Public,
     Operator,
     Internal,
 }
 
+/// A Tower Layer for JWT Authentication
 #[derive(Clone)]
 pub struct JwtAuthLayer {
-    access_map: HashMap<String, AccessLevel>,
-    operator_key: DecodingKey,
-    internal_key: DecodingKey,
+    method_roles: HashMap<String, AccessRole>,
+    role_keys: HashMap<AccessRole, DecodingKey>,
 }
-
 impl JwtAuthLayer {
     pub fn new(
-        access_map: HashMap<String, AccessLevel>,
-        operator_key: DecodingKey,
-        internal_key: DecodingKey,
+        method_roles: HashMap<String, AccessRole>,
+        role_keys: HashMap<AccessRole, DecodingKey>,
     ) -> Self {
         Self {
-            access_map,
-            operator_key,
-            internal_key,
+            method_roles,
+            role_keys,
         }
     }
 }
-
 impl<S> Layer<S> for JwtAuthLayer {
     type Service = JwtAuthMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
         JwtAuthMiddleware {
             inner,
-            access_map: self.access_map.clone(),
-            operator_key: self.operator_key.clone(),
-            internal_key: self.internal_key.clone(),
+            method_roles: self.method_roles.clone(),
+            role_keys: self.role_keys.clone(),
         }
     }
 }

@@ -1,4 +1,5 @@
-
+use super::{AccessRole, HttpBody, HttpRequest, HttpResponse};
+use crate::auth::auth_future::ResponseFuture;
 use http::StatusCode;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use std::{
@@ -6,26 +7,15 @@ use std::{
     task::{Context, Poll},
 };
 use tower::Service;
-use super::{AccessLevel, HttpBody, HttpRequest, HttpResponse};
-use crate::auth::auth_future::ResponseFuture;
 
+/// A Tower Service for JWT Authentication
+/// Performs Auth, and if it succeeds passes the request to the inner service
 #[derive(Clone)]
 pub struct JwtAuthMiddleware<S> {
     pub inner: S,
-    pub access_map: HashMap<String, AccessLevel>,
-    pub operator_key: DecodingKey,
-    pub internal_key: DecodingKey,
+    pub method_roles: HashMap<String, AccessRole>,
+    pub role_keys: HashMap<AccessRole, DecodingKey>,
 }
-
-fn error_response(status_code: http::StatusCode, message: String) -> HttpResponse {
-    let response = HttpResponse::builder()
-        .status(status_code)
-        .header("content-type", "application/json")
-        .body(HttpBody::from(message))
-        .unwrap();
-    response
-}
-
 impl<S> Service<HttpRequest> for JwtAuthMiddleware<S>
 where
     S: Service<HttpRequest, Response = HttpResponse>,
@@ -40,11 +30,10 @@ where
     }
 
     fn call(&mut self, req: HttpRequest) -> Self::Future {
-        // Extract JSON-RPC method name
+        // Extract JSON-RPC method name and access role
         let (parts, body) = req.into_parts();
         let method = parts.method.to_string();
-    
-        let access = match self.access_map.get(&method) {
+        let access = match self.method_roles.get(&method) {
             Some(access) => *access,
             None => {
                 return ResponseFuture::invalid_auth(error_response(
@@ -53,19 +42,20 @@ where
                 ));
             }
         };
-    
+
         // If public, pass through
-        if access == AccessLevel::Public {
+        if access == AccessRole::Public {
             let req = HttpRequest::from_parts(parts, body);
             return ResponseFuture::future(self.inner.call(req));
         }
-    
+
         // Check Authorization header
+        // Errors if Header/Token is malformed
         let auth_header = parts
             .headers
             .get("authorization")
             .and_then(|v| v.to_str().ok());
-    
+
         let token = match auth_header.and_then(|s| s.strip_prefix("Bearer ")) {
             Some(t) => t,
             None => {
@@ -75,13 +65,18 @@ where
                 ));
             }
         };
-    
-        let key = match access {
-            AccessLevel::Operator => &self.operator_key,
-            AccessLevel::Internal => &self.internal_key,
-            AccessLevel::Public => unreachable!(),
+
+        // validate the JWT token
+        // Errors when token is well-formed but expired or invalid
+        let key = match self.role_keys.get(&access) {
+            Some(key) => key,
+            None => {
+                return ResponseFuture::invalid_auth(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "JwtAuthMiddleware: failed to find key for access role".into(),
+                ))
+            }
         };
-    
         let validation = Validation::default();
         if decode::<serde_json::Value>(token, key, &validation).is_err() {
             return ResponseFuture::invalid_auth(error_response(
@@ -89,9 +84,19 @@ where
                 "JwtAuthMiddleware: Invalid or expired token".into(),
             ));
         }
-    
+
         // Auth success: reconstruct request and forward
         let req = HttpRequest::from_parts(parts, body);
         ResponseFuture::future(self.inner.call(req))
-    }    
+    }
+}
+
+/// A helper method to create an error response for the HttpResponse type
+fn error_response(status_code: http::StatusCode, message: String) -> HttpResponse {
+    let response = HttpResponse::builder()
+        .status(status_code)
+        .header("content-type", "application/json")
+        .body(HttpBody::from(message))
+        .unwrap();
+    response
 }

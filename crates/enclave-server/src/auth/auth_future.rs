@@ -1,9 +1,9 @@
 use super::HttpResponse;
-use std::future::Future;
 use pin_project::pin_project;
+use std::future::Future;
 use std::pin::Pin;
-use std::task::Poll;
 use std::task::Context;
+use std::task::Poll;
 
 /// A future representing the response of an RPC request
 #[pin_project]
@@ -16,11 +16,17 @@ pub struct ResponseFuture<F> {
 
 impl<F> ResponseFuture<F> {
     pub const fn future(future: F) -> Self {
-        Self { kind: Kind::Future { future } }
+        Self {
+            kind: Kind::Future { future },
+        }
     }
 
     pub const fn invalid_auth(err_res: HttpResponse) -> Self {
-        Self { kind: Kind::Error { response: Some(err_res) } }
+        Self {
+            kind: Kind::Error {
+                response: Some(err_res),
+            },
+        }
     }
 }
 
