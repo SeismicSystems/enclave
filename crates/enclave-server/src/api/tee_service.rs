@@ -14,10 +14,11 @@ use crate::genesis::att_genesis_data;
 
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
-use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
+use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
 
 use super::seismic_attestation_agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
+use attestation_agent::AttestationAPIs;
 
 // Unified service implementation
 pub struct TeeService<K: NetworkKeyProvider> {
@@ -43,7 +44,7 @@ impl<K: NetworkKeyProvider> TeeService<K> {
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(attestation_agent.init())?;
         
-        Ok(Self::new(key_provider, attestation_agent))
+        Ok(Self::new(Arc::new(key_provider), attestation_agent))
     }
 }
 
@@ -116,7 +117,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(anyhow::anyhow!("Issue in getting the evidence").into());
+                return Err(rpc_bad_quote_error("Issue in getting the evidence"));
             }
         };
         
@@ -131,7 +132,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             Ok(result) => result,
             Err(e) => {
                 error!("Failed to attest genesis data: {}", e);
-                return Err(anyhow::anyhow!("Issue in attesting genesis data").into());
+                return Err(rpc_bad_genesis_error("Issue in attesting genesis data"));
             }
         };
 
