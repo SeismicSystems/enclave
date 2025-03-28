@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use attestation_service::token::AttestationTokenBroker;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
