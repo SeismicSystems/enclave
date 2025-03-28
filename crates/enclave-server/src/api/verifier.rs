@@ -221,7 +221,7 @@ pub fn claims_to_json(claims: &ASCoreTokenClaims) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::coco_as::parse_as_token_claims;
+    use crate::coco_as::{parse_as_token_claims, policies};
 
     use super::*;
     use tokio::test;
@@ -241,7 +241,7 @@ mod tests {
         let mut verifier = DcapAttVerifier::new();
         
         // Set a policy
-        let policy_id = "test-policy".to_string();
+        let policy_id = r#"test-policy"#.to_string();
         let policy_content = r#"{"rules":[]}"#.to_string();
         verifier.set_policy(policy_id.clone(), policy_content.clone()).await.unwrap();
         
