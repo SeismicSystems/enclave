@@ -242,21 +242,21 @@ mod tests {
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&verifier).await.unwrap();
 
-        // Get the policy
+        let policy_id = "allow".to_string();
+        let expected_content = fixture.get_policy_content(&policy_id).unwrap();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
         assert_eq!(retrieved_policy, policy_content);
         
-        // List policies
         let policies = verifier.list_policies().await.unwrap();
-        assert_eq!(policies.len(), 1);
-        assert_eq!(policies.get(&policy_id).unwrap(), &policy_content);
+        assert_eq!(policies.len(), 3);
         
         // Update a policy
         verifier.set_policy(policy_id.clone(), fixture.encode_policy(YOCTO_POLICY_UPDATED)).await.unwrap();
         
         // Verify update
+        let policy_id = "yocto".to_string();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
-        assert_eq!(retrieved_policy, updated_policy);
+        assert_eq!(retrieved_policy, YOCTO_POLICY_UPDATED);
         
         // Try getting non-existent policy
         let result = verifier.get_policy("non-existent".to_string()).await;

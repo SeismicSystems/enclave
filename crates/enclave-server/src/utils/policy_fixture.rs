@@ -3,6 +3,7 @@
 use crate::{coco_as::policies::YOCTO_POLICY, verifier::DcapAttVerifier};
 use anyhow::Result;
 use std::collections::HashMap;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 
 pub const ALLOW_POLICY: &str = r#"
 package policy
