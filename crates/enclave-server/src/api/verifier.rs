@@ -245,7 +245,7 @@ mod tests {
         let policy_id = "allow".to_string();
         let expected_content = fixture.get_policy_content(&policy_id).unwrap();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
-        assert_eq!(retrieved_policy, policy_content);
+        assert_eq!(retrieved_policy, expected_content);
         
         let policies = verifier.list_policies().await.unwrap();
         assert_eq!(policies.len(), 3);
