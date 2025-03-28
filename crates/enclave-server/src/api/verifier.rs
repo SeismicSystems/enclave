@@ -379,15 +379,9 @@ mod tests {
             None,
             HashAlgorithm::Sha256,
             vec!["deny".to_string()],
-        ).await.unwrap();
-        
-        let claims_deny = parse_as_token_claims(&raw_claims_deny).unwrap();
-        
-        // Verify the deny policy is marked as failed
-        let deny_reports = &claims_deny.evaluation_reports;
-        assert!(!deny_reports.is_empty());
-        let first_report = &deny_reports[0];
-        assert_eq!(first_report["policy-id"], "deny");
+        ).await;
+
+        assert!(raw_claims_fail.is_err(), "Reject by policy deny");
     }
 
     #[test]
