@@ -17,7 +17,7 @@ use crypto::HashAlgorithm;
 /// Below is from confidential-containers trustee repo.
 /// Runtime/Init Data used to check the binding relationship with report data
 /// in Evidence
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Data {
     /// This will be used as the expected runtime/init data to check against
     /// the one inside evidence.
