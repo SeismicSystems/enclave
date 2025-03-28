@@ -244,13 +244,12 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_mock_server_and_sync_client() {
         // spawn a seperate thread for the server, otherwise the test will hang
-        let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
         println!("addr: {:?}", addr);
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        let client = EnclaveClient::mock_default();
         async_test_health_check(&client).await;
         async_test_get_public_key(&client).await;
         async_test_get_eph_rng_keypair(&client).await;
