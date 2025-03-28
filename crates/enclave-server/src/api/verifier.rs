@@ -236,7 +236,11 @@ impl DcapAttVerifier {
             init_data_claims: init_data_claims.clone(),
             reference_data: reference_data_map.clone(),
             tee,
-            policy_results: policy_ids.iter().zip(evaluation_reports.iter().map(|r| r["result"].as_bool().unwrap_or(false))).collect(),
+            policy_results: policy_ids
+                .iter()
+                .zip(evaluation_reports.iter().map(|r| r["result"].as_bool().unwrap_or(false)))
+                .map(|(k, v)| (k.clone(), v))
+                .collect()
         };
         
         // Create the final ASCoreTokenClaims structure
@@ -275,38 +279,19 @@ impl DcapAttVerifier {
         &self,
         data: Option<Data>,
         hash_algorithm: &HashAlgorithm,
-    ) -> Result<(Option<Vec<u8>>, Option<serde_json::Value>)> {
-        if let Some(data) = data {
-            let hash = match hash_algorithm {
-                HashAlgorithm::Sha256 => {
-                    let mut hasher = Sha256::new();
-                    hasher.update(&data.bytes);
-                    hasher.finalize().to_vec()
+    ) -> Result<(Option<Vec<u8>>, Value)> {
+        match data {
+            Some(value) => match value {
+                Data::Raw(raw) => Ok((Some(raw), Value::Null)),
+                Data::Structured(structured) => {
+                    // by default serde_json will enforence the alphabet order for keys
+                    let hash_materials =
+                        serde_json::to_vec(&structured).context("parse JSON structured data")?;
+                    let digest = hash_algorithm.accumulate_hash(hash_materials);
+                    Ok((Some(digest), structured))
                 }
-                HashAlgorithm::Sha384 => {
-                    let mut hasher = Sha384::new();
-                    hasher.update(&data.bytes);
-                    hasher.finalize().to_vec()
-                }
-                HashAlgorithm::Sha512 => {
-                    let mut hasher = Sha512::new();
-                    hasher.update(&data.bytes);
-                    hasher.finalize().to_vec()
-                }
-            };
-
-            let claims = if let Some(json_str) = data.json {
-                match serde_json::from_str(&json_str) {
-                    Ok(json) => Some(json),
-                    Err(e) => return Err(anyhow!("Failed to parse JSON: {}", e)),
-                }
-            } else {
-                None
-            };
-
-            Ok((Some(hash), claims))
-        } else {
-            Ok((None, None))
+            },
+            None => Ok((None, Value::Null)),
         }
     }
 
