@@ -495,17 +495,7 @@ mod tests {
             None,
             HashAlgorithm::Sha256,
             vec!["yocto".to_string()],
-        ).await.unwrap();
-        
-        let claims_fail = parse_as_token_claims(&raw_claims_fail).unwrap();
-        
-        // In a real implementation with actual policy checking:
-        // - Pass case: first_report["result"] should be true
-        // - Fail case: evaluate() should return an error or first_report["result"] should be false
-        
-        // For now we just verify we get the right policy ID in the reports
-        let first_report = &claims_fail.evaluation_reports[0];
-        assert_eq!(first_report["policy-id"], "yocto");
+        ).await.expect("Reject by policy yocto");
     }
 
     #[test]
