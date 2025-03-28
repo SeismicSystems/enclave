@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
-use attestation_service::token::{ear_broker::Configuration, simple::SimpleAttestationTokenBroker};
+use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration};
 use attestation_service::token::AttestationTokenBroker;
+use attestation_service::{Data, HashAlgorithm};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,24 +14,6 @@ use verifier::{
 };
 
 use kbs_types::Tee;
-use crypto::HashAlgorithm;
-
-/// Below is from confidential-containers trustee repo.
-/// Runtime/Init Data used to check the binding relationship with report data
-/// in Evidence
-#[derive(Debug, Clone)]
-pub enum Data {
-    /// This will be used as the expected runtime/init data to check against
-    /// the one inside evidence.
-    Raw(Vec<u8>),
-
-    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
-    /// data JSON object in dictionary order by key, then serialize and output
-    /// it into a compact string, and perform hash calculation on the whole
-    /// to check against the one inside evidence.
-    Structured(Value),
-}
-
 
 /// Struct representing the relevant fields of an Attestation Service (AS) token's claims.
 ///
@@ -102,7 +85,7 @@ impl DcapAttVerifier {
     pub fn new() -> Self {
         Self {
             //todo: enable creating custom token brokers, with a sk derived from key manager
-            token_broker: SimpleAttestationTokenBroker::new(Configuration::default()),
+            token_broker: SimpleAttestationTokenBroker::new(Configuration::default()).unwrap(),
         }
     }
 
@@ -139,7 +122,7 @@ impl DcapAttVerifier {
         init_data: Option<Data>,
         init_data_hash_algorithm: HashAlgorithm,
         policy_ids: Vec<String>,
-    ) -> Result<ASCoreTokenClaims> {
+    ) -> Result<String> {
         // Get the appropriate verifier for the TEE type
         let verifier = verifier::to_verifier(&tee)?;
 
@@ -210,16 +193,10 @@ impl DcapAttVerifier {
     }
 
     /// Get reference data for verification
-    /// This is a simplified placeholder - in a real implementation, 
-    /// you would fetch this from your reference value provider
-    async fn get_reference_data(&self) -> Result<HashMap<String, String>> {
-        let mut reference_data = HashMap::new();
-        // Populate with your reference data
-        // Example:
-        // reference_data.insert("mrsigner".to_string(), "0123456789abcdef...".to_string());
+    async fn get_reference_data(&self) -> Result<HashMap<String, Vec<String>>> {
+        let reference_data: HashMap<String, Vec<String>> = HashMap::new();
         Ok(reference_data)
     }
-
 }
 
 // To serialize claims as a JSON string without using JWT
