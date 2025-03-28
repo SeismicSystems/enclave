@@ -21,6 +21,7 @@ use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
+use reth_rpc_layer::JwtSecret;
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
@@ -101,7 +102,7 @@ async fn test_get_public_key(client: &EnclaveClient) {
 }
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-    let res = client.get_eph_rng_keypair().await.unwrap();
+    let _res = client.get_eph_rng_keypair().await.unwrap();
 }
 
 #[tokio::test]
@@ -118,8 +119,11 @@ async fn test_server_requests() {
     let port = get_random_port();
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
-    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp, None).await.unwrap().start().await.unwrap();
+    let auth_secret = JwtSecret::random();
+    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp, auth_secret).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
+
+    // TODO: set up client with auth_secret
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
 
     test_health_check(&client).await;

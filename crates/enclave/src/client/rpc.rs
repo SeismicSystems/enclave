@@ -17,32 +17,24 @@ use crate::signing::{
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use tracing::{info, warn};
+use tracing::info;
 use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
     fn methods(self) -> Methods;
-    fn auth_secret(&self) -> Option<JwtSecret>;
+    fn auth_secret(&self) -> JwtSecret;
     async fn start(self) -> Result<ServerHandle>;
     async fn start_rpc_server(self) -> Result<ServerHandle>
     where
         Self: Sized,
     {
         let addr = self.addr();
-        let rpc_server = ServerBuilder::new();
-        match self.auth_secret() {
-            Some(secret) => {
-                let http_middleware =
+        let secret = self.auth_secret();
+        let http_middleware =
                 tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
-                rpc_server.set_http_middleware(http_middleware);
-            }
-            None => {
-                warn!(target: "rpc::enclave", "server configured without an auth secret");
-            }
-        }
-
         let rpc_server = ServerBuilder::new()
+            .set_http_middleware(http_middleware)
             .build(addr)
             .await?;
         let module = self.methods();

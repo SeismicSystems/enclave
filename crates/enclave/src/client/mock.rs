@@ -27,6 +27,7 @@ use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
+use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 pub struct MockEnclaveServer {
     addr: SocketAddr,
@@ -126,8 +127,8 @@ impl BuildableServer for MockEnclaveServer {
         self.into_rpc().into()
     }
 
-    fn auth_secret(&self) -> Option<reth_rpc_layer::JwtSecret> {
-        None
+    fn auth_secret(&self) -> reth_rpc_layer::JwtSecret {
+        JwtSecret::from_str("0x00").unwrap()
     }
 
     async fn start(self) -> Result<ServerHandle> {

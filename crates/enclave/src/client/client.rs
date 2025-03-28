@@ -19,6 +19,7 @@ use crate::{
 };
 
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
+use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret, AuthClientLayer};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
@@ -30,6 +31,7 @@ pub struct EnclaveClientBuilder {
     port: Option<u16>,
     timeout: Option<Duration>,
     url: Option<String>,
+    auth_secret: Option<JwtSecret>,
 }
 
 impl EnclaveClientBuilder {
@@ -39,6 +41,7 @@ impl EnclaveClientBuilder {
             port: None,
             timeout: None,
             url: None,
+            auth_secret: None,
         }
     }
 
@@ -62,7 +65,17 @@ impl EnclaveClientBuilder {
         self
     }
 
+    pub fn auth_secret(mut self, auth_secret: JwtSecret) -> Self {
+        self.auth_secret = Some(auth_secret);
+        self
+    }
+
     pub fn build(self) -> EnclaveClient {
+        let auth_secret = self.auth_secret.unwrap_or_else(|| {
+            // TODO: better error handling
+            panic!("No auth secret supplied to builder")
+        });
+
         let url = self.url.unwrap_or_else(|| {
             format!(
                 "http://{}:{}",
@@ -71,13 +84,19 @@ impl EnclaveClientBuilder {
                 self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
             )
         });
+
+        let secret_layer = AuthClientLayer::new(auth_secret);
+        let middleware = tower::ServiceBuilder::default().layer(secret_layer);
+
         let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .set_http_middleware(middleware)
             .request_timeout(
                 self.timeout
                     .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
             )
             .build(url)
             .unwrap();
+        
         EnclaveClient::new_from_client(async_client)
     }
 }
