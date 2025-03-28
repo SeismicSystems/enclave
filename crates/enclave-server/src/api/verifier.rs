@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration};
 use attestation_service::token::AttestationTokenBroker;
-use attestation_service::{Data, HashAlgorithm};
+use attestation_service::Data;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -14,6 +14,8 @@ use verifier::{
 };
 
 use kbs_types::Tee;
+use crypto::HashAlgorithm;
+
 
 /// Struct representing the relevant fields of an Attestation Service (AS) token's claims.
 ///
@@ -181,10 +183,14 @@ impl DcapAttVerifier {
             Some(value) => match value {
                 Data::Raw(raw) => Ok((Some(raw), Value::Null)),
                 Data::Structured(structured) => {
-                    // by default serde_json will enforence the alphabet order for keys
-                    let hash_materials =
-                        serde_json::to_vec(&structured).context("parse JSON structured data")?;
-                    let digest = hash_algorithm.accumulate_hash(hash_materials);
+                    // Serialize the structured data with keys in alphabetical order
+                    let hash_materials = serde_json::to_vec(&structured)
+                        .context("parse JSON structured data")?;
+                    let digest = match hash_algorithm {
+                        HashAlgorithm::Sha256 => hash_reportdata::<Sha256>(&hash_materials),
+                        HashAlgorithm::Sha384 => hash_reportdata::<Sha384>(&hash_materials),
+                        HashAlgorithm::Sha512 => hash_reportdata::<Sha512>(&hash_materials),
+                    };
                     Ok((Some(digest), structured))
                 }
             },
