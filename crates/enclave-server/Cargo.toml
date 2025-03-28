@@ -61,6 +61,9 @@ alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
 alloy-provider = "0.8"
 
+reth-rpc-layer.workspace = true
+tower.workspace = true
+
 [dev-dependencies]
 serial_test = "3.2.0"
 tempfile = "3.17.1"
