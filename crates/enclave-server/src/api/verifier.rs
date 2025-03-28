@@ -355,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_policy_management() {
+    async fn verifier_test_policy_management() {
         // Test basic policy operations
         let verifier = DcapAttVerifier::new();
         
@@ -387,7 +387,7 @@ mod tests {
     }
     
     #[test]
-    async fn test_eval_evidence_sample() {
+    async fn verifier_test_eval_evidence_sample() {
         // Create verifier with an "allow" policy
         let verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
@@ -426,7 +426,7 @@ mod tests {
     }
     
     #[test]
-    async fn test_eval_policy_deny() {
+    async fn verifier_test_eval_policy_deny() {
         // Create verifier with "allow" and "deny" policies
         let verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
@@ -487,7 +487,7 @@ mod tests {
     
     #[test]
     #[ignore] // Ignore by default as it requires actual TDX evidence files
-    async fn test_eval_evidence_az_tdx() {
+    async fn verifier_test_eval_evidence_az_tdx() {
         // This test requires actual TDX evidence files
         // Skip if files are not available
         let evidence_path = "../../examples/tdx_encoded_evidence.txt";
@@ -531,7 +531,7 @@ mod tests {
     
     #[test]
     #[ignore] // Ignore by default as it requires actual TDX evidence files
-    async fn test_eval_evidence_az_tdx_tpm_pcr04() {
+    async fn verifier_test_eval_evidence_az_tdx_tpm_pcr04() {
         // This test requires specific TDX evidence files
         let evidence_path_pass = "../../examples/yocto_20241023223507.txt";
         let evidence_path_fail = "../../examples/yocto_20241025193121.txt";
@@ -603,7 +603,7 @@ mod tests {
     }
     
     #[test]
-    async fn test_init_data_and_runtime_data() {
+    async fn verifier_test_init_data_and_runtime_data() {
         // Test that init_data and runtime_data are properly processed
         let verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
@@ -648,7 +648,7 @@ mod tests {
     }
     
     #[test]
-    async fn test_concurrency() {
+    async fn verifier_test_concurrency() {
         // Test that the verifier works properly under concurrent access
         let verifier = Arc::new(DcapAttVerifier::new());
         
