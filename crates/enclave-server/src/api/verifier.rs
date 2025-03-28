@@ -495,7 +495,9 @@ mod tests {
             None,
             HashAlgorithm::Sha256,
             vec!["yocto".to_string()],
-        ).await.expect("Reject by policy yocto");
+        ).await;
+
+        assert!(result.is_err(), "Expected rejection by policy 'yocto'");
     }
 
     #[test]
