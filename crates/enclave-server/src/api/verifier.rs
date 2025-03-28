@@ -373,7 +373,6 @@ mod tests {
     }
     
     #[test]
-    #[ignore] // Ignore by default as it requires actual TDX evidence files
     async fn verifier_test_eval_evidence_az_tdx() {
         // This test requires actual TDX evidence files
         // Skip if files are not available
@@ -419,7 +418,6 @@ mod tests {
     }
     
     #[test]
-    #[ignore] // Ignore by default as it requires actual TDX evidence files
     async fn verifier_test_eval_evidence_az_tdx_tpm_pcr04() {
         // This test requires specific TDX evidence files
         let evidence_path_pass = "../../examples/yocto_20241023223507.txt";
