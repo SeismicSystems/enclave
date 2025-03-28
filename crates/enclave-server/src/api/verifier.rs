@@ -497,7 +497,7 @@ mod tests {
             vec!["yocto".to_string()],
         ).await;
 
-        assert!(result.is_err(), "Expected rejection by policy 'yocto'");
+        assert!(raw_claims_fail.is_err(), "Expected rejection by policy 'yocto'");
     }
 
     #[test]
