@@ -1,9 +1,9 @@
 #[cfg(test)]
-use crate::utils::get_random_port;
 use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
-use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::client::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave::EnclaveClientBuilder;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
@@ -21,6 +21,7 @@ use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
+use reth_rpc_layer::JwtSecret;
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
@@ -101,7 +102,7 @@ async fn test_get_public_key(client: &EnclaveClient) {
 }
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-    let res = client.get_eph_rng_keypair().await.unwrap();
+    let _res = client.get_eph_rng_keypair().await.unwrap();
 }
 
 #[tokio::test]
@@ -115,12 +116,18 @@ async fn test_server_requests() {
     }
 
     // spawn a seperate thread for the server, otherwise the test will hang
-    let port = get_random_port();
-    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
     let kp = KeyManagerBuilder::build_mock().unwrap();
-    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp).await.unwrap().start().await.unwrap();
+    let auth_secret = JwtSecret::random();
+    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp, auth_secret).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
-    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+
+    let client = EnclaveClientBuilder::new()
+        .auth_secret(auth_secret)
+        .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
+        .port(ENCLAVE_DEFAULT_ENDPOINT_PORT)
+        .timeout(Duration::from_secs(5))
+        .build();
 
     test_health_check(&client).await;
     test_genesis_get_data(&client).await;
