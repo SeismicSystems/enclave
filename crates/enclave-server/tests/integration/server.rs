@@ -1,5 +1,4 @@
 #[cfg(test)]
-use crate::utils::get_random_port;
 use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;

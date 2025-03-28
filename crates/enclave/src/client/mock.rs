@@ -27,7 +27,7 @@ use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
-use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
+use reth_rpc_layer::JwtSecret;
 
 pub struct MockEnclaveServer {
     addr: SocketAddr,
