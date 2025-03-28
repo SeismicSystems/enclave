@@ -482,11 +482,11 @@ mod tests {
         // Structured data with JSON
         let json_data = r#"{"key":"value","number":42}"#;
         let runtime_data = Some(Data::Raw("runtime-nonce".as_bytes().to_vec()));
-        let init_data = Some(Data {
-            bytes: "init-data".as_bytes().to_vec(),
-            json: Some(json_data.to_string()),
-        });
-        
+        let init_data = Some(Data::Structured(serde_json::json!({
+            "bytes": "init-data",
+            "json": json_data.to_string(),
+        })));
+
         // Evaluate with both runtime and init data
         let claims = verifier.evaluate(
             evidence,
