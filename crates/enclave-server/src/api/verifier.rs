@@ -381,7 +381,7 @@ mod tests {
             vec!["deny".to_string()],
         ).await;
 
-        assert!(raw_claims_fail.is_err(), "Reject by policy deny");
+        assert!(raw_claims_deny.is_err(), "Reject by policy deny");
     }
 
     #[test]
