@@ -24,6 +24,7 @@ clap = { version = "4.5", features = ["derive"] }
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
+verifier = { git = "https://github.com/confidential-containers/trustee", rev = "1fdd67d", package = "verifier", path = "deps/verifier" }
 
 aes-gcm.workspace = true
 zeroize.workspace = true
@@ -58,6 +59,7 @@ alloy-sol-types = { version = "0.8", default-features = false }
 alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
 alloy-provider = "0.8"
+dashmap = "=6.1.0"
 
 [dev-dependencies]
 serial_test = "3.2.0"
