@@ -257,7 +257,8 @@ mod tests {
         // Verify update
         let policy_id = "yocto".to_string();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
-        assert_eq!(&retrieved_policy, YOCTO_POLICY_UPDATED);
+        let encoded_policy = fixture.encode_policy(YOCTO_POLICY_UPDATED);
+        assert_eq!(&retrieved_policy, encoded_policy);
         
         // Try getting non-existent policy
         let result = verifier.get_policy("non-existent".to_string()).await;
