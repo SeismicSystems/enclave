@@ -207,6 +207,8 @@ pub fn claims_to_json(claims: &ASCoreTokenClaims) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::coco_as::parse_as_token_claims;
+
     use super::*;
     use tokio::test;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -267,7 +269,7 @@ mod tests {
         let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
         
         // Evaluate the evidence
-        let claims = verifier.evaluate(
+        let raw_claims = verifier.evaluate(
             evidence,
             Tee::Sample,
             runtime_data,
@@ -276,6 +278,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["allow".to_string()],
         ).await.unwrap();
+
+        let claims = parse_as_token_claims(&raw_claims).unwrap();
         
         // Verify results
         assert_eq!(claims.tee, "sample");
@@ -307,7 +311,7 @@ mod tests {
         let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
         
         // Evaluate with allow policy - should pass
-        let claims_allow = verifier.evaluate(
+        let raw_claims_allow = verifier.evaluate(
             evidence.clone(),
             Tee::Sample,
             runtime_data.clone(),
@@ -316,6 +320,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["allow".to_string()],
         ).await.unwrap();
+
+        let claims_allow = parse_as_token_claims(&raw_claims_allow).unwrap();
         
         // Verify success
         let allow_reports = &claims_allow.evaluation_reports;
@@ -327,7 +333,7 @@ mod tests {
         // Evaluate with deny policy - should fail in real implementation
         // Note: In a real implementation, we'd want this test to verify failure logic
         // For now, we'll just check that we get a response with the right evaluation result
-        let claims_deny = verifier.evaluate(
+        let raw_claims_deny = verifier.evaluate(
             evidence,
             Tee::Sample,
             runtime_data,
@@ -336,6 +342,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["deny".to_string()],
         ).await.unwrap();
+        
+        let claims_deny = parse_as_token_claims(&raw_claims_deny).unwrap();
         
         // Verify the deny policy is marked as failed
         let deny_reports = &claims_deny.evaluation_reports;
@@ -372,7 +380,7 @@ mod tests {
             .unwrap();
         
         // Evaluate the evidence
-        let claims = verifier.evaluate(
+        let raw_claims = verifier.evaluate(
             tdx_evidence,
             Tee::AzTdxVtpm,
             Some(Data::Raw("".into())),
@@ -381,6 +389,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["allow".to_string()],
         ).await.unwrap();
+        
+        let claims = parse_as_token_claims(&raw_claims).unwrap();
         
         // Verify results
         assert_eq!(claims.tee, "aztdxvtpm");
@@ -429,7 +439,7 @@ mod tests {
         ];
         
         // Evaluate the passing evidence
-        let claims_pass = verifier.evaluate(
+        let raw_claims_pass = verifier.evaluate(
             az_tdx_evidence_pass,
             Tee::AzTdxVtpm,
             Some(Data::Raw(runtime_data_bytes.clone())),
@@ -438,6 +448,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["yocto".to_string()],
         ).await.unwrap();
+        
+        let claims_pass = parse_as_token_claims(&raw_claims_pass).unwrap();
         
         // Verify passing results
         assert_eq!(claims_pass.tee, "aztdxvtpm");
@@ -448,7 +460,7 @@ mod tests {
         // Evaluate the failing evidence
         // Note: In a real test with actual policy evaluation, this should return an error
         // For now, we just check that we get a proper evaluation report
-        let claims_fail = verifier.evaluate(
+        let raw_claims_fail = verifier.evaluate(
             az_tdx_evidence_fail,
             Tee::AzTdxVtpm,
             Some(Data::Raw(runtime_data_bytes)),
@@ -457,6 +469,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["yocto".to_string()],
         ).await.unwrap();
+        
+        let claims_fail = parse_as_token_claims(&raw_claims_fail).unwrap();
         
         // In a real implementation with actual policy checking:
         // - Pass case: first_report["result"] should be true
@@ -488,7 +502,7 @@ mod tests {
         })));
 
         // Evaluate with both runtime and init data
-        let claims = verifier.evaluate(
+        let raw_claims = verifier.evaluate(
             evidence,
             Tee::Sample,
             runtime_data,
@@ -497,6 +511,8 @@ mod tests {
             HashAlgorithm::Sha256,
             vec!["allow".to_string()],
         ).await.unwrap();
+
+        let claims = parse_as_token_claims(&raw_claims).unwrap();
         
         // Verify customized claims contain the data
         assert_ne!(claims.customized_claims.runtime_data, Value::Null);
