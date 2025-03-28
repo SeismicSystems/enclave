@@ -3,7 +3,9 @@ pub mod service;
 #[cfg(feature = "supervisorctl")]
 pub mod supervisorctl;
 
+#[cfg(test)]
 pub mod test_utils;
+pub mod policy_fixture;
 
 /// tdx_evidence_helpers contains helpers for dealing with Vec<u8> evidence
 /// and converting it to a human readable format. It is mainly used for debugging
