@@ -80,7 +80,7 @@ impl PolicyFixture {
     }
     
     /// Configure the verifier with all policies in this fixture
-    pub async fn configure_verifier(&self, verifier: &DcapAttVerifier) -> Result<()> {
+    pub async fn configure_verifier(&self, verifier: &mut DcapAttVerifier) -> Result<()> {
         for (policy_id, policy_content) in &self.policy_map {
             verifier
                 .set_policy(policy_id.clone(), policy_content.clone())
@@ -105,7 +105,7 @@ impl PolicyFixture {
 }
 
 /// Helper function to quickly set up a verifier with default policies
-pub async fn set_default_policies(verifier: &DcapAttVerifier) -> Result<PolicyFixture> {
+pub async fn set_default_policies(verifier: &mut DcapAttVerifier) -> Result<PolicyFixture> {
     let fixture = PolicyFixture::new();
     fixture.configure_verifier(verifier).await?;
     Ok(fixture)

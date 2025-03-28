@@ -240,7 +240,7 @@ mod tests {
         let mut verifier = DcapAttVerifier::new();
         
         let fixture = PolicyFixture::new();
-        fixture.configure_verifier(&verifier).await.unwrap();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
 
         let policy_id = "allow".to_string();
         let expected_content = fixture.get_policy_content(&policy_id).unwrap();
