@@ -183,21 +183,16 @@ impl DcapAttVerifier {
             Some(value) => match value {
                 Data::Raw(raw) => Ok((Some(raw), Value::Null)),
                 Data::Structured(structured) => {
-                    // Serialize the structured data with keys in alphabetical order
-                    let hash_materials = serde_json::to_vec(&structured)
-                        .context("parse JSON structured data")?;
-                    let digest = match hash_algorithm {
-                        HashAlgorithm::Sha256 => hash_reportdata::<Sha256>(&hash_materials),
-                        HashAlgorithm::Sha384 => hash_reportdata::<Sha384>(&hash_materials),
-                        HashAlgorithm::Sha512 => hash_reportdata::<Sha512>(&hash_materials),
-                    };
+                    // Serialize the structured data (keys in alphabetical order)
+                    let hash_materials =
+                        serde_json::to_vec(&structured).context("parse JSON structured data")?;
+                    let digest = hash_algorithm.digest(&hash_materials);
                     Ok((Some(digest), structured))
                 }
             },
             None => Ok((None, Value::Null)),
         }
     }
-
     /// Get reference data for verification
     async fn get_reference_data(&self) -> Result<HashMap<String, Vec<String>>> {
         let reference_data: HashMap<String, Vec<String>> = HashMap::new();
