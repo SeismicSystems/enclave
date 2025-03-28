@@ -12,56 +12,7 @@ use verifier::{
 };
 
 use kbs_types::Tee;
-
-/// Hash algorithms used to calculate runtime/init data binding
-#[derive(Debug, Display, EnumString, AsRefStr)]
-pub enum HashAlgorithm {
-    #[strum(ascii_case_insensitive)]
-    Sha256,
-
-    #[strum(ascii_case_insensitive)]
-    Sha384,
-
-    #[strum(ascii_case_insensitive)]
-    Sha512,
-}
-
-impl HashAlgorithm {
-    fn accumulate_hash(&self, materials: Vec<u8>) -> Vec<u8> {
-        match self {
-            HashAlgorithm::Sha256 => {
-                let mut hasher = Sha256::new();
-                hasher.update(materials);
-                hasher.finalize().to_vec()
-            }
-            HashAlgorithm::Sha384 => {
-                let mut hasher = Sha384::new();
-                hasher.update(materials);
-                hasher.finalize().to_vec()
-            }
-            HashAlgorithm::Sha512 => {
-                let mut hasher = Sha512::new();
-                hasher.update(materials);
-                hasher.finalize().to_vec()
-            }
-        }
-    }
-}
-
-/// Runtime/Init Data used to check the binding relationship with report data
-/// in Evidence
-#[derive(Debug)]
-pub enum Data {
-    /// This will be used as the expected runtime/init data to check against
-    /// the one inside evidence.
-    Raw(Vec<u8>),
-
-    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
-    /// data JSON object in dictionary order by key, then serialize and output
-    /// it into a compact string, and perform hash calculation on the whole
-    /// to check against the one inside evidence.
-    Structured(Value),
-}
+use crypto::{HashAlgorithm, Data};
 
 /// Struct representing the relevant fields of an Attestation Service (AS) token's claims.
 ///
