@@ -13,9 +13,9 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
-use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret, AuthClientLayer, AuthClientService};
+
+use reth_rpc_layer::{JwtSecret, AuthClientLayer, AuthClientService};
 use jsonrpsee::http_client::transport::HttpBackend;
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
@@ -106,19 +106,6 @@ pub struct EnclaveClient {
     /// The runtime for the client.
     handle: Handle,
 }
-// impl Default for EnclaveClient {
-//     fn default() -> Self {
-//         let url = format!(
-//             "http://{}:{}",
-//             ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-//         );
-//         let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
-//             .request_timeout(Duration::from_secs(5))
-//             .build(url)
-//             .unwrap();
-//         Self::new_from_client(async_client)
-//     }
-// }
 
 impl Deref for EnclaveClient {
     type Target = HttpClient<AuthClientService<HttpBackend>>;
@@ -132,16 +119,6 @@ impl EnclaveClient {
     pub fn builder() -> EnclaveClientBuilder {
         EnclaveClientBuilder::new()
     }
-
-    // /// Create a new enclave client.
-    // pub fn new(url: impl AsRef<str>) -> Self {
-    //     EnclaveClientBuilder::new().url(url.as_ref()).build()
-    // }
-
-    // /// Create a new enclave client from an address and port.
-    // pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
-    //     EnclaveClientBuilder::new().addr(addr).port(port).build()
-    // }
 
     pub fn new_from_client(async_client: HttpClient<AuthClientService<HttpBackend>>) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
@@ -162,13 +139,15 @@ impl EnclaveClient {
         tokio::task::block_in_place(|| self.handle.block_on(future))
     }
 
+    /// A client enclave bade to work with the default mock server
+    /// Useful for testing
     pub fn mock_default() -> Self {
         let auth_secret = JwtSecret::from_str("0x00").unwrap();
         EnclaveClientBuilder::new()
             .auth_secret(auth_secret)
             .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
             .port(ENCLAVE_DEFAULT_ENDPOINT_PORT)
-            .timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
             .build()
     }
 }
