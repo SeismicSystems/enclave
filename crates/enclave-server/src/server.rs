@@ -28,15 +28,20 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+use jsonrpsee::server::ServerBuilder;
+use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
+
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K: NetworkKeyProvider + Send + Sync + 'static> {
     addr: SocketAddr,
+    auth_secret: Option<JwtSecret>,
     tee_service: Arc<TeeService<K>>,
 }
 
 /// A builder that lets us configure the server
 pub struct EnclaveServerBuilder<K: NetworkKeyProvider + Send + Sync + 'static> {
     addr: Option<SocketAddr>,
+    auth_secret: Option<JwtSecret>,
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
 }
@@ -50,6 +55,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> Default for EnclaveServerBui
             )),
             key_provider: None,
             attestation_config_path: None,
+            auth_secret: None,
         }
     }
 }
@@ -83,6 +89,11 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
         self
     }
 
+    pub fn with_auth_secret(mut self, secret: JwtSecret) -> Self {
+        self.auth_secret = Some(secret);
+        self
+    }
+
     /// Build the final `EnclaveServer` object.
     pub async fn build(self) -> Result<EnclaveServer<K>> {
         let final_addr = self.addr.ok_or_else(|| {
@@ -103,6 +114,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
 
         Ok(EnclaveServer {
             addr: final_addr,
+            auth_secret: self.auth_secret,
             tee_service,
         })
     }
@@ -116,7 +128,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
+    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, auth_secret: Option<JwtSecret>) -> Result<Self> {
         let tee_service = Arc::new(
             TeeService::with_default_attestation(key_provider, None)
                 .await
@@ -125,6 +137,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
         
         Ok(Self {
             addr: addr.into(),
+            auth_secret,
             tee_service,
         })
     }
@@ -139,28 +152,13 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> BuildableServer for EnclaveS
         self.into_rpc().into()
     }
 
+    fn auth_secret(&self) -> Option<JwtSecret> {
+        self.auth_secret
+    }
+
     async fn start(self) -> Result<ServerHandle> {
         // No need for separate attestation init as TeeService handles this
         BuildableServer::start_rpc_server(self).await
-    }
-
-    async fn start_rpc_server(self) -> Result<ServerHandle> {
-        // TODO: clean this up
-        use jsonrpsee::server::ServerBuilder;
-        use reth_rpc_layer::{AuthLayer, JwtAuthValidator};
-
-        let addr = self.addr();
-        let http_middleware =
-            tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
-        let rpc_server = ServerBuilder::new()
-            .set_http_middleware(http_middleware)
-            .build(addr)
-            .await?;
-        let module = self.methods();
-
-        let server_handle = rpc_server.start(module);
-        info!(target: "rpc::enclave", "Server started at {}", addr);
-        Ok(server_handle)
     }
 }
 

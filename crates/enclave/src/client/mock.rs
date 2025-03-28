@@ -126,6 +126,10 @@ impl BuildableServer for MockEnclaveServer {
         self.into_rpc().into()
     }
 
+    fn auth_secret(&self) -> Option<reth_rpc_layer::JwtSecret> {
+        None
+    }
+
     async fn start(self) -> Result<ServerHandle> {
         BuildableServer::start_rpc_server(self).await
     }

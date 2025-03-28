@@ -6662,6 +6662,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.0",
  "reqwest 0.12.14",
+ "reth-rpc-layer",
  "schnorrkel",
  "secp256k1",
  "seismic-enclave-derive",
@@ -6670,6 +6671,7 @@ dependencies = [
  "sha2",
  "strum 0.26.3",
  "tokio",
+ "tower 0.4.13",
  "tracing",
  "tracing-subscriber",
 ]
