@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::collections::HashMap;
 use std::sync::Arc;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 
 use verifier::{
     InitDataHash, ReportData, Verifier,
@@ -237,8 +238,6 @@ mod tests {
     use std::env;
     use super::*;
     use tokio::test;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use base64::Engine;
     use sha2::{Digest, Sha256};
 
     fn test_parse_as_token() {
