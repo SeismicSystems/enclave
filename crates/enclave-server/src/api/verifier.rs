@@ -233,7 +233,7 @@ pub fn parse_as_token_claims(as_token: &str) -> Result<ASCoreTokenClaims, anyhow
 #[cfg(test)]
 mod tests {
     use crate::utils::{policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}, test_utils::read_vector_txt};
-
+    use std::env;
     use super::*;
     use tokio::test;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
