@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration};
 use attestation_service::token::AttestationTokenBroker;
-use attestation_service::Data;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -16,6 +15,21 @@ use verifier::{
 use kbs_types::Tee;
 use crypto::HashAlgorithm;
 
+
+/// Runtime/Init Data used to check the binding relationship with report data
+/// in Evidence
+#[derive(Debug, Clone)]
+pub enum Data {
+    /// This will be used as the expected runtime/init data to check against
+    /// the one inside evidence.
+    Raw(Vec<u8>),
+
+    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
+    /// data JSON object in dictionary order by key, then serialize and output
+    /// it into a compact string, and perform hash calculation on the whole
+    /// to check against the one inside evidence.
+    Structured(Value),
+}
 
 /// Struct representing the relevant fields of an Attestation Service (AS) token's claims.
 ///
