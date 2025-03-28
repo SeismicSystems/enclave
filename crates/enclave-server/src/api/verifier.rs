@@ -221,7 +221,7 @@ pub fn claims_to_json(claims: &ASCoreTokenClaims) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::coco_as::{parse_as_token_claims, policies};
+    use crate::{coco_as::{parse_as_token_claims, policies}, utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}};
 
     use super::*;
     use tokio::test;
@@ -237,15 +237,11 @@ mod tests {
 
     #[test]
     async fn verifier_test_policy_management() {
-        // Test basic policy operations
         let mut verifier = DcapAttVerifier::new();
         
-        // Set a policy
-        let policy_id = r#"test-policy"#.to_string();
-        let policy_content = r#"{"rules":[]}"#.to_string();
-        let encoded_policy = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&policy_content);
-        verifier.set_policy(policy_id.clone(), encoded_policy.clone()).await.unwrap();
-        
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&verifier).await.unwrap();
+
         // Get the policy
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
         assert_eq!(retrieved_policy, policy_content);
@@ -256,8 +252,7 @@ mod tests {
         assert_eq!(policies.get(&policy_id).unwrap(), &policy_content);
         
         // Update a policy
-        let updated_policy = r#"{"rules":[{"field":"mr_enclave","operator":"eq","value":"0123456789abcdef"}]}"#.to_string();
-        verifier.set_policy(policy_id.clone(), updated_policy.clone()).await.unwrap();
+        verifier.set_policy(policy_id.clone(), fixture.encode_policy(YOCTO_POLICY_UPDATED)).await.unwrap();
         
         // Verify update
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
