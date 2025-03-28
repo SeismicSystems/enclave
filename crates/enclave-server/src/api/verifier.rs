@@ -252,10 +252,10 @@ mod tests {
         assert_eq!(policies.len(), 4);
         
         // Update a policy
+        let policy_id = "yocto".to_string();
         verifier.set_policy(policy_id.clone(), fixture.encode_policy(YOCTO_POLICY_UPDATED)).await.unwrap();
         
         // Verify update
-        let policy_id = "yocto".to_string();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
         let encoded_policy = fixture.encode_policy(YOCTO_POLICY_UPDATED);
         assert_eq!(retrieved_policy, encoded_policy);
