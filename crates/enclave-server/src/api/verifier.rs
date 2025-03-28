@@ -7,6 +7,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::collections::HashMap;
 use std::sync::Arc;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 use verifier::{
     InitDataHash, ReportData, Verifier,
