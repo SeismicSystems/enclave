@@ -267,11 +267,12 @@ mod tests {
     
     #[test]
     async fn verifier_test_eval_evidence_sample() {
-        // Create verifier with an "allow" policy
+        // Create verifier with the policy fixture
         let mut verifier = DcapAttVerifier::new();
-        verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
-        // Sample evidence data (mocked from your original test)
+        // Sample evidence data
         let evidence = vec![
             123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
             95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
@@ -305,13 +306,13 @@ mod tests {
             serde_json::from_str(&claims.tcb_status).unwrap();
         assert_eq!(tcb_status_map["report_data"], "bm9uY2U=");
     }
-    
+
     #[test]
     async fn verifier_test_eval_policy_deny() {
-        // Create verifier with "allow" and "deny" policies
+        // Create verifier with the policy fixture
         let mut verifier = DcapAttVerifier::new();
-        verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
-        verifier.set_policy("deny".to_string(), r#"{"rules":[{"field":"always","operator":"eq","value":"deny"}]}"#.to_string()).await.unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
         // Sample evidence data
         let evidence = vec![
@@ -343,8 +344,6 @@ mod tests {
         assert!(first_report["result"].as_bool().unwrap());
         
         // Evaluate with deny policy - should fail in real implementation
-        // Note: In a real implementation, we'd want this test to verify failure logic
-        // For now, we'll just check that we get a response with the right evaluation result
         let raw_claims_deny = verifier.evaluate(
             evidence,
             Tee::Sample,
@@ -369,7 +368,7 @@ mod tests {
             assert!(!result);
         }
     }
-    
+
     #[test]
     async fn verifier_test_eval_evidence_az_tdx() {
         // This test requires actual TDX evidence files
@@ -380,9 +379,10 @@ mod tests {
             return;
         }
         
-        // Create verifier with an "allow" policy for TDX
+        // Create verifier with the policy fixture
         let mut verifier = DcapAttVerifier::new();
-        verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
         // Read TDX evidence
         let tdx_evidence_encoded = std::fs::read_to_string(evidence_path).unwrap();
@@ -414,7 +414,7 @@ mod tests {
             serde_json::from_str(&claims.tcb_status).unwrap();
         assert!(tcb_status_map.contains_key("aztdxvtpm.quote.body.mr_td"));
     }
-    
+
     #[test]
     async fn verifier_test_eval_evidence_az_tdx_tpm_pcr04() {
         // This test requires specific TDX evidence files
@@ -427,19 +427,10 @@ mod tests {
             return;
         }
         
-        // Create verifier with yocto policy
+        // Create verifier with the policy fixture
         let mut verifier = DcapAttVerifier::new();
-        
-        // A policy checking mr_td, mr_seam, and pcr04
-        let yocto_policy = r#"{
-            "rules": [
-                {"field": "aztdxvtpm.quote.body.mr_td", "operator": "eq", "value": "expected_mr_td_value"},
-                {"field": "aztdxvtpm.quote.body.mr_seam", "operator": "eq", "value": "expected_mr_seam_value"},
-                {"field": "aztdxvtpm.tpm.pcr04", "operator": "eq", "value": "expected_pcr04_value"}
-            ]
-        }"#.to_string();
-        
-        verifier.set_policy("yocto".to_string(), yocto_policy).await.unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
         // Read TDX evidence that should pass
         let az_tdx_evidence_pass = read_vector_txt(evidence_path_pass.to_string()).unwrap();
@@ -468,8 +459,6 @@ mod tests {
         let az_tdx_evidence_fail = read_vector_txt(evidence_path_fail.to_string()).unwrap();
         
         // Evaluate the failing evidence
-        // Note: In a real test with actual policy evaluation, this should return an error
-        // For now, we just check that we get a proper evaluation report
         let raw_claims_fail = verifier.evaluate(
             az_tdx_evidence_fail,
             Tee::AzTdxVtpm,
@@ -490,12 +479,13 @@ mod tests {
         let first_report = &claims_fail.evaluation_reports[0];
         assert_eq!(first_report["policy-id"], "yocto");
     }
-    
+
     #[test]
     async fn verifier_test_init_data_and_runtime_data() {
         // Test that init_data and runtime_data are properly processed
         let mut verifier = DcapAttVerifier::new();
-        verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
         // Sample evidence data
         let evidence = vec![
@@ -536,5 +526,53 @@ mod tests {
         } else {
             panic!("Expected init_data to be a JSON object");
         }
+    }
+
+    // Additional test to demonstrate fixture customization
+    #[test]
+    async fn verifier_test_custom_policy() {
+        let mut verifier = DcapAttVerifier::new();
+        
+        // Create a customized fixture with an additional policy
+        let custom_policy = r#"{"rules":[{"field":"custom","operator":"eq","value":"test"}]}"#;
+        let fixture = PolicyFixture::new()
+            .with_policy("custom-policy", custom_policy);
+        
+        fixture.configure_verifier(&mut verifier).await.unwrap();
+        
+        // Verify the custom policy was set
+        let policy_id = "custom-policy".to_string();
+        let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
+        let expected_policy = fixture.get_encoded_policy(&policy_id).unwrap();
+        assert_eq!(&retrieved_policy, expected_policy);
+        
+        // List policies - should include all fixture policies plus the custom one
+        let policies = verifier.list_policies().await.unwrap();
+        assert_eq!(policies.len(), 5); // 4 default + 1 custom
+        
+        // Sample evidence data for evaluation
+        let evidence = vec![
+            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
+            95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+        ];
+        
+        // Evaluate with the custom policy
+        let raw_claims = verifier.evaluate(
+            evidence,
+            Tee::Sample,
+            Some(Data::Raw("nonce".as_bytes().to_vec())),
+            HashAlgorithm::Sha256,
+            None,
+            HashAlgorithm::Sha256,
+            vec![policy_id.clone()],
+        ).await.unwrap();
+        
+        let claims = parse_as_token_claims(&raw_claims).unwrap();
+        
+        // Verify the evaluation used the custom policy
+        let eval_reports = &claims.evaluation_reports;
+        assert!(!eval_reports.is_empty());
+        let first_report = &eval_reports[0];
+        assert_eq!(first_report["policy-id"], policy_id);
     }
 }
