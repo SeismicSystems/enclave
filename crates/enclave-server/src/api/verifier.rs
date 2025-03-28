@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use attestation_service::token::{ear_broker::Configuration, simple::SimpleAttestationTokenBroker};
 use attestation_service::token::AttestationTokenBroker;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -102,7 +102,7 @@ impl DcapAttVerifier {
     pub fn new() -> Self {
         Self {
             //todo: enable creating custom token brokers, with a sk derived from key manager
-            token_broker: SimpleAttestationTokenBroker::default(),
+            token_broker: SimpleAttestationTokenBroker::new(Configuration::default()),
         }
     }
 
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     async fn verifier_test_policy_management() {
         // Test basic policy operations
-        let verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::new();
         
         // Set a policy
         let policy_id = "test-policy".to_string();
@@ -276,7 +276,7 @@ mod tests {
     #[test]
     async fn verifier_test_eval_evidence_sample() {
         // Create verifier with an "allow" policy
-        let verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
         
         // Sample evidence data (mocked from your original test)
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     async fn verifier_test_eval_policy_deny() {
         // Create verifier with "allow" and "deny" policies
-        let verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
         verifier.set_policy("deny".to_string(), r#"{"rules":[{"field":"always","operator":"eq","value":"deny"}]}"#.to_string()).await.unwrap();
         
@@ -384,7 +384,7 @@ mod tests {
         }
         
         // Create verifier with an "allow" policy for TDX
-        let verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
         
         // Read TDX evidence
@@ -430,7 +430,7 @@ mod tests {
         }
         
         // Create verifier with yocto policy
-        let verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::new();
         
         // A policy checking mr_td, mr_seam, and pcr04
         let yocto_policy = r#"{
@@ -492,7 +492,7 @@ mod tests {
     #[test]
     async fn verifier_test_init_data_and_runtime_data() {
         // Test that init_data and runtime_data are properly processed
-        let verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::new();
         verifier.set_policy("allow".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
         
         // Sample evidence data
@@ -537,7 +537,7 @@ mod tests {
     #[test]
     async fn verifier_test_concurrency() {
         // Test that the verifier works properly under concurrent access
-        let verifier = Arc::new(DcapAttVerifier::new());
+        let mut verifier = Arc::new(DcapAttVerifier::new());
         
         // Add some policies
         verifier.set_policy("policy1".to_string(), r#"{"rules":[]}"#.to_string()).await.unwrap();
