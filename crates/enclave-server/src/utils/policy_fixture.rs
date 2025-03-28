@@ -1,6 +1,6 @@
 // policy_test_utils.rs
 
-use crate::{coco_as::policies::YOCTO_POLICY, api::verifier::DcapAttVerifier};
+use crate::api::verifier::DcapAttVerifier;
 use anyhow::Result;
 use std::collections::HashMap;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
