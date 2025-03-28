@@ -1,12 +1,11 @@
-pub mod handlers;
 pub mod into_original;
 pub mod policies;
 
 use anyhow::Result;
 use attestation_service::token::simple;
 use attestation_service::token::AttestationTokenConfig;
-use attestation_service::Data as OriginalData;
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+pub use attestation_service::Data as OriginalData;
+pub use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::{config::Config, AttestationService};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use kbs_types::Tee;

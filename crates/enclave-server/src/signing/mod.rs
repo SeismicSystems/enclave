@@ -1,5 +1,3 @@
-pub mod handlers;
-
 use anyhow::{anyhow, Result};
 use seismic_enclave::secp256k1_sign_digest;
 

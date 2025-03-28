@@ -1,9 +1,9 @@
 #[cfg(test)]
-use crate::utils::get_random_port;
 use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
-use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::client::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave::EnclaveClientBuilder;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
@@ -12,8 +12,8 @@ use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
-use seismic_enclave::signing::Secp256k1SignRequest;
-use seismic_enclave::signing::Secp256k1VerifyRequest;
+use seismic_enclave_server::key_manager::builder::KeyManagerBuilder;
+use seismic_enclave_server::key_manager::key_manager::KeyManager;
 use seismic_enclave_server::server::init_tracing;
 use seismic_enclave_server::server::EnclaveServer;
 use seismic_enclave_server::utils::test_utils::is_sudo;
@@ -21,6 +21,7 @@ use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
+use reth_rpc_layer::JwtSecret;
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
@@ -95,32 +96,13 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
     assert!(resposne.eval);
 }
 
-async fn test_secp256k1_sign_verify(client: &EnclaveClient) {
-    // Prepare sign request to get a valid signature
-    let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-    let sign_request = Secp256k1SignRequest {
-        msg: msg_to_sign.clone(),
-    };
-    let res = client.sign(sign_request).await.unwrap();
-
-    // Prepare verify request body
-    let verify_request = Secp256k1VerifyRequest {
-        msg: msg_to_sign,
-        sig: res.sig,
-    };
-
-    let res = client.verify(verify_request).await.unwrap();
-    assert_eq!(res.verified, true);
-}
-
 async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
     assert_eq!(res, get_unsecure_sample_secp256k1_pk());
 }
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-    let res = client.get_eph_rng_keypair().await.unwrap();
-    println!("eph_rng_keypair: {:?}", res);
+    let _res = client.get_eph_rng_keypair().await.unwrap();
 }
 
 #[tokio::test]
@@ -134,18 +116,24 @@ async fn test_server_requests() {
     }
 
     // spawn a seperate thread for the server, otherwise the test will hang
-    let port = get_random_port();
-    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let _server_handle = EnclaveServer::new(addr).start().await.unwrap();
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+    let kp = KeyManagerBuilder::build_mock().unwrap();
+    let auth_secret = JwtSecret::random();
+    let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp, auth_secret).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
-    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+
+    let client = EnclaveClientBuilder::new()
+        .auth_secret(auth_secret)
+        .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
+        .port(ENCLAVE_DEFAULT_ENDPOINT_PORT)
+        .timeout(Duration::from_secs(5))
+        .build();
 
     test_health_check(&client).await;
     test_genesis_get_data(&client).await;
     test_tx_io_encrypt_decrypt(&client).await;
     test_attestation_get_evidence(&client).await;
     test_attestation_eval_evidence(&client).await;
-    test_secp256k1_sign_verify(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
 }
