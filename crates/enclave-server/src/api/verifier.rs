@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use dashmap::DashMap;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,58 +91,41 @@ impl Default for ASCustomizedClaims {
     }
 }
 
-/// Internal representation of verification results before conversion to ASCoreTokenClaims
-#[derive(Debug)]
-pub struct VerificationResult {
-    /// Claims obtained from the TEE evidence
-    pub tee_claims: Value,
-    /// Claims from runtime data verification
-    pub runtime_data_claims: Option<Value>,
-    /// Claims from initialization data verification
-    pub init_data_claims: Option<Value>,
-    /// Reference data used during verification
-    pub reference_data: HashMap<String, String>,
-    /// The TEE type that was used
-    pub tee: Tee,
-    /// Results of policy evaluation
-    pub policy_results: HashMap<String, bool>,
-}
-
 /// A lightweight, concurrency-friendly DCAP attestation verifier
 pub struct DcapAttVerifier {
-    /// Thread-safe policy storage using DashMap
-    policies: Arc<DashMap<String, String>>,
+    token_broker: SimpleAttestationTokenBroker, 
 }
 
 impl DcapAttVerifier {
     /// Create a new DcapAttVerifier instance
     pub fn new() -> Self {
         Self {
-            policies: Arc::new(DashMap::new()),
+            //todo: enable creating custom token brokers, with a sk derived from key manager
+            token_broker: SimpleAttestationTokenBroker::default(),
         }
     }
 
-    /// Set a policy with the given ID
-    pub async fn set_policy(&self, policy_id: String, policy: String) -> Result<()> {
-        self.policies.insert(policy_id, policy);
+    /// Set Attestation Verification Policy.
+    pub async fn set_policy(&mut self, policy_id: String, policy: String) -> Result<()> {
+        self.token_broker.set_policy(policy_id, policy).await?;
         Ok(())
     }
 
-    /// List all policies
+    /// Get Attestation Verification Policy List.
+    /// The result is a `policy-id` -> `policy hash` map.
     pub async fn list_policies(&self) -> Result<HashMap<String, String>> {
-        let mut result = HashMap::new();
-        for item in self.policies.iter() {
-            result.insert(item.key().clone(), item.value().clone());
-        }
-        Ok(result)
+        self.token_broker
+            .list_policies()
+            .await
+            .context("Cannot List Policy")
     }
 
-    /// Get a policy by ID
+    /// Get a single Policy content.
     pub async fn get_policy(&self, policy_id: String) -> Result<String> {
-        self.policies
-            .get(&policy_id)
-            .map(|value| value.clone())
-            .ok_or_else(|| anyhow!("Policy not found: {}", policy_id))
+        self.token_broker
+            .get_policy(policy_id)
+            .await
+            .context("Cannot Get Policy")
     }
 
     /// Evaluate evidence against policies
@@ -186,94 +169,24 @@ impl DcapAttVerifier {
             .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?;
         info!("{:?} Verifier/endorsement check passed.", tee);
 
-        // Get reference data (simplified from the original implementation)
-        // In a real implementation, you'd replace this with your reference value provider
         let reference_data_map = self.get_reference_data().await?;
         debug!("reference_data_map: {:#?}", reference_data_map);
 
-        // Evaluate policies
-        let mut evaluation_reports = Vec::new();
-        for policy_id in &policy_ids {
-            if let Ok(policy) = self.get_policy(policy_id.clone()).await {
-                // This is a simplified policy evaluation
-                // In a real implementation, you would parse and apply the policy logic
-                let policy_passed = self.evaluate_policy(
-                    &policy, 
-                    &claims_from_tee_evidence, 
-                    &reference_data_map
-                ).await?;
-                
-                // Create an evaluation report for this policy
-                let report = serde_json::json!({
-                    "policy-id": policy_id,
-                    "result": policy_passed,
-                    "details": {
-                        "passed": policy_passed,
-                        "failed-rules": []
-                    }
-                });
-                
-                evaluation_reports.push(report);
-            } else {
-                // Policy not found
-                let report = serde_json::json!({
-                    "policy-id": policy_id,
-                    "result": false,
-                    "details": {
-                        "passed": false,
-                        "failed-rules": ["policy not found"]
-                    }
-                });
-                
-                evaluation_reports.push(report);
-            }
-        }
+        let attestation_results_token = self
+            .token_broker
+            .issue(
+                claims_from_tee_evidence,
+                policy_ids,
+                init_data_claims,
+                runtime_data_claims,
+                reference_data_map,
+                tee,
+            )
+        .await?;
 
-        // Construct internal verification result for debugging/logging if needed
-        let verification_result = VerificationResult {
-            tee_claims: claims_from_tee_evidence.clone(),
-            runtime_data_claims: runtime_data_claims.clone(),
-            init_data_claims: init_data_claims.clone(),
-            reference_data: reference_data_map.clone(),
-            tee,
-            policy_results: policy_ids
-                .iter()
-                .zip(evaluation_reports.iter().map(|r| r["result"].as_bool().unwrap_or(false)))
-                .map(|(k, v)| (k.clone(), v))
-                .collect()
-        };
-        
-        // Create the final ASCoreTokenClaims structure
-        let claims = ASCoreTokenClaims {
-            tee: tee.to_string(),
-            evaluation_reports,
-            tcb_status: self.determine_tcb_status(&verification_result)?,
-            customized_claims: ASCustomizedClaims {
-                init_data: init_data_claims.unwrap_or(Value::Null),
-                runtime_data: runtime_data_claims.unwrap_or(Value::Null),
-            },
-            reference_data: Some(reference_data_map),
-        };
-
-        Ok(claims)
+        Ok(attestation_results_token)
     }
     
-    /// Determine TCB status based on verification results
-    fn determine_tcb_status(&self, verification_result: &VerificationResult) -> Result<String> {
-        // Extract TCB status from TEE claims if available
-        if let Some(tcb_status) = verification_result.tee_claims.get("tcb_status").and_then(|v| v.as_str()) {
-            return Ok(tcb_status.to_string());
-        }
-        
-        // Default status based on policy evaluation results
-        let all_policies_passed = verification_result.policy_results.values().all(|&passed| passed);
-        if all_policies_passed {
-            Ok("UpToDate".to_string())
-        } else {
-            Ok("OutOfDate".to_string())
-        }
-    }
-
     /// Parse and hash data using the specified algorithm
     fn parse_data(
         &self,
@@ -306,36 +219,6 @@ impl DcapAttVerifier {
         Ok(reference_data)
     }
 
-    /// Evaluate a policy against claims and reference data
-    /// This is a simplified placeholder - in a real implementation,
-    /// you would implement your policy evaluation logic
-    async fn evaluate_policy(
-        &self,
-        policy: &str,
-        claims: &serde_json::Value,
-        reference_data: &HashMap<String, String>,
-    ) -> Result<bool> {
-        // Simple policy evaluation logic
-        // In a real implementation, you would parse the policy and apply it to the claims
-        // For now, we'll just return true to simplify the example
-        Ok(true)
-    }
-}
-
-#[cfg(feature = "jwt")]
-pub mod jwt {
-    use super::ASCoreTokenClaims;
-    use anyhow::Result;
-    use jsonwebtoken::{encode, EncodingKey, Header};
-    
-    pub fn claims_to_jwt(claims: &ASCoreTokenClaims, secret: &[u8]) -> Result<String> {
-        let token = encode(
-            &Header::default(),
-            claims,
-            &EncodingKey::from_secret(secret),
-        )?;
-        Ok(token)
-    }
 }
 
 // To serialize claims as a JSON string without using JWT

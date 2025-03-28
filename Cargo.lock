@@ -6659,7 +6659,6 @@ dependencies = [
  "bytes",
  "clap",
  "crypto 0.1.0 (git+https://github.com/confidential-containers/guest-components?rev=d207191)",
- "dashmap",
  "env_logger 0.11.7",
  "hex",
  "hkdf",

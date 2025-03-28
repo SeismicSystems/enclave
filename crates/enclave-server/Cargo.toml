@@ -60,7 +60,6 @@ alloy-sol-types = { version = "0.8", default-features = false }
 alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
 alloy-provider = "0.8"
-dashmap = "=6.1.0"
 
 [dev-dependencies]
 serial_test = "3.2.0"
