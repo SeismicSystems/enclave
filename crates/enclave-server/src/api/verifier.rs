@@ -219,9 +219,20 @@ pub fn claims_to_json(claims: &ASCoreTokenClaims) -> Result<String> {
     Ok(serde_json::to_string(claims)?)
 }
 
+// parses the b64 JWT token retuned by the attestation service
+pub fn parse_as_token_claims(as_token: &str) -> Result<ASCoreTokenClaims, anyhow::Error> {
+    let parts: Vec<&str> = as_token.splitn(3, '.').collect();
+    let claims_b64 = parts[1];
+    let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
+    let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
+    let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string)?;
+
+    Ok(claims)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{coco_as::{parse_as_token_claims, policies}, utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}};
+    use crate::utils::{policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}, test_utils::read_vector_txt};
 
     use super::*;
     use tokio::test;
@@ -229,10 +240,27 @@ mod tests {
     use base64::Engine;
     use sha2::{Digest, Sha256};
 
-    // Helper function to read test files
-    fn read_vector_txt(file_path: String) -> Result<Vec<u8>> {
-        let encoded = std::fs::read_to_string(file_path)?;
-        Ok(URL_SAFE_NO_PAD.decode(encoded.trim())?)
+    fn test_parse_as_token() {
+        match env::current_dir() {
+            Ok(path) => println!("Current directory: {}", path.display()),
+            Err(e) => eprintln!("Error getting current directory: {}", e),
+        }
+        let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
+        let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
+
+        let claims = parse_as_token_claims(&ex_token).unwrap();
+
+        assert_eq!(claims.tee, "aztdxvtpm");
+        let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
+        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"b3b555df21b9e952384aec5e81e03e53ca82741da3c5d055ccdb6ba5a85dcc2e6fd1196819dc3c26d09471735275b30a\",\"policy-id\":\"yocto\"}]");
+        let tcb_status_map: serde_json::Map<String, Value> =
+            serde_json::from_str(&claims.tcb_status).unwrap();
+        assert_eq!(
+            tcb_status_map.get("aztdxvtpm.quote.body.mr_td"),
+            Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
+        );
+        assert_eq!(claims.customized_claims.init_data, Value::Null);
+        assert_eq!(claims.customized_claims.runtime_data, Value::Null);
     }
 
     #[test]

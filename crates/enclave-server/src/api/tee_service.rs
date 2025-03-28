@@ -331,29 +331,6 @@ mod tests {
         assert_ne!(res_1.evidence, res_2.evidence);
     }
     
-    fn test_parse_as_token() {
-        match env::current_dir() {
-            Ok(path) => println!("Current directory: {}", path.display()),
-            Err(e) => eprintln!("Error getting current directory: {}", e),
-        }
-        let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
-        let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
-
-        let claims = parse_as_token_claims(&ex_token).unwrap();
-
-        assert_eq!(claims.tee, "aztdxvtpm");
-        let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
-        assert_eq!(evaluation_reports, "[{\"policy-hash\":\"b3b555df21b9e952384aec5e81e03e53ca82741da3c5d055ccdb6ba5a85dcc2e6fd1196819dc3c26d09471735275b30a\",\"policy-id\":\"yocto\"}]");
-        let tcb_status_map: serde_json::Map<String, Value> =
-            serde_json::from_str(&claims.tcb_status).unwrap();
-        assert_eq!(
-            tcb_status_map.get("aztdxvtpm.quote.body.mr_td"),
-            Some(&Value::String("bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7154".to_string()))
-        );
-        assert_eq!(claims.customized_claims.init_data, Value::Null);
-        assert_eq!(claims.customized_claims.runtime_data, Value::Null);
-    }
-
     #[tokio::test]
     #[serial(attestation_agent)]
     async fn test_genesis_get_data_handler_success_basic() {
