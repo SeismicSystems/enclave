@@ -12,7 +12,24 @@ use verifier::{
 };
 
 use kbs_types::Tee;
-use crypto::{HashAlgorithm, Data};
+use crypto::HashAlgorithm;
+
+/// Below is from confidential-containers trustee repo.
+/// Runtime/Init Data used to check the binding relationship with report data
+/// in Evidence
+#[derive(Debug)]
+pub enum Data {
+    /// This will be used as the expected runtime/init data to check against
+    /// the one inside evidence.
+    Raw(Vec<u8>),
+
+    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
+    /// data JSON object in dictionary order by key, then serialize and output
+    /// it into a compact string, and perform hash calculation on the whole
+    /// to check against the one inside evidence.
+    Structured(Value),
+}
+
 
 /// Struct representing the relevant fields of an Attestation Service (AS) token's claims.
 ///
