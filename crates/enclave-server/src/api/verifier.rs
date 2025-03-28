@@ -248,7 +248,8 @@ mod tests {
         assert_eq!(&retrieved_policy, expected_content);
         
         let policies = verifier.list_policies().await.unwrap();
-        assert_eq!(policies.len(), 3);
+        // 4 policies = our three policies + default policy 
+        assert_eq!(policies.len(), 4);
         
         // Update a policy
         verifier.set_policy(policy_id.clone(), fixture.encode_policy(YOCTO_POLICY_UPDATED)).await.unwrap();
