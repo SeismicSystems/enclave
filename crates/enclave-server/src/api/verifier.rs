@@ -243,7 +243,7 @@ mod tests {
         // Set a policy
         let policy_id = r#"test-policy"#.to_string();
         let policy_content = r#"{"rules":[]}"#.to_string();
-        let encoded_policy = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy_content);
+        let encoded_policy = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&policy_content);
         verifier.set_policy(policy_id.clone(), encoded_policy.clone()).await.unwrap();
         
         // Get the policy
