@@ -1,27 +1,17 @@
 use std::collections::HashMap;
 use jsonrpsee::core::async_trait;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use kbs_types::Tee;
-use once_cell::sync::OnceCell;
 use seismic_enclave::genesis::GenesisData;
 use sha2::{Digest, Sha256};
-use core::prelude::v1;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use attestation_agent::InitDataResult;
-
-use attestation_service::token::ear_broker;
-use attestation_service::token::simple;
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use attestation_service::token::AttestationTokenBroker;
-use attestation_service::token::AttestationTokenConfig;
-
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-use seismic_enclave::request_types::coco_as::{HashAlgorithm, Data};
 
 
 use crate::attestation::verifier::DcapAttVerifier;

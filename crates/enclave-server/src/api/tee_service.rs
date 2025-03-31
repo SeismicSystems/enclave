@@ -1,5 +1,4 @@
 use crate::key_manager::NetworkKeyProvider;
-use anyhow::{anyhow, Result};
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
@@ -23,12 +22,7 @@ use attestation_agent::AttestationAPIs;
 use crate::attestation::verifier::into_original::IntoOriginalData;
 use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
 use seismic_enclave::coco_as::ASCoreTokenClaims;
-// use crate::attestation::verifier::ASCoreTokenClaims;
-
-use attestation_service::token::simple::{Configuration, SimpleAttestationTokenBroker};
-use attestation_service::token::{
-    ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig,
-};
+use attestation_service::token::AttestationTokenBroker;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::{Data, HashAlgorithm};
 
@@ -208,7 +202,7 @@ mod tests {
     //       I believe if a quote matches any policy it passes, so start with deny all?
     pub fn default_tee_service() -> TeeService<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let v_token_broker = SimpleAttestationTokenBroker::new(simple::Configuration::default())
+        let v_token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default())
             .expect("Failed to create an AttestationAgent");
         let saa = SeismicAttestationAgent::new(None, v_token_broker);
         TeeService::new(Arc::new(kp), Arc::new(saa))

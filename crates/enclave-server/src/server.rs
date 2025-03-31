@@ -1,10 +1,8 @@
 use crate::api::traits::TeeServiceApi;
 use crate::api::tee_service::TeeService;
-use crate::key_manager::builder::KeyManagerBuilder;
-use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use attestation_service::token::AttestationTokenBroker;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -22,7 +20,6 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
 use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
