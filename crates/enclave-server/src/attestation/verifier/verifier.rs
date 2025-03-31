@@ -305,41 +305,22 @@ mod tests {
     //     ];
         
     //     // Runtime data
-    //     let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
+    //     let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
         
-    //     // Evaluate with allow policy - should pass
-    //     let raw_claims_allow = verifier.evaluate(
-    //         evidence.clone(),
-    //         Tee::Sample,
-    //         runtime_data.clone(),
-    //         HashAlgorithm::Sha256,
-    //         None,
-    //         HashAlgorithm::Sha256,
-    //         vec!["allow".to_string()],
-    //     ).await.unwrap();
-
-    //     let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
-    //     let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
-    //     let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
-        
-    //     // Verify success
-    //     let allow_reports = &claims_allow.evaluation_reports;
-    //     assert!(!allow_reports.is_empty());
-    //     let first_report = &allow_reports[0];
-    //     assert_eq!(first_report["policy-id"], "allow");
-        
-    //     // Evaluate with deny policy - should fail in real implementation
+    //     // Evaluate with allow policy - should fail 
     //     let raw_claims_deny = verifier.evaluate(
     //         evidence,
     //         Tee::Sample,
     //         runtime_data,
-    //         HashAlgorithm::Sha256,
+    //         OriginalHashAlgorithm::Sha256,
     //         None,
-    //         HashAlgorithm::Sha256,
-    //         vec!["deny".to_string()],
+    //         OriginalHashAlgorithm::Sha256,
+    //         vec!["allow".to_string()],
     //     ).await;
 
-    //     assert!(raw_claims_deny.is_err(), "Reject by policy deny");
+    //     println!("raw_claims_deny: {:?}", raw_claims_deny);
+
+    //     assert!(raw_claims_deny.is_err(), "Deny policy should reject, but allowed");
     // }
 
     // #[test]
