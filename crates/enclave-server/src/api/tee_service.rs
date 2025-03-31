@@ -15,8 +15,9 @@ use crate::attestation::agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
 use attestation_agent::AttestationAPIs;
 
-// use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
-// use crate::attestation::verifier::into_original::IntoOriginalData;
+use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
+use crate::attestation::verifier::into_original::IntoOriginalData;
+use seismic_enclave::coco_as::ASCoreTokenClaims;
 // use crate::attestation::verifier::ASCoreTokenClaims;
 
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;

@@ -111,9 +111,9 @@ impl PolicyFixture {
     }
 }
 
-/// Helper function to quickly set up a verifier with default policies
-pub async fn set_default_policies(verifier: &mut DcapAttVerifier) -> Result<PolicyFixture> {
-    let fixture = PolicyFixture::new();
-    fixture.configure_verifier(verifier).await?;
-    Ok(fixture)
-}
+// /// Helper function to quickly set up a verifier with default policies
+// pub async fn set_default_policies(verifier: &mut DcapAttVerifier) -> Result<PolicyFixture> {
+//     let fixture = PolicyFixture::new();
+//     fixture.configure_verifier(verifier).await?;
+//     Ok(fixture)
+// }
