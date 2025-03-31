@@ -18,7 +18,7 @@ use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use tracing::info;
-use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
+use crate::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;

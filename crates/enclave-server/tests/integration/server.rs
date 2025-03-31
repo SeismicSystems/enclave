@@ -21,7 +21,7 @@ use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
-use reth_rpc_layer::JwtSecret;
+use seismic_enclave::auth::JwtSecret;
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct

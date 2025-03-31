@@ -6,14 +6,10 @@ mod auth_layer;
 mod jwt_validator;
 mod jwt;
 
-
-
-// pub use auth_client_layer::{secret_to_bearer_header, AuthClientLayer, AuthClientService};
-// pub use auth_layer::AuthLayer;
-// pub use jwt_validator::JwtAuthValidator;
-
-
-// pub use alloy_rpc_types_engine::{Claims, JwtError, JwtSecret};
+pub use auth_client_layer::{secret_to_bearer_header, AuthClientLayer, AuthClientService};
+pub use auth_layer::AuthLayer;
+pub use jwt_validator::JwtAuthValidator;
+pub use jwt::{Claims, JwtError, JwtSecret};
 
 /// General purpose trait to validate Http Authorization headers. It's supposed to be integrated as
 /// a validator trait into an [`AuthLayer`].

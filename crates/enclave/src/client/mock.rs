@@ -22,12 +22,12 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
+use crate::auth::JwtSecret;
 
 use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
-use reth_rpc_layer::JwtSecret;
 
 pub struct MockEnclaveServer {
     addr: SocketAddr,
@@ -127,7 +127,7 @@ impl BuildableServer for MockEnclaveServer {
         self.into_rpc().into()
     }
 
-    fn auth_secret(&self) -> reth_rpc_layer::JwtSecret {
+    fn auth_secret(&self) -> JwtSecret {
         JwtSecret::from_str("0x00").unwrap()
     }
 

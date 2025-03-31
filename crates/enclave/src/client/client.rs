@@ -15,7 +15,7 @@ use crate::{
 };
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 
-use reth_rpc_layer::{JwtSecret, AuthClientLayer, AuthClientService};
+use crate::auth::{JwtSecret, AuthClientLayer, AuthClientService};
 use jsonrpsee::http_client::transport::HttpBackend;
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);

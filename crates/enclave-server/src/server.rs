@@ -29,7 +29,7 @@ use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use jsonrpsee::server::ServerBuilder;
-use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
+use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K: NetworkKeyProvider + Send + Sync + 'static> {
