@@ -17,10 +17,12 @@ use attestation_service::token::ear_broker;
 use attestation_service::token::simple;
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use attestation_service::token::AttestationTokenBroker;
+use attestation_service::token::AttestationTokenConfig;
 
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use seismic_enclave::request_types::coco_as::{HashAlgorithm, Data};
+
 
 use crate::attestation::verifier::DcapAttVerifier;
 // use crate::attestation::verifier::into_original::{IntoOriginalData};
@@ -34,9 +36,9 @@ pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
 
 impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
     /// Create a new SeismicAttestationAgent wrapper
-    pub fn new(config_path: Option<&str>, token_broker: T) -> Self {
+    pub fn new(aa_config_path: Option<&str>, token_broker: T) -> Self {
         Self {
-            attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
+            attestation_agent: AttestationAgent::new(aa_config_path).expect("Failed to create an AttestationAgent"),
             quote_mutex: Mutex::new(()),
             verifier: DcapAttVerifier::new(token_broker),
         }

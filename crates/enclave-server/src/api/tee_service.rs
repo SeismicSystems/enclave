@@ -1,28 +1,35 @@
-use std::sync::Arc;
-
-use log::error;
+use crate::key_manager::NetworkKeyProvider;
+use anyhow::{anyhow, Result};
 use jsonrpsee::core::{async_trait, RpcResult};
+use log::error;
+use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
-use crate::key_manager::NetworkKeyProvider;
-use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
-use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
-use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
+use seismic_enclave::tx_io::{
+    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
+};
+use seismic_enclave::{
+    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
+    rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
+    secp256k1_sign_digest,
+};
+use std::sync::Arc;
 
-
-use crate::attestation::agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
+use crate::attestation::agent::SeismicAttestationAgent;
 use attestation_agent::AttestationAPIs;
 
-use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
 use crate::attestation::verifier::into_original::IntoOriginalData;
+use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 // use crate::attestation::verifier::ASCoreTokenClaims;
 
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::token::simple::{Configuration, SimpleAttestationTokenBroker};
-use attestation_service::token::{ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig};
+use attestation_service::token::{
+    ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig,
+};
+use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::{Data, HashAlgorithm};
 
 pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
@@ -30,22 +37,21 @@ pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + 
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
 }
 
-impl<K, T>TeeService<K, T>
+impl<K, T> TeeService<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
     pub fn new(key_provider: Arc<K>, attestation_agent: Arc<SeismicAttestationAgent<T>>) -> Self {
-        Self { 
+        Self {
             key_provider,
             attestation_agent,
         }
     }
 }
 
-
 #[async_trait]
-impl<K, T>TeeServiceApi for TeeService<K, T>
+impl<K, T> TeeServiceApi for TeeService<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -55,20 +61,14 @@ where
         Ok(self.key_provider.get_tx_io_pk())
     }
 
-    async fn secp256k1_sign(
-        &self,
-        req: Secp256k1SignRequest,
-    ) -> RpcResult<Secp256k1SignResponse> {
+    async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         let sk = self.key_provider.get_tx_io_sk();
         let signature = secp256k1_sign_digest(&req.msg, sk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
         Ok(Secp256k1SignResponse { sig: signature })
     }
 
-    async fn encrypt(
-        &self,
-        req: IoEncryptionRequest,
-    ) -> RpcResult<IoEncryptionResponse> {
+    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         let sk = self.key_provider.get_tx_io_sk();
         let encrypted_data = match ecdh_encrypt(&req.key, &sk, &req.data, req.nonce) {
             Ok(data) => data,
@@ -77,35 +77,27 @@ where
                 return Err(rpc_bad_argument_error(e));
             }
         };
-        
+
         Ok(IoEncryptionResponse { encrypted_data })
     }
 
-    async fn decrypt(
-        &self,
-        req: IoDecryptionRequest,
-    ) -> RpcResult<IoDecryptionResponse> {
+    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         let sk = self.key_provider.get_tx_io_sk();
-        let decrypted_data = match ecdh_decrypt(
-            &req.key,
-            &sk,
-            &req.data,
-            req.nonce,
-        ) {
+        let decrypted_data = match ecdh_decrypt(&req.key, &sk, &req.data, req.nonce) {
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to decrypt data: {}", e);
                 return Err(rpc_invalid_ciphertext_error(e));
             }
         };
-        
+
         Ok(IoDecryptionResponse { decrypted_data })
     }
-    
+
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(self.key_provider.get_rng_keypair())
     }
-    
+
     // Attestation operations implementations - now using SeismicAttestationAgent
     async fn get_attestation_evidence(
         &self,
@@ -113,26 +105,35 @@ where
     ) -> RpcResult<AttestationGetEvidenceResponse> {
         // Use SeismicAttestationAgent's mutex-protected get_evidence method
         // The mutex handling is already implemented in the agent
-        let evidence = match self.attestation_agent.get_evidence(req.runtime_data.as_slice()).await {
+        let evidence = match self
+            .attestation_agent
+            .get_evidence(req.runtime_data.as_slice())
+            .await
+        {
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_quote_error(anyhow::anyhow!("Issue in getting the evidence")));
+                return Err(rpc_bad_quote_error(anyhow::anyhow!(
+                    "Issue in getting the evidence"
+                )));
             }
         };
-        
+
         Ok(AttestationGetEvidenceResponse { evidence })
     }
 
     async fn genesis_get_data_handler(&self) -> RpcResult<GenesisDataResponse> {
         let io_pk = self.key_provider.get_tx_io_pk();
-        
+
         // Use the agent's attest_genesis_data method which handles the mutex internally
-        let (genesis_data, evidence) = match self.attestation_agent.attest_genesis_data(io_pk).await {
+        let (genesis_data, evidence) = match self.attestation_agent.attest_genesis_data(io_pk).await
+        {
             Ok(result) => result,
             Err(e) => {
                 error!("Failed to attest genesis data: {}", e);
-                return Err(rpc_bad_genesis_error(anyhow::anyhow!("Issue in attesting genesis data")));
+                return Err(rpc_bad_genesis_error(anyhow::anyhow!(
+                    "Issue in attesting genesis data"
+                )));
             }
         };
 
@@ -148,24 +149,24 @@ where
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
         let runtime_data: Option<Data> = request.runtime_data.map(|data| data.into_original());
-        let runtime_data_hash_algorithm: HashAlgorithm =
-            match request.runtime_data_hash_algorithm {
-                Some(alg) => alg.into_original(),
-                None => OriginalHashAlgorithm::Sha256,
-            };
+        let runtime_data_hash_algorithm: HashAlgorithm = match request.runtime_data_hash_algorithm {
+            Some(alg) => alg.into_original(),
+            None => OriginalHashAlgorithm::Sha256,
+        };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
-        let eval_result = self.attestation_agent.
-            evaluate(
-            request.evidence,
-            request.tee,
-            runtime_data,
-            runtime_data_hash_algorithm,
-            None,
-            OriginalHashAlgorithm::Sha256,
-            request.policy_ids,
-        )
-        .await;
+        let eval_result = self
+            .attestation_agent
+            .evaluate(
+                request.evidence,
+                request.tee,
+                runtime_data,
+                runtime_data_hash_algorithm,
+                None,
+                OriginalHashAlgorithm::Sha256,
+                request.policy_ids,
+            )
+            .await;
 
         let as_token: String = match eval_result {
             Ok(as_token) => as_token,
@@ -192,161 +193,166 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::utils::test_utils::{is_sudo, read_vector_txt};
     use super::*;
-    use seismic_enclave::coco_as::{Data, HashAlgorithm};
+    use crate::utils::test_utils::is_sudo;
+    use attestation_service::token::simple::SimpleAttestationTokenBroker;
 
-    use serial_test::serial;
-    use std::env;
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    use kbs_types::Tee;
-    use serde_json::Value;
-    use sha2::{Digest, Sha256};
     use crate::key_manager::builder::KeyManagerBuilder;
-    
-    use seismic_enclave::{nonce::Nonce, get_unsecure_sample_secp256k1_pk};
 
-    //#[tokio::test]
-    //async fn test_secp256k1_sign() {
-    //    // Prepare sign request body
-    //    let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-    //    let sign_request = Secp256k1SignRequest {
-    //        msg: msg_to_sign.clone(),
-    //    };
-    //    let kp = KeyManagerBuilder::build_mock().unwrap();
+    use crate::key_manager::key_manager::KeyManager;
+    use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
-    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    // TODO: this needs work, especially on what is a good default policy
+    //       I believe if a quote matches any policy it passes, so start with deny all?
+    pub fn default_tee_service() -> TeeService<KeyManager, SimpleAttestationTokenBroker> {
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let v_token_broker = SimpleAttestationTokenBroker::new(simple::Configuration::default())
+            .expect("Failed to create an AttestationAgent");
+        let saa = SeismicAttestationAgent::new(None, v_token_broker);
+        TeeService::new(Arc::new(kp), Arc::new(saa))
+    }
 
-    //    let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
-    //    assert!(!res.sig.is_empty());
-    //}
+    #[tokio::test]
+    pub async fn run_tests() {
+        let tee_service: TeeService<KeyManager, SimpleAttestationTokenBroker> =
+            default_tee_service();
 
-    //#[tokio::test]
-    //async fn test_io_encryption() {
-    //    // Prepare encryption request body
-    //    let data_to_encrypt = vec![72, 101, 108, 108, 111];
-    //    let nonce = Nonce::new_rand();
-    //    let req = IoEncryptionRequest {
-    //        key: get_unsecure_sample_secp256k1_pk(),
-    //        data: data_to_encrypt.clone(),
-    //        nonce: nonce.clone().into(),
-    //    };
-    //    let kp = KeyManagerBuilder::build_mock().unwrap();
+        test_secp256k1_sign::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
+        test_io_encryption::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
+        test_decrypt_invalid_ciphertext::<KeyManager, SimpleAttestationTokenBroker>(&tee_service)
+            .await;
+        test_attestation_evidence_handler_valid_request_sample::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
+        test_attestation_evidence_handler_aztdxvtpm_runtime_data::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
+        test_genesis_get_data_handler_success_basic::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
+    }
 
-    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-    //    
-    //    let res = tee_service.encrypt(req).await.unwrap();
+    async fn test_secp256k1_sign<K, T>(tee_service: &TeeService<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+        // Prepare sign request body
+        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
+        let sign_request = Secp256k1SignRequest {
+            msg: msg_to_sign.clone(),
+        };
 
-    //    // check that decryption returns the original data
-    //    // Prepare decrypt request body
-    //    let req = IoDecryptionRequest {
-    //        key: get_unsecure_sample_secp256k1_pk(),
-    //        data: res.encrypted_data,
-    //        nonce: nonce.clone(),
-    //    };
+        let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
+        assert!(!res.sig.is_empty());
+    }
 
-    //    let res = tee_service.decrypt(req).await.unwrap();
+    async fn test_io_encryption<K, T>(tee_service: &TeeService<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+        let data_to_encrypt = vec![72, 101, 108, 108, 111];
+        let nonce = Nonce::new_rand();
+        let req = IoEncryptionRequest {
+            key: get_unsecure_sample_secp256k1_pk(),
+            data: data_to_encrypt.clone(),
+            nonce: nonce.clone().into(),
+        };
 
-    //    assert_eq!(res.decrypted_data, data_to_encrypt);
-    //}
+        let res = tee_service.encrypt(req).await.unwrap();
 
-    //#[tokio::test]
-    //async fn test_decrypt_invalid_ciphertext() {
-    //    let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    //    let nonce = Nonce::new_rand();
-    //    let decryption_request = IoDecryptionRequest {
-    //        key: get_unsecure_sample_secp256k1_pk(),
-    //        data: bad_ciphertext,
-    //        nonce: nonce.clone(),
-    //    };
-    //    let kp = KeyManagerBuilder::build_mock().unwrap();
-    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-    //    let res = tee_service.decrypt(decryption_request).await;
+       // check that decryption returns the original data
+       // Prepare decrypt request body
+       let req = IoDecryptionRequest {
+           key: get_unsecure_sample_secp256k1_pk(),
+           data: res.encrypted_data,
+           nonce: nonce.clone(),
+       };
 
-    //    assert_eq!(res.is_err(), true);
-    //    assert_eq!(
-    //        res.err()
-    //            .unwrap()
-    //            .to_string()
-    //            .contains("Invalid ciphertext"),
-    //        true
-    //    );
-    //}
+       let res = tee_service.decrypt(req).await.unwrap();
 
-    //#[tokio::test]
-    //#[serial(attestation_agent)]
-    //async fn test_attestation_evidence_handler_valid_request_sample() {
-    //    // NOTE: This test will run with the Sample TEE Type
-    //    // because it doesn't run with sudo privileges
+       assert_eq!(res.decrypted_data, data_to_encrypt);
+    }
 
-    //    init_coco_aa().expect("Failed to initialize AttestationAgent");
+    async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &TeeService<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+       let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+       let nonce = Nonce::new_rand();
+       let decryption_request = IoDecryptionRequest {
+           key: get_unsecure_sample_secp256k1_pk(),
+           data: bad_ciphertext,
+           nonce: nonce.clone(),
+       };
+       let res = tee_service.decrypt(decryption_request).await;
 
-    //    // Mock a valid AttestationGetEvidenceRequest
-    //    let runtime_data = "nonce".as_bytes(); // Example runtime data
-    //    let evidence_request = AttestationGetEvidenceRequest {
-    //        runtime_data: runtime_data.to_vec(),
-    //    };
-    //    
-    //    let kp = KeyManagerBuilder::build_mock().unwrap();
-    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-    //    
-    //    // Call the handler
-    //    let res = tee_service.get_attestation_evidence(evidence_request)
-    //        .await
-    //        .unwrap();
+       assert_eq!(res.is_err(), true);
+       assert_eq!(
+           res.err()
+               .unwrap()
+               .to_string()
+               .contains("Invalid ciphertext"),
+           true
+       );
+    }
 
-    //    // Ensure the response is not empty
-    //    assert!(!res.evidence.is_empty());
-    //}
+    async fn test_attestation_evidence_handler_valid_request_sample<K, T>(tee_service: &TeeService<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+       // Mock a valid AttestationGetEvidenceRequest
+       let runtime_data = "nonce".as_bytes(); // Example runtime data
+       let evidence_request = AttestationGetEvidenceRequest {
+           runtime_data: runtime_data.to_vec(),
+       };
 
-    //#[tokio::test]
-    //#[serial(attestation_agent)]
-    //async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data() {
-    //    // handle set up permissions
-    //    if !is_sudo() {
-    //        panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-    //    }
+       // Call the handler
+       let res = tee_service.get_attestation_evidence(evidence_request)
+           .await
+           .unwrap();
 
-    //    init_coco_aa().expect("Failed to initialize AttestationAgent");
+       // Ensure the response is not empty
+       assert!(!res.evidence.is_empty());
+    }
 
-    //    // Make requests with different runtime data and see they are different
-    //    let runtime_data_1 = "nonce1".as_bytes();
-    //    let evidence_request_1 = AttestationGetEvidenceRequest {
-    //        runtime_data: runtime_data_1.to_vec(),
-    //    };
+    async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data<K, T>(tee_service: &TeeService<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+       // handle set up permissions
+       if !is_sudo() {
+           panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+       }
 
-    //    let runtime_data_2 = "nonce2".as_bytes();
-    //    let evidence_request_2 = AttestationGetEvidenceRequest {
-    //        runtime_data: runtime_data_2.to_vec(),
-    //    };
-    //    
-    //    let kp = KeyManagerBuilder::build_mock().unwrap();
-    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+       // Make requests with different runtime data and see they are different
+       let runtime_data_1 = "nonce1".as_bytes();
+       let evidence_request_1 = AttestationGetEvidenceRequest {
+           runtime_data: runtime_data_1.to_vec(),
+       };
 
-    //    let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
-    //        .await
-    //        .unwrap();
-    //    let res_2 = tee_service.get_attestation_evidence(evidence_request_2)
-    //        .await
-    //        .unwrap();
+       let runtime_data_2 = "nonce2".as_bytes();
+       let evidence_request_2 = AttestationGetEvidenceRequest {
+           runtime_data: runtime_data_2.to_vec(),
+       };
 
-    //    assert_ne!(res_1.evidence, res_2.evidence);
-    //}
-    //
-    //#[tokio::test]
-    //#[serial(attestation_agent)]
-    //async fn test_genesis_get_data_handler_success_basic() {
-    //    // Initialize ATTESTATION_AGENT
-    //    init_coco_aa().expect("Failed to initialize AttestationAgent");
-    //    let kp = KeyManagerBuilder::build_mock().unwrap();
+       let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
+           .await
+           .unwrap();
+       let res_2 = tee_service.get_attestation_evidence(evidence_request_2)
+           .await
+           .unwrap();
 
-    //    // Call the handler
-    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-    //    let res = tee_service.genesis_get_data_handler().await.unwrap();
-    //    assert!(!res.evidence.is_empty());
-    //}
+       assert_ne!(res_1.evidence, res_2.evidence);
+    }
 
+    async fn test_genesis_get_data_handler_success_basic<K, T>(tee_service: &TeeService<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+       // Call the handler
+       let res = tee_service.genesis_get_data_handler().await.unwrap();
+       assert!(!res.evidence.is_empty());
+    }
 }
