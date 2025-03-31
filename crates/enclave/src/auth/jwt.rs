@@ -210,6 +210,10 @@ impl JwtSecret {
     pub const fn as_bytes(&self) -> &[u8] {
         &self.0
     }
+
+    pub const fn mock_default() -> Self {
+        Self([0u8; 32])
+    }
 }
 
 impl core::fmt::Debug for JwtSecret {

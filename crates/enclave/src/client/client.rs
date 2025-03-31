@@ -142,7 +142,7 @@ impl EnclaveClient {
     /// A client enclave bade to work with the default mock server
     /// Useful for testing
     pub fn mock_default() -> Self {
-        let auth_secret = JwtSecret::from_str("0x00").unwrap();
+        let auth_secret = JwtSecret::mock_default();
         EnclaveClientBuilder::new()
             .auth_secret(auth_secret)
             .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())

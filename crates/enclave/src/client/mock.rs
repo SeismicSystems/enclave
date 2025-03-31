@@ -128,7 +128,7 @@ impl BuildableServer for MockEnclaveServer {
     }
 
     fn auth_secret(&self) -> JwtSecret {
-        JwtSecret::from_str("0x00").unwrap()
+        JwtSecret::mock_default()
     }
 
     async fn start(self) -> Result<ServerHandle> {
