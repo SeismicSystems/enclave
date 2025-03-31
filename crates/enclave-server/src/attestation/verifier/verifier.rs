@@ -297,37 +297,37 @@ mod tests {
         assert_eq!(tcb_status_map["report_data"], "bm9uY2U=");
     }
 
-    // #[test]
-    // async fn verifier_test_eval_policy_deny() {
-    //     // Create verifier with the policy fixture
-    //     let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
-    //     let fixture = PolicyFixture::new();
-    //     fixture.configure_verifier(&mut verifier).await.unwrap();
+    #[test]
+    async fn verifier_test_eval_policy_deny() {
+        // Create verifier with the policy fixture
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
 
-    //     // Sample evidence data
-    //     let evidence = vec![
-    //         123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
-    //         95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
-    //     ];
+        // Sample evidence data
+        let evidence = vec![
+            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
+            95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+        ];
 
-    //     // Runtime data
-    //     let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
+        // Runtime data
+        let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
 
-    //     // Evaluate with allow policy - should fail
-    //     let raw_claims_deny = verifier.evaluate(
-    //         evidence,
-    //         Tee::Sample,
-    //         runtime_data,
-    //         OriginalHashAlgorithm::Sha256,
-    //         None,
-    //         OriginalHashAlgorithm::Sha256,
-    //         vec!["allow".to_string()],
-    //     ).await;
+        // Evaluate with allow policy - should fail
+        let raw_claims_deny = verifier.evaluate(
+            evidence,
+            Tee::Sample,
+            runtime_data,
+            OriginalHashAlgorithm::Sha256,
+            None,
+            OriginalHashAlgorithm::Sha256,
+            vec!["allow".to_string()],
+        ).await;
 
-    //     println!("raw_claims_deny: {:?}", raw_claims_deny);
+        println!("raw_claims_deny: {:?}", raw_claims_deny);
 
-    //     assert!(raw_claims_deny.is_err(), "Deny policy should reject, but allowed");
-    // }
+        assert!(raw_claims_deny.is_err(), "Deny policy should reject, but allowed");
+    }
 
     #[test]
     async fn verifier_test_eval_evidence_az_tdx() {
@@ -418,6 +418,7 @@ mod tests {
                 vec!["yocto".to_string()],
             )
             .await
+            .map_err(|e| anyhow!("claim evaluation should pass but failed: {e:?}"))
             .unwrap();
         let claims_pass = ASCoreTokenClaims::from_jwt(&raw_claims_pass).unwrap();
 
