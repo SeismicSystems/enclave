@@ -30,8 +30,8 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     addr: SocketAddr,
     tee_service: Arc<TeeService<K, T>>,
@@ -40,8 +40,8 @@ where
 /// A builder that lets us configure the server
 pub struct EnclaveServerBuilder<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     addr: Option<SocketAddr>,
     key_provider: Option<K>,
@@ -50,8 +50,8 @@ where
 
 impl<K, T> Default for EnclaveServerBuilder<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     fn default() -> Self {
         Self {
@@ -67,8 +67,8 @@ where
 
 impl<K, T> EnclaveServerBuilder<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
         if let Some(curr) = self.addr {
@@ -125,8 +125,8 @@ where
 
 impl<K, T>EnclaveServer<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     /// Create a new builder with default address
     pub fn builder() -> EnclaveServerBuilder<K, T> {
@@ -149,8 +149,8 @@ where
 }
 impl<K, T>BuildableServer for EnclaveServer<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     fn addr(&self) -> SocketAddr {
         self.addr
@@ -169,8 +169,8 @@ where
 #[async_trait]
 impl<K, T>EnclaveApiServer for EnclaveServer<K, T>
 where
-    K: NetworkKeyProvider,
-    T: AttestationTokenBroker,
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
