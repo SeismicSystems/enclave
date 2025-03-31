@@ -18,27 +18,18 @@ use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use tracing::info;
-use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
     fn methods(self) -> Methods;
-    fn auth_secret(&self) -> JwtSecret;
     async fn start(self) -> Result<ServerHandle>;
     async fn start_rpc_server(self) -> Result<ServerHandle>
     where
         Self: Sized,
     {
         let addr = self.addr();
-        let secret = self.auth_secret();
-        let http_middleware =
-                tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
-        let rpc_server = ServerBuilder::new()
-            .set_http_middleware(http_middleware)
-            .build(addr)
-            .await?;
+        let rpc_server = ServerBuilder::new().build(addr).await?;
         let module = self.methods();
-
         let server_handle = rpc_server.start(module);
         info!(target: "rpc::enclave", "Server started at {}", addr);
         Ok(server_handle)

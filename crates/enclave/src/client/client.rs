@@ -1,6 +1,10 @@
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
-    future::Future, net::{IpAddr, Ipv4Addr}, ops::Deref, str::FromStr, sync::OnceLock, time::Duration
+    future::Future,
+    net::{IpAddr, Ipv4Addr},
+    ops::Deref,
+    sync::OnceLock,
+    time::Duration,
 };
 use tokio::runtime::{Handle, Runtime};
 
@@ -13,10 +17,8 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 
-use reth_rpc_layer::{JwtSecret, AuthClientLayer, AuthClientService};
-use jsonrpsee::http_client::transport::HttpBackend;
+use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
@@ -28,7 +30,6 @@ pub struct EnclaveClientBuilder {
     port: Option<u16>,
     timeout: Option<Duration>,
     url: Option<String>,
-    auth_secret: Option<JwtSecret>,
 }
 
 impl EnclaveClientBuilder {
@@ -38,7 +39,6 @@ impl EnclaveClientBuilder {
             port: None,
             timeout: None,
             url: None,
-            auth_secret: None,
         }
     }
 
@@ -62,17 +62,7 @@ impl EnclaveClientBuilder {
         self
     }
 
-    pub fn auth_secret(mut self, auth_secret: JwtSecret) -> Self {
-        self.auth_secret = Some(auth_secret);
-        self
-    }
-
     pub fn build(self) -> EnclaveClient {
-        let auth_secret = self.auth_secret.unwrap_or_else(|| {
-            // TODO: better error handling
-            panic!("No auth secret supplied to builder")
-        });
-
         let url = self.url.unwrap_or_else(|| {
             format!(
                 "http://{}:{}",
@@ -81,19 +71,13 @@ impl EnclaveClientBuilder {
                 self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
             )
         });
-
-        let secret_layer = AuthClientLayer::new(auth_secret);
-        let middleware = tower::ServiceBuilder::default().layer(secret_layer);
-
-        let async_client: HttpClient<AuthClientService<HttpBackend>> = jsonrpsee::http_client::HttpClientBuilder::default()
-            .set_http_middleware(middleware)
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
             .request_timeout(
                 self.timeout
                     .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
             )
             .build(url)
             .unwrap();
-        
         EnclaveClient::new_from_client(async_client)
     }
 }
@@ -102,13 +86,27 @@ impl EnclaveClientBuilder {
 #[derive(Debug, Clone)]
 pub struct EnclaveClient {
     /// The inner HTTP client.
-    async_client: HttpClient<AuthClientService<HttpBackend>>,
+    async_client: HttpClient,
     /// The runtime for the client.
     handle: Handle,
 }
 
+impl Default for EnclaveClient {
+    fn default() -> Self {
+        let url = format!(
+            "http://{}:{}",
+            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
+        );
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(Duration::from_secs(5))
+            .build(url)
+            .unwrap();
+        Self::new_from_client(async_client)
+    }
+}
+
 impl Deref for EnclaveClient {
-    type Target = HttpClient<AuthClientService<HttpBackend>>;
+    type Target = HttpClient;
 
     fn deref(&self) -> &Self::Target {
         &self.async_client
@@ -120,7 +118,17 @@ impl EnclaveClient {
         EnclaveClientBuilder::new()
     }
 
-    pub fn new_from_client(async_client: HttpClient<AuthClientService<HttpBackend>>) -> Self {
+    /// Create a new enclave client.
+    pub fn new(url: impl AsRef<str>) -> Self {
+        EnclaveClientBuilder::new().url(url.as_ref()).build()
+    }
+
+    /// Create a new enclave client from an address and port.
+    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
+        EnclaveClientBuilder::new().addr(addr).port(port).build()
+    }
+
+    pub fn new_from_client(async_client: HttpClient) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
             let runtime = ENCLAVE_CLIENT_RUNTIME.get_or_init(|| Runtime::new().unwrap());
             runtime.handle().clone()
@@ -137,18 +145,6 @@ impl EnclaveClient {
         F: Future<Output = T>,
     {
         tokio::task::block_in_place(|| self.handle.block_on(future))
-    }
-
-    /// A client enclave bade to work with the default mock server
-    /// Useful for testing
-    pub fn mock_default() -> Self {
-        let auth_secret = JwtSecret::from_str("0x00").unwrap();
-        EnclaveClientBuilder::new()
-            .auth_secret(auth_secret)
-            .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
-            .port(ENCLAVE_DEFAULT_ENDPOINT_PORT)
-            .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
-            .build()
     }
 }
 
@@ -193,17 +189,21 @@ pub mod tests {
     #[test]
     fn test_client_sync_context() {
         // testing if sync client can be created in a sync runtime
-        let _ = EnclaveClient::mock_default();
+        let port = 1888;
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        let _ = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sync_client() {
         // spawn a seperate thread for the server, otherwise the test will hang
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+        let port = get_random_port();
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        println!("addr: {:?}", addr);
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::mock_default();
+        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
         sync_test_health_check(&client);
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);

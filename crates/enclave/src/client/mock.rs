@@ -27,7 +27,6 @@ use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
-use reth_rpc_layer::JwtSecret;
 
 pub struct MockEnclaveServer {
     addr: SocketAddr,
@@ -125,10 +124,6 @@ impl BuildableServer for MockEnclaveServer {
 
     fn methods(self) -> Methods {
         self.into_rpc().into()
-    }
-
-    fn auth_secret(&self) -> reth_rpc_layer::JwtSecret {
-        JwtSecret::from_str("0x00").unwrap()
     }
 
     async fn start(self) -> Result<ServerHandle> {
@@ -244,12 +239,13 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_mock_server_and_sync_client() {
         // spawn a seperate thread for the server, otherwise the test will hang
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+        let port = get_random_port();
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
         println!("addr: {:?}", addr);
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::mock_default();
+        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
         async_test_health_check(&client).await;
         async_test_get_public_key(&client).await;
         async_test_get_eph_rng_keypair(&client).await;
