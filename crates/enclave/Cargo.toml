@@ -38,5 +38,11 @@ strum.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-reth-rpc-layer.workspace = true
 tower.workspace = true
+http.workspace = true
+jsonrpsee-http-client.workspace = true
+pin-project.workspace = true
+jsonwebtoken.workspace = true
+hex.workspace = true
+
+reth-rpc-layer.workspace = true
