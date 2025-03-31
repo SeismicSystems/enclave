@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use attestation_agent::AttestationAgent;
-use attestation_service::token::simple::{self, Configuration, SimpleAttestationTokenBroker};
+use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker, AttestationTokenConfig};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -16,7 +15,6 @@ use verifier::{
 };
 
 use kbs_types::Tee;
-use crypto::HashAlgorithm;
 
 use crate::attestation::agent::SeismicAttestationAgent;
 use attestation_service::Data as OriginalData;
@@ -189,13 +187,13 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::{policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}, test_utils::read_vector_txt};
-    // use crate::attestation::verifier::ASCoreTokenClaims;
+    use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
     use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
+    use attestation_service::token::simple::SimpleAttestationTokenBroker;
+    use attestation_service::token::simple::Configuration;
     use std::env;
     use super::*;
     use tokio::test;
-    use sha2::{Digest, Sha256};
 
     fn test_parse_as_token() {
         match env::current_dir() {

@@ -100,26 +100,27 @@ where
     where
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-        let final_addr = self.addr.ok_or_else(|| {
-            anyhow!("No address found in builder (should not happen if default is set)")
-        })?;
+        todo!()
+        // let final_addr = self.addr.ok_or_else(|| {
+        //     anyhow!("No address found in builder (should not happen if default is set)")
+        // })?;
 
-        let key_provider = self.key_provider.ok_or_else(|| {
-            anyhow!("No key provider supplied to builder")
-        })?;
+        // let key_provider = self.key_provider.ok_or_else(|| {
+        //     anyhow!("No key provider supplied to builder")
+        // })?;
        
-        // Initialize TeeService with the key provider
-        let config_path = self.attestation_config_path.as_deref();
-        let tee_service = Arc::new(
-            TeeService::with_simple_token(key_provider, config_path)
-                .await
-                .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
-        );
+        // // Initialize TeeService with the key provider
+        // let config_path = self.attestation_config_path.as_deref();
+        // let tee_service = Arc::new(
+        //     TeeService::with_simple_token(key_provider, config_path)
+        //         .await
+        //         .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
+        // );
 
-        Ok(EnclaveServer {
-            addr: final_addr,
-            tee_service,
-        })
+        // Ok(EnclaveServer {
+        //     addr: final_addr,
+        //     tee_service,
+        // })
     }
 }
 
@@ -135,16 +136,17 @@ where
     
     /// Simplified constructor if you want to skip the builder
     pub async fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
-        let tee_service = Arc::new(
-            TeeService::with_simple_token(key_provider, None)
-                .await
-                .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
-        );
+        todo!()
+        // let tee_service = Arc::new(
+        //     TeeService::with_simple_token(key_provider, None)
+        //         .await
+        //         .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
+        // );
         
-        Ok(Self {
-            addr: addr.into(),
-            tee_service,
-        })
+        // Ok(Self {
+        //     addr: addr.into(),
+        //     tee_service,
+        // })
     }
 }
 impl<K, T>BuildableServer for EnclaveServer<K, T>
