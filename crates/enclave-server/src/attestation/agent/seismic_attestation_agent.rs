@@ -1,6 +1,7 @@
 use alloy_primitives::map::HashMap;
 use attestation_service::token::ear_broker;
 use attestation_service::token::simple;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use attestation_service::token::AttestationTokenBroker;
 use attestation_service::Data;
 use attestation_service::HashAlgorithm;
@@ -19,10 +20,10 @@ use tokio::sync::Mutex;
 
 use crate::attestation::verifier::DcapAttVerifier;
 
-pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
+pub struct SeismicAttestationAgent<> {
     attestation_agent: AttestationAgent,
     quote_mutex: Mutex<()>,
-    verifier: Arc<DcapAttVerifier<T>>,
+    verifier: Arc<DcapAttVerifier>,
 }
 
 impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
@@ -33,10 +34,6 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
             quote_mutex: Mutex::new(()),
             verifier: Arc::new(DcapAttVerifier::new(token_broker)),
         }
-    }
-
-    pub fn new_simple(config_path: Option<&str>) -> Self {
-        Self::new(config_path, SimpleAttestationTokenBroker::new(Configuration::default()).expect("Failed to create an AttestationAgent"))
     }
 
     pub async fn init(&mut self) -> Result<()> {

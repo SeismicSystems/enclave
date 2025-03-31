@@ -36,32 +36,6 @@ where
             attestation_agent,
         }
     }
-
-    // Factory method to create with default configuration
-    pub async fn with_simple_token(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
-        let attestation_agent: SeismicAttestationAgent<SimpleAttestationTokenBroker> = SeismicAttestationAgent::new_simple(config_path);
-        let attestation_agent = Arc::new(attestation_agent);
-        
-        // Initialize the attestation agent
-        Arc::clone(&attestation_agent).init().await?;
-        
-        Ok(Self::new(Arc::new(key_provider), attestation_agent))
-    }
-    
-    // Factory method with custom token broker configuration
-    pub async fn with_token_config(
-        key_provider: K, 
-        config_path: Option<&str>, 
-        token_config: AttestationTokenConfig
-    ) -> Result<Self, anyhow::Error> {
-        let attestation_agent = SeismicAttestationAgent::with_token_config(config_path, token_config)?;
-        let attestation_agent = Arc::new(attestation_agent);
-        
-        // Initialize the attestation agent
-        Arc::clone(&attestation_agent).init().await?;
-        
-        Ok(Self::new(Arc::new(key_provider), attestation_agent))
-    }
 }
 
 
