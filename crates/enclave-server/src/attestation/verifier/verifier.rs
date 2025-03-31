@@ -1,17 +1,14 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker};
+use attestation_service::Data as OriginalData;
+use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use verifier::{
-    InitDataHash, ReportData,
-};
-use kbs_types::Tee;
-use attestation_service::Data as OriginalData;
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-
+use verifier::{InitDataHash, ReportData};
 
 /// Runtime/Init Data used to check the binding relationship with report data
 /// in Evidence
@@ -40,7 +37,7 @@ impl DcapAttVerifier<simple::SimpleAttestationTokenBroker> {
         let token_broker = simple::SimpleAttestationTokenBroker::new(config)?;
         Ok(Self { token_broker })
     }
-    
+
     /// Create a new DcapAttVerifier with default SimpleAttestationTokenBroker
     pub fn default_simple() -> Result<Self> {
         Self::new_simple(simple::Configuration::default())
@@ -53,7 +50,7 @@ impl DcapAttVerifier<ear_broker::EarAttestationTokenBroker> {
         let token_broker = ear_broker::EarAttestationTokenBroker::new(config)?;
         Ok(Self { token_broker })
     }
-    
+
     /// Create a new DcapAttVerifier with default EarAttestationTokenBroker
     pub fn default_ear() -> Result<Self> {
         Self::new_ear(ear_broker::Configuration::default())
@@ -63,9 +60,7 @@ impl DcapAttVerifier<ear_broker::EarAttestationTokenBroker> {
 impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Create a new DcapAttVerifier instance
     pub fn new(token_broker: T) -> Self {
-        Self {
-            token_broker
-        }
+        Self { token_broker }
     }
 
     /// Set Attestation Verification Policy.
@@ -106,9 +101,9 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
         let verifier = verifier::to_verifier(&tee)?;
 
         // Parse and hash runtime data
-        let (report_data, runtime_data_claims) =
-            self.parse_data(runtime_data, &runtime_data_hash_algorithm)
-                .context("parse runtime data")?;
+        let (report_data, runtime_data_claims) = self
+            .parse_data(runtime_data, &runtime_data_hash_algorithm)
+            .context("parse runtime data")?;
 
         let report_data = match &report_data {
             Some(data) => ReportData::Value(data),
@@ -116,9 +111,9 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
         };
 
         // Parse and hash init data
-        let (init_data, init_data_claims) =
-            self.parse_data(init_data, &init_data_hash_algorithm)
-                .context("parse init data")?;
+        let (init_data, init_data_claims) = self
+            .parse_data(init_data, &init_data_hash_algorithm)
+            .context("parse init data")?;
 
         let init_data_hash = match &init_data {
             Some(data) => InitDataHash::Value(data),
@@ -145,11 +140,11 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
                 reference_data_map,
                 tee,
             )
-        .await?;
+            .await?;
 
         Ok(attestation_results_token)
     }
-    
+
     /// Parse and hash data using the specified algorithm
     fn parse_data(
         &self,
@@ -163,7 +158,10 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
                     // Serialize the structured data (keys in alphabetical order)
                     let hash_materials =
                         serde_json::to_vec(&structured).context("parse JSON structured data")?;
-                    let digest = Sha256::new().chain_update(hash_materials).finalize().to_vec(); // TODO: don't hardcode Sha256, use the Hash alg given
+                    let digest = Sha256::new()
+                        .chain_update(hash_materials)
+                        .finalize()
+                        .to_vec(); // TODO: don't hardcode Sha256, use the Hash alg given
                     Ok((Some(digest), structured))
                 }
             },
@@ -179,16 +177,16 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::test_utils::read_vector_txt;
-    use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
-    use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
-    use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use attestation_service::token::simple::Configuration;
-    use std::env;
     use super::*;
-    use tokio::test;
+    use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
+    use crate::utils::test_utils::read_vector_txt;
+    use attestation_service::token::simple::Configuration;
+    use attestation_service::token::simple::SimpleAttestationTokenBroker;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
+    use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
+    use std::env;
+    use tokio::test;
 
     #[test]
     async fn test_parse_as_token() {
@@ -216,8 +214,10 @@ mod tests {
 
     #[test]
     async fn verifier_test_policy_management() {
-        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
-        
+        let mut verifier =
+            DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
+                .unwrap();
+
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
@@ -225,61 +225,72 @@ mod tests {
         let expected_content = fixture.get_policy_content(&policy_id).unwrap();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
         assert_eq!(&retrieved_policy, expected_content);
-        
+
         let policies = verifier.list_policies().await.unwrap();
-        // 4 policies = our three policies + default policy 
+        // 4 policies = our three policies + default policy
         assert_eq!(policies.len(), 4);
-        
+
         // Update a policy
         let policy_id = "yocto".to_string();
-        verifier.set_policy(policy_id.clone(), fixture.encode_policy(YOCTO_POLICY_UPDATED)).await.unwrap();
-        
+        verifier
+            .set_policy(
+                policy_id.clone(),
+                fixture.encode_policy(YOCTO_POLICY_UPDATED),
+            )
+            .await
+            .unwrap();
+
         // Verify update
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
         let encoded_policy = fixture.encode_policy(YOCTO_POLICY_UPDATED);
         assert_eq!(retrieved_policy, encoded_policy);
-        
+
         // Try getting non-existent policy
         let result = verifier.get_policy("non-existent".to_string()).await;
         assert!(result.is_err());
     }
-    
+
     #[test]
     async fn verifier_test_eval_evidence_sample() {
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
+        let mut verifier =
+            DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
+                .unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
-        
+
         // Sample evidence data
         let evidence = vec![
-            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
-            95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95,
+            100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
         ];
-        
+
         // Runtime data
         let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
-        
+
         // Evaluate the evidence
-        let raw_claims = verifier.evaluate(
-            evidence,
-            Tee::Sample,
-            runtime_data,
-            OriginalHashAlgorithm::Sha256,
-            None,
-            OriginalHashAlgorithm::Sha256,
-            vec!["allow".to_string()],
-        ).await.unwrap();
+        let raw_claims = verifier
+            .evaluate(
+                evidence,
+                Tee::Sample,
+                runtime_data,
+                OriginalHashAlgorithm::Sha256,
+                None,
+                OriginalHashAlgorithm::Sha256,
+                vec!["allow".to_string()],
+            )
+            .await
+            .unwrap();
 
         let claims = ASCoreTokenClaims::from_jwt(&raw_claims).unwrap();
-        
+
         // Verify results
         assert_eq!(claims.tee, "sample");
-        
+
         // Check if policy evaluation was successful
         let eval_reports = &claims.evaluation_reports;
         assert!(!eval_reports.is_empty());
-        
+
         // For Sample TEE, we should have a report_data field in tcb_status
         let tcb_status_map: serde_json::Map<String, Value> =
             serde_json::from_str(&claims.tcb_status).unwrap();
@@ -292,17 +303,17 @@ mod tests {
     //     let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
     //     let fixture = PolicyFixture::new();
     //     fixture.configure_verifier(&mut verifier).await.unwrap();
-        
+
     //     // Sample evidence data
     //     let evidence = vec![
     //         123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
     //         95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
     //     ];
-        
+
     //     // Runtime data
     //     let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
-        
-    //     // Evaluate with allow policy - should fail 
+
+    //     // Evaluate with allow policy - should fail
     //     let raw_claims_deny = verifier.evaluate(
     //         evidence,
     //         Tee::Sample,
@@ -327,36 +338,41 @@ mod tests {
             println!("Skipping test_eval_evidence_az_tdx: evidence file not found");
             return;
         }
-        
+
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
+        let mut verifier =
+            DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
+                .unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
-        
+
         // Read TDX evidence
         let tdx_evidence_encoded = std::fs::read_to_string(evidence_path).unwrap();
         let tdx_evidence = URL_SAFE_NO_PAD
             .decode(tdx_evidence_encoded.as_str())
             .unwrap();
-        
+
         // Evaluate the evidence
-        let raw_claims = verifier.evaluate(
-            tdx_evidence,
-            Tee::AzTdxVtpm,
-            Some(OriginalData::Raw("".into())),
-            OriginalHashAlgorithm::Sha256,
-            None,
-            OriginalHashAlgorithm::Sha256,
-            vec!["allow".to_string()],
-        ).await.unwrap();
+        let raw_claims = verifier
+            .evaluate(
+                tdx_evidence,
+                Tee::AzTdxVtpm,
+                Some(OriginalData::Raw("".into())),
+                OriginalHashAlgorithm::Sha256,
+                None,
+                OriginalHashAlgorithm::Sha256,
+                vec!["allow".to_string()],
+            )
+            .await
+            .unwrap();
         let claims = ASCoreTokenClaims::from_jwt(&raw_claims).unwrap();
-        
+
         // Verify results
         assert_eq!(claims.tee, "aztdxvtpm");
-        
+
         // Check evaluation reports
         assert!(!claims.evaluation_reports.is_empty());
-        
+
         // For AzTdxVtpm, we expect mr_td field in tcb_status
         let tcb_status_map: serde_json::Map<String, Value> =
             serde_json::from_str(&claims.tcb_status).unwrap();
@@ -368,54 +384,65 @@ mod tests {
         // This test requires specific TDX evidence files
         let evidence_path_pass = "../../examples/yocto_20241023223507.txt";
         let evidence_path_fail = "../../examples/yocto_20241025193121.txt";
-        
-        if !std::path::Path::new(evidence_path_pass).exists() || 
-           !std::path::Path::new(evidence_path_fail).exists() {
+
+        if !std::path::Path::new(evidence_path_pass).exists()
+            || !std::path::Path::new(evidence_path_fail).exists()
+        {
             println!("Skipping test_eval_evidence_az_tdx_tpm_pcr04: evidence files not found");
             return;
         }
-        
+
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
+        let mut verifier =
+            DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
+                .unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
-        
+
         // Read TDX evidence that should pass
         let az_tdx_evidence_pass = read_vector_txt(evidence_path_pass.to_string()).unwrap();
         let runtime_data_bytes = vec![
             240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
             221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
         ];
-        
+
         // Evaluate the passing evidence
-        let raw_claims_pass = verifier.evaluate(
-            az_tdx_evidence_pass,
-            Tee::AzTdxVtpm,
-            Some(OriginalData::Raw(runtime_data_bytes.clone())),
-            OriginalHashAlgorithm::Sha256,
-            None,
-            OriginalHashAlgorithm::Sha256,
-            vec!["yocto".to_string()],
-        ).await.unwrap();
+        let raw_claims_pass = verifier
+            .evaluate(
+                az_tdx_evidence_pass,
+                Tee::AzTdxVtpm,
+                Some(OriginalData::Raw(runtime_data_bytes.clone())),
+                OriginalHashAlgorithm::Sha256,
+                None,
+                OriginalHashAlgorithm::Sha256,
+                vec!["yocto".to_string()],
+            )
+            .await
+            .unwrap();
         let claims_pass = ASCoreTokenClaims::from_jwt(&raw_claims_pass).unwrap();
-        
+
         // Verify passing results
         assert_eq!(claims_pass.tee, "aztdxvtpm");
-        
+
         // Read TDX evidence that should fail
         let az_tdx_evidence_fail = read_vector_txt(evidence_path_fail.to_string()).unwrap();
-        
-        // Evaluate the failing evidence
-        let raw_claims_fail = verifier.evaluate(
-            az_tdx_evidence_fail,
-            Tee::AzTdxVtpm,
-            Some(OriginalData::Raw(runtime_data_bytes)),
-            OriginalHashAlgorithm::Sha256,
-            None,
-            OriginalHashAlgorithm::Sha256,
-            vec!["yocto".to_string()],
-        ).await;
 
-        assert!(raw_claims_fail.is_err(), "Expected rejection by policy 'yocto'");
+        // Evaluate the failing evidence
+        let raw_claims_fail = verifier
+            .evaluate(
+                az_tdx_evidence_fail,
+                Tee::AzTdxVtpm,
+                Some(OriginalData::Raw(runtime_data_bytes)),
+                OriginalHashAlgorithm::Sha256,
+                None,
+                OriginalHashAlgorithm::Sha256,
+                vec!["yocto".to_string()],
+            )
+            .await;
+
+        assert!(
+            raw_claims_fail.is_err(),
+            "Expected rejection by policy 'yocto'"
+        );
     }
 }
