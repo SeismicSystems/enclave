@@ -24,16 +24,18 @@ pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + 
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
 }
 
-impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> TeeService<K, T> {
+impl<K, T>TeeService<K, T>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+{
     pub fn new(key_provider: Arc<K>, attestation_agent: Arc<SeismicAttestationAgent<T>>) -> Self {
         Self { 
             key_provider,
             attestation_agent,
         }
     }
-}
 
-impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync> TeeService<K, T> {
     // Factory method to create with default configuration
     pub async fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
         let token_broker = AttestationTokenConfig::default().to_token_broker();
@@ -62,47 +64,13 @@ impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync> TeeService<
     }
 }
 
-// Convenience implementations for specific token broker types
-impl<K: NetworkKeyProvider> TeeService<K, simple::SimpleAttestationTokenBroker> {
-    pub async fn with_simple_broker(
-        key_provider: K,
-        config_path: Option<&str>,
-        broker_config: Option<simple::Configuration>,
-    ) -> Result<Self, anyhow::Error> {
-        let attestation_agent = match broker_config {
-            Some(config) => SeismicAttestationAgent::new_simple(config_path, config)?,
-            None => SeismicAttestationAgent::default_simple(config_path)?,
-        };
-        let attestation_agent = Arc::new(attestation_agent);
-        
-        // Initialize the attestation agent
-        Arc::clone(&attestation_agent).init().await?;
-        
-        Ok(Self::new(Arc::new(key_provider), attestation_agent))
-    }
-}
-
-impl<K: NetworkKeyProvider> TeeService<K, ear_broker::EarAttestationTokenBroker> {
-    pub async fn with_ear_broker(
-        key_provider: K,
-        config_path: Option<&str>,
-        broker_config: Option<ear_broker::Configuration>,
-    ) -> Result<Self, anyhow::Error> {
-        let attestation_agent = match broker_config {
-            Some(config) => SeismicAttestationAgent::new_ear(config_path, config)?,
-            None => SeismicAttestationAgent::default_ear(config_path)?,
-        };
-        let attestation_agent = Arc::new(attestation_agent);
-        
-        // Initialize the attestation agent
-        Arc::clone(&attestation_agent).init().await?;
-        
-        Ok(Self::new(Arc::new(key_provider), attestation_agent))
-    }
-}
 
 #[async_trait]
-impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService<K> {
+impl<K, T>TeeServiceApi for TeeService<K, T>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+{
     // Crypto operations implementations
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
         Ok(self.key_provider.get_tx_io_pk())
