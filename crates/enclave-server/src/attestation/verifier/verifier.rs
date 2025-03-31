@@ -1,22 +1,14 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
-use attestation_service::token::{ear_broker, AttestationTokenBroker, AttestationTokenConfig};
+use attestation_service::token::{ear_broker, AttestationTokenBroker};
 use log::{debug, info};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256, Sha384, Sha512};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
-
 use verifier::{
-    InitDataHash, ReportData, Verifier,
+    InitDataHash, ReportData,
 };
-
 use kbs_types::Tee;
-
-use crate::attestation::agent::SeismicAttestationAgent;
 use attestation_service::Data as OriginalData;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 
@@ -195,6 +187,8 @@ mod tests {
     use std::env;
     use super::*;
     use tokio::test;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
 
     #[test]
     async fn test_parse_as_token() {
