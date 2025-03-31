@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use super::verifier::DcapAttVerifier;
+use crate::attestation::verifier::DcapAttVerifier;
 
 pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
     attestation_agent: AttestationAgent,

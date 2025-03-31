@@ -6,18 +6,14 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use seismic_enclave::coco_as::{ASCoreTokenClaims, AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
 
-use crate::coco_as::{eval_att_evidence, parse_as_token_claims};
-use crate::coco_as::into_original::{IntoOriginalData, OriginalData, OriginalHashAlgorithm, IntoOriginalHashAlgorithm};
 use crate::key_manager::NetworkKeyProvider;
-use crate::coco_aa::attest;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
-use crate::genesis::att_genesis_data;
 
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
 
-use super::seismic_attestation_agent::SeismicAttestationAgent;
+use crate::attestation::agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
 use attestation_agent::AttestationAPIs;
 
@@ -252,7 +248,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
 
 #[cfg(test)]
 mod tests {
-    use crate::{coco_aa::init_coco_aa, coco_as::{init_as_policies, init_coco_as, into_original::ApiData}, utils::test_utils::{is_sudo, read_vector_txt}};
+    use crate::utils::test_utils::{is_sudo, read_vector_txt};
     use super::*;
     use seismic_enclave::coco_as::{Data, HashAlgorithm};
 
