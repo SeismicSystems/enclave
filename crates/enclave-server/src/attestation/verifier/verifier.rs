@@ -187,6 +187,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::test_utils::read_vector_txt;
     use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
     use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
@@ -323,110 +324,104 @@ mod tests {
     //     assert!(raw_claims_deny.is_err(), "Deny policy should reject, but allowed");
     // }
 
-    // #[test]
-    // async fn verifier_test_eval_evidence_az_tdx() {
-    //     // This test requires actual TDX evidence files
-    //     // Skip if files are not available
-    //     let evidence_path = "../../examples/tdx_encoded_evidence.txt";
-    //     if !std::path::Path::new(evidence_path).exists() {
-    //         println!("Skipping test_eval_evidence_az_tdx: evidence file not found");
-    //         return;
-    //     }
+    #[test]
+    async fn verifier_test_eval_evidence_az_tdx() {
+        // This test requires actual TDX evidence files
+        // Skip if files are not available
+        let evidence_path = "../../examples/tdx_encoded_evidence.txt";
+        if !std::path::Path::new(evidence_path).exists() {
+            println!("Skipping test_eval_evidence_az_tdx: evidence file not found");
+            return;
+        }
         
-    //     // Create verifier with the policy fixture
-    //     let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
-    //     let fixture = PolicyFixture::new();
-    //     fixture.configure_verifier(&mut verifier).await.unwrap();
+        // Create verifier with the policy fixture
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
-    //     // Read TDX evidence
-    //     let tdx_evidence_encoded = std::fs::read_to_string(evidence_path).unwrap();
-    //     let tdx_evidence = URL_SAFE_NO_PAD
-    //         .decode(tdx_evidence_encoded.as_str())
-    //         .unwrap();
+        // Read TDX evidence
+        let tdx_evidence_encoded = std::fs::read_to_string(evidence_path).unwrap();
+        let tdx_evidence = URL_SAFE_NO_PAD
+            .decode(tdx_evidence_encoded.as_str())
+            .unwrap();
         
-    //     // Evaluate the evidence
-    //     let raw_claims = verifier.evaluate(
-    //         tdx_evidence,
-    //         Tee::AzTdxVtpm,
-    //         Some(Data::Raw("".into())),
-    //         HashAlgorithm::Sha256,
-    //         None,
-    //         HashAlgorithm::Sha256,
-    //         vec!["allow".to_string()],
-    //     ).await.unwrap();
+        // Evaluate the evidence
+        let raw_claims = verifier.evaluate(
+            tdx_evidence,
+            Tee::AzTdxVtpm,
+            Some(OriginalData::Raw("".into())),
+            OriginalHashAlgorithm::Sha256,
+            None,
+            OriginalHashAlgorithm::Sha256,
+            vec!["allow".to_string()],
+        ).await.unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&raw_claims).unwrap();
         
-    //     let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
-    //     let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
-    //     let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
+        // Verify results
+        assert_eq!(claims.tee, "aztdxvtpm");
         
-    //     // Verify results
-    //     assert_eq!(claims.tee, "aztdxvtpm");
+        // Check evaluation reports
+        assert!(!claims.evaluation_reports.is_empty());
         
-    //     // Check evaluation reports
-    //     assert!(!claims.evaluation_reports.is_empty());
-        
-    //     // For AzTdxVtpm, we expect mr_td field in tcb_status
-    //     let tcb_status_map: serde_json::Map<String, Value> =
-    //         serde_json::from_str(&claims.tcb_status).unwrap();
-    //     assert!(tcb_status_map.contains_key("aztdxvtpm.quote.body.mr_td"));
-    // }
+        // For AzTdxVtpm, we expect mr_td field in tcb_status
+        let tcb_status_map: serde_json::Map<String, Value> =
+            serde_json::from_str(&claims.tcb_status).unwrap();
+        assert!(tcb_status_map.contains_key("aztdxvtpm.quote.body.mr_td"));
+    }
 
-    // #[test]
-    // async fn verifier_test_eval_evidence_az_tdx_tpm_pcr04() {
-    //     // This test requires specific TDX evidence files
-    //     let evidence_path_pass = "../../examples/yocto_20241023223507.txt";
-    //     let evidence_path_fail = "../../examples/yocto_20241025193121.txt";
+    #[test]
+    async fn verifier_test_eval_evidence_az_tdx_tpm_pcr04() {
+        // This test requires specific TDX evidence files
+        let evidence_path_pass = "../../examples/yocto_20241023223507.txt";
+        let evidence_path_fail = "../../examples/yocto_20241025193121.txt";
         
-    //     if !std::path::Path::new(evidence_path_pass).exists() || 
-    //        !std::path::Path::new(evidence_path_fail).exists() {
-    //         println!("Skipping test_eval_evidence_az_tdx_tpm_pcr04: evidence files not found");
-    //         return;
-    //     }
+        if !std::path::Path::new(evidence_path_pass).exists() || 
+           !std::path::Path::new(evidence_path_fail).exists() {
+            println!("Skipping test_eval_evidence_az_tdx_tpm_pcr04: evidence files not found");
+            return;
+        }
         
-    //     // Create verifier with the policy fixture
-    //     let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
-    //     let fixture = PolicyFixture::new();
-    //     fixture.configure_verifier(&mut verifier).await.unwrap();
+        // Create verifier with the policy fixture
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
+        let fixture = PolicyFixture::new();
+        fixture.configure_verifier(&mut verifier).await.unwrap();
         
-    //     // Read TDX evidence that should pass
-    //     let az_tdx_evidence_pass = read_vector_txt(evidence_path_pass.to_string()).unwrap();
-    //     let runtime_data_bytes = vec![
-    //         240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
-    //         221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
-    //     ];
+        // Read TDX evidence that should pass
+        let az_tdx_evidence_pass = read_vector_txt(evidence_path_pass.to_string()).unwrap();
+        let runtime_data_bytes = vec![
+            240, 30, 194, 3, 67, 143, 162, 40, 249, 35, 238, 193, 59, 140, 203, 3, 98, 144, 105,
+            221, 209, 34, 207, 229, 52, 61, 58, 14, 102, 234, 146, 8,
+        ];
         
-    //     // Evaluate the passing evidence
-    //     let raw_claims_pass = verifier.evaluate(
-    //         az_tdx_evidence_pass,
-    //         Tee::AzTdxVtpm,
-    //         Some(Data::Raw(runtime_data_bytes.clone())),
-    //         HashAlgorithm::Sha256,
-    //         None,
-    //         HashAlgorithm::Sha256,
-    //         vec!["yocto".to_string()],
-    //     ).await.unwrap();
+        // Evaluate the passing evidence
+        let raw_claims_pass = verifier.evaluate(
+            az_tdx_evidence_pass,
+            Tee::AzTdxVtpm,
+            Some(OriginalData::Raw(runtime_data_bytes.clone())),
+            OriginalHashAlgorithm::Sha256,
+            None,
+            OriginalHashAlgorithm::Sha256,
+            vec!["yocto".to_string()],
+        ).await.unwrap();
+        let claims_pass = ASCoreTokenClaims::from_jwt(&raw_claims_pass).unwrap();
         
-    //     let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
-    //     let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
-    //     let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
+        // Verify passing results
+        assert_eq!(claims_pass.tee, "aztdxvtpm");
         
-    //     // Verify passing results
-    //     assert_eq!(claims_pass.tee, "aztdxvtpm");
+        // Read TDX evidence that should fail
+        let az_tdx_evidence_fail = read_vector_txt(evidence_path_fail.to_string()).unwrap();
         
-    //     // Read TDX evidence that should fail
-    //     let az_tdx_evidence_fail = read_vector_txt(evidence_path_fail.to_string()).unwrap();
-        
-    //     // Evaluate the failing evidence
-    //     let raw_claims_fail = verifier.evaluate(
-    //         az_tdx_evidence_fail,
-    //         Tee::AzTdxVtpm,
-    //         Some(Data::Raw(runtime_data_bytes)),
-    //         HashAlgorithm::Sha256,
-    //         None,
-    //         HashAlgorithm::Sha256,
-    //         vec!["yocto".to_string()],
-    //     ).await;
+        // Evaluate the failing evidence
+        let raw_claims_fail = verifier.evaluate(
+            az_tdx_evidence_fail,
+            Tee::AzTdxVtpm,
+            Some(OriginalData::Raw(runtime_data_bytes)),
+            OriginalHashAlgorithm::Sha256,
+            None,
+            OriginalHashAlgorithm::Sha256,
+            vec!["yocto".to_string()],
+        ).await;
 
-    //     assert!(raw_claims_fail.is_err(), "Expected rejection by policy 'yocto'");
-    // }
+        assert!(raw_claims_fail.is_err(), "Expected rejection by policy 'yocto'");
+    }
 }
