@@ -168,6 +168,9 @@ where
 
 #[async_trait]
 impl<K, T>EnclaveApiServer for EnclaveServer<K, T>
+where
+    K: NetworkKeyProvider,
+    T: AttestationTokenBroker,
 {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {

@@ -2,6 +2,7 @@
 
 use crate::attestation::verifier::DcapAttVerifier;
 use anyhow::Result;
+use attestation_service::token::AttestationTokenBroker;
 use std::collections::HashMap;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 
