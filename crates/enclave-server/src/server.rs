@@ -1,7 +1,5 @@
 use crate::api::traits::TeeServiceApi;
 use crate::api::tee_service::TeeService;
-use crate::coco_aa::init_coco_aa;
-use crate::coco_as::init_coco_as;
 use crate::key_manager::builder::KeyManagerBuilder;
 use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
@@ -41,7 +39,7 @@ pub struct EnclaveServerBuilder<K: NetworkKeyProvider + Send + Sync + 'static> {
     attestation_config_path: Option<String>,
 }
 
-impl<K: NetworkKeyProvider + Send + Sync + 'static> Default for EnclaveServerBuilder<K> {
+impl<K: NetworkKeyProvider + Send + Sync + 'static> Default for EnclaveServerBuilder<K, T> {
     fn default() -> Self {
         Self {
             addr: Some(SocketAddr::new(

@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
-use attestation_service::token::{ear_broker, simple};
+use attestation_service::token::{ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig};
+use attestation_service::{Data, HashAlgorithm};
 use log::error;
 use jsonrpsee::core::{async_trait, RpcResult};
-use seismic_enclave::coco_as::{ASCoreTokenClaims, AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
+use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
 
+use crate::attestation::verifier::ASCoreTokenClaims;
 use crate::key_manager::NetworkKeyProvider;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 
@@ -34,7 +36,7 @@ impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> T
 }
 
 // Implementation for boxed trait version (most flexible)
-impl<K: NetworkKeyProvider> TeeService<K, Box<dyn AttestationTokenBroker + Send + Sync>> {
+impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync> TeeService<K, T> {
     // Factory method to create with default configuration
     pub async fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
 
@@ -201,15 +203,16 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
-        let runtime_data: Option<OriginalData> = request.runtime_data.map(|data| data.into_original());
-        let runtime_data_hash_algorithm: OriginalHashAlgorithm =
+        let runtime_data: Option<Data> = request.runtime_data.map(|data| data.into_original());
+        let runtime_data_hash_algorithm: HashAlgorithm =
             match request.runtime_data_hash_algorithm {
                 Some(alg) => alg.into_original(),
                 None => OriginalHashAlgorithm::Sha256,
             };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
-        let eval_result = eval_att_evidence(
+        let eval_result = self.attestation_agent.
+            evaluate(
             request.evidence,
             request.tee,
             runtime_data,
@@ -228,7 +231,7 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> TeeServiceApi for TeeService
             }
         };
 
-        let claims: ASCoreTokenClaims = match parse_as_token_claims(&as_token) {
+        let claims: ASCoreTokenClaims = match ASCoreTokenClaims::from_jwt(&as_token) {
             Ok(claims) => claims,
             Err(e) => {
                 error!("Failed to parse AS token: {}", e);

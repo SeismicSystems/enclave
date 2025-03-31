@@ -1,12 +1,13 @@
 use anyhow::{anyhow, Context, Result};
+use attestation_agent::AttestationAgent;
 use attestation_service::token::simple::{self, Configuration, SimpleAttestationTokenBroker};
-use attestation_service::token::{ear_broker, AttestationTokenBroker};
+use attestation_service::token::{ear_broker, AttestationTokenBroker, AttestationTokenConfig};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 
@@ -16,6 +17,8 @@ use verifier::{
 
 use kbs_types::Tee;
 use crypto::HashAlgorithm;
+
+use crate::attestation::agent::SeismicAttestationAgent;
 
 
 /// Runtime/Init Data used to check the binding relationship with report data
