@@ -19,8 +19,6 @@ use crate::attestation::agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
 use attestation_agent::AttestationAPIs;
 
-pub type DefaultTeeService<K> = TeeService<K, Box<dyn AttestationTokenBroker + Send + Sync>>;
-
 pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
@@ -35,12 +33,11 @@ impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> T
     }
 }
 
-// Implementation for boxed trait version (most flexible)
 impl<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync> TeeService<K, T> {
     // Factory method to create with default configuration
     pub async fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
-
-        let attestation_agent = SeismicAttestationAgent::new(config_path)?;
+        let token_broker = AttestationTokenConfig::default().to_token_broker();
+        let attestation_agent = SeismicAttestationAgent::new(config_path, token_broker)?;
         let attestation_agent = Arc::new(attestation_agent);
         
         // Initialize the attestation agent
