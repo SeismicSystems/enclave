@@ -17,7 +17,7 @@ use tower::{Layer, Service};
 /// ```rust
 /// async fn build_layered_rpc_server() {
 ///     use jsonrpsee::server::ServerBuilder;
-///     use reth_rpc_layer::{AuthLayer, JwtAuthValidator, JwtSecret};
+///     use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 ///     use std::net::SocketAddr;
 ///
 ///     const AUTH_PORT: u32 = 8551;
