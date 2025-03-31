@@ -53,7 +53,8 @@ pub struct PolicyFixture {
 impl PolicyFixture {
     pub fn new() -> Self {
         let mut policy_map = HashMap::new();
-        
+
+        // TODO: evaluate if this should be included by default. under what circumstances do we not care what enclave a quote came from?
         policy_map.insert(
             "allow".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY.to_string()),

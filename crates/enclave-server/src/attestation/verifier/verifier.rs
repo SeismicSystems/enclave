@@ -313,7 +313,7 @@ mod tests {
         // Runtime data
         let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
 
-        // Evaluate with allow policy - should fail
+        // Evaluate with deny policy - should fail
         let raw_claims_deny = verifier.evaluate(
             evidence,
             Tee::Sample,
@@ -321,7 +321,7 @@ mod tests {
             OriginalHashAlgorithm::Sha256,
             None,
             OriginalHashAlgorithm::Sha256,
-            vec!["allow".to_string()],
+            vec!["deny".to_string()],
         ).await;
 
         println!("raw_claims_deny: {:?}", raw_claims_deny);
