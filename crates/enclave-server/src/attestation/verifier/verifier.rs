@@ -195,7 +195,8 @@ mod tests {
     use super::*;
     use tokio::test;
 
-    fn test_parse_as_token() {
+    #[test]
+    async fn test_parse_as_token() {
         match env::current_dir() {
             Ok(path) => println!("Current directory: {}", path.display()),
             Err(e) => eprintln!("Error getting current directory: {}", e),
@@ -275,9 +276,7 @@ mod tests {
             vec!["allow".to_string()],
         ).await.unwrap();
 
-        let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
-        let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
-        let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&raw_claims).unwrap();
         
         // Verify results
         assert_eq!(claims.tee, "sample");
