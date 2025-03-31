@@ -1,3 +1,5 @@
+use attestation_service::token::ear_broker;
+use attestation_service::token::simple;
 use jsonrpsee::core::async_trait;
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
@@ -11,22 +13,53 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-pub struct SeismicAttestationAgent {
-    inner: AttestationAgent,
-    quote_mutex: Mutex<()>,  
+use super::verifier::DcapAttVerifier;
+
+pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
+    attestation_agent: AttestationAgent,
+    quote_mutex: Mutex<()>,
+    verifier: Arc<DcapAttVerifier<T>>,
 }
 
-impl SeismicAttestationAgent {
+// Convenience implementations for specific token broker types
+impl SeismicAttestationAgent<simple::SimpleAttestationTokenBroker> {
+    /// Create a new SeismicAttestationAgent with SimpleAttestationTokenBroker
+    pub fn new_simple(config_path: Option<&str>, broker_config: simple::Configuration) -> Result<Self> {
+        let token_broker = simple::SimpleAttestationTokenBroker::new(broker_config)?;
+        Ok(Self::new_with_broker(config_path, token_broker))
+    }
+
+    /// Create a new SeismicAttestationAgent with default SimpleAttestationTokenBroker
+    pub fn default_simple(config_path: Option<&str>) -> Result<Self> {
+        Self::new_simple(config_path, simple::Configuration::default())
+    }
+}
+
+impl SeismicAttestationAgent<ear_broker::EarAttestationTokenBroker> {
+    /// Create a new SeismicAttestationAgent with EarAttestationTokenBroker
+    pub fn new_ear(config_path: Option<&str>, broker_config: ear_broker::Configuration) -> Result<Self> {
+        let token_broker = ear_broker::EarAttestationTokenBroker::new(broker_config)?;
+        Ok(Self::new_with_broker(config_path, token_broker))
+    }
+
+    /// Create a new SeismicAttestationAgent with default EarAttestationTokenBroker
+    pub fn default_ear(config_path: Option<&str>) -> Result<Self> {
+        Self::new_ear(config_path, ear_broker::Configuration::default())
+    }
+}
+
+impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
     /// Create a new SeismicAttestationAgent wrapper
-    pub fn new(config_path: Option<&str>) -> Self {
+    pub fn new(config_path: Option<&str>, token_broker: T) -> Self {
         Self {
-            inner: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
+            attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
             quote_mutex: Mutex::new(()),
+            verifier: Arc::new(DcapAttVerifier::new(token_broker)),
         }
     }
 
     pub async fn init(&mut self) -> Result<()> {
-        self.inner.init().await
+        self.attestation_agent.init().await
     }
 
     pub async fn attest_signing_pk(&self, signing_pk: secp256k1::PublicKey) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
@@ -56,23 +89,63 @@ impl SeismicAttestationAgent {
 
         Ok((genesis_data, evidence))
     }
+    
+    /// Set Attestation Verification Policy.
+    pub async fn set_policy(&mut self, policy_id: String, policy: String) -> Result<()> {
+        self.verifier.set_policy(policy_id, policy).await?;
+        Ok(())
+    }
+
+    /// Get Attestation Verification Policy List.
+    /// The result is a `policy-id` -> `policy hash` map.
+    pub async fn list_policies(&self) -> Result<HashMap<String, String>> {
+        self.verifier
+            .list_policies()
+            .await
+            .context("Cannot List Policy")
+    }
+
+    /// Get a single Policy content.
+    pub async fn get_policy(&self, policy_id: String) -> Result<String> {
+        self.verifier
+            .get_policy(policy_id)
+            .await
+            .context("Cannot Get Policy")
+    }
+
+    /// Evaluate evidence against policies
+    pub async fn evaluate(
+        &self,
+        evidence: Vec<u8>,
+        tee: Tee,
+        runtime_data: Option<Data>,
+        runtime_data_hash_algorithm: HashAlgorithm,
+        init_data: Option<Data>,
+        init_data_hash_algorithm: HashAlgorithm,
+        policy_ids: Vec<String>,
+    ) -> Result<String> {
+        self.verifier
+            .evaluate(evidence, tee, runtime_data, runtime_data_hash_algorithm, init_data, init_data_hash_algorithm, policy_ids)
+            .await
+            .context("Failed to evaluate attestation")
+    }
 }
 
 #[async_trait]
-impl AttestationAPIs for SeismicAttestationAgent {
-    /// Get attestation Token (delegates to inner)
+impl<T: AttestationTokenBroker + Send + Sync> AttestationAPIs for SeismicAttestationAgent<T> {
+    /// Get attestation Token (delegates to attestation_agent)
     async fn get_token(&self, token_type: &str) -> Result<Vec<u8>> {
-        self.inner.get_token(token_type).await
+        self.attestation_agent.get_token(token_type).await
     }
 
     /// Get TEE hardware signed evidence with concurrency protection
     async fn get_evidence(&self, runtime_data: &[u8]) -> Result<Vec<u8>> {
         let _lock = self.quote_mutex.lock().await;
         
-        self.inner.get_evidence(runtime_data).await
+        self.attestation_agent.get_evidence(runtime_data).await
     }
 
-    /// Extend runtime measurement (delegates to inner)
+    /// Extend runtime measurement (delegates to attestation_agent)
     async fn extend_runtime_measurement(
         &self,
         domain: &str,
@@ -80,17 +153,17 @@ impl AttestationAPIs for SeismicAttestationAgent {
         content: &str,
         register_index: Option<u64>,
     ) -> Result<()> {
-        self.inner.extend_runtime_measurement(domain, operation, content, register_index).await
+        self.attestation_agent.extend_runtime_measurement(domain, operation, content, register_index).await
     }
 
-    /// Bind initdata (delegates to inner)
+    /// Bind initdata (delegates to attestation_agent)
     async fn bind_init_data(&self, init_data: &[u8]) -> Result<InitDataResult> {
-        self.inner.bind_init_data(init_data).await
+        self.attestation_agent.bind_init_data(init_data).await
     }
 
-    /// Get TEE type (delegates to inner)
+    /// Get TEE type (delegates to attestation_agent)
     fn get_tee_type(&self) -> Tee {
-        self.inner.get_tee_type()
+        self.attestation_agent.get_tee_type()
     }
 }
 

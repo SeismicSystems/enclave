@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration};
-use attestation_service::token::AttestationTokenBroker;
+use attestation_service::token::simple::{self, Configuration, SimpleAttestationTokenBroker};
+use attestation_service::token::{ear_broker, AttestationTokenBroker};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -94,16 +94,65 @@ impl Default for ASCustomizedClaims {
 }
 
 /// A lightweight, concurrency-friendly DCAP attestation verifier
-pub struct DcapAttVerifier {
-    token_broker: SimpleAttestationTokenBroker, 
+pub struct DcapAttVerifier<T: AttestationTokenBroker + Send + Sync> {
+    token_broker: T,
 }
 
-impl DcapAttVerifier {
+// Convenience methods for creating DcapAttVerifier with common token broker types
+impl DcapAttVerifier<simple::SimpleAttestationTokenBroker> {
+    /// Create a new DcapAttVerifier with SimpleAttestationTokenBroker
+    pub fn new_simple(config: simple::Configuration) -> Result<Self> {
+        let token_broker = simple::SimpleAttestationTokenBroker::new(config)?;
+        Ok(Self { token_broker })
+    }
+    
+    /// Create a new DcapAttVerifier with default SimpleAttestationTokenBroker
+    pub fn default_simple() -> Result<Self> {
+        Self::new_simple(simple::Configuration::default())
+    }
+}
+
+impl DcapAttVerifier<ear_broker::EarAttestationTokenBroker> {
+    /// Create a new DcapAttVerifier with EarAttestationTokenBroker
+    pub fn new_ear(config: ear_broker::Configuration) -> Result<Self> {
+        let token_broker = ear_broker::EarAttestationTokenBroker::new(config)?;
+        Ok(Self { token_broker })
+    }
+    
+    /// Create a new DcapAttVerifier with default EarAttestationTokenBroker
+    pub fn default_ear() -> Result<Self> {
+        Self::new_ear(ear_broker::Configuration::default())
+    }
+}
+
+// Implementation for the boxed trait version for backward compatibility
+impl SeismicAttestationAgent<Box<dyn AttestationTokenBroker + Send + Sync>> {
+    /// Create a new SeismicAttestationAgent with default configuration
+    pub fn new(config_path: Option<&str>) -> Result<Self> {
+        let verifier = DcapAttVerifier::default()?;
+        Ok(Self {
+            attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
+            quote_mutex: Mutex::new(()),
+            verifier: Arc::new(verifier),
+        })
+    }
+
+    /// Create a new SeismicAttestationAgent with specific token broker configuration
+    pub fn with_token_config(config_path: Option<&str>, token_config: AttestationTokenConfig) -> Result<Self> {
+        let verifier = DcapAttVerifier::from_config(token_config)?;
+        Ok(Self {
+            attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
+            quote_mutex: Mutex::new(()),
+            verifier: Arc::new(verifier),
+        })
+    }
+}
+
+impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Create a new DcapAttVerifier instance
-    pub fn new() -> Self {
+    pub fn new(token_broker: T) -> Self {
         Self {
-            //todo: enable creating custom token brokers, with a sk derived from key manager
-            token_broker: SimpleAttestationTokenBroker::new(Configuration::default()).unwrap(),
+            token_broker
         }
     }
 
@@ -265,7 +314,7 @@ mod tests {
 
     #[test]
     async fn verifier_test_policy_management() {
-        let mut verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
         
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
@@ -296,7 +345,7 @@ mod tests {
     #[test]
     async fn verifier_test_eval_evidence_sample() {
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
         
@@ -338,7 +387,7 @@ mod tests {
     #[test]
     async fn verifier_test_eval_policy_deny() {
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
         
@@ -395,7 +444,7 @@ mod tests {
         }
         
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
         
@@ -443,7 +492,7 @@ mod tests {
         }
         
         // Create verifier with the policy fixture
-        let mut verifier = DcapAttVerifier::new();
+        let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
         let fixture = PolicyFixture::new();
         fixture.configure_verifier(&mut verifier).await.unwrap();
         
