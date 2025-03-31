@@ -5,6 +5,7 @@ use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 
 use anyhow::{anyhow, Result};
+use attestation_service::token::AttestationTokenBroker;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -47,7 +48,7 @@ where
     attestation_config_path: Option<String>,
 }
 
-impl<K> Default for EnclaveServerBuilder<K>
+impl<K, T> Default for EnclaveServerBuilder<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -98,7 +99,7 @@ where
     }
 
     /// Build the final `EnclaveServer` object.
-    pub async fn build(self) -> Result<EnclaveServer<K>> {
+    pub async fn build(self) -> Result<EnclaveServer<K, T>> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
@@ -146,7 +147,7 @@ where
         })
     }
 }
-impl<K>BuildableServer for EnclaveServer<K>
+impl<K, T>BuildableServer for EnclaveServer<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -166,10 +167,7 @@ where
 }
 
 #[async_trait]
-impl<K>EnclaveApiServer for EnclaveServer<K>
-where
-    K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
+impl<K, T>EnclaveApiServer for EnclaveServer<K, T>
 {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {

@@ -80,7 +80,13 @@ impl PolicyFixture {
     }
     
     /// Configure the verifier with all policies in this fixture
-    pub async fn configure_verifier(&self, verifier: &mut DcapAttVerifier) -> Result<()> {
+    pub async fn configure_verifier<T>(
+        &self,
+        verifier: &mut DcapAttVerifier<T>,
+    ) -> Result<()>
+    where
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
         for (policy_id, policy_content) in &self.policy_map {
             verifier
                 .set_policy(policy_id.clone(), policy_content.clone())
@@ -88,7 +94,7 @@ impl PolicyFixture {
         }
         Ok(())
     }
-    
+   
     /// Get the content of a specific policy
     pub fn get_policy_content(&self, policy_id: &str) -> Option<&String> {
         self.policy_map.get(policy_id)
