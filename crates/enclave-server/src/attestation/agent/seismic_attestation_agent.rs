@@ -35,6 +35,10 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         }
     }
 
+    pub fn new_simple(config_path: Option<&str>) -> Self {
+        Self::new(config_path, SimpleAttestationTokenBroker::new(Configuration::default()).expect("Failed to create an AttestationAgent"))
+    }
+
     pub async fn init(&mut self) -> Result<()> {
         self.attestation_agent.init().await
     }
