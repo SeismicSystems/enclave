@@ -63,10 +63,9 @@ where
     }
 }
 
-impl<K, T> EnclaveServerBuilder<K, T>
+impl<K> EnclaveServerBuilder<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
         if let Some(curr) = self.addr {
@@ -97,7 +96,10 @@ where
     }
 
     /// Build the final `EnclaveServer` object.
-    pub async fn build(self) -> Result<EnclaveServer<K, T>> {
+    pub async fn build<T>(self) -> Result<EnclaveServer<K, T>>
+    where
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
@@ -109,7 +111,7 @@ where
         // Initialize TeeService with the key provider
         let config_path = self.attestation_config_path.as_deref();
         let tee_service = Arc::new(
-            TeeService::with_default_attestation(key_provider, config_path)
+            TeeService::with_simple_token(key_provider, config_path)
                 .await
                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
         );
@@ -134,7 +136,7 @@ where
     /// Simplified constructor if you want to skip the builder
     pub async fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
         let tee_service = Arc::new(
-            TeeService::with_default_attestation(key_provider, None)
+            TeeService::with_simple_token(key_provider, None)
                 .await
                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
         );
