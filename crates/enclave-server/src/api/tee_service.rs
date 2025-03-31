@@ -219,13 +219,15 @@ mod tests {
         let tee_service: TeeService<KeyManager, SimpleAttestationTokenBroker> =
             default_tee_service();
 
-        test_secp256k1_sign::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
-        test_io_encryption::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
-        test_decrypt_invalid_ciphertext::<KeyManager, SimpleAttestationTokenBroker>(&tee_service)
-            .await;
-        test_attestation_evidence_handler_valid_request_sample::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
-        test_attestation_evidence_handler_aztdxvtpm_runtime_data::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
-        test_genesis_get_data_handler_success_basic::<KeyManager, SimpleAttestationTokenBroker>(&tee_service).await;
+        let t1 = test_secp256k1_sign(&tee_service);
+        let t2 = test_io_encryption(&tee_service);
+        let t3 = test_decrypt_invalid_ciphertext(&tee_service);
+        let t4 = test_attestation_evidence_handler_valid_request_sample(&tee_service);
+        let t5 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&tee_service);
+        let t6 = test_genesis_get_data_handler_success_basic(&tee_service);
+
+        // Run all concurrently and await them
+        let (_r1, _r2, _r3, _r4, _r5, _r6) = tokio::join!(t1, t2, t3, t4, t5, t6);
     }
 
     async fn test_secp256k1_sign<K, T>(tee_service: &TeeService<K, T>)
@@ -258,17 +260,17 @@ mod tests {
 
         let res = tee_service.encrypt(req).await.unwrap();
 
-       // check that decryption returns the original data
-       // Prepare decrypt request body
-       let req = IoDecryptionRequest {
-           key: get_unsecure_sample_secp256k1_pk(),
-           data: res.encrypted_data,
-           nonce: nonce.clone(),
-       };
+        // check that decryption returns the original data
+        // Prepare decrypt request body
+        let req = IoDecryptionRequest {
+            key: get_unsecure_sample_secp256k1_pk(),
+            data: res.encrypted_data,
+            nonce: nonce.clone(),
+        };
 
-       let res = tee_service.decrypt(req).await.unwrap();
+        let res = tee_service.decrypt(req).await.unwrap();
 
-       assert_eq!(res.decrypted_data, data_to_encrypt);
+        assert_eq!(res.decrypted_data, data_to_encrypt);
     }
 
     async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &TeeService<K, T>)
@@ -276,74 +278,79 @@ mod tests {
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-       let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-       let nonce = Nonce::new_rand();
-       let decryption_request = IoDecryptionRequest {
-           key: get_unsecure_sample_secp256k1_pk(),
-           data: bad_ciphertext,
-           nonce: nonce.clone(),
-       };
-       let res = tee_service.decrypt(decryption_request).await;
+        let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let nonce = Nonce::new_rand();
+        let decryption_request = IoDecryptionRequest {
+            key: get_unsecure_sample_secp256k1_pk(),
+            data: bad_ciphertext,
+            nonce: nonce.clone(),
+        };
+        let res = tee_service.decrypt(decryption_request).await;
 
-       assert_eq!(res.is_err(), true);
-       assert_eq!(
-           res.err()
-               .unwrap()
-               .to_string()
-               .contains("Invalid ciphertext"),
-           true
-       );
+        assert_eq!(res.is_err(), true);
+        assert_eq!(
+            res.err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid ciphertext"),
+            true
+        );
     }
 
-    async fn test_attestation_evidence_handler_valid_request_sample<K, T>(tee_service: &TeeService<K, T>)
-    where
+    async fn test_attestation_evidence_handler_valid_request_sample<K, T>(
+        tee_service: &TeeService<K, T>,
+    ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-       // Mock a valid AttestationGetEvidenceRequest
-       let runtime_data = "nonce".as_bytes(); // Example runtime data
-       let evidence_request = AttestationGetEvidenceRequest {
-           runtime_data: runtime_data.to_vec(),
-       };
+        // Mock a valid AttestationGetEvidenceRequest
+        let runtime_data = "nonce".as_bytes(); // Example runtime data
+        let evidence_request = AttestationGetEvidenceRequest {
+            runtime_data: runtime_data.to_vec(),
+        };
 
-       // Call the handler
-       let res = tee_service.get_attestation_evidence(evidence_request)
-           .await
-           .unwrap();
+        // Call the handler
+        let res = tee_service
+            .get_attestation_evidence(evidence_request)
+            .await
+            .unwrap();
 
-       // Ensure the response is not empty
-       assert!(!res.evidence.is_empty());
+        // Ensure the response is not empty
+        assert!(!res.evidence.is_empty());
     }
 
-    async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data<K, T>(tee_service: &TeeService<K, T>)
-    where
+    async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data<K, T>(
+        tee_service: &TeeService<K, T>,
+    ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-       // handle set up permissions
-       if !is_sudo() {
-           panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-       }
+        // handle set up permissions
+        if !is_sudo() {
+            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+        }
 
-       // Make requests with different runtime data and see they are different
-       let runtime_data_1 = "nonce1".as_bytes();
-       let evidence_request_1 = AttestationGetEvidenceRequest {
-           runtime_data: runtime_data_1.to_vec(),
-       };
+        // Make requests with different runtime data and see they are different
+        let runtime_data_1 = "nonce1".as_bytes();
+        let evidence_request_1 = AttestationGetEvidenceRequest {
+            runtime_data: runtime_data_1.to_vec(),
+        };
 
-       let runtime_data_2 = "nonce2".as_bytes();
-       let evidence_request_2 = AttestationGetEvidenceRequest {
-           runtime_data: runtime_data_2.to_vec(),
-       };
+        let runtime_data_2 = "nonce2".as_bytes();
+        let evidence_request_2 = AttestationGetEvidenceRequest {
+            runtime_data: runtime_data_2.to_vec(),
+        };
 
-       let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
-           .await
-           .unwrap();
-       let res_2 = tee_service.get_attestation_evidence(evidence_request_2)
-           .await
-           .unwrap();
+        let res_1 = tee_service
+            .get_attestation_evidence(evidence_request_1)
+            .await
+            .unwrap();
+        let res_2 = tee_service
+            .get_attestation_evidence(evidence_request_2)
+            .await
+            .unwrap();
 
-       assert_ne!(res_1.evidence, res_2.evidence);
+        assert_ne!(res_1.evidence, res_2.evidence);
     }
 
     async fn test_genesis_get_data_handler_success_basic<K, T>(tee_service: &TeeService<K, T>)
@@ -351,8 +358,8 @@ mod tests {
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-       // Call the handler
-       let res = tee_service.genesis_get_data_handler().await.unwrap();
-       assert!(!res.evidence.is_empty());
+        // Call the handler
+        let res = tee_service.genesis_get_data_handler().await.unwrap();
+        assert!(!res.evidence.is_empty());
     }
 }
