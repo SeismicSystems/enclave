@@ -58,6 +58,7 @@ pub enum Data {
 /// - For empty data in `AzTdxVtpm`, set the following:
 ///   - `runtime_data = Some(Data::Raw("".into()))`
 ///   - `runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)`
+#[derive(Debug)]
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
@@ -134,33 +135,6 @@ impl ASCoreTokenClaims {
 pub struct ASCustomizedClaims {
     pub init_data: Value,
     pub runtime_data: Value,
-}
-
-impl fmt::Debug for AttestationEvalEvidenceRequest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AttestationEvalEvidenceRequest")
-            .field("evidence", &self.evidence)
-            .field("tee", &self.tee)
-            .field(
-                "runtime_data",
-                &match &self.runtime_data {
-                    Some(data) => match data {
-                        Data::Raw(bytes) => format!("Raw({:?})", bytes),
-                        Data::Structured(value) => format!("Structured({:?})", value),
-                    },
-                    None => "None".to_string(),
-                },
-            )
-            .field(
-                "runtime_data_hash_algorithm",
-                &match &self.runtime_data_hash_algorithm {
-                    Some(alg) => alg.to_string(),
-                    None => "None".to_string(),
-                },
-            )
-            .field("policy_ids", &self.policy_ids)
-            .finish()
-    }
 }
 
 impl Serialize for AttestationEvalEvidenceRequest {
