@@ -1,24 +1,28 @@
 use std::sync::Arc;
 
-use attestation_service::token::simple::{Configuration, SimpleAttestationTokenBroker};
-use attestation_service::token::{ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig};
-use attestation_service::{Data, HashAlgorithm};
 use log::error;
 use jsonrpsee::core::{async_trait, RpcResult};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
-
-use crate::attestation::verifier::ASCoreTokenClaims;
 use crate::key_manager::NetworkKeyProvider;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
-
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest};
 
+
 use crate::attestation::agent::SeismicAttestationAgent;
 use super::traits::TeeServiceApi;
 use attestation_agent::AttestationAPIs;
+
+// use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
+// use crate::attestation::verifier::into_original::IntoOriginalData;
+// use crate::attestation::verifier::ASCoreTokenClaims;
+
+use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+use attestation_service::token::simple::{Configuration, SimpleAttestationTokenBroker};
+use attestation_service::token::{ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig};
+use attestation_service::{Data, HashAlgorithm};
 
 pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
     key_provider: Arc<K>,

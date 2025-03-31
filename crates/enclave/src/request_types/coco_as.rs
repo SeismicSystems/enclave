@@ -7,6 +7,10 @@ use std::fmt;
 use std::str::FromStr;
 use strum::{AsRefStr, Display, EnumString};
 
+use anyhow::{anyhow, Result};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+
 /// Hash algorithms used to calculate runtime/init data binding
 #[derive(Debug, Display, EnumString, AsRefStr)]
 pub enum HashAlgorithm {
@@ -102,6 +106,28 @@ pub struct ASCoreTokenClaims {
     pub tcb_status: String,
 
     pub customized_claims: ASCustomizedClaims,
+}
+impl ASCoreTokenClaims {
+    /// Serializes the claims to JSON (without JWT encoding).
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(self)?)
+    }
+
+    /// Parses a (base64-encoded) JWT string into an `ASCoreTokenClaims`.
+    ///
+    /// Expects the token to have three parts separated by '.', and
+    /// decodes the middle part as JSON claims.
+    pub fn from_jwt(token: &str) -> Result<Self> {
+        let parts: Vec<&str> = token.splitn(3, '.').collect();
+        if parts.len() != 3 {
+            return Err(anyhow!("Invalid token format: expected 3 parts separated by '.'"));
+        }
+        let claims_b64 = parts[1];
+        let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
+        let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
+        let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string)?;
+        Ok(claims)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

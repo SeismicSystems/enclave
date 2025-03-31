@@ -1,29 +1,35 @@
-use alloy_primitives::map::HashMap;
-use attestation_service::token::ear_broker;
-use attestation_service::token::simple;
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
-use attestation_service::token::AttestationTokenBroker;
-use attestation_service::Data;
-use attestation_service::HashAlgorithm;
+use std::collections::HashMap;
 use jsonrpsee::core::async_trait;
 use anyhow::{anyhow, Result};
-use attestation_agent::AttestationAPIs;
-use attestation_agent::AttestationAgent;
-use attestation_agent::InitDataResult;
 use kbs_types::Tee;
 use once_cell::sync::OnceCell;
 use seismic_enclave::genesis::GenesisData;
 use sha2::{Digest, Sha256};
+use core::prelude::v1;
 use std::sync::Arc;
-
 use tokio::sync::Mutex;
 
-use crate::attestation::verifier::DcapAttVerifier;
+use attestation_agent::AttestationAPIs;
+use attestation_agent::AttestationAgent;
+use attestation_agent::InitDataResult;
 
-pub struct SeismicAttestationAgent<> {
+use attestation_service::token::ear_broker;
+use attestation_service::token::simple;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use attestation_service::token::AttestationTokenBroker;
+
+use attestation_service::Data as OriginalData;
+use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+use seismic_enclave::request_types::coco_as::{HashAlgorithm, Data};
+
+use crate::attestation::verifier::DcapAttVerifier;
+// use crate::attestation::verifier::into_original::{IntoOriginalData};
+// use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+
+pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
     attestation_agent: AttestationAgent,
     quote_mutex: Mutex<()>,
-    verifier: Arc<DcapAttVerifier>,
+    verifier: DcapAttVerifier<T>,
 }
 
 impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
@@ -32,7 +38,7 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         Self {
             attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
             quote_mutex: Mutex::new(()),
-            verifier: Arc::new(DcapAttVerifier::new(token_broker)),
+            verifier: DcapAttVerifier::new(token_broker),
         }
     }
 
@@ -77,7 +83,7 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
     /// Get Attestation Verification Policy List.
     /// The result is a `policy-id` -> `policy hash` map.
     pub async fn list_policies(&self) -> Result<HashMap<String, String>> {
-        self.verifier
+      self.verifier
             .list_policies()
             .await
     }
@@ -94,10 +100,10 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         &self,
         evidence: Vec<u8>,
         tee: Tee,
-        runtime_data: Option<Data>,
-        runtime_data_hash_algorithm: HashAlgorithm,
-        init_data: Option<Data>,
-        init_data_hash_algorithm: HashAlgorithm,
+        runtime_data: Option<OriginalData>,
+        runtime_data_hash_algorithm: OriginalHashAlgorithm,
+        init_data: Option<OriginalData>,
+        init_data_hash_algorithm: OriginalHashAlgorithm,
         policy_ids: Vec<String>,
     ) -> Result<String> {
         self.verifier
