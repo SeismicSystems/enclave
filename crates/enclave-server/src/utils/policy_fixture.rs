@@ -1,6 +1,6 @@
 // policy_test_utils.rs
 
-use crate::api::verifier::DcapAttVerifier;
+use crate::attestation::verifier::DcapAttVerifier;
 use anyhow::Result;
 use std::collections::HashMap;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};

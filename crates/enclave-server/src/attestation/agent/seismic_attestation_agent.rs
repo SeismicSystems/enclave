@@ -2,6 +2,8 @@ use alloy_primitives::map::HashMap;
 use attestation_service::token::ear_broker;
 use attestation_service::token::simple;
 use attestation_service::token::AttestationTokenBroker;
+use attestation_service::Data;
+use attestation_service::HashAlgorithm;
 use jsonrpsee::core::async_trait;
 use anyhow::{anyhow, Result};
 use attestation_agent::AttestationAPIs;
@@ -104,7 +106,6 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         self.verifier
             .list_policies()
             .await
-            .context("Cannot List Policy")
     }
 
     /// Get a single Policy content.
@@ -112,7 +113,6 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         self.verifier
             .get_policy(policy_id)
             .await
-            .context("Cannot Get Policy")
     }
 
     /// Evaluate evidence against policies
@@ -129,7 +129,6 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         self.verifier
             .evaluate(evidence, tee, runtime_data, runtime_data_hash_algorithm, init_data, init_data_hash_algorithm, policy_ids)
             .await
-            .context("Failed to evaluate attestation")
     }
 }
 

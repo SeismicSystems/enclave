@@ -68,29 +68,6 @@ impl DcapAttVerifier<ear_broker::EarAttestationTokenBroker> {
     }
 }
 
-// Implementation for the boxed trait version for backward compatibility
-impl SeismicAttestationAgent<Box<dyn AttestationTokenBroker + Send + Sync>> {
-    /// Create a new SeismicAttestationAgent with default configuration
-    pub fn new(config_path: Option<&str>) -> Result<Self> {
-        let verifier = DcapAttVerifier::default()?;
-        Ok(Self {
-            attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
-            quote_mutex: Mutex::new(()),
-            verifier: Arc::new(verifier),
-        })
-    }
-
-    /// Create a new SeismicAttestationAgent with specific token broker configuration
-    pub fn with_token_config(config_path: Option<&str>, token_config: AttestationTokenConfig) -> Result<Self> {
-        let verifier = DcapAttVerifier::from_config(token_config)?;
-        Ok(Self {
-            attestation_agent: AttestationAgent::new(config_path).expect("Failed to create an AttestationAgent"),
-            quote_mutex: Mutex::new(()),
-            verifier: Arc::new(verifier),
-        })
-    }
-}
-
 impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Create a new DcapAttVerifier instance
     pub fn new(token_broker: T) -> Self {
@@ -210,7 +187,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::{policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}, test_utils::read_vector_txt};
+    use crate::{attestation::verifier::ASCoreTokenClaims, utils::{policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED}, test_utils::read_vector_txt}};
     use std::env;
     use super::*;
     use tokio::test;
@@ -224,7 +201,7 @@ mod tests {
         let ex_token_path = "../../examples/as_token.txt"; // assumes tests are run from enclaver-server dir
         let ex_token = std::fs::read_to_string(ex_token_path).unwrap();
 
-        let claims = parse_as_token_claims(&ex_token).unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
 
         assert_eq!(claims.tee, "aztdxvtpm");
         let evaluation_reports = serde_json::to_string(&claims.evaluation_reports).unwrap();
@@ -296,7 +273,7 @@ mod tests {
             vec!["allow".to_string()],
         ).await.unwrap();
 
-        let claims = parse_as_token_claims(&raw_claims).unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
         
         // Verify results
         assert_eq!(claims.tee, "sample");
@@ -338,7 +315,7 @@ mod tests {
             vec!["allow".to_string()],
         ).await.unwrap();
 
-        let claims_allow = parse_as_token_claims(&raw_claims_allow).unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
         
         // Verify success
         let allow_reports = &claims_allow.evaluation_reports;
@@ -392,7 +369,7 @@ mod tests {
             vec!["allow".to_string()],
         ).await.unwrap();
         
-        let claims = parse_as_token_claims(&raw_claims).unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
         
         // Verify results
         assert_eq!(claims.tee, "aztdxvtpm");
@@ -441,7 +418,7 @@ mod tests {
             vec!["yocto".to_string()],
         ).await.unwrap();
         
-        let claims_pass = parse_as_token_claims(&raw_claims_pass).unwrap();
+        let claims = ASCoreTokenClaims::from_jwt(&ex_token).unwrap();
         
         // Verify passing results
         assert_eq!(claims_pass.tee, "aztdxvtpm");
