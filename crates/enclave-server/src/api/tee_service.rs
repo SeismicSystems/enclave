@@ -39,7 +39,7 @@ where
 
     // Factory method to create with default configuration
     pub async fn with_simple_token(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
-        let token_broker = SimpleAttestationTokenBroker::new(Configuration::default());
+        let token_broker = SimpleAttestationTokenBroker::new(Configuration::default())?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, token_broker)?;
         let attestation_agent = Arc::new(attestation_agent);
         

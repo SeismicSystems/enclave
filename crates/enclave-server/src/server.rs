@@ -129,7 +129,7 @@ where
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
     /// Create a new builder with default address
-    pub fn builder() -> EnclaveServerBuilder<K, T> {
+    pub fn builder() -> EnclaveServerBuilder<K> {
         EnclaveServerBuilder::default()
     }
     
