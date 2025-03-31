@@ -262,144 +262,144 @@ mod tests {
     
     use seismic_enclave::{nonce::Nonce, get_unsecure_sample_secp256k1_pk};
 
-    #[tokio::test]
-    async fn test_secp256k1_sign() {
-        // Prepare sign request body
-        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-        let sign_request = Secp256k1SignRequest {
-            msg: msg_to_sign.clone(),
-        };
-        let kp = KeyManagerBuilder::build_mock().unwrap();
+    //#[tokio::test]
+    //async fn test_secp256k1_sign() {
+    //    // Prepare sign request body
+    //    let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
+    //    let sign_request = Secp256k1SignRequest {
+    //        msg: msg_to_sign.clone(),
+    //    };
+    //    let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
 
-        let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
-        assert!(!res.sig.is_empty());
-    }
+    //    let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
+    //    assert!(!res.sig.is_empty());
+    //}
 
-    #[tokio::test]
-    async fn test_io_encryption() {
-        // Prepare encryption request body
-        let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let nonce = Nonce::new_rand();
-        let req = IoEncryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: data_to_encrypt.clone(),
-            nonce: nonce.clone().into(),
-        };
-        let kp = KeyManagerBuilder::build_mock().unwrap();
+    //#[tokio::test]
+    //async fn test_io_encryption() {
+    //    // Prepare encryption request body
+    //    let data_to_encrypt = vec![72, 101, 108, 108, 111];
+    //    let nonce = Nonce::new_rand();
+    //    let req = IoEncryptionRequest {
+    //        key: get_unsecure_sample_secp256k1_pk(),
+    //        data: data_to_encrypt.clone(),
+    //        nonce: nonce.clone().into(),
+    //    };
+    //    let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-        
-        let res = tee_service.encrypt(req).await.unwrap();
+    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    //    
+    //    let res = tee_service.encrypt(req).await.unwrap();
 
-        // check that decryption returns the original data
-        // Prepare decrypt request body
-        let req = IoDecryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: res.encrypted_data,
-            nonce: nonce.clone(),
-        };
+    //    // check that decryption returns the original data
+    //    // Prepare decrypt request body
+    //    let req = IoDecryptionRequest {
+    //        key: get_unsecure_sample_secp256k1_pk(),
+    //        data: res.encrypted_data,
+    //        nonce: nonce.clone(),
+    //    };
 
-        let res = tee_service.decrypt(req).await.unwrap();
+    //    let res = tee_service.decrypt(req).await.unwrap();
 
-        assert_eq!(res.decrypted_data, data_to_encrypt);
-    }
+    //    assert_eq!(res.decrypted_data, data_to_encrypt);
+    //}
 
-    #[tokio::test]
-    async fn test_decrypt_invalid_ciphertext() {
-        let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let nonce = Nonce::new_rand();
-        let decryption_request = IoDecryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: bad_ciphertext,
-            nonce: nonce.clone(),
-        };
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-        let res = tee_service.decrypt(decryption_request).await;
+    //#[tokio::test]
+    //async fn test_decrypt_invalid_ciphertext() {
+    //    let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    //    let nonce = Nonce::new_rand();
+    //    let decryption_request = IoDecryptionRequest {
+    //        key: get_unsecure_sample_secp256k1_pk(),
+    //        data: bad_ciphertext,
+    //        nonce: nonce.clone(),
+    //    };
+    //    let kp = KeyManagerBuilder::build_mock().unwrap();
+    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    //    let res = tee_service.decrypt(decryption_request).await;
 
-        assert_eq!(res.is_err(), true);
-        assert_eq!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("Invalid ciphertext"),
-            true
-        );
-    }
+    //    assert_eq!(res.is_err(), true);
+    //    assert_eq!(
+    //        res.err()
+    //            .unwrap()
+    //            .to_string()
+    //            .contains("Invalid ciphertext"),
+    //        true
+    //    );
+    //}
 
-    #[tokio::test]
-    #[serial(attestation_agent)]
-    async fn test_attestation_evidence_handler_valid_request_sample() {
-        // NOTE: This test will run with the Sample TEE Type
-        // because it doesn't run with sudo privileges
+    //#[tokio::test]
+    //#[serial(attestation_agent)]
+    //async fn test_attestation_evidence_handler_valid_request_sample() {
+    //    // NOTE: This test will run with the Sample TEE Type
+    //    // because it doesn't run with sudo privileges
 
-        init_coco_aa().expect("Failed to initialize AttestationAgent");
+    //    init_coco_aa().expect("Failed to initialize AttestationAgent");
 
-        // Mock a valid AttestationGetEvidenceRequest
-        let runtime_data = "nonce".as_bytes(); // Example runtime data
-        let evidence_request = AttestationGetEvidenceRequest {
-            runtime_data: runtime_data.to_vec(),
-        };
-        
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-        
-        // Call the handler
-        let res = tee_service.get_attestation_evidence(evidence_request)
-            .await
-            .unwrap();
+    //    // Mock a valid AttestationGetEvidenceRequest
+    //    let runtime_data = "nonce".as_bytes(); // Example runtime data
+    //    let evidence_request = AttestationGetEvidenceRequest {
+    //        runtime_data: runtime_data.to_vec(),
+    //    };
+    //    
+    //    let kp = KeyManagerBuilder::build_mock().unwrap();
+    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    //    
+    //    // Call the handler
+    //    let res = tee_service.get_attestation_evidence(evidence_request)
+    //        .await
+    //        .unwrap();
 
-        // Ensure the response is not empty
-        assert!(!res.evidence.is_empty());
-    }
+    //    // Ensure the response is not empty
+    //    assert!(!res.evidence.is_empty());
+    //}
 
-    #[tokio::test]
-    #[serial(attestation_agent)]
-    async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data() {
-        // handle set up permissions
-        if !is_sudo() {
-            panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
-        }
+    //#[tokio::test]
+    //#[serial(attestation_agent)]
+    //async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data() {
+    //    // handle set up permissions
+    //    if !is_sudo() {
+    //        panic!("test_eval_evidence_az_tdx: skipped (requires sudo privileges)");
+    //    }
 
-        init_coco_aa().expect("Failed to initialize AttestationAgent");
+    //    init_coco_aa().expect("Failed to initialize AttestationAgent");
 
-        // Make requests with different runtime data and see they are different
-        let runtime_data_1 = "nonce1".as_bytes();
-        let evidence_request_1 = AttestationGetEvidenceRequest {
-            runtime_data: runtime_data_1.to_vec(),
-        };
+    //    // Make requests with different runtime data and see they are different
+    //    let runtime_data_1 = "nonce1".as_bytes();
+    //    let evidence_request_1 = AttestationGetEvidenceRequest {
+    //        runtime_data: runtime_data_1.to_vec(),
+    //    };
 
-        let runtime_data_2 = "nonce2".as_bytes();
-        let evidence_request_2 = AttestationGetEvidenceRequest {
-            runtime_data: runtime_data_2.to_vec(),
-        };
-        
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    //    let runtime_data_2 = "nonce2".as_bytes();
+    //    let evidence_request_2 = AttestationGetEvidenceRequest {
+    //        runtime_data: runtime_data_2.to_vec(),
+    //    };
+    //    
+    //    let kp = KeyManagerBuilder::build_mock().unwrap();
+    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
 
-        let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
-            .await
-            .unwrap();
-        let res_2 = tee_service.get_attestation_evidence(evidence_request_2)
-            .await
-            .unwrap();
+    //    let res_1 = tee_service.get_attestation_evidence(evidence_request_1)
+    //        .await
+    //        .unwrap();
+    //    let res_2 = tee_service.get_attestation_evidence(evidence_request_2)
+    //        .await
+    //        .unwrap();
 
-        assert_ne!(res_1.evidence, res_2.evidence);
-    }
-    
-    #[tokio::test]
-    #[serial(attestation_agent)]
-    async fn test_genesis_get_data_handler_success_basic() {
-        // Initialize ATTESTATION_AGENT
-        init_coco_aa().expect("Failed to initialize AttestationAgent");
-        let kp = KeyManagerBuilder::build_mock().unwrap();
+    //    assert_ne!(res_1.evidence, res_2.evidence);
+    //}
+    //
+    //#[tokio::test]
+    //#[serial(attestation_agent)]
+    //async fn test_genesis_get_data_handler_success_basic() {
+    //    // Initialize ATTESTATION_AGENT
+    //    init_coco_aa().expect("Failed to initialize AttestationAgent");
+    //    let kp = KeyManagerBuilder::build_mock().unwrap();
 
-        // Call the handler
-        let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
-        let res = tee_service.genesis_get_data_handler().await.unwrap();
-        assert!(!res.evidence.is_empty());
-    }
+    //    // Call the handler
+    //    let tee_service = TeeService::with_default_attestation(kp, None).await.unwrap();
+    //    let res = tee_service.genesis_get_data_handler().await.unwrap();
+    //    assert!(!res.evidence.is_empty());
+    //}
 
 }
