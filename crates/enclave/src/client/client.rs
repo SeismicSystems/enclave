@@ -1,6 +1,6 @@
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
-    future::Future, net::{IpAddr, Ipv4Addr}, ops::Deref, str::FromStr, sync::OnceLock, time::Duration
+    future::Future, net::{IpAddr, Ipv4Addr}, ops::Deref, sync::OnceLock, time::Duration
 };
 use tokio::runtime::{Handle, Runtime};
 
@@ -199,7 +199,8 @@ pub mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sync_client() {
         // spawn a seperate thread for the server, otherwise the test will hang
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+        let port = get_random_port(); // rand port for test parallelization
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
