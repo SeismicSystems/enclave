@@ -38,20 +38,18 @@ where
 }
 
 /// A builder that lets us configure the server
-pub struct EnclaveServerBuilder<K, T>
+pub struct EnclaveServerBuilder<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     addr: Option<SocketAddr>,
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
 }
 
-impl<K, T> Default for EnclaveServerBuilder<K, T>
+impl<K> Default for EnclaveServerBuilder<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     fn default() -> Self {
         Self {

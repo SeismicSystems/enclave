@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use attestation_service::token::simple::{Configuration, SimpleAttestationTokenBroker};
 use attestation_service::token::{ear_broker, simple, AttestationTokenBroker, AttestationTokenConfig};
 use attestation_service::{Data, HashAlgorithm};
 use log::error;
@@ -37,8 +38,8 @@ where
     }
 
     // Factory method to create with default configuration
-    pub async fn with_default_attestation(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
-        let token_broker = AttestationTokenConfig::default().to_token_broker();
+    pub async fn with_simple_token(key_provider: K, config_path: Option<&str>) -> Result<Self, anyhow::Error> {
+        let token_broker = SimpleAttestationTokenBroker::new(Configuration::default());
         let attestation_agent = SeismicAttestationAgent::new(config_path, token_broker)?;
         let attestation_agent = Arc::new(attestation_agent);
         

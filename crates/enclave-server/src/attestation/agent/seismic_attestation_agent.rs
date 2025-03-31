@@ -25,33 +25,6 @@ pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
     verifier: Arc<DcapAttVerifier<T>>,
 }
 
-// Convenience implementations for specific token broker types
-impl SeismicAttestationAgent<simple::SimpleAttestationTokenBroker> {
-    /// Create a new SeismicAttestationAgent with SimpleAttestationTokenBroker
-    pub fn new_simple(config_path: Option<&str>, broker_config: simple::Configuration) -> Result<Self> {
-        let token_broker = simple::SimpleAttestationTokenBroker::new(broker_config)?;
-        Ok(Self::new_with_broker(config_path, token_broker))
-    }
-
-    /// Create a new SeismicAttestationAgent with default SimpleAttestationTokenBroker
-    pub fn default_simple(config_path: Option<&str>) -> Result<Self> {
-        Self::new_simple(config_path, simple::Configuration::default())
-    }
-}
-
-impl SeismicAttestationAgent<ear_broker::EarAttestationTokenBroker> {
-    /// Create a new SeismicAttestationAgent with EarAttestationTokenBroker
-    pub fn new_ear(config_path: Option<&str>, broker_config: ear_broker::Configuration) -> Result<Self> {
-        let token_broker = ear_broker::EarAttestationTokenBroker::new(broker_config)?;
-        Ok(Self::new_with_broker(config_path, token_broker))
-    }
-
-    /// Create a new SeismicAttestationAgent with default EarAttestationTokenBroker
-    pub fn default_ear(config_path: Option<&str>) -> Result<Self> {
-        Self::new_ear(config_path, ear_broker::Configuration::default())
-    }
-}
-
 impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
     /// Create a new SeismicAttestationAgent wrapper
     pub fn new(config_path: Option<&str>, token_broker: T) -> Self {
