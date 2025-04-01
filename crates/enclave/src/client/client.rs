@@ -27,6 +27,8 @@ pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
+type EnclaveHttpClient = HttpClient<AuthClientService<HttpBackend>>;
+
 pub struct EnclaveClientBuilder {
     addr: Option<String>,
     port: Option<u16>,
@@ -80,13 +82,23 @@ impl EnclaveClientBuilder {
                 self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
             )
         });
-        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+        let auth_secret = self.auth_secret.unwrap_or_else(|| {
+            // TODO: better error handling
+            panic!("No auth secret supplied to builder")
+        });
+
+        let secret_layer = AuthClientLayer::new(auth_secret);
+        let middleware = tower::ServiceBuilder::default().layer(secret_layer);
+
+        let async_client: EnclaveHttpClient = jsonrpsee::http_client::HttpClientBuilder::default()
+            .set_http_middleware(middleware)
             .request_timeout(
                 self.timeout
                     .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
             )
             .build(url)
             .unwrap();
+
         EnclaveClient::new_from_client(async_client)
     }
 }
@@ -95,27 +107,13 @@ impl EnclaveClientBuilder {
 #[derive(Debug, Clone)]
 pub struct EnclaveClient {
     /// The inner HTTP client.
-    async_client: HttpClient,
+    async_client: EnclaveHttpClient,
     /// The runtime for the client.
     handle: Handle,
 }
 
-impl Default for EnclaveClient {
-    fn default() -> Self {
-        let url = format!(
-            "http://{}:{}",
-            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        );
-        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
-            .request_timeout(Duration::from_secs(5))
-            .build(url)
-            .unwrap();
-        Self::new_from_client(async_client)
-    }
-}
-
 impl Deref for EnclaveClient {
-    type Target = HttpClient;
+    type Target = EnclaveHttpClient;
 
     fn deref(&self) -> &Self::Target {
         &self.async_client
@@ -127,17 +125,7 @@ impl EnclaveClient {
         EnclaveClientBuilder::new()
     }
 
-    /// Create a new enclave client.
-    pub fn new(url: impl AsRef<str>) -> Self {
-        EnclaveClientBuilder::new().url(url.as_ref()).build()
-    }
-
-    /// Create a new enclave client from an address and port.
-    pub fn new_from_addr_port(addr: impl Into<String>, port: u16) -> Self {
-        EnclaveClientBuilder::new().addr(addr).port(port).build()
-    }
-
-    pub fn new_from_client(async_client: HttpClient) -> Self {
+    pub fn new_from_client(async_client: EnclaveHttpClient) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
             let runtime = ENCLAVE_CLIENT_RUNTIME.get_or_init(|| Runtime::new().unwrap());
             runtime.handle().clone()
@@ -210,9 +198,9 @@ pub mod tests {
     #[test]
     fn test_client_sync_context() {
         // testing if sync client can be created in a sync runtime
-        let port = 1888;
+        let port = get_random_port();
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-        let _ = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        let _ = EnclaveClient::mock(addr.ip().to_string(), addr.port());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -224,7 +212,7 @@ pub mod tests {
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        let client = EnclaveClient::mock(addr.ip().to_string(), addr.port());
         sync_test_health_check(&client);
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);

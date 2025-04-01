@@ -250,7 +250,7 @@ mod tests {
         let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        let client = EnclaveClient::mock(addr.ip().to_string(), addr.port());
         async_test_health_check(&client).await;
         async_test_get_public_key(&client).await;
         async_test_get_eph_rng_keypair(&client).await;

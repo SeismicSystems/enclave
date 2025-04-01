@@ -9,6 +9,7 @@ use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
 use seismic_enclave::coco_as::HashAlgorithm;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
@@ -21,6 +22,7 @@ use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
+use std::net::IpAddr;
 use seismic_enclave::auth::JwtSecret;
 use crate::utils::get_random_port;
 
@@ -115,11 +117,24 @@ pub fn is_sudo() -> bool {
 
  async fn test_get_public_key(client: &EnclaveClient) {
      let res = client.get_public_key().await.unwrap();
-     assert_eq!(res, get_unsecure_sample_secp256k1_pk());
+     assert!(!(res==get_unsecure_sample_secp256k1_pk()), "public key should be randomly generated");
  }
 
  async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-     let res = client.get_eph_rng_keypair().await.unwrap();
+     let res: schnorrkel::Keypair = client.get_eph_rng_keypair().await.unwrap();
+     assert!(!(res.secret==get_unsecure_sample_schnorrkel_keypair().secret), "eph rng keypair should be randomly generated");
+ }
+
+ async fn test_misconfigured_auth_secret(ip: IpAddr, port: u16) {
+    let rand_auth_secret = JwtSecret::random();
+    let client = EnclaveClientBuilder::new()
+        .auth_secret(rand_auth_secret)
+        .addr(ip.to_string())
+        .port(port)
+        .timeout(Duration::from_secs(5))
+        .build();
+    let response = client.health_check().await;
+    assert!(response.is_err(), "client should not be able to connect to server with wrong auth secret");
  }
 
 #[tokio::test]
@@ -156,4 +171,5 @@ async fn test_server_requests() {
     test_attestation_eval_evidence(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
+    test_misconfigured_auth_secret(addr.ip(), addr.port()).await;
 }
