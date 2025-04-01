@@ -1,6 +1,10 @@
-use crate::key_manager::NetworkKeyProvider;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use std::sync::Arc;
+use attestation_agent::AttestationAPIs;
+use attestation_service::token::AttestationTokenBroker;
+use attestation_service::{Data, HashAlgorithm};
+
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -13,24 +17,21 @@ use seismic_enclave::{
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
     secp256k1_sign_digest,
 };
-use std::sync::Arc;
+use seismic_enclave::coco_as::ASCoreTokenClaims;
 
-use super::traits::TeeServiceApi;
+use super::traits::AttestationEngineApi;
 use crate::attestation::agent::SeismicAttestationAgent;
-use attestation_agent::AttestationAPIs;
-
+use crate::key_manager::NetworkKeyProvider;
 use crate::attestation::verifier::into_original::IntoOriginalData;
 use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
-use seismic_enclave::coco_as::ASCoreTokenClaims;
-use attestation_service::token::AttestationTokenBroker;
-use attestation_service::{Data, HashAlgorithm};
 
-pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
+/// The main execution engine for secure enclave logic
+/// controls central resources, e.g. key manager, attestation agent
+pub struct AttestationEngine<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
 }
-
-impl<K, T> TeeService<K, T>
+impl<K, T> AttestationEngine<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -44,7 +45,7 @@ where
 }
 
 #[async_trait]
-impl<K, T> TeeServiceApi for TeeService<K, T>
+impl<K, T> AttestationEngineApi for AttestationEngine<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -91,7 +92,7 @@ where
         Ok(self.key_provider.get_rng_keypair())
     }
 
-    // Attestation operations implementations - now using SeismicAttestationAgent
+    // Attestation operations implementations
     async fn get_attestation_evidence(
         &self,
         req: AttestationGetEvidenceRequest,
@@ -195,17 +196,17 @@ mod tests {
     use crate::key_manager::KeyManager;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
-    pub fn default_tee_service() -> TeeService<KeyManager, SimpleAttestationTokenBroker> {
+    pub fn default_tee_service() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let v_token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default())
             .expect("Failed to create an AttestationAgent");
         let saa = SeismicAttestationAgent::new(None, v_token_broker);
-        TeeService::new(kp, saa)
+        AttestationEngine::new(kp, saa)
     }
 
     #[tokio::test]
     pub async fn run_tests() {
-        let tee_service: TeeService<KeyManager, SimpleAttestationTokenBroker> =
+        let tee_service: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
             default_tee_service();
 
         let t1 = test_secp256k1_sign(&tee_service);
@@ -219,7 +220,7 @@ mod tests {
         let (_r1, _r2, _r3, _r4, _r5, _r6) = tokio::join!(t1, t2, t3, t4, t5, t6);
     }
 
-    async fn test_secp256k1_sign<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_secp256k1_sign<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -234,7 +235,7 @@ mod tests {
         assert!(!res.sig.is_empty());
     }
 
-    async fn test_io_encryption<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_io_encryption<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -262,7 +263,7 @@ mod tests {
         assert_eq!(res.decrypted_data, data_to_encrypt);
     }
 
-    async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -287,7 +288,7 @@ mod tests {
     }
 
     async fn test_attestation_evidence_handler_valid_request_sample<K, T>(
-        tee_service: &TeeService<K, T>,
+        tee_service: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -309,7 +310,7 @@ mod tests {
     }
 
     async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data<K, T>(
-        tee_service: &TeeService<K, T>,
+        tee_service: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -342,7 +343,7 @@ mod tests {
         assert_ne!(res_1.evidence, res_2.evidence);
     }
 
-    async fn test_genesis_get_data_handler_success_basic<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_genesis_get_data_handler_success_basic<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,

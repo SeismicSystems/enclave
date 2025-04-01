@@ -1,2 +1,5 @@
-pub mod traits; 
-pub mod tee_service;
+mod traits; 
+mod engine;
+
+pub use traits::AttestationEngineApi;
+pub use engine::AttestationEngine;

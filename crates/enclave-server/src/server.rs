@@ -1,5 +1,4 @@
-use crate::api::traits::TeeServiceApi;
-use crate::api::tee_service::TeeService;
+use crate::api::{AttestationEngineApi, AttestationEngine};
 use crate::key_manager::NetworkKeyProvider;
 use crate::attestation::agent::SeismicAttestationAgent;
 
@@ -40,7 +39,7 @@ where
     auth_secret: JwtSecret,
     /// The main execution engine for secure enclave logic
     /// controls central resources, e.g. key manager, attestation agent
-    tee_service: Arc<TeeService<K, T>>,
+    tee_service: Arc<AttestationEngine<K, T>>,
 }
 
 /// A builder that lets us configure the server
@@ -124,13 +123,13 @@ where
             anyhow!("No auth secret supplied to builder")
         })?;
        
-        // Initialize TeeService with the key provider
+        // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
         let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
         let tee_service = Arc::new(
-            TeeService::new(key_provider, attestation_agent)
+            AttestationEngine::new(key_provider, attestation_agent)
         );
 
         Ok(EnclaveServer {
@@ -154,7 +153,7 @@ where
     /// Simplified constructor if you want to skip the builder
     pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: crate::attestation::agent::SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
          let tee_service = Arc::new(
-             TeeService::new(key_provider, token_broker)
+             AttestationEngine::new(key_provider, token_broker)
          );
         
          Ok(Self {
@@ -182,7 +181,7 @@ where
     }
 
     async fn start(self) -> Result<ServerHandle> {
-        // No need for separate attestation init as TeeService handles this
+        // No need for separate attestation init as AttestationEngine handles this
         BuildableServer::start_rpc_server(self).await
     }
 }

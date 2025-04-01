@@ -2,8 +2,10 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use secp256k1::PublicKey;
 use seismic_enclave::{coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse}, coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse}, genesis::GenesisDataResponse, signing::{Secp256k1SignRequest, Secp256k1SignResponse}, tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse}};
 
+/// Api for the attestation engine
+/// Defines the functions the exposed to the server for serving requests
 #[async_trait]
-pub trait TeeServiceApi {
+pub trait AttestationEngineApi {
     // Crypto operations
     async fn get_public_key(&self) -> RpcResult<PublicKey>;
     
