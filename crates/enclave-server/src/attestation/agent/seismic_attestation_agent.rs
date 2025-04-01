@@ -10,13 +10,11 @@ use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use attestation_agent::InitDataResult;
 use attestation_service::token::AttestationTokenBroker;
-use attestation_service::Data as OriginalData;
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+use attestation_service::Data as Data;
+use attestation_service::HashAlgorithm as HashAlgorithm;
 
 
 use crate::attestation::verifier::DcapAttVerifier;
-// use crate::attestation::verifier::into_original::{IntoOriginalData};
-// use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 
 pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
     attestation_agent: AttestationAgent,
@@ -92,10 +90,10 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         &self,
         evidence: Vec<u8>,
         tee: Tee,
-        runtime_data: Option<OriginalData>,
-        runtime_data_hash_algorithm: OriginalHashAlgorithm,
-        init_data: Option<OriginalData>,
-        init_data_hash_algorithm: OriginalHashAlgorithm,
+        runtime_data: Option<Data>,
+        runtime_data_hash_algorithm: HashAlgorithm,
+        init_data: Option<Data>,
+        init_data_hash_algorithm: HashAlgorithm,
         policy_ids: Vec<String>,
     ) -> Result<String> {
         self.verifier

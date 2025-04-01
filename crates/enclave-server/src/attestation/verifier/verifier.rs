@@ -1,29 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker};
-use attestation_service::Data as OriginalData;
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
+use attestation_service::{HashAlgorithm, Data};
 use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use verifier::{InitDataHash, ReportData};
-
-/// Runtime/Init Data used to check the binding relationship with report data
-/// in Evidence
-#[derive(Debug, Clone)]
-pub enum Data {
-    /// This will be used as the expected runtime/init data to check against
-    /// the one inside evidence.
-    Raw(Vec<u8>),
-
-    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
-    /// data JSON object in dictionary order by key, then serialize and output
-    /// it into a compact string, and perform hash calculation on the whole
-    /// to check against the one inside evidence.
-    Structured(Value),
-}
 
 /// A lightweight, concurrency-friendly DCAP attestation verifier
 pub struct DcapAttVerifier<T: AttestationTokenBroker + Send + Sync> {
@@ -91,10 +75,10 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
         &self,
         evidence: Vec<u8>,
         tee: Tee,
-        runtime_data: Option<OriginalData>,
-        runtime_data_hash_algorithm: OriginalHashAlgorithm,
-        init_data: Option<OriginalData>,
-        init_data_hash_algorithm: OriginalHashAlgorithm,
+        runtime_data: Option<Data>,
+        runtime_data_hash_algorithm: HashAlgorithm,
+        init_data: Option<Data>,
+        init_data_hash_algorithm: HashAlgorithm,
         policy_ids: Vec<String>,
     ) -> Result<String> {
         // Get the appropriate verifier for the TEE type
@@ -102,7 +86,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
         // Parse and hash runtime data
         let (report_data, runtime_data_claims) = self
-            .parse_data(runtime_data, &runtime_data_hash_algorithm)
+            .parse_data(runtime_data, runtime_data_hash_algorithm)
             .context("parse runtime data")?;
 
         let report_data = match &report_data {
@@ -112,7 +96,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
         // Parse and hash init data
         let (init_data, init_data_claims) = self
-            .parse_data(init_data, &init_data_hash_algorithm)
+            .parse_data(init_data, init_data_hash_algorithm)
             .context("parse init data")?;
 
         let init_data_hash = match &init_data {
@@ -148,13 +132,13 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Parse and hash data using the specified algorithm
     fn parse_data(
         &self,
-        data: Option<OriginalData>,
-        hash_algorithm: &OriginalHashAlgorithm,
+        data: Option<Data>,
+        hash_algorithm: HashAlgorithm,
     ) -> Result<(Option<Vec<u8>>, Value)> {
         match data {
             Some(value) => match value {
-                OriginalData::Raw(raw) => Ok((Some(raw), Value::Null)),
-                OriginalData::Structured(structured) => {
+                Data::Raw(raw) => Ok((Some(raw), Value::Null)),
+                Data::Structured(structured) => {
                     // Serialize the structured data (keys in alphabetical order)
                     let hash_materials =
                         serde_json::to_vec(&structured).context("parse JSON structured data")?;
@@ -266,7 +250,7 @@ mod tests {
         ];
 
         // Runtime data
-        let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
+        let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
 
         // Evaluate the evidence
         let raw_claims = verifier
@@ -274,9 +258,9 @@ mod tests {
                 evidence,
                 Tee::Sample,
                 runtime_data,
-                OriginalHashAlgorithm::Sha256,
+                HashAlgorithm::Sha256,
                 None,
-                OriginalHashAlgorithm::Sha256,
+                HashAlgorithm::Sha256,
                 vec!["allow".to_string()],
             )
             .await
@@ -311,16 +295,16 @@ mod tests {
         ];
 
         // Runtime data
-        let runtime_data = Some(OriginalData::Raw("nonce".as_bytes().to_vec()));
-
+        let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
+        
         // Evaluate with deny policy - should fail
         let raw_claims_deny = verifier.evaluate(
             evidence,
             Tee::Sample,
             runtime_data,
-            OriginalHashAlgorithm::Sha256,
+            HashAlgorithm::Sha256,
             None,
-            OriginalHashAlgorithm::Sha256,
+            HashAlgorithm::Sha256,
             vec!["deny".to_string()],
         ).await;
 
@@ -357,10 +341,10 @@ mod tests {
             .evaluate(
                 tdx_evidence,
                 Tee::AzTdxVtpm,
-                Some(OriginalData::Raw("".into())),
-                OriginalHashAlgorithm::Sha256,
+                Some(Data::Raw("".into())),
+                HashAlgorithm::Sha256,
                 None,
-                OriginalHashAlgorithm::Sha256,
+                HashAlgorithm::Sha256,
                 vec!["allow".to_string()],
             )
             .await
@@ -411,10 +395,10 @@ mod tests {
             .evaluate(
                 az_tdx_evidence_pass,
                 Tee::AzTdxVtpm,
-                Some(OriginalData::Raw(runtime_data_bytes.clone())),
-                OriginalHashAlgorithm::Sha256,
+                Some(Data::Raw(runtime_data_bytes.clone())),
+                HashAlgorithm::Sha256,
                 None,
-                OriginalHashAlgorithm::Sha256,
+                HashAlgorithm::Sha256,
                 vec!["yocto".to_string()],
             )
             .await
@@ -433,10 +417,10 @@ mod tests {
             .evaluate(
                 az_tdx_evidence_fail,
                 Tee::AzTdxVtpm,
-                Some(OriginalData::Raw(runtime_data_bytes)),
-                OriginalHashAlgorithm::Sha256,
+                Some(Data::Raw(runtime_data_bytes)),
+                HashAlgorithm::Sha256,
                 None,
-                OriginalHashAlgorithm::Sha256,
+                HashAlgorithm::Sha256,
                 vec!["yocto".to_string()],
             )
             .await;
