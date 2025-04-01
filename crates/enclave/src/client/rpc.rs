@@ -29,6 +29,7 @@ pub trait BuildableServer {
     where
         Self: Sized,
     {
+        // TODO: add auth layer
         let addr = self.addr();
         let rpc_server = ServerBuilder::new().build(addr).await?;
         let module = self.methods();

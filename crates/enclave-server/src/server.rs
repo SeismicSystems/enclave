@@ -35,8 +35,13 @@ where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
+    /// The address to listen on
     addr: SocketAddr,
+    /// The JWT authentication secret for http requests
+    /// Expected to also be known by the client sending requests
     auth_secret: JwtSecret,
+    /// The main execution engine for secure enclave logic
+    /// controls central resources, e.g. key manager, attestation agent
     tee_service: Arc<TeeService<K, T>>,
 }
 
@@ -50,7 +55,6 @@ where
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
 }
-
 impl<K> Default for EnclaveServerBuilder<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
@@ -106,10 +110,10 @@ where
     }
 
     /// Build the final `EnclaveServer` object.
-    pub async fn build<T>(self) -> Result<EnclaveServer<K, T>>
-    where
-        T: AttestationTokenBroker + Send + Sync + 'static,
-    {
+    /// Currently only support SimpleAttestationTokenBroker for the attestation verifier 
+    /// Because getting the types to compile is a pain
+    /// TODO: allow builder to have a BrokerConfiguration passed in
+    pub async fn build(self) -> Result<EnclaveServer<K, SimpleAttestationTokenBroker>> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
@@ -124,7 +128,7 @@ where
        
         // Initialize TeeService with the key provider
         let config_path = self.attestation_config_path.as_deref();
-        let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?; // TODO: consider adding thing to the builder
+        let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
         let tee_service = Arc::new(
