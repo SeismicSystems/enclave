@@ -51,6 +51,7 @@ where
     auth_secret: Option<JwtSecret>,
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
+    token_broker_config: Option<BrokerConfiguration>,
 }
 impl<K> Default for EnclaveServerBuilder<K>
 where
@@ -65,6 +66,7 @@ where
             auth_secret: None,
             key_provider: None,
             attestation_config_path: None,
+            token_broker_config: Some(BrokerConfiguration::default()),
         }
     }
 }
@@ -105,26 +107,31 @@ where
         self
     }
 
+    pub fn with_token_broker_config(mut self, config: BrokerConfiguration) -> Self {
+        self.token_broker_config = Some(config);
+        self
+    }
+
     /// Build the final `EnclaveServer` object.
     /// Currently only support SimpleAttestationTokenBroker for the attestation verifier
     /// Because getting the types to compile is a pain
-    /// TODO: allow builder to have a BrokerConfiguration passed in
     pub async fn build(self) -> Result<EnclaveServer<K, SimpleAttestationTokenBroker>> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
-
         let key_provider = self
             .key_provider
             .ok_or_else(|| anyhow!("No key provider supplied to builder"))?;
-
         let auth_secret = self
             .auth_secret
             .ok_or_else(|| anyhow!("No auth secret supplied to builder"))?;
+        let token_broker_config = self.token_broker_config.ok_or_else(|| {
+            anyhow!("No token broker config supplied to builder")
+        })?;
 
         // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
-        let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?;
+        let v_token_broker = SimpleAttestationTokenBroker::new(token_broker_config)?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
         let inner = Arc::new(AttestationEngine::new(key_provider, attestation_agent));
