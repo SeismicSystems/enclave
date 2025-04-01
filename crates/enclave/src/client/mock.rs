@@ -11,7 +11,7 @@ use std::{
 
 use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
-    ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+    ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 use crate::auth::JwtSecret;
 use crate::{
@@ -36,8 +36,8 @@ impl MockEnclaveServer {
         Self { addr: addr.into() }
     }
 
-    pub fn new_from_addr_port(addr: String, port: u16) -> Self {
-        Self::new((IpAddr::from_str(&addr).unwrap(), port))
+    pub fn new_from_ip_port(ip: String, port: u16) -> Self {
+        Self::new((IpAddr::from_str(&ip).unwrap(), port))
     }
 
     /// Mock implementation of the health check method.
@@ -116,7 +116,7 @@ impl MockEnclaveServer {
 
 impl Default for MockEnclaveServer {
     fn default() -> Self {
-        Self::new((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT))
+        Self::new((ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT))
     }
 }
 
@@ -253,8 +253,7 @@ mod tests {
     async fn test_mock_server_and_sync_client() -> Result<()> {
         // spawn a seperate thread for the server, otherwise the test will hang
         let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-        println!("addr: {:?}", addr);
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let _server_handle = MockEnclaveServer::new(addr).start().await?;
         let _ = sleep(Duration::from_secs(2));
 

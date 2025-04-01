@@ -21,11 +21,11 @@ use tower::{Layer, Service};
 ///     use std::net::SocketAddr;
 ///
 ///     const AUTH_PORT: u32 = 8551;
-///     const AUTH_ADDR: &str = "0.0.0.0";
+///     const AUTH_IP: &str = "0.0.0.0";
 ///     const AUTH_SECRET: &str =
 ///         "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
 ///
-///     let addr = format!("{AUTH_ADDR}:{AUTH_PORT}");
+///     let addr = format!("{AUTH_IP}:{AUTH_PORT}");
 ///     let secret = JwtSecret::from_hex(AUTH_SECRET).unwrap();
 ///     let validator = JwtAuthValidator::new(secret);
 ///     let layer = AuthLayer::new(validator);
@@ -169,7 +169,7 @@ mod tests {
     };
 
     const AUTH_PORT: u32 = 8551;
-    const AUTH_ADDR: &str = "0.0.0.0";
+    const AUTH_IP: &str = "0.0.0.0";
     const SECRET: &str = "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
 
     #[tokio::test]
@@ -249,7 +249,7 @@ mod tests {
 
         let body = r#"{"jsonrpc": "2.0", "method": "greet_melkor", "params": [], "id": 1}"#;
         let response = client
-            .post(format!("http://{AUTH_ADDR}:{AUTH_PORT}"))
+            .post(format!("http://{AUTH_IP}:{AUTH_PORT}"))
             .bearer_auth(jwt.unwrap_or_default())
             .body(body)
             .header(header::CONTENT_TYPE, "application/json")
@@ -268,7 +268,7 @@ mod tests {
     /// Spawn a new RPC server equipped with a `JwtLayer` auth middleware.
     async fn spawn_server() -> ServerHandle {
         let secret = JwtSecret::from_hex(SECRET).unwrap();
-        let addr = format!("{AUTH_ADDR}:{AUTH_PORT}");
+        let addr = format!("{AUTH_IP}:{AUTH_PORT}");
         let validator = JwtAuthValidator::new(secret);
         let layer = AuthLayer::new(validator);
         let middleware = tower::ServiceBuilder::default().layer(layer);

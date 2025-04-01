@@ -20,7 +20,7 @@ use crate::{
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
-pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+pub const ENCLAVE_DEFAULT_ENDPOINT_IP: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
@@ -31,7 +31,7 @@ type EnclaveHttpClient = HttpClient<AuthClientService<HttpBackend>>;
 
 /// Builder for [`EnclaveClient`].
 pub struct EnclaveClientBuilder {
-    addr: Option<String>,
+    ip: Option<String>,
     port: Option<u16>,
     auth_secret: Option<JwtSecret>,
     timeout: Option<Duration>,
@@ -40,7 +40,7 @@ pub struct EnclaveClientBuilder {
 impl EnclaveClientBuilder {
     pub fn new() -> Self {
         Self {
-            addr: None,
+            ip: None,
             port: None,
             auth_secret: None,
             timeout: None,
@@ -48,8 +48,8 @@ impl EnclaveClientBuilder {
         }
     }
 
-    pub fn addr(mut self, addr: impl Into<String>) -> Self {
-        self.addr = Some(addr.into());
+    pub fn ip(mut self, ip: impl Into<String>) -> Self {
+        self.ip = Some(ip.into());
         self
     }
 
@@ -77,8 +77,8 @@ impl EnclaveClientBuilder {
         let url = self.url.unwrap_or_else(|| {
             format!(
                 "http://{}:{}",
-                self.addr
-                    .unwrap_or_else(|| ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string()),
+                self.ip
+                    .unwrap_or_else(|| ENCLAVE_DEFAULT_ENDPOINT_IP.to_string()),
                 self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
             )
         });
@@ -145,11 +145,11 @@ impl EnclaveClient {
 
     /// A client enclave bade to work with the default mock server
     /// Useful for testing
-    pub fn mock(addr: String, port: u16) -> Result<Self> {
+    pub fn mock(ip: String, port: u16) -> Result<Self> {
         let auth_secret = JwtSecret::mock_default();
         let client = EnclaveClientBuilder::new()
             .auth_secret(auth_secret)
-            .addr(addr)
+            .ip(ip)
             .port(port)
             .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
             .build()?;
@@ -200,7 +200,7 @@ pub mod tests {
     fn test_client_sync_context() {
         // testing if sync client can be created in a sync runtime
         let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let _ = EnclaveClient::mock(addr.ip().to_string(), addr.port());
     }
 
@@ -208,8 +208,7 @@ pub mod tests {
     async fn test_sync_client() -> Result<()> {
         // spawn a seperate thread for the server, otherwise the test will hang
         let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-        println!("addr: {:?}", addr);
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let _server_handle = MockEnclaveServer::new(addr).start().await?;
         let _ = sleep(Duration::from_secs(2));
 

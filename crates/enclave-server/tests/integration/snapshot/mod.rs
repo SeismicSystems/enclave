@@ -5,7 +5,7 @@
 //    PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 //};
 //use seismic_enclave::{
-//    EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+//    EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 //};
 //use seismic_enclave_server::snapshot::*;
 //#[cfg(not(feature = "supervisorctl"))]
@@ -41,7 +41,7 @@
 //    // assumes test is run from the root of the enclave-server crate
 //    let foundry_json_path = "tests/integration/snapshot/UpgradeOperator.json";
 //    let enclave_addr =
-//        SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+//        SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT));
 //    let enclave_client = EnclaveClient::new(format!(
 //        "http://{}:{}",
 //        enclave_addr.ip(),
@@ -118,7 +118,7 @@
 //    assert!(is_sudo(), "Must be run as sudo");
 //
 //    let enclave_addr =
-//        SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+//        SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT));
 //    let enclave_client = EnclaveClient::new(format!(
 //        "http://{}:{}",
 //        enclave_addr.ip(),

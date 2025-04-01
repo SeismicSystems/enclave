@@ -1,6 +1,6 @@
 use seismic_enclave::auth::JwtSecret;
 use seismic_enclave::client::rpc::BuildableServer;
-use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_ADDR};
+use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP};
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
 use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
@@ -139,7 +139,7 @@ async fn test_misconfigured_auth_secret(ip: IpAddr, port: u16) {
     let rand_auth_secret = JwtSecret::random();
     let client = EnclaveClientBuilder::new()
         .auth_secret(rand_auth_secret)
-        .addr(ip.to_string())
+        .ip(ip.to_string())
         .port(port)
         .timeout(Duration::from_secs(5))
         .build()
@@ -169,7 +169,7 @@ async fn test_server_requests() {
 
     // spawn a seperate thread for the server, otherwise the test will hang
     let port = get_random_port(); // rand port for test parallelization
-    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
     let token_broker = SimpleAttestationTokenBroker::new(
         attestation_service::token::simple::Configuration::default(),
@@ -192,7 +192,7 @@ async fn test_server_requests() {
 
     let client = EnclaveClientBuilder::new()
         .auth_secret(auth_secret)
-        .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
+        .ip(ENCLAVE_DEFAULT_ENDPOINT_IP.to_string())
         .port(port)
         .timeout(Duration::from_secs(5))
         .build()

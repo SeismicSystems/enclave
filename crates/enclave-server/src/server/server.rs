@@ -11,7 +11,7 @@ use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
 use anyhow::{anyhow, Result};
 use attestation_service::token::simple::{
@@ -60,7 +60,7 @@ where
     fn default() -> Self {
         Self {
             addr: Some(SocketAddr::new(
-                ENCLAVE_DEFAULT_ENDPOINT_ADDR,
+                ENCLAVE_DEFAULT_ENDPOINT_IP,
                 ENCLAVE_DEFAULT_ENDPOINT_PORT,
             )),
             auth_secret: None,
@@ -74,11 +74,11 @@ impl<K> EnclaveServerBuilder<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {
-    pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
+    pub fn with_ip(mut self, ip: IpAddr) -> Self {
         if let Some(curr) = self.addr {
-            self.addr = Some(SocketAddr::new(ip_addr, curr.port()));
+            self.addr = Some(SocketAddr::new(ip, curr.port()));
         } else {
-            self.addr = Some(SocketAddr::new(ip_addr, ENCLAVE_DEFAULT_ENDPOINT_PORT));
+            self.addr = Some(SocketAddr::new(ip, ENCLAVE_DEFAULT_ENDPOINT_PORT));
         }
         self
     }
@@ -87,7 +87,7 @@ where
         if let Some(curr) = self.addr {
             self.addr = Some(SocketAddr::new(curr.ip(), port));
         } else {
-            self.addr = Some(SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
+            self.addr = Some(SocketAddr::new(ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         }
         self
     }
