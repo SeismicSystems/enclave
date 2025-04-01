@@ -250,7 +250,7 @@ mod tests {
         ];
 
         // Runtime data
-        let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
+        let runtime_data = Some(&Data::Raw("nonce".as_bytes().to_vec()));
 
         // Evaluate the evidence
         let raw_claims = verifier
@@ -258,9 +258,9 @@ mod tests {
                 evidence,
                 Tee::Sample,
                 runtime_data,
-                HashAlgorithm::Sha256,
+                &HashAlgorithm::Sha256,
                 None,
-                HashAlgorithm::Sha256,
+                &HashAlgorithm::Sha256,
                 vec!["allow".to_string()],
             )
             .await
@@ -295,16 +295,16 @@ mod tests {
         ];
 
         // Runtime data
-        let runtime_data = Some(Data::Raw("nonce".as_bytes().to_vec()));
+        let runtime_data = Some(&Data::Raw("nonce".as_bytes().to_vec()));
 
         // Evaluate with deny policy - should fail
         let raw_claims_deny = verifier.evaluate(
             evidence,
             Tee::Sample,
             runtime_data,
-            HashAlgorithm::Sha256,
+            &HashAlgorithm::Sha256,
             None,
-            HashAlgorithm::Sha256,
+            &HashAlgorithm::Sha256,
             vec!["deny".to_string()],
         ).await;
 
@@ -341,10 +341,10 @@ mod tests {
             .evaluate(
                 tdx_evidence,
                 Tee::AzTdxVtpm,
-                Some(Data::Raw("".into())),
-                HashAlgorithm::Sha256,
+                Some(&Data::Raw("".into())),
+                &HashAlgorithm::Sha256,
                 None,
-                HashAlgorithm::Sha256,
+                &HashAlgorithm::Sha256,
                 vec!["allow".to_string()],
             )
             .await
@@ -395,10 +395,10 @@ mod tests {
             .evaluate(
                 az_tdx_evidence_pass,
                 Tee::AzTdxVtpm,
-                Some(Data::Raw(runtime_data_bytes.clone())),
-                HashAlgorithm::Sha256,
+                Some(&Data::Raw(runtime_data_bytes)),
+                &HashAlgorithm::Sha256,
                 None,
-                HashAlgorithm::Sha256,
+                &HashAlgorithm::Sha256,
                 vec!["yocto".to_string()],
             )
             .await
@@ -417,10 +417,10 @@ mod tests {
             .evaluate(
                 az_tdx_evidence_fail,
                 Tee::AzTdxVtpm,
-                Some(Data::Raw(runtime_data_bytes)),
-                HashAlgorithm::Sha256,
+                Some(&Data::Raw(runtime_data_bytes)),
+                &HashAlgorithm::Sha256,
                 None,
-                HashAlgorithm::Sha256,
+                &HashAlgorithm::Sha256,
                 vec!["yocto".to_string()],
             )
             .await;
