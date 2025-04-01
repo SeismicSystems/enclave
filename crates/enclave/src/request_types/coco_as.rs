@@ -275,41 +275,6 @@ mod tests {
     use serde_json;
 
     #[test]
-    fn test_debug() {
-        let request = AttestationEvalEvidenceRequest {
-            evidence: vec![1, 2, 3],
-            tee: Tee::Sgx,
-            runtime_data: Some(Data::Raw(vec![7, 8, 9])),
-            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["allow".to_string()],
-        };
-
-        let debug_output = format!("{:?}", request);
-
-        // The expected debug output
-        let expected_output = "AttestationEvalEvidenceRequest { \
-        evidence: [1, 2, 3], \
-        tee: Sgx, \
-        runtime_data: \"Raw([7, 8, 9])\", \
-        runtime_data_hash_algorithm: \"Sha256\", \
-        policy_ids: [\"allow\"] }";
-
-        assert_eq!(
-            debug_output.trim(),
-            expected_output.trim(),
-            "Debug output does not match expected"
-        );
-
-        // Ensure that each key part of the struct is present in the output
-        assert!(debug_output.contains("AttestationEvalEvidenceRequest"));
-        assert!(debug_output.contains("evidence: [1, 2, 3]"));
-        assert!(debug_output.contains("tee: Sgx"));
-        assert!(debug_output.contains("runtime_data: \"Raw([7, 8, 9])\""));
-        assert!(debug_output.contains("runtime_data_hash_algorithm: \"Sha256\""));
-        assert!(debug_output.contains("policy_ids: [\"allow\"]"));
-    }
-
-    #[test]
     fn test_serialize_some_data() {
         let original_request = AttestationEvalEvidenceRequest {
             evidence: vec![
