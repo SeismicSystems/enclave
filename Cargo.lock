@@ -6100,19 +6100,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 
 [[package]]
-name = "routerify"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "496c1d3718081c45ba9c31fbfc07417900aa96f4070ff90dc29961836b7a9945"
-dependencies = [
- "http 0.2.12",
- "hyper 0.14.32",
- "lazy_static",
- "percent-encoding",
- "regex",
-]
-
-[[package]]
 name = "rsa"
 version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6620,7 +6607,6 @@ dependencies = [
  "jsonrpsee-http-client",
  "jsonwebtoken",
  "kbs-types",
- "once_cell",
  "pin-project",
  "rand 0.9.0",
  "reqwest 0.12.14",
@@ -6633,7 +6619,6 @@ dependencies = [
  "strum 0.26.3",
  "tokio",
  "tower 0.4.13",
- "tracing",
  "tracing-subscriber",
 ]
 
@@ -6676,7 +6661,6 @@ dependencies = [
  "once_cell",
  "rand 0.9.0",
  "reqwest 0.12.14",
- "routerify",
  "schnorrkel",
  "scroll",
  "secp256k1",

@@ -30,10 +30,8 @@ jsonrpsee.workspace = true
 jsonrpsee-http-client.workspace = true
 jsonwebtoken.workspace = true
 kbs-types.workspace = true
-once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true
-reqwest.workspace = true
 schnorrkel.workspace = true
 secp256k1.workspace = true
 serde.workspace = true
@@ -42,5 +40,7 @@ sha2.workspace = true
 strum.workspace = true
 tokio.workspace = true
 tower.workspace = true
-tracing.workspace = true
 base64.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true

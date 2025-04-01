@@ -8,7 +8,6 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
 use std::net::SocketAddr;
-use tracing::info;
 
 use crate::auth::JwtSecret;
 use crate::auth::{AuthLayer, JwtAuthValidator};
@@ -43,7 +42,6 @@ pub trait BuildableServer {
         let module = self.methods();
 
         let server_handle = rpc_server.start(module);
-        info!(target: "rpc::enclave", "Server started at {}", addr);
         Ok(server_handle)
     }
 }

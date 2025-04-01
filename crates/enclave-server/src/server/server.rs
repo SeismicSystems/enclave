@@ -191,7 +191,10 @@ where
 
     async fn start(self) -> Result<ServerHandle> {
         // No need for separate attestation init as AttestationEngine handles this
-        BuildableServer::start_rpc_server(self).await
+        let addr = self.addr.clone();
+        let handle = BuildableServer::start_rpc_server(self).await;
+        info!(target: "rpc::enclave", "Server started at {}", addr);
+        handle
     }
 }
 

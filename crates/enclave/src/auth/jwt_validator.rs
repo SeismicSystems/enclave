@@ -2,7 +2,6 @@ use crate::auth::jwt::{JwtError, JwtSecret};
 use crate::auth::AuthValidator;
 use http::{header, HeaderMap, Response, StatusCode};
 use jsonrpsee_http_client::{HttpBody, HttpResponse};
-use tracing::error;
 
 /// Implements JWT validation logics and integrates
 /// to an Http [`AuthLayer`][crate::AuthLayer]
@@ -25,14 +24,12 @@ impl AuthValidator for JwtAuthValidator {
             Some(jwt) => match self.secret.validate(&jwt) {
                 Ok(_) => Ok(()),
                 Err(e) => {
-                    error!(target: "engine::jwt-validator", "Invalid JWT: {e}");
                     let response = err_response(e);
                     Err(response)
                 }
             },
             None => {
                 let e = JwtError::MissingOrInvalidAuthorizationHeader;
-                error!(target: "engine::jwt-validator", "Invalid JWT: {e}");
                 let response = err_response(e);
                 Err(response)
             }
