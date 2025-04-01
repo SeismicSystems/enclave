@@ -27,7 +27,7 @@ pub async fn build_snapsync_response(
     // let snapsync_bytes = snapsync_data.to_bytes()?;
 
     // // generate a random nonce
-    // // TODO: evaluate security of this approach
+    // // Future work: evaluate security of this approach
     // let mut nonce = [0u8; 12];
     // OsRng.fill_bytes(&mut nonce);
 
@@ -54,7 +54,7 @@ pub async fn build_snapsync_response(
 /// Gathers the snapsync data
 /// Currently the snapsync data has the io private key and the private state
 ///
-/// TODO: Update this to have real private keys, no state (now handled by snapshot)
+/// Future work: Update this to have real private keys, no state (now handled by snapshot)
 fn gather_snapsync_data() -> Result<SnapSyncData, anyhow::Error> {
     todo!()
     // let sample_private_state = format!("private state @ %{}", RETH_DB_DIR)
