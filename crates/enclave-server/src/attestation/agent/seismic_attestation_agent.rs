@@ -10,8 +10,8 @@ use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use attestation_agent::InitDataResult;
 use attestation_service::token::AttestationTokenBroker;
-use attestation_service::Data as Data;
-use attestation_service::HashAlgorithm as HashAlgorithm;
+use attestation_service::Data;
+use attestation_service::HashAlgorithm;
 
 
 use crate::attestation::verifier::DcapAttVerifier;
