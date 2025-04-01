@@ -1,3 +1,6 @@
+//! An RPC layer for authentication via JWT tokens
+//! Heavily inspired by alloy v0.8 crate
+
 use http::HeaderMap;
 use jsonrpsee_http_client::HttpResponse;
 
