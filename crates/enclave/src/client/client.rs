@@ -217,7 +217,6 @@ pub mod tests {
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);
         sync_test_tx_io_encrypt_decrypt(&client);
-        // TODO: test client with wrong auth secret is rejected
     }
 
     pub fn get_random_port() -> u16 {

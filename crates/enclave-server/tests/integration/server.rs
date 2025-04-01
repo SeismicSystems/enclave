@@ -9,6 +9,7 @@ use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
 use seismic_enclave::coco_as::HashAlgorithm;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
@@ -115,11 +116,12 @@ pub fn is_sudo() -> bool {
 
  async fn test_get_public_key(client: &EnclaveClient) {
      let res = client.get_public_key().await.unwrap();
-     assert_eq!(res, get_unsecure_sample_secp256k1_pk());
+     assert!(!(res==get_unsecure_sample_secp256k1_pk()), "public key should be randomly generated");
  }
 
  async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-     let res = client.get_eph_rng_keypair().await.unwrap();
+     let res: schnorrkel::Keypair = client.get_eph_rng_keypair().await.unwrap();
+     assert!(!(res.secret==get_unsecure_sample_schnorrkel_keypair().secret), "eph rng keypair should be randomly generated");
  }
 
 #[tokio::test]
@@ -156,4 +158,5 @@ async fn test_server_requests() {
     test_attestation_eval_evidence(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
+    // TODO: test that client rejects wrong auth secret
 }
