@@ -1,5 +1,3 @@
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
-use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
@@ -18,13 +16,17 @@ use seismic_enclave_server::key_manager::builder::KeyManagerBuilder;
 use seismic_enclave_server::key_manager::key_manager::KeyManager;
 use seismic_enclave_server::server::init_tracing;
 use seismic_enclave_server::server::EnclaveServer;
+use seismic_enclave::auth::JwtSecret;
+use crate::utils::get_random_port;
+
+use anyhow::anyhow;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use kbs_types::Tee;
 use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::net::IpAddr;
-use seismic_enclave::auth::JwtSecret;
-use crate::utils::get_random_port;
 
 pub fn is_sudo() -> bool {
     use std::process::Command;
@@ -132,7 +134,9 @@ pub fn is_sudo() -> bool {
         .addr(ip.to_string())
         .port(port)
         .timeout(Duration::from_secs(5))
-        .build();
+        .build()
+        .map_err(|e| anyhow!("test_misconfigured_auth_secret Failed to build client: {:?}", e))
+        .unwrap();
     let response = client.health_check().await;
     assert!(response.is_err(), "client should not be able to connect to server with wrong auth secret");
  }
@@ -162,7 +166,8 @@ async fn test_server_requests() {
         .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
         .port(port)
         .timeout(Duration::from_secs(5))
-        .build();
+        .build()
+        .unwrap();
 
     test_health_check(&client).await;
     test_genesis_get_data(&client).await;

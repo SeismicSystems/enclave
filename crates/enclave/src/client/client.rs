@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 use tokio::runtime::{Handle, Runtime};
+use anyhow::{anyhow, Result};
 
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
@@ -73,7 +74,7 @@ impl EnclaveClientBuilder {
         self
     }
 
-    pub fn build(self) -> EnclaveClient {
+    pub fn build(self) -> Result<EnclaveClient> {
         let url = self.url.unwrap_or_else(|| {
             format!(
                 "http://{}:{}",
@@ -82,10 +83,9 @@ impl EnclaveClientBuilder {
                 self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
             )
         });
-        let auth_secret = self.auth_secret.unwrap_or_else(|| {
-            // TODO: better error handling
-            panic!("No auth secret supplied to builder")
-        });
+        let auth_secret = self.auth_secret.ok_or_else(|| {
+            return anyhow!("No auth secret supplied to builder")
+        })?;
 
         let secret_layer = AuthClientLayer::new(auth_secret);
         let middleware = tower::ServiceBuilder::default().layer(secret_layer);
@@ -99,7 +99,7 @@ impl EnclaveClientBuilder {
             .build(url)
             .unwrap();
 
-        EnclaveClient::new_from_client(async_client)
+        Ok(EnclaveClient::new_from_client(async_client))
     }
 }
 
@@ -146,14 +146,15 @@ impl EnclaveClient {
 
     /// A client enclave bade to work with the default mock server
     /// Useful for testing
-    pub fn mock(addr: String, port: u16) -> Self {
+    pub fn mock(addr: String, port: u16) -> Result<Self> {
         let auth_secret = JwtSecret::mock_default();
-        EnclaveClientBuilder::new()
+        let client = EnclaveClientBuilder::new()
             .auth_secret(auth_secret)
             .addr(addr)
             .port(port)
             .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
-            .build()
+            .build()?;
+        Ok(client)
     }
 }
 
@@ -204,19 +205,20 @@ pub mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_sync_client() {
+    async fn test_sync_client() -> Result<()> {
         // spawn a seperate thread for the server, otherwise the test will hang
         let port = get_random_port();
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
         println!("addr: {:?}", addr);
-        let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
+        let _server_handle = MockEnclaveServer::new(addr).start().await?;
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::mock(addr.ip().to_string(), addr.port());
+        let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         sync_test_health_check(&client);
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);
         sync_test_tx_io_encrypt_decrypt(&client);
+        Ok(())
     }
 
     pub fn get_random_port() -> u16 {
