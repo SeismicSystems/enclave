@@ -1,6 +1,6 @@
 use crate::api::AttestationEngine;
 use crate::key_manager::NetworkKeyProvider;
-use crate::attestation::agent::SeismicAttestationAgent;
+use crate::attestation::SeismicAttestationAgent;
 
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -151,7 +151,7 @@ where
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: crate::attestation::agent::SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
+    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
          let inner = Arc::new(
              AttestationEngine::new(key_provider, token_broker)
          );

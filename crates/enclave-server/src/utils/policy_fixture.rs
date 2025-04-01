@@ -1,7 +1,7 @@
 //! Attestation Verifier Policies and the PolicyFixture object
 //! Useful for testing the attestation verifier
 
-use crate::attestation::verifier::DcapAttVerifier;
+use crate::attestation::DcapAttVerifier;
 use anyhow::Result;
 use attestation_service::token::AttestationTokenBroker;
 use std::collections::HashMap;

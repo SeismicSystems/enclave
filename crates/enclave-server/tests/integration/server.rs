@@ -7,7 +7,7 @@ use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
-use seismic_enclave_server::attestation::agent::SeismicAttestationAgent;
+use seismic_enclave_server::attestation::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
 use seismic_enclave_server::server::{EnclaveServer, init_tracing};
 use seismic_enclave::auth::JwtSecret;
