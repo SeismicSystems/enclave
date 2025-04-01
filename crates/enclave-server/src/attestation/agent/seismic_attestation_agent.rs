@@ -92,10 +92,10 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         &self,
         evidence: Vec<u8>,
         tee: Tee,
-        runtime_data: Option<&Data>,
-        runtime_data_hash_algorithm: &HashAlgorithm,
-        init_data: Option<&Data>,
-        init_data_hash_algorithm: &HashAlgorithm,
+        runtime_data: Option<Data>,
+        runtime_data_hash_algorithm: HashAlgorithm,
+        init_data: Option<Data>,
+        init_data_hash_algorithm: HashAlgorithm,
         policy_ids: Vec<String>,
     ) -> Result<String> {
         self.verifier
