@@ -21,7 +21,10 @@ use crate::{
     genesis::GenesisDataResponse,
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
-    signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse},
+    signing::{
+        Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
+        Secp256k1VerifyResponse,
+    },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 

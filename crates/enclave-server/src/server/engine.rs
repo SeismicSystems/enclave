@@ -11,14 +11,16 @@ use seismic_enclave::coco_as::ASCoreTokenClaims;
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::{GenesisData, GenesisDataResponse};
 use seismic_enclave::rpc::EnclaveApiServer;
-use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse};
+use seismic_enclave::signing::{
+    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
+};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{
     ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
-    secp256k1_sign_digest, secp256k1_verify
+    secp256k1_sign_digest, secp256k1_verify,
 };
 
 use crate::attestation::SeismicAttestationAgent;
@@ -71,9 +73,7 @@ where
         Ok(Secp256k1SignResponse { sig: signature })
     }
 
-    async fn verify(&self, 
-        request: Secp256k1VerifyRequest,
-    ) -> RpcResult<Secp256k1VerifyResponse> {
+    async fn verify(&self, request: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
         let pk = self.key_provider.get_tx_io_pk();
         let verified = secp256k1_verify(&request.msg, &request.sig, pk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
@@ -263,7 +263,7 @@ mod tests {
         };
 
         let res = tee_service.sign(sign_request).await.unwrap();
-        
+
         // Prepare verify request body
         let verify_request = Secp256k1VerifyRequest {
             msg: msg_to_sign,

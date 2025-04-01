@@ -7,7 +7,9 @@ use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvid
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
-use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse};
+use seismic_enclave::signing::{
+    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
+};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
@@ -125,9 +127,9 @@ where
         let auth_secret = self
             .auth_secret
             .ok_or_else(|| anyhow!("No auth secret supplied to builder"))?;
-        let token_broker_config = self.token_broker_config.ok_or_else(|| {
-            anyhow!("No token broker config supplied to builder")
-        })?;
+        let token_broker_config = self
+            .token_broker_config
+            .ok_or_else(|| anyhow!("No token broker config supplied to builder"))?;
 
         // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
