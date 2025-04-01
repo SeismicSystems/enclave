@@ -1,29 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker};
-use attestation_service::Data;
-use attestation_service::HashAlgorithm;
+use attestation_service::{HashAlgorithm, Data};
 use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use verifier::{InitDataHash, ReportData};
-
-/// Runtime/Init Data used to check the binding relationship with report data
-/// in Evidence
-#[derive(Debug, Clone)]
-pub enum Data {
-    /// This will be used as the expected runtime/init data to check against
-    /// the one inside evidence.
-    Raw(Vec<u8>),
-
-    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
-    /// data JSON object in dictionary order by key, then serialize and output
-    /// it into a compact string, and perform hash calculation on the whole
-    /// to check against the one inside evidence.
-    Structured(Value),
-}
 
 /// A lightweight, concurrency-friendly DCAP attestation verifier
 pub struct DcapAttVerifier<T: AttestationTokenBroker + Send + Sync> {
@@ -91,10 +75,10 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
         &self,
         evidence: Vec<u8>,
         tee: Tee,
-        runtime_data: Option<Data>,
-        runtime_data_hash_algorithm: HashAlgorithm,
-        init_data: Option<Data>,
-        init_data_hash_algorithm: HashAlgorithm,
+        runtime_data: Option<&Data>,
+        runtime_data_hash_algorithm: &HashAlgorithm,
+        init_data: Option<&Data>,
+        init_data_hash_algorithm: &HashAlgorithm,
         policy_ids: Vec<String>,
     ) -> Result<String> {
         // Get the appropriate verifier for the TEE type
@@ -148,7 +132,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Parse and hash data using the specified algorithm
     fn parse_data(
         &self,
-        data: Option<Data>,
+        data: Option<&Data>,
         hash_algorithm: &HashAlgorithm,
     ) -> Result<(Option<Vec<u8>>, Value)> {
         match data {
