@@ -15,8 +15,6 @@ use attestation_service::HashAlgorithm as HashAlgorithm;
 
 
 use crate::attestation::verifier::DcapAttVerifier;
-// use crate::attestation::verifier::into_original::{IntoOriginalData};
-// use attestation_service::HashAlgorithm as HashAlgorithm;
 
 pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
     attestation_agent: AttestationAgent,
