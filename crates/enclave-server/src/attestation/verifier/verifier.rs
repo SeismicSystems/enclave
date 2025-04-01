@@ -86,7 +86,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
         // Parse and hash runtime data
         let (report_data, runtime_data_claims) = self
-            .parse_data(runtime_data, &runtime_data_hash_algorithm)
+            .parse_data(runtime_data, runtime_data_hash_algorithm)
             .context("parse runtime data")?;
 
         let report_data = match &report_data {
@@ -96,7 +96,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 
         // Parse and hash init data
         let (init_data, init_data_claims) = self
-            .parse_data(init_data, &init_data_hash_algorithm)
+            .parse_data(init_data, init_data_hash_algorithm)
             .context("parse init data")?;
 
         let init_data_hash = match &init_data {
