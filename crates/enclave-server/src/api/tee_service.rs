@@ -23,7 +23,6 @@ use crate::attestation::verifier::into_original::IntoOriginalData;
 use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 use attestation_service::token::AttestationTokenBroker;
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::{Data, HashAlgorithm};
 
 pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
@@ -145,7 +144,7 @@ where
         let runtime_data: Option<Data> = request.runtime_data.map(|data| data.into_original());
         let runtime_data_hash_algorithm: HashAlgorithm = match request.runtime_data_hash_algorithm {
             Some(alg) => alg.into_original(),
-            None => OriginalHashAlgorithm::Sha256,
+            None => HashAlgorithm::Sha256,
         };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
