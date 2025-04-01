@@ -21,7 +21,7 @@ use crate::{
     genesis::GenesisDataResponse,
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
-    signing::{Secp256k1SignRequest, Secp256k1SignResponse},
+    signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
@@ -87,6 +87,11 @@ impl MockEnclaveServer {
     /// Mock implementation of the sign method.
     pub fn sign(_req: Secp256k1SignRequest) -> Secp256k1SignResponse {
         unimplemented!("sign not implemented for mock server")
+    }
+
+    /// Mock implementation of the verify method.
+    pub fn verify(_req: Secp256k1VerifyRequest) -> Secp256k1VerifyResponse {
+        unimplemented!("verify not implemented for mock server")
     }
 
     /// Mock implementation of the get_genesis_data method.
@@ -181,6 +186,11 @@ impl EnclaveApiServer for MockEnclaveServer {
         Ok(MockEnclaveServer::sign(req))
     }
 
+    /// Handler for: `verify`
+    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
+        Ok(MockEnclaveServer::verify(req))
+    }
+
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(MockEnclaveServer::get_eph_rng_keypair())
@@ -212,6 +222,7 @@ impl_mock_sync_client_trait!(
     fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
     fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
     fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError>,
+    fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
     fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
     fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,

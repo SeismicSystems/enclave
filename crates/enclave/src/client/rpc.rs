@@ -15,7 +15,7 @@ use crate::auth::{AuthLayer, JwtAuthValidator};
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
-use crate::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
+use crate::signing::{Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
@@ -65,6 +65,10 @@ pub trait EnclaveApi {
     /// Signs a message using secp256k1 private key
     #[method(name = "sign")]
     async fn sign(&self, _req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse>;
+
+    /// Verifies a secp256k1 signature against a message
+    #[method(name = "verify")]
+    async fn verify(&self, _req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse>;
 
     /// Generates attestation evidence from the attestation authority
     #[method(name = "getAttestationEvidence")]
