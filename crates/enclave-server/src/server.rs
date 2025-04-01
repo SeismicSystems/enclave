@@ -137,7 +137,7 @@ where
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: T, auth_secret: JwtSecret) -> Result<Self> {
+    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: crate::attestation::agent::SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
          let tee_service = Arc::new(
              TeeService::new(key_provider, token_broker)
          );
