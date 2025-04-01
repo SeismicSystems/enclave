@@ -271,7 +271,7 @@ mod tests {
         };
 
         let res = tee_service.verify(verify_request).await.unwrap();
-        assert_eq!(res.verified, true);
+        assert!(res.verified);
     }
 
     async fn test_io_encryption<K, T>(tee_service: &AttestationEngine<K, T>)
@@ -284,7 +284,7 @@ mod tests {
         let req = IoEncryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: data_to_encrypt.clone(),
-            nonce: nonce.clone().into(),
+            nonce: nonce.clone(),
         };
 
         let res = tee_service.encrypt(req).await.unwrap();
@@ -316,13 +316,12 @@ mod tests {
         };
         let res = tee_service.decrypt(decryption_request).await;
 
-        assert_eq!(res.is_err(), true);
-        assert_eq!(
+        assert!(res.is_err());
+        assert!(
             res.err()
                 .unwrap()
                 .to_string()
-                .contains("Invalid ciphertext"),
-            true
+                .contains("Invalid ciphertext")
         );
     }
 

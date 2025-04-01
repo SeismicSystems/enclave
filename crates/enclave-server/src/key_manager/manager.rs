@@ -96,7 +96,7 @@ impl KeyManager {
     ///
     /// Returns an error if HKDF expansion fails (though this is unlikely with correct parameters).
     fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
-        let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), &self.master_key.as_ref());
+        let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), self.master_key.as_ref());
         let mut derived_key = vec![0u8; 32];
         hk.expand(&purpose.domain_separator(), &mut derived_key)
             .expect("32 is a valid length for Sha256 to output");
@@ -113,7 +113,7 @@ impl KeyManager {
     /// Returns an error if the key has not been derived.
     fn get_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
         if let Some(key) = self.purpose_keys.get(&purpose) {
-            return Ok(key.clone());
+            Ok(key.clone())
         } else {
             anyhow::bail!("KeyManager does not have a key for purpose {:?}", purpose);
         }
@@ -136,8 +136,8 @@ impl NetworkKeyProvider for KeyManager {
             .expect("KeyManager should always have a snapshot key");
         let sk = secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid");
-        let pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
-        pk
+        
+        secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk)
     }
 
     /// Retrieves the Schnorrkel keypair used for randomness generation.

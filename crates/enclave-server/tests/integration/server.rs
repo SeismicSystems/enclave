@@ -122,7 +122,7 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
 async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
     assert!(
-        !(res == get_unsecure_sample_secp256k1_pk()),
+        (res != get_unsecure_sample_secp256k1_pk()),
         "public key should be randomly generated"
     );
 }

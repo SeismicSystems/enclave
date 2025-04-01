@@ -154,7 +154,7 @@ impl JwtSecret {
     pub fn from_hex<S: AsRef<str>>(hex: S) -> Result<Self, JwtError> {
         let hex = hex.as_ref().trim().trim_start_matches("0x");
         if hex.len() == JWT_SECRET_LEN {
-            let hex_bytes = hex::decode(hex).map_err(|e| JwtError::JwtSecretHexDecodeError(e))?;
+            let hex_bytes = hex::decode(hex).map_err(JwtError::JwtSecretHexDecodeError)?;
             // is 32bytes, see length check
             let bytes = hex_bytes.try_into().expect("is expected len");
             Ok(Self(bytes))

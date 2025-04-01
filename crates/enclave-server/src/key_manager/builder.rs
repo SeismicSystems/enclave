@@ -10,6 +10,12 @@ use rand::TryRngCore;
 /// or a deterministic mock version for testing purposes.
 pub struct KeyManagerBuilder {}
 
+impl Default for KeyManagerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeyManagerBuilder {
     /// Creates a new instance of the `KeyManagerBuilder`.
     pub fn new() -> Self {

@@ -204,6 +204,12 @@ impl EnclaveApiServer for MockEnclaveServer {
 /// Useful for testing the against the mock server,
 /// as it can be easily set up instead of going through the EnclaveClientBuilder
 pub struct MockEnclaveClient;
+impl Default for MockEnclaveClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockEnclaveClient {
     pub fn new() -> Self {
         Self {}
@@ -258,7 +264,7 @@ mod tests {
         let port = get_random_port();
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let _server_handle = MockEnclaveServer::new(addr).start().await?;
-        let _ = sleep(Duration::from_secs(2));
+        let _ = sleep(Duration::from_secs(2)).await;
 
         let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         async_test_health_check(&client).await;

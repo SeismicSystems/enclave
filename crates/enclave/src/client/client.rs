@@ -40,6 +40,12 @@ pub struct EnclaveClientBuilder {
     timeout: Option<Duration>,
     url: Option<String>,
 }
+impl Default for EnclaveClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EnclaveClientBuilder {
     pub fn new() -> Self {
         Self {
@@ -89,7 +95,7 @@ impl EnclaveClientBuilder {
         // auth seceret is required as server rejects all messages without it
         let auth_secret = self
             .auth_secret
-            .ok_or_else(|| return anyhow!("No auth secret supplied to builder"))?;
+            .ok_or_else(|| anyhow!("No auth secret supplied to builder"))?;
         let secret_layer = AuthClientLayer::new(auth_secret);
         let middleware = tower::ServiceBuilder::default().layer(secret_layer);
 
@@ -213,7 +219,7 @@ pub mod tests {
         let port = get_random_port();
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let _server_handle = MockEnclaveServer::new(addr).start().await?;
-        let _ = sleep(Duration::from_secs(2));
+        let _ = sleep(Duration::from_secs(2)).await;
 
         let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         sync_test_health_check(&client);

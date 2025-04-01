@@ -51,6 +51,12 @@ pub struct PolicyFixture {
     pub policy_map: HashMap<String, String>,
 }
 
+impl Default for PolicyFixture {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolicyFixture {
     /// Creates a blank PolicyFixture
     /// Policies can then be added with `with_policy`
@@ -66,17 +72,17 @@ impl PolicyFixture {
 
         policy_map.insert(
             "allow".to_string(),
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY.to_string()),
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY),
         );
 
         policy_map.insert(
             "deny".to_string(),
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(DENY_POLICY.to_string()),
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(DENY_POLICY),
         );
 
         policy_map.insert(
             "yocto".to_string(),
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY.to_string()),
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY),
         );
 
         Self { policy_map }
