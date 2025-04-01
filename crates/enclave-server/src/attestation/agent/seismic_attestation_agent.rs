@@ -13,7 +13,6 @@ use attestation_service::token::AttestationTokenBroker;
 use attestation_service::Data;
 use attestation_service::HashAlgorithm;
 
-
 use crate::attestation::verifier::DcapAttVerifier;
 
 pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {

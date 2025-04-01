@@ -5,6 +5,7 @@ use attestation_agent::AttestationAPIs;
 use attestation_service::token::AttestationTokenBroker;
 use attestation_service::{Data, HashAlgorithm};
 
+use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -19,13 +20,13 @@ use seismic_enclave::{
 };
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 
-use super::traits::AttestationEngineApi;
 use crate::attestation::agent::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
 use crate::attestation::verifier::into_original::IntoOriginalData;
 use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
 
 /// The main execution engine for secure enclave logic
+/// handles server apu calls after http parsing and authentication
 /// controls central resources, e.g. key manager, attestation agent
 pub struct AttestationEngine<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
     key_provider: Arc<K>,
@@ -45,17 +46,21 @@ where
 }
 
 #[async_trait]
-impl<K, T> AttestationEngineApi for AttestationEngine<K, T>
+impl<K, T>EnclaveApiServer for AttestationEngine<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
+    async fn health_check(&self) -> RpcResult<String> {
+        Ok("OK".into())
+    }
+    
     // Crypto operations implementations
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
         Ok(self.key_provider.get_tx_io_pk())
     }
 
-    async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
+    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         let sk = self.key_provider.get_tx_io_sk();
         let signature = secp256k1_sign_digest(&req.msg, sk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
@@ -116,7 +121,7 @@ where
         Ok(AttestationGetEvidenceResponse { evidence })
     }
 
-    async fn genesis_get_data_handler(&self) -> RpcResult<GenesisDataResponse> {
+    async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         let io_pk = self.key_provider.get_tx_io_pk();
 
         // Use the agent's attest_genesis_data method which handles the mutex internally
@@ -137,7 +142,7 @@ where
         })
     }
 
-    async fn attestation_eval_evidence(
+    async fn eval_attestation_evidence(
         &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
@@ -231,7 +236,7 @@ mod tests {
             msg: msg_to_sign.clone(),
         };
 
-        let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
+        let res = tee_service.sign(sign_request).await.unwrap();
         assert!(!res.sig.is_empty());
     }
 
@@ -349,7 +354,7 @@ mod tests {
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
         // Call the handler
-        let res = tee_service.genesis_get_data_handler().await.unwrap();
+        let res = tee_service.get_genesis_data().await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 }

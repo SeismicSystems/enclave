@@ -1,4 +1,4 @@
-use crate::api::{AttestationEngineApi, AttestationEngine};
+use crate::api::AttestationEngine;
 use crate::key_manager::NetworkKeyProvider;
 use crate::attestation::agent::SeismicAttestationAgent;
 
@@ -39,7 +39,7 @@ where
     auth_secret: JwtSecret,
     /// The main execution engine for secure enclave logic
     /// controls central resources, e.g. key manager, attestation agent
-    tee_service: Arc<AttestationEngine<K, T>>,
+    inner: Arc<AttestationEngine<K, T>>,
 }
 
 /// A builder that lets us configure the server
@@ -128,14 +128,14 @@ where
         let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
-        let tee_service = Arc::new(
+        let inner = Arc::new(
             AttestationEngine::new(key_provider, attestation_agent)
         );
 
         Ok(EnclaveServer {
             addr: final_addr,
             auth_secret,
-            tee_service,
+            inner,
         })
     }
 }
@@ -152,13 +152,13 @@ where
     
     /// Simplified constructor if you want to skip the builder
     pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: crate::attestation::agent::SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
-         let tee_service = Arc::new(
+         let inner = Arc::new(
              AttestationEngine::new(key_provider, token_broker)
          );
         
          Ok(Self {
              addr: addr.into(),
-             tee_service,
+             inner,
              auth_secret,
          })
     }
@@ -194,30 +194,30 @@ where
 {
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        self.tee_service.get_public_key().await
+        self.inner.get_public_key().await
     }
 
     /// Handler for: `healthCheck`
     async fn health_check(&self) -> RpcResult<String> {
-        Ok("OK".into())
+        self.inner.health_check().await
     }
 
     /// Handler for: `getGenesisData`
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         debug!(target: "rpc::enclave", "Serving getGenesisData");
-        self.tee_service.genesis_get_data_handler().await
+        self.inner.get_genesis_data().await
     }
 
     /// Handler for: `encrypt`
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         debug!(target: "rpc::enclave", "Serving encrypt");
-        self.tee_service.encrypt(req).await
+        self.inner.encrypt(req).await
     }
 
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
-        self.tee_service.decrypt(req).await
+        self.inner.decrypt(req).await
     }
 
     /// Handler for: `getAttestationEvidence`
@@ -226,7 +226,7 @@ where
         req: AttestationGetEvidenceRequest,
     ) -> RpcResult<AttestationGetEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving getAttestationEvidence");
-        self.tee_service.get_attestation_evidence(req).await
+        self.inner.get_attestation_evidence(req).await
     }
 
     /// Handler for: `evalAttestationEvidence`
@@ -235,19 +235,19 @@ where
         req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
-        self.tee_service.attestation_eval_evidence(req).await
+        self.inner.eval_attestation_evidence(req).await
     }
 
     /// Handler for: `sign`
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         debug!(target: "rpc::enclave", "Serving sign");
-        self.tee_service.secp256k1_sign(req).await
+        self.inner.sign(req).await
     }
 
     /// Handler for: 'eph_rng.get_keypair'
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        self.tee_service.get_eph_rng_keypair().await
+        self.inner.get_eph_rng_keypair().await
     }
 }
 
