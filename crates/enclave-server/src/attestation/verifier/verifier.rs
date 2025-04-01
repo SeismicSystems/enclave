@@ -178,13 +178,13 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::attestation::verifier::ASCoreTokenClaims;
     use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
     use crate::utils::test_utils::read_vector_txt;
     use attestation_service::token::simple::Configuration;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
+    use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
     use std::env;
     use tokio::test;
 

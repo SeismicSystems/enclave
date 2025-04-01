@@ -1,4 +1,3 @@
-use crate::attestation::verifier::ASCoreTokenClaims;
 use crate::key_manager::NetworkKeyProvider;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
@@ -22,6 +21,7 @@ use attestation_agent::AttestationAPIs;
 
 use crate::attestation::verifier::into_original::IntoOriginalData;
 use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
+use seismic_enclave::coco_as::ASCoreTokenClaims;
 use attestation_service::token::AttestationTokenBroker;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
 use attestation_service::{Data, HashAlgorithm};
