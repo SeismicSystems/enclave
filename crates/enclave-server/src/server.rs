@@ -1,6 +1,7 @@
 use crate::api::traits::TeeServiceApi;
 use crate::api::tee_service::TeeService;
 use crate::key_manager::NetworkKeyProvider;
+use crate::attestation::agent::SeismicAttestationAgent;
 
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -26,6 +27,7 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use jsonrpsee::server::ServerBuilder;
+use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration as BrokerConfiguration};
 
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K, T>
@@ -44,6 +46,7 @@ where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {
     addr: Option<SocketAddr>,
+    auth_secret: Option<JwtSecret>,
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
 }
@@ -58,6 +61,7 @@ where
                 ENCLAVE_DEFAULT_ENDPOINT_ADDR,
                 ENCLAVE_DEFAULT_ENDPOINT_PORT,
             )),
+            auth_secret: None,
             key_provider: None,
             attestation_config_path: None,
         }
@@ -86,6 +90,11 @@ where
         self
     }
 
+    pub fn with_auth_secret(mut self, auth_secret: JwtSecret) -> Self {
+        self.auth_secret = Some(auth_secret);
+        self
+    }
+
     pub fn with_key_provider(mut self, key_provider: K) -> Self {
         self.key_provider = Some(key_provider);
         self
@@ -101,27 +110,32 @@ where
     where
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-        todo!()
-        // let final_addr = self.addr.ok_or_else(|| {
-        //     anyhow!("No address found in builder (should not happen if default is set)")
-        // })?;
+        let final_addr = self.addr.ok_or_else(|| {
+            anyhow!("No address found in builder (should not happen if default is set)")
+        })?;
 
-        // let key_provider = self.key_provider.ok_or_else(|| {
-        //     anyhow!("No key provider supplied to builder")
-        // })?;
+        let key_provider = self.key_provider.ok_or_else(|| {
+            anyhow!("No key provider supplied to builder")
+        })?;
+
+        let auth_secret = self.auth_secret.ok_or_else(|| {
+            anyhow!("No auth secret supplied to builder")
+        })?;
        
-        // // Initialize TeeService with the key provider
-        // let config_path = self.attestation_config_path.as_deref();
-        // let tee_service = Arc::new(
-        //     TeeService::with_simple_token(key_provider, config_path)
-        //         .await
-        //         .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
-        // );
+        // Initialize TeeService with the key provider
+        let config_path = self.attestation_config_path.as_deref();
+        let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?; // TODO: consider adding thing to the builder
+        let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
-        // Ok(EnclaveServer {
-        //     addr: final_addr,
-        //     tee_service,
-        // })
+        let tee_service = Arc::new(
+            TeeService::new(key_provider, attestation_agent)
+        );
+
+        Ok(EnclaveServer {
+            addr: final_addr,
+            auth_secret,
+            tee_service,
+        })
     }
 }
 
