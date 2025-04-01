@@ -68,7 +68,6 @@ where
         }
     }
 }
-
 impl<K> EnclaveServerBuilder<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
