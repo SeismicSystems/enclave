@@ -22,6 +22,7 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
+use crate::auth::JwtSecret;
 
 use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},

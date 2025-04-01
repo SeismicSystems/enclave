@@ -37,3 +37,10 @@ sha2.workspace = true
 strum.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+tower.workspace = true
+http.workspace = true
+jsonrpsee-http-client.workspace = true
+pin-project.workspace = true
+jsonwebtoken.workspace = true
+hex.workspace = true

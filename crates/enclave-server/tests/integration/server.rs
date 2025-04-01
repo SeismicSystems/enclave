@@ -4,6 +4,7 @@ use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
 use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::EnclaveClientBuilder;
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::coco_as::Data;
@@ -20,22 +21,8 @@ use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
-
-pub fn is_sudo() -> bool {
-    use std::process::Command;
-
-    // Run the "id -u" command to check the user ID
-    let output = Command::new("id")
-        .arg("-u")
-        .output()
-        .expect("Failed to execute id command");
-
-    // Convert the output to a string and trim any whitespace
-    let user_id = String::from_utf8(output.stdout).unwrap().trim().to_string();
-
-    // Check if the user ID is 0 (which means the user is root)
-    user_id == "0"
-}
+use seismic_enclave::auth::JwtSecret;
+use crate::utils::get_random_port;
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
@@ -130,12 +117,26 @@ async fn test_server_requests() {
     }
 
     // spawn a seperate thread for the server, otherwise the test will hang
+<<<<<<< HEAD
     let port = get_random_port();
+=======
+    let port = get_random_port(); // rand port for test parallelization
+>>>>>>> origin/api
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
     let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
+<<<<<<< HEAD
     let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+=======
+
+    let client = EnclaveClientBuilder::new()
+        .auth_secret(auth_secret)
+        .addr(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string())
+        .port(port)
+        .timeout(Duration::from_secs(5))
+        .build();
+>>>>>>> origin/api
 
     test_health_check(&client).await;
     test_genesis_get_data(&client).await;

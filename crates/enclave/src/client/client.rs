@@ -19,6 +19,8 @@ use crate::{
 };
 
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
+use crate::auth::{JwtSecret, AuthClientLayer, AuthClientService};
+use jsonrpsee::http_client::transport::HttpBackend;
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
@@ -145,6 +147,18 @@ impl EnclaveClient {
         F: Future<Output = T>,
     {
         tokio::task::block_in_place(|| self.handle.block_on(future))
+    }
+
+    /// A client enclave bade to work with the default mock server
+    /// Useful for testing
+    pub fn mock(addr: String, port: u16) -> Self {
+        let auth_secret = JwtSecret::mock_default();
+        EnclaveClientBuilder::new()
+            .auth_secret(auth_secret)
+            .addr(addr)
+            .port(port)
+            .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
+            .build()
     }
 }
 
