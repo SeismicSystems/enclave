@@ -117,7 +117,6 @@ impl<F> ResponseFuture<F> {
         Self { kind: Kind::Error { response: Some(err_res) } }
     }
 }
-
 #[pin_project(project = KindProj)]
 enum Kind<F> {
     Future {
@@ -128,7 +127,6 @@ enum Kind<F> {
         response: Option<HttpResponse>,
     },
 }
-
 impl<F, E> Future for ResponseFuture<F>
 where
     F: Future<Output = Result<HttpResponse, E>>,
