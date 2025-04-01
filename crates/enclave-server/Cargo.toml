@@ -60,7 +60,6 @@ alloy-sol-types = { version = "0.8", default-features = false }
 alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
 alloy-provider = "0.8"
-
 tower.workspace = true
 
 [dev-dependencies]

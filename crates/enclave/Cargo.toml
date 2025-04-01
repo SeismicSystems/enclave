@@ -44,4 +44,3 @@ jsonrpsee-http-client.workspace = true
 pin-project.workspace = true
 jsonwebtoken.workspace = true
 hex.workspace = true
-base64.workspace = true
