@@ -3,7 +3,7 @@ use crate::api::tee_service::TeeService;
 use crate::key_manager::NetworkKeyProvider;
 
 use alloy_sol_types::abi::token;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use attestation_service::token::AttestationTokenBroker;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -140,8 +140,6 @@ where
     pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: T, auth_secret: JwtSecret) -> Result<Self> {
          let tee_service = Arc::new(
              TeeService::new(key_provider, token_broker)
-                 .await
-                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
          );
         
          Ok(Self {

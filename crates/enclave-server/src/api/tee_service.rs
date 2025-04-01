@@ -36,10 +36,10 @@ where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
-    pub fn new(key_provider: Arc<K>, attestation_agent: Arc<SeismicAttestationAgent<T>>) -> Self {
+    pub fn new(key_provider: K, attestation_agent: SeismicAttestationAgent<T>) -> Self {
         Self {
-            key_provider,
-            attestation_agent,
+            key_provider: Arc::new(key_provider),
+            attestation_agent: Arc::new(attestation_agent),
         }
     }
 }
@@ -205,7 +205,7 @@ mod tests {
         let v_token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default())
             .expect("Failed to create an AttestationAgent");
         let saa = SeismicAttestationAgent::new(None, v_token_broker);
-        TeeService::new(Arc::new(kp), Arc::new(saa))
+        TeeService::new(kp, saa)
     }
 
     #[tokio::test]
