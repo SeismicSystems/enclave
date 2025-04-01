@@ -137,7 +137,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     ) -> Result<(Option<Vec<u8>>, Value)> {
         match data {
             Some(value) => match value {
-                Data::Raw(raw) => Ok((Some(&raw), Value::Null)),
+                Data::Raw(raw) => Ok((Some(raw.to_vec()), Value::Null)),
                 Data::Structured(structured) => {
                     // Serialize the structured data (keys in alphabetical order)
                     let hash_materials =
@@ -250,7 +250,8 @@ mod tests {
         ];
 
         // Runtime data
-        let runtime_data = Some(&Data::Raw("nonce".as_bytes().to_vec()));
+        let binding = Data::Raw("nonce".as_bytes().to_vec());
+        let runtime_data = Some(&binding);
 
         // Evaluate the evidence
         let raw_claims = verifier
@@ -395,7 +396,7 @@ mod tests {
             .evaluate(
                 az_tdx_evidence_pass,
                 Tee::AzTdxVtpm,
-                Some(&Data::Raw(runtime_data_bytes)),
+                Some(&Data::Raw(runtime_data_bytes.clone())),
                 &HashAlgorithm::Sha256,
                 None,
                 &HashAlgorithm::Sha256,
@@ -417,7 +418,7 @@ mod tests {
             .evaluate(
                 az_tdx_evidence_fail,
                 Tee::AzTdxVtpm,
-                Some(&Data::Raw(runtime_data_bytes.clone())),
+                Some(&Data::Raw(runtime_data_bytes)),
                 &HashAlgorithm::Sha256,
                 None,
                 &HashAlgorithm::Sha256,

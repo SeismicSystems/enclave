@@ -156,7 +156,7 @@ where
                 runtime_data,
                 &runtime_data_hash_algorithm,
                 None,
-                &OriginalHashAlgorithm::Sha256,
+                &HashAlgorithm::Sha256,
                 request.policy_ids,
             )
             .await;
