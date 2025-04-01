@@ -5,7 +5,6 @@ use attestation_service::{HashAlgorithm, Data};
 use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use verifier::{InitDataHash, ReportData};
 
@@ -142,10 +141,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
                     // Serialize the structured data (keys in alphabetical order)
                     let hash_materials =
                         serde_json::to_vec(&structured).context("parse JSON structured data")?;
-                    let digest = Sha256::new()
-                        .chain_update(hash_materials)
-                        .finalize()
-                        .to_vec(); // TODO: don't hardcode Sha256, use the Hash alg given
+                    let digest = hash_algorithm.accumulate_hash(hash_materials);
                     Ok((Some(digest), structured))
                 }
             },
