@@ -53,6 +53,7 @@ strum.workspace = true
 strum_macros.workspace = true
 tokio.workspace = true
 schnorrkel.workspace = true
+tower.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
@@ -60,7 +61,6 @@ alloy-sol-types = { version = "0.8", default-features = false }
 alloy-primitives = { version = "0.8", default-features = false }
 alloy-contract = { version = "0.8", default-features = false }
 alloy-provider = "0.8"
-tower.workspace = true
 
 [dev-dependencies]
 serial_test = "3.2.0"
