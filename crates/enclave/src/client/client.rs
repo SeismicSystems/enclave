@@ -20,6 +20,8 @@ use crate::{
 
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 
+use crate::auth::JwtSecret;
+
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
@@ -28,6 +30,7 @@ static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 pub struct EnclaveClientBuilder {
     addr: Option<String>,
     port: Option<u16>,
+    auth_secret: Option<JwtSecret>,
     timeout: Option<Duration>,
     url: Option<String>,
 }
@@ -37,6 +40,7 @@ impl EnclaveClientBuilder {
         Self {
             addr: None,
             port: None,
+            auth_secret: None,
             timeout: None,
             url: None,
         }
@@ -49,6 +53,11 @@ impl EnclaveClientBuilder {
 
     pub fn port(mut self, port: u16) -> Self {
         self.port = Some(port);
+        self
+    }
+
+    pub fn auth_secret(mut self, auth_secret: JwtSecret) -> Self {
+        self.auth_secret = Some(auth_secret);
         self
     }
 
@@ -146,6 +155,18 @@ impl EnclaveClient {
     {
         tokio::task::block_in_place(|| self.handle.block_on(future))
     }
+
+    /// A client enclave bade to work with the default mock server
+    /// Useful for testing
+    pub fn mock(addr: String, port: u16) -> Self {
+        let auth_secret = JwtSecret::mock_default();
+        EnclaveClientBuilder::new()
+            .auth_secret(auth_secret)
+            .addr(addr)
+            .port(port)
+            .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
+            .build()
+    }
 }
 
 macro_rules! impl_sync_client_trait {
@@ -189,21 +210,20 @@ pub mod tests {
     #[test]
     fn test_client_sync_context() {
         // testing if sync client can be created in a sync runtime
-        let port = 1888;
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-        let _ = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        let port = get_random_port(); // rand port for test parallelization
+        let _ = EnclaveClient::mock(ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string(), port);
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sync_client() {
         // spawn a seperate thread for the server, otherwise the test will hang
-        let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-        println!("addr: {:?}", addr);
-        let _server_handle = MockEnclaveServer::new(addr).start().await.unwrap();
+        let port = get_random_port(); // rand port for test parallelization
+        let addr = ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+        let socket_addr = SocketAddr::from((addr, port));
+        let _server_handle = MockEnclaveServer::new(socket_addr).start().await.unwrap();
         let _ = sleep(Duration::from_secs(2));
 
-        let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+        let client = EnclaveClient::mock(addr.to_string(), port);
         sync_test_health_check(&client);
         sync_test_get_public_key(&client);
         sync_test_get_eph_rng_keypair(&client);

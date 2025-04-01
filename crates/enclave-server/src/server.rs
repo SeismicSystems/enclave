@@ -24,6 +24,9 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+use jsonrpsee::server::ServerBuilder;
+use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
+
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K, T>
 where
@@ -31,6 +34,7 @@ where
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
     addr: SocketAddr,
+    auth_secret: JwtSecret,
     tee_service: Arc<TeeService<K, T>>,
 }
 
@@ -153,6 +157,10 @@ where
 {
     fn addr(&self) -> SocketAddr {
         self.addr
+    }
+
+    fn auth_secret(&self) -> JwtSecret {
+        self.auth_secret
     }
 
     fn methods(self) -> Methods {

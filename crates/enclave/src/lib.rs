@@ -2,6 +2,7 @@ pub mod client;
 pub mod crypto;
 pub mod errors;
 pub mod request_types;
+pub mod auth;
 
 pub use client::*;
 pub use crypto::*;
