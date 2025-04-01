@@ -14,9 +14,8 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
+use seismic_enclave::auth::JwtSecret;
 
-use alloy_sol_types::abi::token;
 use anyhow::{anyhow, Result};
 use attestation_service::token::AttestationTokenBroker;
 use jsonrpsee::core::{async_trait, RpcResult};
