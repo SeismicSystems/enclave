@@ -1,10 +1,11 @@
-// policy_test_utils.rs
+//! Attestation Verifier Policies and the PolicyFixture object
+//! Useful for testing the attestation verifier
 
 use crate::attestation::verifier::DcapAttVerifier;
 use anyhow::Result;
 use attestation_service::token::AttestationTokenBroker;
 use std::collections::HashMap;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::Engine;
 
 pub const ALLOW_POLICY: &str = r#"
 package policy
@@ -51,10 +52,18 @@ pub struct PolicyFixture {
 }
 
 impl PolicyFixture {
+    /// Creates a blank PolicyFixture
+    /// Policies can then be added with `with_policy`
     pub fn new() -> Self {
+        let policy_map = HashMap::new();
+        Self { policy_map }
+    }
+
+    /// Creates a PolicyFixture with several policies useful for testing
+    /// Not used in production, as we currently have no use case for blanket allow/deny policies
+    pub fn testing_mock() -> Self {
         let mut policy_map = HashMap::new();
 
-        // TODO: evaluate if this should be included by default. under what circumstances do we not care what enclave a quote came from?
         policy_map.insert(
             "allow".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY.to_string()),
@@ -69,9 +78,7 @@ impl PolicyFixture {
             "yocto".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY.to_string()),
         );
-        
-        // Add more policies as needed for your test suite
-        
+
         Self { policy_map }
     }
     
@@ -111,10 +118,3 @@ impl PolicyFixture {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy)
     }
 }
-
-// /// Helper function to quickly set up a verifier with default policies
-// pub async fn set_default_policies(verifier: &mut DcapAttVerifier) -> Result<PolicyFixture> {
-//     let fixture = PolicyFixture::new();
-//     fixture.configure_verifier(verifier).await?;
-//     Ok(fixture)
-// }

@@ -198,7 +198,7 @@ mod tests {
             DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
                 .unwrap();
 
-        let fixture = PolicyFixture::new();
+        let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         let policy_id = "allow".to_string();
@@ -236,7 +236,7 @@ mod tests {
         let mut verifier =
             DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
                 .unwrap();
-        let fixture = PolicyFixture::new();
+        let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         // Sample evidence data
@@ -281,7 +281,7 @@ mod tests {
     async fn verifier_test_eval_policy_deny() {
         // Create verifier with the policy fixture
         let mut verifier = DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default()).unwrap();
-        let fixture = PolicyFixture::new();
+        let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         // Sample evidence data
@@ -323,7 +323,7 @@ mod tests {
         let mut verifier =
             DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
                 .unwrap();
-        let fixture = PolicyFixture::new();
+        let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         // Read TDX evidence
@@ -376,7 +376,7 @@ mod tests {
         let mut verifier =
             DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
                 .unwrap();
-        let fixture = PolicyFixture::new();
+        let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         // Read TDX evidence that should pass
