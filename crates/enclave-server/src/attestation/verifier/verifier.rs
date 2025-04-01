@@ -132,12 +132,12 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Parse and hash data using the specified algorithm
     fn parse_data(
         &self,
-        data: Option<&Data>,
-        hash_algorithm: &HashAlgorithm,
+        data: Option<Data>,
+        hash_algorithm: HashAlgorithm,
     ) -> Result<(Option<Vec<u8>>, Value)> {
         match data {
             Some(value) => match value {
-                Data::Raw(raw) => Ok((Some(raw.to_vec()), Value::Null)),
+                Data::Raw(raw) => Ok((Some(raw), Value::Null)),
                 Data::Structured(structured) => {
                     // Serialize the structured data (keys in alphabetical order)
                     let hash_materials =
@@ -146,7 +146,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
                         .chain_update(hash_materials)
                         .finalize()
                         .to_vec(); // TODO: don't hardcode Sha256, use the Hash alg given
-                    Ok((Some(digest), structured.clone()))
+                    Ok((Some(digest), structured))
                 }
             },
             None => Ok((None, Value::Null)),
