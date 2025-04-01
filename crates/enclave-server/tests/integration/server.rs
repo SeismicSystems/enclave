@@ -121,7 +121,7 @@ async fn test_server_requests() {
     let port = get_random_port(); // rand port for test parallelization
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
-    let token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default());
+    let token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default()).unwrap();
     let auth_secret = JwtSecret::random();
     let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(addr, kp,token_broker, auth_secret).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
