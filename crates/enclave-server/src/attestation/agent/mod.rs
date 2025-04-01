@@ -1,0 +1,2 @@
+mod seismic_attestation_agent;
+pub use seismic_attestation_agent::SeismicAttestationAgent;

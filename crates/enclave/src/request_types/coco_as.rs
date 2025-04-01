@@ -7,6 +7,10 @@ use std::fmt;
 use std::str::FromStr;
 use strum::{AsRefStr, Display, EnumString};
 
+use anyhow::{anyhow, Result};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+
 /// Hash algorithms used to calculate runtime/init data binding
 #[derive(Debug, Display, EnumString, AsRefStr)]
 pub enum HashAlgorithm {
@@ -54,6 +58,7 @@ pub enum Data {
 /// - For empty data in `AzTdxVtpm`, set the following:
 ///   - `runtime_data = Some(Data::Raw("".into()))`
 ///   - `runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)`
+#[derive(Debug)]
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
@@ -103,38 +108,33 @@ pub struct ASCoreTokenClaims {
 
     pub customized_claims: ASCustomizedClaims,
 }
+impl ASCoreTokenClaims {
+    /// Serializes the claims to JSON (without JWT encoding).
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(self)?)
+    }
+
+    /// Parses a (base64-encoded) JWT string into an `ASCoreTokenClaims`.
+    ///
+    /// Expects the token to have three parts separated by '.', and
+    /// decodes the middle part as JSON claims.
+    pub fn from_jwt(token: &str) -> Result<Self> {
+        let parts: Vec<&str> = token.splitn(3, '.').collect();
+        if parts.len() != 3 {
+            return Err(anyhow!("Invalid token format: expected 3 parts separated by '.'"));
+        }
+        let claims_b64 = parts[1];
+        let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;
+        let claims_decoded_string = String::from_utf8(claims_decoded_bytes)?;
+        let claims: ASCoreTokenClaims = serde_json::from_str(&claims_decoded_string)?;
+        Ok(claims)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ASCustomizedClaims {
     pub init_data: Value,
     pub runtime_data: Value,
-}
-
-impl fmt::Debug for AttestationEvalEvidenceRequest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AttestationEvalEvidenceRequest")
-            .field("evidence", &self.evidence)
-            .field("tee", &self.tee)
-            .field(
-                "runtime_data",
-                &match &self.runtime_data {
-                    Some(data) => match data {
-                        Data::Raw(bytes) => format!("Raw({:?})", bytes),
-                        Data::Structured(value) => format!("Structured({:?})", value),
-                    },
-                    None => "None".to_string(),
-                },
-            )
-            .field(
-                "runtime_data_hash_algorithm",
-                &match &self.runtime_data_hash_algorithm {
-                    Some(alg) => alg.to_string(),
-                    None => "None".to_string(),
-                },
-            )
-            .field("policy_ids", &self.policy_ids)
-            .finish()
-    }
 }
 
 impl Serialize for AttestationEvalEvidenceRequest {
@@ -273,41 +273,6 @@ impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
 mod tests {
     use super::*;
     use serde_json;
-
-    #[test]
-    fn test_debug() {
-        let request = AttestationEvalEvidenceRequest {
-            evidence: vec![1, 2, 3],
-            tee: Tee::Sgx,
-            runtime_data: Some(Data::Raw(vec![7, 8, 9])),
-            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["allow".to_string()],
-        };
-
-        let debug_output = format!("{:?}", request);
-
-        // The expected debug output
-        let expected_output = "AttestationEvalEvidenceRequest { \
-        evidence: [1, 2, 3], \
-        tee: Sgx, \
-        runtime_data: \"Raw([7, 8, 9])\", \
-        runtime_data_hash_algorithm: \"Sha256\", \
-        policy_ids: [\"allow\"] }";
-
-        assert_eq!(
-            debug_output.trim(),
-            expected_output.trim(),
-            "Debug output does not match expected"
-        );
-
-        // Ensure that each key part of the struct is present in the output
-        assert!(debug_output.contains("AttestationEvalEvidenceRequest"));
-        assert!(debug_output.contains("evidence: [1, 2, 3]"));
-        assert!(debug_output.contains("tee: Sgx"));
-        assert!(debug_output.contains("runtime_data: \"Raw([7, 8, 9])\""));
-        assert!(debug_output.contains("runtime_data_hash_algorithm: \"Sha256\""));
-        assert!(debug_output.contains("policy_ids: [\"allow\"]"));
-    }
 
     #[test]
     fn test_serialize_some_data() {

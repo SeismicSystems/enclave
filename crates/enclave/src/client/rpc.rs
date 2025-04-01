@@ -8,6 +8,7 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
 
+use crate::auth::JwtSecret;
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
@@ -18,7 +19,6 @@ use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use tracing::info;
-use crate::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
@@ -30,15 +30,8 @@ pub trait BuildableServer {
         Self: Sized,
     {
         let addr = self.addr();
-        let secret = self.auth_secret();
-        let http_middleware =
-                tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
-        let rpc_server = ServerBuilder::new()
-            .set_http_middleware(http_middleware)
-            .build(addr)
-            .await?;
+        let rpc_server = ServerBuilder::new().build(addr).await?;
         let module = self.methods();
-
         let server_handle = rpc_server.start(module);
         info!(target: "rpc::enclave", "Server started at {}", addr);
         Ok(server_handle)

@@ -1,12 +1,10 @@
 use crate::api::traits::TeeServiceApi;
 use crate::api::tee_service::TeeService;
-use crate::coco_aa::init_coco_aa;
-use crate::coco_as::init_coco_as;
-use crate::key_manager::builder::KeyManagerBuilder;
-use crate::key_manager::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 
+use alloy_sol_types::abi::token;
 use anyhow::{anyhow, Result};
+use attestation_service::token::AttestationTokenBroker;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -23,7 +21,6 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
 use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
@@ -32,21 +29,30 @@ use jsonrpsee::server::ServerBuilder;
 use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 /// The main server struct, with everything needed to run.
-pub struct EnclaveServer<K: NetworkKeyProvider + Send + Sync + 'static> {
+pub struct EnclaveServer<K, T>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+{
     addr: SocketAddr,
     auth_secret: JwtSecret,
-    tee_service: Arc<TeeService<K>>,
+    tee_service: Arc<TeeService<K, T>>,
 }
 
 /// A builder that lets us configure the server
-pub struct EnclaveServerBuilder<K: NetworkKeyProvider + Send + Sync + 'static> {
+pub struct EnclaveServerBuilder<K>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+{
     addr: Option<SocketAddr>,
-    auth_secret: Option<JwtSecret>,
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
 }
 
-impl<K: NetworkKeyProvider + Send + Sync + 'static> Default for EnclaveServerBuilder<K> {
+impl<K> Default for EnclaveServerBuilder<K>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+{
     fn default() -> Self {
         Self {
             addr: Some(SocketAddr::new(
@@ -55,12 +61,14 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> Default for EnclaveServerBui
             )),
             key_provider: None,
             attestation_config_path: None,
-            auth_secret: None,
         }
     }
 }
 
-impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
+impl<K> EnclaveServerBuilder<K>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+{
     pub fn with_addr(mut self, ip_addr: IpAddr) -> Self {
         if let Some(curr) = self.addr {
             self.addr = Some(SocketAddr::new(ip_addr, curr.port()));
@@ -89,74 +97,73 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServerBuilder<K> {
         self
     }
 
-    pub fn with_auth_secret(mut self, secret: JwtSecret) -> Self {
-        self.auth_secret = Some(secret);
-        self
-    }
-
     /// Build the final `EnclaveServer` object.
-    pub async fn build(self) -> Result<EnclaveServer<K>> {
-        let final_addr = self.addr.ok_or_else(|| {
-            anyhow!("No address found in builder (should not happen if default is set)")
-        })?;
+    pub async fn build<T>(self) -> Result<EnclaveServer<K, T>>
+    where
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+        todo!()
+        // let final_addr = self.addr.ok_or_else(|| {
+        //     anyhow!("No address found in builder (should not happen if default is set)")
+        // })?;
 
-        let key_provider = self.key_provider.ok_or_else(|| {
-            anyhow!("No key provider supplied to builder")
-        })?;
-        let auth_secret = self.auth_secret.ok_or_else(|| {
-            anyhow!("No auth secret supplied to builder")
-        })?;
+        // let key_provider = self.key_provider.ok_or_else(|| {
+        //     anyhow!("No key provider supplied to builder")
+        // })?;
        
-        // Initialize TeeService with the key provider
-        let config_path = self.attestation_config_path.as_deref();
-        let tee_service = Arc::new(
-            TeeService::with_default_attestation(key_provider, config_path)
-                .await
-                .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
-        );
+        // // Initialize TeeService with the key provider
+        // let config_path = self.attestation_config_path.as_deref();
+        // let tee_service = Arc::new(
+        //     TeeService::with_simple_token(key_provider, config_path)
+        //         .await
+        //         .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
+        // );
 
-        Ok(EnclaveServer {
-            addr: final_addr,
-            auth_secret: auth_secret,
-            tee_service,
-        })
+        // Ok(EnclaveServer {
+        //     addr: final_addr,
+        //     tee_service,
+        // })
     }
 }
 
-
-impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveServer<K> {
+impl<K, T>EnclaveServer<K, T>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+{
     /// Create a new builder with default address
     pub fn builder() -> EnclaveServerBuilder<K> {
         EnclaveServerBuilder::default()
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, auth_secret: JwtSecret) -> Result<Self> {
-        let tee_service = Arc::new(
-            TeeService::with_default_attestation(key_provider, None)
-                .await
-                .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
-        );
+    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: crate::attestation::agent::SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
+         let tee_service = Arc::new(
+             TeeService::new(key_provider, token_broker)
+         );
         
-        Ok(Self {
-            addr: addr.into(),
-            auth_secret,
-            tee_service,
-        })
+         Ok(Self {
+             addr: addr.into(),
+             tee_service,
+             auth_secret,
+         })
     }
 }
-
-impl<K: NetworkKeyProvider + Send + Sync + 'static> BuildableServer for EnclaveServer<K> {
+impl<K, T>BuildableServer for EnclaveServer<K, T>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+{
     fn addr(&self) -> SocketAddr {
         self.addr
     }
 
-    fn methods(self) -> Methods {
-        self.into_rpc().into()
-    }
-
     fn auth_secret(&self) -> JwtSecret {
         self.auth_secret
+    }
+
+    fn methods(self) -> Methods {
+        self.into_rpc().into()
     }
 
     async fn start(self) -> Result<ServerHandle> {
@@ -166,7 +173,11 @@ impl<K: NetworkKeyProvider + Send + Sync + 'static> BuildableServer for EnclaveS
 }
 
 #[async_trait]
-impl<K: NetworkKeyProvider + Send + Sync + 'static> EnclaveApiServer for EnclaveServer<K> {
+impl<K, T>EnclaveApiServer for EnclaveServer<K, T>
+where
+    K: NetworkKeyProvider + Send + Sync + 'static,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+{
     /// Handler for: `getPublicKey`
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
         self.tee_service.get_public_key().await

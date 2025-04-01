@@ -1,3 +1,4 @@
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use clap::arg;
 use clap::Parser;
 use seismic_enclave_server::key_manager::key_manager::KeyManager;
@@ -6,7 +7,7 @@ use tracing::info;
 
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use seismic_enclave_server::server::{init_tracing, EnclaveServer};
+use seismic_enclave_server::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
 
 /// Command line arguments for the enclave server
 #[derive(Parser, Debug)]
@@ -33,11 +34,11 @@ async fn main() {
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
-    let builder = EnclaveServer::<KeyManager>::builder()
+    let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::builder()
         .with_addr(args.addr)
         .with_port(args.port);
 
-    let server = builder.build().await.unwrap();
+    let server: EnclaveServer<KeyManager, SimpleAttestationTokenBroker> = builder.build().await.unwrap();
     let handle = server.start().await.unwrap();
 
     handle.stopped().await;

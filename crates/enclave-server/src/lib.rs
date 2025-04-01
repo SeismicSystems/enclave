@@ -1,6 +1,3 @@
-mod coco_aa;
-mod coco_as;
-mod genesis;
 pub mod key_manager;
 pub mod server;
 mod signing;
@@ -8,3 +5,4 @@ mod signing;
 // mod snapsync;
 pub mod utils;
 pub mod api;
+pub mod attestation;
