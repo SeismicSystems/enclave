@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker};
+use attestation_service::{Data, HashAlgorithm};
 use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;

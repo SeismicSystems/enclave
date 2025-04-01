@@ -1,4 +1,4 @@
 mod verifier;
-pub mod into_original;
-pub use verifier::{DcapAttVerifier, Data};
+pub mod data_conversion;
+pub use verifier::DcapAttVerifier;
 
