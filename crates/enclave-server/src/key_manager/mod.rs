@@ -1,14 +1,19 @@
-pub mod builder;
-pub mod key_manager;
-
 use zeroize::{Zeroize, ZeroizeOnDrop};
+
+mod builder;
+mod manager;
+
+// re-export important types
+pub use manager::KeyManager;
+pub use builder::KeyManagerBuilder;
+
 
 /// A secure wrapper around a 32-byte master secret key.
 ///
 /// Implements [`Zeroize`] and [`ZeroizeOnDrop`] to ensure the memory is cleared
 /// when the value is dropped or explicitly zeroized.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
-pub struct Secret(pub [u8; 32]);
+struct Secret(pub [u8; 32]);
 
 impl Secret {
     /// Creates a new `Secret` from a 32-byte array.
@@ -44,7 +49,7 @@ impl AsRef<[u8]> for Secret {
 ///
 /// Typically created via HKDF derivation from a master [`Secret`].
 #[derive(Debug, Clone)]
-pub struct Key {
+struct Key {
     pub bytes: Vec<u8>,
 }
 

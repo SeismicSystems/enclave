@@ -191,14 +191,10 @@ mod tests {
     use super::*;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
-
-    use crate::key_manager::builder::KeyManagerBuilder;
-
-    use crate::key_manager::key_manager::KeyManager;
+    use crate::key_manager::KeyManagerBuilder;
+    use crate::key_manager::KeyManager;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
-    // TODO: this needs work, especially on what is a good default policy
-    //       I believe if a quote matches any policy it passes, so start with deny all?
     pub fn default_tee_service() -> TeeService<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let v_token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default())

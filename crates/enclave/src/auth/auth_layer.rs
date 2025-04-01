@@ -42,7 +42,6 @@ use tower::{Layer, Service};
 pub struct AuthLayer<V> {
     validator: V,
 }
-
 impl<V> AuthLayer<V> {
     /// Creates an instance of [`AuthLayer`].
     /// `validator` is a generic trait able to validate requests (see [`AuthValidator`]).
@@ -50,7 +49,6 @@ impl<V> AuthLayer<V> {
         Self { validator }
     }
 }
-
 impl<S, V> Layer<S> for AuthLayer<V>
 where
     V: Clone,
@@ -71,7 +69,6 @@ pub struct AuthService<S, V> {
     /// Recipient of authorized Http requests
     inner: S,
 }
-
 impl<S, V> Service<HttpRequest> for AuthService<S, V>
 where
     S: Service<HttpRequest, Response = HttpResponse>,

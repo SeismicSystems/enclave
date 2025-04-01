@@ -11,14 +11,12 @@ use tower::{Layer, Service};
 pub struct AuthClientLayer {
     secret: JwtSecret,
 }
-
 impl AuthClientLayer {
     /// Create a new `AuthClientLayer` with the given `secret`.
     pub const fn new(secret: JwtSecret) -> Self {
         Self { secret }
     }
 }
-
 impl<S> Layer<S> for AuthClientLayer {
     type Service = AuthClientService<S>;
 
@@ -39,7 +37,6 @@ impl<S> AuthClientService<S> {
         Self { secret, inner }
     }
 }
-
 impl<S, B> Service<http::Request<B>> for AuthClientService<S>
 where
     S: Service<http::Request<B>>,

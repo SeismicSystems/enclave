@@ -1,7 +1,7 @@
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use clap::arg;
 use clap::Parser;
-use seismic_enclave_server::key_manager::key_manager::KeyManager;
+use seismic_enclave_server::key_manager::KeyManager;
 use std::net::IpAddr;
 use tracing::info;
 

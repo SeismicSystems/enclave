@@ -1,4 +1,4 @@
-use crate::key_manager::key_manager::KeyManager;
+use crate::key_manager::manager::KeyManager;
 
 use anyhow::Result;
 use rand::rngs::OsRng;

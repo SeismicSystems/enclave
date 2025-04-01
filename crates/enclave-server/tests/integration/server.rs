@@ -1,21 +1,15 @@
 use seismic_enclave::client::rpc::BuildableServer;
-use seismic_enclave::client::EnclaveClient;
-use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
-use seismic_enclave::EnclaveClientBuilder;
+use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_ADDR};
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
-use seismic_enclave::coco_as::Data;
-use seismic_enclave::coco_as::HashAlgorithm;
+use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave_server::attestation::agent::SeismicAttestationAgent;
-use seismic_enclave_server::key_manager::builder::KeyManagerBuilder;
-use seismic_enclave_server::key_manager::key_manager::KeyManager;
-use seismic_enclave_server::server::init_tracing;
-use seismic_enclave_server::server::EnclaveServer;
+use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
+use seismic_enclave_server::server::{EnclaveServer, init_tracing};
 use seismic_enclave::auth::JwtSecret;
 use crate::utils::get_random_port;
 
