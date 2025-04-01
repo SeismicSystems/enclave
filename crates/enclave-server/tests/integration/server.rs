@@ -139,7 +139,7 @@ async fn test_server_requests() {
     let token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default()).unwrap();
     let seismic_attestation_agent = SeismicAttestationAgent::new(None, token_broker);
     let auth_secret = JwtSecret::random();
-    let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(addr, kp, token_broker, auth_secret).await.unwrap().start().await.unwrap();
+    let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(addr, kp, seismic_attestation_agent, auth_secret).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
 
     let client = EnclaveClientBuilder::new()
