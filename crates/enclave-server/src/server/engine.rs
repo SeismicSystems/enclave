@@ -22,8 +22,8 @@ use seismic_enclave::coco_as::ASCoreTokenClaims;
 
 use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
-use crate::api::into_original::IntoOriginalData;
-use crate::api::into_original::IntoOriginalHashAlgorithm;
+use crate::server::into_original::IntoOriginalData;
+use crate::server::into_original::IntoOriginalHashAlgorithm;
 
 /// The main execution engine for secure enclave logic
 /// handles server apu calls after http parsing and authentication
