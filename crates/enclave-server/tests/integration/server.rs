@@ -1,5 +1,4 @@
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
-#[cfg(test)]
 use kbs_types::Tee;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::EnclaveClient;
@@ -13,17 +12,33 @@ use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
+use seismic_enclave_server::attestation::agent::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::builder::KeyManagerBuilder;
 use seismic_enclave_server::key_manager::key_manager::KeyManager;
 use seismic_enclave_server::server::init_tracing;
 use seismic_enclave_server::server::EnclaveServer;
-use seismic_enclave_server::utils::test_utils::is_sudo;
 use serial_test::serial;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
 use seismic_enclave::auth::JwtSecret;
 use crate::utils::get_random_port;
+
+pub fn is_sudo() -> bool {
+    use std::process::Command;
+
+    // Run the "id -u" command to check the user ID
+    let output = Command::new("id")
+        .arg("-u")
+        .output()
+        .expect("Failed to execute id command");
+
+    // Convert the output to a string and trim any whitespace
+    let user_id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    // Check if the user ID is 0 (which means the user is root)
+    user_id == "0"
+}
 
  async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
      // make the request struct
@@ -122,8 +137,9 @@ async fn test_server_requests() {
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
     let token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default()).unwrap();
+    let seismic_attestation_agent = SeismicAttestationAgent::new(None, token_broker);
     let auth_secret = JwtSecret::random();
-    let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(addr, kp,token_broker, auth_secret).await.unwrap().start().await.unwrap();
+    let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(addr, kp, token_broker, auth_secret).await.unwrap().start().await.unwrap();
     sleep(Duration::from_secs(4));
 
     let client = EnclaveClientBuilder::new()
