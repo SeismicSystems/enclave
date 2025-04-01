@@ -1,6 +1,6 @@
-mod server;
-mod into_original;
 mod engine;
+mod into_original;
+mod server;
 
 // re-exports
-pub use server::{EnclaveServer, EnclaveServerBuilder, init_tracing};
+pub use server::{init_tracing, EnclaveServer, EnclaveServerBuilder};

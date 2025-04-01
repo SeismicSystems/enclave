@@ -17,13 +17,13 @@ const PREFIX: &str = "seismic-purpose";
 /// Implements [`Zeroize`] and [`ZeroizeOnDrop`] to ensure the memory is cleared
 /// when the value is dropped or explicitly zeroized.
 #[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
-struct Key (pub Vec<u8>);
+struct Key(pub Vec<u8>);
 impl Key {
     /// Creates a new `Key` from the given byte vector.
     ///
     /// This is primarily used internally by the key manager when deriving keys.
     fn new(bytes: Vec<u8>) -> Self {
-        Self (bytes)
+        Self(bytes)
     }
 }
 impl AsRef<[u8]> for Key {
@@ -146,9 +146,8 @@ impl NetworkKeyProvider for KeyManager {
             .get_key(KeyPurpose::RngPrecompile)
             .expect("KeyManager should always have a snapshot key");
         let mini_key_bytes = mini_key.as_ref();
-        let mini_secret_key =
-            schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes)
-                .expect("mini_secret_key should be valid");
+        let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes)
+            .expect("mini_secret_key should be valid");
         mini_secret_key
             .expand(schnorrkel::ExpansionMode::Uniform)
             .into()

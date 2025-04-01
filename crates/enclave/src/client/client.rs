@@ -1,5 +1,6 @@
-use jsonrpsee::{core::ClientError, http_client::HttpClient};
+use anyhow::{anyhow, Result};
 use jsonrpsee::http_client::transport::HttpBackend;
+use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr},
@@ -8,19 +9,16 @@ use std::{
     time::Duration,
 };
 use tokio::runtime::{Handle, Runtime};
-use anyhow::{anyhow, Result};
 
+use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
+use crate::auth::{AuthClientLayer, AuthClientService, JwtSecret};
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     genesis::GenesisDataResponse,
-    signing::{
-        Secp256k1SignRequest, Secp256k1SignResponse,
-    },
+    signing::{Secp256k1SignRequest, Secp256k1SignResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
-use crate::auth::{JwtSecret, AuthClientLayer, AuthClientService};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
@@ -86,9 +84,9 @@ impl EnclaveClientBuilder {
         });
 
         // auth seceret is required as server rejects all messages without it
-        let auth_secret = self.auth_secret.ok_or_else(|| {
-            return anyhow!("No auth secret supplied to builder")
-        })?;
+        let auth_secret = self
+            .auth_secret
+            .ok_or_else(|| return anyhow!("No auth secret supplied to builder"))?;
         let secret_layer = AuthClientLayer::new(auth_secret);
         let middleware = tower::ServiceBuilder::default().layer(secret_layer);
 

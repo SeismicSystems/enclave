@@ -34,11 +34,13 @@ async fn main() {
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
-    let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::builder()
-        .with_addr(args.addr)
-        .with_port(args.port);
+    let builder: EnclaveServerBuilder<KeyManager> =
+        EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::builder()
+            .with_addr(args.addr)
+            .with_port(args.port);
 
-    let server: EnclaveServer<KeyManager, SimpleAttestationTokenBroker> = builder.build().await.unwrap();
+    let server: EnclaveServer<KeyManager, SimpleAttestationTokenBroker> =
+        builder.build().await.unwrap();
     let handle = server.start().await.unwrap();
 
     handle.stopped().await;

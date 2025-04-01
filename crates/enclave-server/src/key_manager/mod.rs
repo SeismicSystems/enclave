@@ -2,8 +2,8 @@ mod builder;
 mod manager;
 
 // re-export important types
-pub use manager::KeyManager;
 pub use builder::KeyManagerBuilder;
+pub use manager::KeyManager;
 
 /// Trait for providing access to derived keys used in networking and other runtime logic.
 ///

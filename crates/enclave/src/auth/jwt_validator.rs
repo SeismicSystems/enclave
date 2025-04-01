@@ -1,5 +1,5 @@
+use crate::auth::jwt::{JwtError, JwtSecret};
 use crate::auth::AuthValidator;
-use crate::auth::jwt::{JwtSecret, JwtError};
 use http::{header, HeaderMap, Response, StatusCode};
 use jsonrpsee_http_client::{HttpBody, HttpResponse};
 use tracing::error;

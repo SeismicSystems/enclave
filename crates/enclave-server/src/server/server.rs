@@ -1,21 +1,22 @@
-use crate::server::engine::AttestationEngine;
-use crate::key_manager::NetworkKeyProvider;
 use crate::attestation::SeismicAttestationAgent;
+use crate::key_manager::NetworkKeyProvider;
+use crate::server::engine::AttestationEngine;
 
+use seismic_enclave::auth::JwtSecret;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
 use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
-use seismic_enclave::signing::{
-    Secp256k1SignRequest, Secp256k1SignResponse,
-};
+use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use seismic_enclave::auth::JwtSecret;
 
 use anyhow::{anyhow, Result};
+use attestation_service::token::simple::{
+    Configuration as BrokerConfiguration, SimpleAttestationTokenBroker,
+};
 use attestation_service::token::AttestationTokenBroker;
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
@@ -24,7 +25,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
-use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration as BrokerConfiguration};
 
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K, T>
@@ -106,7 +106,7 @@ where
     }
 
     /// Build the final `EnclaveServer` object.
-    /// Currently only support SimpleAttestationTokenBroker for the attestation verifier 
+    /// Currently only support SimpleAttestationTokenBroker for the attestation verifier
     /// Because getting the types to compile is a pain
     /// TODO: allow builder to have a BrokerConfiguration passed in
     pub async fn build(self) -> Result<EnclaveServer<K, SimpleAttestationTokenBroker>> {
@@ -114,22 +114,20 @@ where
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
 
-        let key_provider = self.key_provider.ok_or_else(|| {
-            anyhow!("No key provider supplied to builder")
-        })?;
+        let key_provider = self
+            .key_provider
+            .ok_or_else(|| anyhow!("No key provider supplied to builder"))?;
 
-        let auth_secret = self.auth_secret.ok_or_else(|| {
-            anyhow!("No auth secret supplied to builder")
-        })?;
-       
+        let auth_secret = self
+            .auth_secret
+            .ok_or_else(|| anyhow!("No auth secret supplied to builder"))?;
+
         // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
         let v_token_broker = SimpleAttestationTokenBroker::new(BrokerConfiguration::default())?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
-        let inner = Arc::new(
-            AttestationEngine::new(key_provider, attestation_agent)
-        );
+        let inner = Arc::new(AttestationEngine::new(key_provider, attestation_agent));
 
         Ok(EnclaveServer {
             addr: final_addr,
@@ -139,7 +137,7 @@ where
     }
 }
 
-impl<K, T>EnclaveServer<K, T>
+impl<K, T> EnclaveServer<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -148,21 +146,24 @@ where
     pub fn builder() -> EnclaveServerBuilder<K> {
         EnclaveServerBuilder::default()
     }
-    
+
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: SeismicAttestationAgent<T>, auth_secret: JwtSecret) -> Result<Self> {
-         let inner = Arc::new(
-             AttestationEngine::new(key_provider, token_broker)
-         );
-        
-         Ok(Self {
-             addr: addr.into(),
-             inner,
-             auth_secret,
-         })
+    pub async fn new(
+        addr: impl Into<SocketAddr>,
+        key_provider: K,
+        token_broker: SeismicAttestationAgent<T>,
+        auth_secret: JwtSecret,
+    ) -> Result<Self> {
+        let inner = Arc::new(AttestationEngine::new(key_provider, token_broker));
+
+        Ok(Self {
+            addr: addr.into(),
+            inner,
+            auth_secret,
+        })
     }
 }
-impl<K, T>BuildableServer for EnclaveServer<K, T>
+impl<K, T> BuildableServer for EnclaveServer<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -186,7 +187,7 @@ where
 }
 
 #[async_trait]
-impl<K, T>EnclaveApiServer for EnclaveServer<K, T>
+impl<K, T> EnclaveApiServer for EnclaveServer<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
