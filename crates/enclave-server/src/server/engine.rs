@@ -3,12 +3,13 @@ use attestation_service::token::AttestationTokenBroker;
 use attestation_service::{Data, HashAlgorithm};
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use seismic_enclave::genesis::GenesisDataResponse;
+use seismic_enclave::genesis::{GenesisData, GenesisDataResponse};
 use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{
@@ -124,19 +125,30 @@ where
         Ok(AttestationGetEvidenceResponse { evidence })
     }
 
+    // Future Work: update what genesis data consists of, error responses
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         let io_pk = self.key_provider.get_tx_io_pk();
 
-        // Use the agent's attest_genesis_data method which handles the mutex internally
-        let (genesis_data, evidence) = match self.attestation_agent.attest_genesis_data(io_pk).await
+        // For now the genesis data is just the public key of the IO encryption keypair
+        // But this is expected to change in the future
+        let genesis_data = GenesisData { io_pk };
+
+        // hash the genesis data and attest to it
+        let genesis_data_bytes = match genesis_data.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(e) => return Err(rpc_bad_genesis_error(anyhow::anyhow!(e))),
+        };
+        let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
+
+        // Get the evidence from the attestation agent
+        let evidence = match self
+            .attestation_agent
+            .get_evidence(&hash_bytes)
+            .await
+            .map_err(|e| format!("Error while getting evidence: {:?}", e))
         {
-            Ok(result) => result,
-            Err(e) => {
-                error!("Failed to attest genesis data: {}", e);
-                return Err(rpc_bad_genesis_error(anyhow::anyhow!(
-                    "Issue in attesting genesis data"
-                )));
-            }
+            Ok(evidence) => evidence,
+            Err(e) => return Err(rpc_bad_quote_error(anyhow::anyhow!(e))),
         };
 
         Ok(GenesisDataResponse {

@@ -1,8 +1,6 @@
 use anyhow::Result;
 use jsonrpsee::core::async_trait;
 use kbs_types::Tee;
-use seismic_enclave::genesis::GenesisData;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 
@@ -38,40 +36,6 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         self.attestation_agent.init().await
     }
 
-    pub async fn attest_signing_pk(
-        &self,
-        signing_pk: secp256k1::PublicKey,
-    ) -> Result<(Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
-        let signing_pk_bytes = signing_pk.serialize();
-        let pk_hash: [u8; 32] = Sha256::digest(signing_pk_bytes.as_slice()).into();
-
-        let att = self.get_evidence(pk_hash.as_slice()).await?;
-
-        Ok((att, signing_pk))
-    }
-
-    pub async fn attest_genesis_data(
-        &self,
-        io_pk: secp256k1::PublicKey,
-    ) -> Result<(GenesisData, Vec<u8>), anyhow::Error> {
-        // For now the genesis data is just the public key of the IO encryption keypair
-        // But this is expected to change in the future
-        let genesis_data = GenesisData { io_pk };
-
-        // hash the genesis data and attest to it
-        let genesis_data_bytes = genesis_data.to_bytes()?;
-        let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
-
-        // Get the evidence from the attestation agent
-        let evidence = self
-            .get_evidence(&hash_bytes)
-            .await
-            .map_err(|e| format!("Error while getting evidence: {:?}", e))
-            .unwrap();
-
-        Ok((genesis_data, evidence))
-    }
-
     /// Set Attestation Verification Policy.
     pub async fn set_policy(&mut self, policy_id: String, policy: String) -> Result<()> {
         self.verifier.set_policy(policy_id, policy).await?;
@@ -89,7 +53,7 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
         self.verifier.get_policy(policy_id).await
     }
 
-    /// Evaluate evidence against policies
+    /// Evaluate evidence against policies, verifying the attestation
     pub async fn evaluate(
         &self,
         evidence: Vec<u8>,
@@ -114,6 +78,7 @@ impl<T: AttestationTokenBroker + Send + Sync> SeismicAttestationAgent<T> {
     }
 }
 
+/// impl AttestationAPIs for SeismicAttestationAgent for easy use of inner methods
 #[async_trait]
 impl<T: AttestationTokenBroker + Send + Sync> AttestationAPIs for SeismicAttestationAgent<T> {
     /// Get attestation Token (delegates to attestation_agent)
