@@ -1,16 +1,36 @@
-use crate::key_manager::{Key, Secret};
+use super::NetworkKeyProvider;
 
-use crate::key_manager::NetworkKeyProvider;
 use hkdf::Hkdf;
 use sha2::Sha256;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Salt used during HKDF key derivation for purpose-specific keys.
 const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
 /// Prefix used in domain separation when deriving purpose-specific keys.
 const PREFIX: &str = "seismic-purpose";
+
+/// Represents a derived key used for specific cryptographic purposes.
+///
+/// Implements [`Zeroize`] and [`ZeroizeOnDrop`] to ensure the memory is cleared
+/// when the value is dropped or explicitly zeroized.
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
+struct Key(pub Vec<u8>);
+impl Key {
+    /// Creates a new `Key` from the given byte vector.
+    ///
+    /// This is primarily used internally by the key manager when deriving keys.
+    fn new(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+}
+impl AsRef<[u8]> for Key {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 /// Enum representing the intended usage ("purpose") of a derived key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
@@ -19,7 +39,6 @@ pub enum KeyPurpose {
     RngPrecompile,
     TxIo,
 }
-
 impl KeyPurpose {
     /// Returns the short string label for the purpose.
     fn label(&self) -> &'static str {
@@ -41,7 +60,7 @@ impl KeyPurpose {
 /// Keys are derived using HKDF-SHA256 with domain separation.
 /// This struct supports retrieving keys. See KeyPurpose for the intended usages
 pub struct KeyManager {
-    master_key: Secret,
+    master_key: Key,
     //no-thread-safety yet
     purpose_keys: HashMap<KeyPurpose, Key>,
 }
@@ -56,7 +75,7 @@ impl KeyManager {
     /// Returns an error if key derivation fails.
     pub fn new(master_key_bytes: [u8; 32]) -> Result<Self, anyhow::Error> {
         let mut km = Self {
-            master_key: Secret::new(master_key_bytes),
+            master_key: Key(master_key_bytes.to_vec()),
             purpose_keys: HashMap::new(), // purpose keys are derived on demand
         };
         km.derive_all_purpose_keys()?;
@@ -100,14 +119,13 @@ impl KeyManager {
         }
     }
 }
-
 impl NetworkKeyProvider for KeyManager {
     /// Retrieves the secp256k1 secret key for transaction I/O signing.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey {
         let key = self
             .get_key(KeyPurpose::TxIo)
             .expect("KeyManager should always have a snapshot key");
-        secp256k1::SecretKey::from_slice(&key.bytes)
+        secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid")
     }
 
@@ -116,7 +134,7 @@ impl NetworkKeyProvider for KeyManager {
         let key = self
             .get_key(KeyPurpose::TxIo)
             .expect("KeyManager should always have a snapshot key");
-        let sk = secp256k1::SecretKey::from_slice(&key.bytes)
+        let sk = secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid");
         let pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
         pk
@@ -124,12 +142,12 @@ impl NetworkKeyProvider for KeyManager {
 
     /// Retrieves the Schnorrkel keypair used for randomness generation.
     fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair {
-        let mini_key_bytes = self
+        let mini_key = self
             .get_key(KeyPurpose::RngPrecompile)
             .expect("KeyManager should always have a snapshot key");
-        let mini_secret_key =
-            schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes.bytes.as_slice())
-                .expect("mini_secret_key should be valid");
+        let mini_key_bytes = mini_key.as_ref();
+        let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes)
+            .expect("mini_secret_key should be valid");
         mini_secret_key
             .expand(schnorrkel::ExpansionMode::Uniform)
             .into()
@@ -140,7 +158,7 @@ impl NetworkKeyProvider for KeyManager {
         let key = self
             .get_key(KeyPurpose::Snapshot)
             .expect("KeyManager should always have a snapshot key");
-        let bytes: [u8; 32] = key.bytes.try_into().expect("Key should be 32 bytes");
+        let bytes: [u8; 32] = key.as_ref().try_into().expect("Key should be 32 bytes");
         bytes.into()
     }
 }
@@ -156,7 +174,7 @@ mod tests {
 
         for purpose in KeyPurpose::iter() {
             let key = key_manager.get_key(purpose).unwrap();
-            assert!(!key.bytes.is_empty());
+            assert!(!key.as_ref().is_empty());
         }
     }
 
@@ -166,6 +184,6 @@ mod tests {
         let key_manager = KeyManager::new(master_key_bytes).unwrap();
         let key_a = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
         let key_b = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
-        assert_eq!(key_a.bytes, key_b.bytes);
+        assert_eq!(key_a.as_ref(), key_b.as_ref());
     }
 }

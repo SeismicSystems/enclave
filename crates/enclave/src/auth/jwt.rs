@@ -7,7 +7,7 @@ use jsonwebtoken::get_current_timestamp;
 use rand::Rng;
 use std::fmt;
 
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, errors::ErrorKind};
+use jsonwebtoken::{errors::ErrorKind, Algorithm, DecodingKey, Validation};
 
 /// Errors returned by the [`JwtSecret`]
 #[derive(Debug)]
@@ -47,7 +47,10 @@ impl fmt::Display for JwtError {
                 )
             }
             JwtError::UnsupportedSignatureAlgorithm => {
-                write!(f, "unsupported signature algorithm. Only HS256 is supported")
+                write!(
+                    f,
+                    "unsupported signature algorithm. Only HS256 is supported"
+                )
             }
             JwtError::InvalidSignature => write!(f, "provided signature is invalid"),
             JwtError::InvalidIssuanceTimestamp => {
@@ -110,7 +113,10 @@ pub struct Claims {
 impl Claims {
     /// Creates a new instance of [`Claims`] with the current timestamp as the `iat` claim.
     pub fn with_current_timestamp() -> Self {
-        Self { iat: get_current_timestamp(), exp: None }
+        Self {
+            iat: get_current_timestamp(),
+            exp: None,
+        }
     }
 
     /// Checks if the `iat` claim is within the allowed range from the current time.
@@ -148,16 +154,14 @@ impl JwtSecret {
     pub fn from_hex<S: AsRef<str>>(hex: S) -> Result<Self, JwtError> {
         let hex = hex.as_ref().trim().trim_start_matches("0x");
         if hex.len() == JWT_SECRET_LEN {
-            let hex_bytes = hex::decode(hex).map_err(
-                |e| JwtError::JwtSecretHexDecodeError(e)
-            )?;
+            let hex_bytes = hex::decode(hex).map_err(|e| JwtError::JwtSecretHexDecodeError(e))?;
             // is 32bytes, see length check
             let bytes = hex_bytes.try_into().expect("is expected len");
             Ok(Self(bytes))
         } else {
             Err(JwtError::InvalidLength(JWT_SECRET_LEN, hex.len()))
         }
-    }   
+    }
 
     /// Validates a JWT token along the following rules:
     /// - The JWT signature is valid.

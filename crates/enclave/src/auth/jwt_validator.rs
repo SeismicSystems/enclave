@@ -1,5 +1,5 @@
+use crate::auth::jwt::{JwtError, JwtSecret};
 use crate::auth::AuthValidator;
-use crate::auth::jwt::{JwtSecret, JwtError};
 use http::{header, HeaderMap, Response, StatusCode};
 use jsonrpsee_http_client::{HttpBody, HttpResponse};
 use tracing::error;
@@ -11,7 +11,6 @@ use tracing::error;
 pub struct JwtAuthValidator {
     secret: JwtSecret,
 }
-
 impl JwtAuthValidator {
     /// Creates a new instance of [`JwtAuthValidator`].
     /// Validation logics are implemented by the `secret`
@@ -20,7 +19,6 @@ impl JwtAuthValidator {
         Self { secret }
     }
 }
-
 impl AuthValidator for JwtAuthValidator {
     fn validate(&self, headers: &HeaderMap) -> Result<(), HttpResponse> {
         match get_bearer(headers) {
@@ -52,7 +50,7 @@ fn get_bearer(headers: &HeaderMap) -> Option<String> {
     let token: &str = &auth[index + prefix.len()..];
     Some(token.into())
 }
-
+/// convert a JWT error to an Http response
 fn err_response(err: JwtError) -> HttpResponse {
     // We build a response from an error message.
     // We don't cope with headers or other structured fields.

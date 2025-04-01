@@ -121,7 +121,9 @@ impl ASCoreTokenClaims {
     pub fn from_jwt(token: &str) -> Result<Self> {
         let parts: Vec<&str> = token.splitn(3, '.').collect();
         if parts.len() != 3 {
-            return Err(anyhow!("Invalid token format: expected 3 parts separated by '.'"));
+            return Err(anyhow!(
+                "Invalid token format: expected 3 parts separated by '.'"
+            ));
         }
         let claims_b64 = parts[1];
         let claims_decoded_bytes = URL_SAFE_NO_PAD.decode(claims_b64)?;

@@ -1,9 +1,15 @@
-use crate::key_manager::NetworkKeyProvider;
+use attestation_agent::AttestationAPIs;
+use attestation_service::token::AttestationTokenBroker;
+use attestation_service::{Data, HashAlgorithm};
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use std::sync::Arc;
+
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
+use seismic_enclave::coco_as::ASCoreTokenClaims;
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
+use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
@@ -13,24 +19,23 @@ use seismic_enclave::{
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
     secp256k1_sign_digest,
 };
-use std::sync::Arc;
 
-use super::traits::TeeServiceApi;
-use crate::attestation::agent::SeismicAttestationAgent;
-use attestation_agent::AttestationAPIs;
+use crate::attestation::SeismicAttestationAgent;
+use crate::key_manager::NetworkKeyProvider;
+use crate::server::into_original::IntoOriginalData;
+use crate::server::into_original::IntoOriginalHashAlgorithm;
 
-use crate::attestation::verifier::into_original::IntoOriginalData;
-use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
-use seismic_enclave::coco_as::ASCoreTokenClaims;
-use attestation_service::token::AttestationTokenBroker;
-use attestation_service::{Data, HashAlgorithm};
-
-pub struct TeeService<K: NetworkKeyProvider, T: AttestationTokenBroker + Send + Sync + 'static> {
+/// The main execution engine for secure enclave logic
+/// handles server apu calls after http parsing and authentication
+/// controls central resources, e.g. key manager, attestation agent
+pub struct AttestationEngine<
+    K: NetworkKeyProvider,
+    T: AttestationTokenBroker + Send + Sync + 'static,
+> {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
 }
-
-impl<K, T> TeeService<K, T>
+impl<K, T> AttestationEngine<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
@@ -44,17 +49,21 @@ where
 }
 
 #[async_trait]
-impl<K, T> TeeServiceApi for TeeService<K, T>
+impl<K, T> EnclaveApiServer for AttestationEngine<K, T>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
+    async fn health_check(&self) -> RpcResult<String> {
+        Ok("OK".into())
+    }
+
     // Crypto operations implementations
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
         Ok(self.key_provider.get_tx_io_pk())
     }
 
-    async fn secp256k1_sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
+    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
         let sk = self.key_provider.get_tx_io_sk();
         let signature = secp256k1_sign_digest(&req.msg, sk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
@@ -91,7 +100,7 @@ where
         Ok(self.key_provider.get_rng_keypair())
     }
 
-    // Attestation operations implementations - now using SeismicAttestationAgent
+    // Attestation operations implementations
     async fn get_attestation_evidence(
         &self,
         req: AttestationGetEvidenceRequest,
@@ -115,7 +124,7 @@ where
         Ok(AttestationGetEvidenceResponse { evidence })
     }
 
-    async fn genesis_get_data_handler(&self) -> RpcResult<GenesisDataResponse> {
+    async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
         let io_pk = self.key_provider.get_tx_io_pk();
 
         // Use the agent's attest_genesis_data method which handles the mutex internally
@@ -136,7 +145,7 @@ where
         })
     }
 
-    async fn attestation_eval_evidence(
+    async fn eval_attestation_evidence(
         &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
@@ -189,27 +198,25 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::key_manager::KeyManager;
+    use crate::key_manager::KeyManagerBuilder;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
-
-    use crate::key_manager::builder::KeyManagerBuilder;
-
-    use crate::key_manager::key_manager::KeyManager;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
 
-    // TODO: this needs work, especially on what is a good default policy
-    //       I believe if a quote matches any policy it passes, so start with deny all?
-    pub fn default_tee_service() -> TeeService<KeyManager, SimpleAttestationTokenBroker> {
+    pub fn default_tee_service() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let v_token_broker = SimpleAttestationTokenBroker::new(attestation_service::token::simple::Configuration::default())
-            .expect("Failed to create an AttestationAgent");
+        let v_token_broker = SimpleAttestationTokenBroker::new(
+            attestation_service::token::simple::Configuration::default(),
+        )
+        .expect("Failed to create an AttestationAgent");
         let saa = SeismicAttestationAgent::new(None, v_token_broker);
-        TeeService::new(kp, saa)
+        AttestationEngine::new(kp, saa)
     }
 
     #[tokio::test]
     pub async fn run_tests() {
-        let tee_service: TeeService<KeyManager, SimpleAttestationTokenBroker> =
+        let tee_service: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
             default_tee_service();
 
         let t1 = test_secp256k1_sign(&tee_service);
@@ -223,7 +230,7 @@ mod tests {
         let (_r1, _r2, _r3, _r4, _r5, _r6) = tokio::join!(t1, t2, t3, t4, t5, t6);
     }
 
-    async fn test_secp256k1_sign<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_secp256k1_sign<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -234,11 +241,11 @@ mod tests {
             msg: msg_to_sign.clone(),
         };
 
-        let res = tee_service.secp256k1_sign(sign_request).await.unwrap();
+        let res = tee_service.sign(sign_request).await.unwrap();
         assert!(!res.sig.is_empty());
     }
 
-    async fn test_io_encryption<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_io_encryption<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -266,7 +273,7 @@ mod tests {
         assert_eq!(res.decrypted_data, data_to_encrypt);
     }
 
-    async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &TeeService<K, T>)
+    async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -291,7 +298,7 @@ mod tests {
     }
 
     async fn test_attestation_evidence_handler_valid_request_sample<K, T>(
-        tee_service: &TeeService<K, T>,
+        tee_service: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -313,7 +320,7 @@ mod tests {
     }
 
     async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data<K, T>(
-        tee_service: &TeeService<K, T>,
+        tee_service: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -346,13 +353,14 @@ mod tests {
         assert_ne!(res_1.evidence, res_2.evidence);
     }
 
-    async fn test_genesis_get_data_handler_success_basic<K, T>(tee_service: &TeeService<K, T>)
-    where
+    async fn test_genesis_get_data_handler_success_basic<K, T>(
+        tee_service: &AttestationEngine<K, T>,
+    ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
         // Call the handler
-        let res = tee_service.genesis_get_data_handler().await.unwrap();
+        let res = tee_service.get_genesis_data().await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 }

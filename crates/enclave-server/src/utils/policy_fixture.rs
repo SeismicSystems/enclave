@@ -1,11 +1,11 @@
 //! Attestation Verifier Policies and the PolicyFixture object
 //! Useful for testing the attestation verifier
 
-use crate::attestation::verifier::DcapAttVerifier;
+use crate::attestation::DcapAttVerifier;
 use anyhow::Result;
 use attestation_service::token::AttestationTokenBroker;
-use std::collections::HashMap;
 use base64::Engine;
+use std::collections::HashMap;
 
 pub const ALLOW_POLICY: &str = r#"
 package policy
@@ -68,12 +68,12 @@ impl PolicyFixture {
             "allow".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY.to_string()),
         );
-        
+
         policy_map.insert(
             "deny".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(DENY_POLICY.to_string()),
         );
-        
+
         policy_map.insert(
             "yocto".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY.to_string()),
@@ -81,18 +81,15 @@ impl PolicyFixture {
 
         Self { policy_map }
     }
-    
+
     /// Add a custom policy to the fixture
     pub fn with_policy(mut self, id: &str, content: &str) -> Self {
         self.policy_map.insert(id.to_string(), content.to_string());
         self
     }
-    
+
     /// Configure the verifier with all policies in this fixture
-    pub async fn configure_verifier<T>(
-        &self,
-        verifier: &mut DcapAttVerifier<T>,
-    ) -> Result<()>
+    pub async fn configure_verifier<T>(&self, verifier: &mut DcapAttVerifier<T>) -> Result<()>
     where
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
@@ -103,12 +100,12 @@ impl PolicyFixture {
         }
         Ok(())
     }
-   
+
     /// Get the content of a specific policy
     pub fn get_policy_content(&self, policy_id: &str) -> Option<&String> {
         self.policy_map.get(policy_id)
     }
-    
+
     /// Get all policy IDs
     pub fn get_policy_ids(&self) -> Vec<String> {
         self.policy_map.keys().cloned().collect()

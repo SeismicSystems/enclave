@@ -1,27 +1,26 @@
-use std::net::SocketAddr;
+//! This module provides the JSON-RPC traits for the enclave server and client.
+//! Defines how server's are expected to be built and the shared API
 
-/// JSON-RPC Trait for Server and Client
 use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
+use std::net::SocketAddr;
 use tracing::info;
 
 use crate::auth::JwtSecret;
+use crate::auth::{AuthLayer, JwtAuthValidator};
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
-use crate::signing::{
-    Secp256k1SignRequest, Secp256k1SignResponse
-};
+use crate::signing::{Secp256k1SignRequest, Secp256k1SignResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use crate::auth::{JwtAuthValidator, AuthLayer};
 
-
+/// A trait for building a server.
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
     fn methods(self) -> Methods;
@@ -32,23 +31,24 @@ pub trait BuildableServer {
         Self: Sized,
     {
         let addr = self.addr();
-         let secret = self.auth_secret();
-         let http_middleware =
-                 tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
-         let rpc_server = ServerBuilder::new()
-             .set_http_middleware(http_middleware)
-             .build(addr)
-             .await?;
-         let module = self.methods();
+        let secret = self.auth_secret();
+        let http_middleware =
+            tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
+        let rpc_server = ServerBuilder::new()
+            .set_http_middleware(http_middleware)
+            .build(addr)
+            .await?;
+        let module = self.methods();
 
-         let server_handle = rpc_server.start(module);
-         info!(target: "rpc::enclave", "Server started at {}", addr);
-         Ok(server_handle)
+        let server_handle = rpc_server.start(module);
+        info!(target: "rpc::enclave", "Server started at {}", addr);
+        Ok(server_handle)
     }
 }
 
-#[derive_sync_client_trait] // get SyncEnclaveApi trait
-#[rpc(client, server)] // get EnclaveApiClient EnclaveApiServer trait
+/// The JSON-RPC trait for the enclave server and client, defining the API.
+#[derive_sync_client_trait] // get SyncEnclaveApi trait, which allows for sync calls, which seismic-reth requires
+#[rpc(client, server)] // get EnclaveApiClient and EnclaveApiServer traits
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]

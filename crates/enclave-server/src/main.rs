@@ -1,7 +1,7 @@
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use clap::arg;
 use clap::Parser;
-use seismic_enclave_server::key_manager::key_manager::KeyManager;
+use seismic_enclave_server::key_manager::KeyManager;
 use std::net::IpAddr;
 use tracing::info;
 
@@ -34,11 +34,13 @@ async fn main() {
     info!("Enclave server starting on {}:{}", args.addr, args.port);
 
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
-    let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::builder()
-        .with_addr(args.addr)
-        .with_port(args.port);
+    let builder: EnclaveServerBuilder<KeyManager> =
+        EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::builder()
+            .with_addr(args.addr)
+            .with_port(args.port);
 
-    let server: EnclaveServer<KeyManager, SimpleAttestationTokenBroker> = builder.build().await.unwrap();
+    let server: EnclaveServer<KeyManager, SimpleAttestationTokenBroker> =
+        builder.build().await.unwrap();
     let handle = server.start().await.unwrap();
 
     handle.stopped().await;

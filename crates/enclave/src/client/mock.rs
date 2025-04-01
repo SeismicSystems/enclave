@@ -1,15 +1,19 @@
-use std::{
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
-};
-
 use anyhow::Result;
 use jsonrpsee::{
     core::{async_trait, ClientError, RpcResult},
     server::ServerHandle,
     Methods,
 };
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
+use super::{
+    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
+    ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+};
+use crate::auth::JwtSecret;
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
@@ -17,18 +21,12 @@ use crate::{
     genesis::GenesisDataResponse,
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
-    signing::{
-        Secp256k1SignRequest, Secp256k1SignResponse
-    },
+    signing::{Secp256k1SignRequest, Secp256k1SignResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-use crate::auth::JwtSecret;
 
-use super::{
-    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
-    ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
-};
-
+/// A mock enclave server for testing purposes.
+/// Does not check the validity of the JWT token.
 pub struct MockEnclaveServer {
     addr: SocketAddr,
 }
@@ -95,7 +93,6 @@ impl MockEnclaveServer {
     pub fn get_genesis_data() -> GenesisDataResponse {
         unimplemented!("get_genesis_data not implemented for mock server")
     }
-
 
     /// Mock implementation of the get_attestation_evidence method.
     pub fn get_attestation_evidence(
@@ -188,16 +185,17 @@ impl EnclaveApiServer for MockEnclaveServer {
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(MockEnclaveServer::get_eph_rng_keypair())
     }
-
 }
 
+/// Mock enclave client for testing purposes.
+/// Useful for testing the against the mock server,
+/// as it can be easily set up instead of going through the EnclaveClientBuilder
 pub struct MockEnclaveClient;
 impl MockEnclaveClient {
     pub fn new() -> Self {
         Self {}
     }
 }
-
 macro_rules! impl_mock_sync_client_trait {
     ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
         impl SyncEnclaveApiClient for MockEnclaveClient {
@@ -209,7 +207,6 @@ macro_rules! impl_mock_sync_client_trait {
         }
     };
 }
-
 impl_mock_sync_client_trait!(
     fn health_check(&self) -> Result<String, ClientError>,
     fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
