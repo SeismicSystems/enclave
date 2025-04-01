@@ -141,7 +141,7 @@ where
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
-        let runtime_data: Option<&Data> = request.runtime_data.map(|data| &data.into_original());
+        let runtime_data: Option<&Data> = request.runtime_data.as_ref().map(|data| data.into_original());
         let runtime_data_hash_algorithm: HashAlgorithm = match request.runtime_data_hash_algorithm {
             Some(alg) => alg.into_original(),
             None => HashAlgorithm::Sha256,
