@@ -1,4 +1,5 @@
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
+use jsonrpsee::http_client::transport::HttpBackend;
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr},
@@ -18,18 +19,19 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 use crate::auth::{JwtSecret, AuthClientLayer, AuthClientService};
-use jsonrpsee::http_client::transport::HttpBackend;
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
+/// The inner async HTTP client.
+/// Useful to define here in case the HttpClient<T> generic changes
 type EnclaveHttpClient = HttpClient<AuthClientService<HttpBackend>>;
 
+/// Builder for [`EnclaveClient`].
 pub struct EnclaveClientBuilder {
     addr: Option<String>,
     port: Option<u16>,
@@ -37,7 +39,6 @@ pub struct EnclaveClientBuilder {
     timeout: Option<Duration>,
     url: Option<String>,
 }
-
 impl EnclaveClientBuilder {
     pub fn new() -> Self {
         Self {
@@ -83,10 +84,11 @@ impl EnclaveClientBuilder {
                 self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
             )
         });
+
+        // auth seceret is required as server rejects all messages without it
         let auth_secret = self.auth_secret.ok_or_else(|| {
             return anyhow!("No auth secret supplied to builder")
         })?;
-
         let secret_layer = AuthClientLayer::new(auth_secret);
         let middleware = tower::ServiceBuilder::default().layer(secret_layer);
 
@@ -111,7 +113,6 @@ pub struct EnclaveClient {
     /// The runtime for the client.
     handle: Handle,
 }
-
 impl Deref for EnclaveClient {
     type Target = EnclaveHttpClient;
 
@@ -119,12 +120,12 @@ impl Deref for EnclaveClient {
         &self.async_client
     }
 }
-
 impl EnclaveClient {
     pub fn builder() -> EnclaveClientBuilder {
         EnclaveClientBuilder::new()
     }
 
+    /// Create a new [`EnclaveClient`] from an [`EnclaveHttpClient`].
     pub fn new_from_client(async_client: EnclaveHttpClient) -> Self {
         let handle = Handle::try_current().unwrap_or_else(|_| {
             let runtime = ENCLAVE_CLIENT_RUNTIME.get_or_init(|| Runtime::new().unwrap());
@@ -158,6 +159,7 @@ impl EnclaveClient {
     }
 }
 
+// impl the SyncEnclaveApiClient trait for EnclaveClient based on the [`EnclaveApi`] trait
 macro_rules! impl_sync_client_trait {
     ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
         impl SyncEnclaveApiClient for EnclaveClient {
@@ -169,7 +171,6 @@ macro_rules! impl_sync_client_trait {
         }
     };
 }
-
 impl_sync_client_trait!(
     fn health_check(&self) -> Result<String, ClientError>,
     fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,

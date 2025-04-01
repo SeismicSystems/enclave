@@ -1,6 +1,7 @@
-use std::net::SocketAddr;
+//! This module provides the JSON-RPC traits for the enclave server and client.
+//! Defines how server's are expected to be built and the shared API
 
-/// JSON-RPC Trait for Server and Client
+use std::net::SocketAddr;
 use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
@@ -22,6 +23,7 @@ use crate::tx_io::{
 use crate::auth::{JwtAuthValidator, AuthLayer};
 
 
+/// A trait for building a server.
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
     fn methods(self) -> Methods;
@@ -47,8 +49,9 @@ pub trait BuildableServer {
     }
 }
 
-#[derive_sync_client_trait] // get SyncEnclaveApi trait
-#[rpc(client, server)] // get EnclaveApiClient EnclaveApiServer trait
+/// The JSON-RPC trait for the enclave server and client, defining the API.
+#[derive_sync_client_trait] // get SyncEnclaveApi trait, which allows for sync calls, which seismic-reth requires 
+#[rpc(client, server)] // get EnclaveApiClient and EnclaveApiServer traits
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
