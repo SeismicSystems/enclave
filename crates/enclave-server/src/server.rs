@@ -26,7 +26,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
-use jsonrpsee::server::ServerBuilder;
 use attestation_service::token::simple::{SimpleAttestationTokenBroker, Configuration as BrokerConfiguration};
 
 /// The main server struct, with everything needed to run.
