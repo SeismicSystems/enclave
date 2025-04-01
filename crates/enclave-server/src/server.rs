@@ -2,6 +2,7 @@ use crate::api::traits::TeeServiceApi;
 use crate::api::tee_service::TeeService;
 use crate::key_manager::NetworkKeyProvider;
 
+use alloy_sol_types::abi::token;
 use anyhow::Result;
 use attestation_service::token::AttestationTokenBroker;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
@@ -136,18 +137,18 @@ where
     }
     
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K) -> Result<Self> {
-        todo!()
-        // let tee_service = Arc::new(
-        //     TeeService::with_simple_token(key_provider, None)
-        //         .await
-        //         .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
-        // );
+    pub async fn new(addr: impl Into<SocketAddr>, key_provider: K, token_broker: T, auth_secret: JwtSecret) -> Result<Self> {
+         let tee_service = Arc::new(
+             TeeService::new(key_provider, token_broker)
+                 .await
+                 .map_err(|e| anyhow!("Failed to initialize TeeService: {}", e))?,
+         );
         
-        // Ok(Self {
-        //     addr: addr.into(),
-        //     tee_service,
-        // })
+         Ok(Self {
+             addr: addr.into(),
+             tee_service,
+             auth_secret,
+         })
     }
 }
 impl<K, T>BuildableServer for EnclaveServer<K, T>
