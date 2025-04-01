@@ -25,7 +25,6 @@ clap = { version = "4.5", features = ["derive"] }
 attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
 verifier = { git = "https://github.com/confidential-containers/trustee", rev = "1fdd67d", package = "verifier" }
-crypto = { git = "https://github.com/confidential-containers/guest-components", rev = "d207191"}
 
 aes-gcm.workspace = true
 zeroize.workspace = true

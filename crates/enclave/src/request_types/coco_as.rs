@@ -4,40 +4,12 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
+use crate::common::{HashAlgorithm, Data};
 use std::str::FromStr;
-use strum::{AsRefStr, Display, EnumString};
 
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-
-/// Hash algorithms used to calculate runtime/init data binding
-#[derive(Debug, Display, EnumString, AsRefStr)]
-pub enum HashAlgorithm {
-    #[strum(ascii_case_insensitive)]
-    Sha256,
-
-    #[strum(ascii_case_insensitive)]
-    Sha384,
-
-    #[strum(ascii_case_insensitive)]
-    Sha512,
-}
-
-/// Runtime/Init Data used to check the binding relationship with report data
-/// in Evidence
-#[derive(Debug, Clone)]
-pub enum Data {
-    /// This will be used as the expected runtime/init data to check against
-    /// the one inside evidence.
-    Raw(Vec<u8>),
-
-    /// Runtime/Init data in a JSON map. CoCoAS will rearrange each layer of the
-    /// data JSON object in dictionary order by key, then serialize and output
-    /// it into a compact string, and perform hash calculation on the whole
-    /// to check against the one inside evidence.
-    Structured(Value),
-}
 
 /// Represents the request to evaluate attestation evidence.
 ///

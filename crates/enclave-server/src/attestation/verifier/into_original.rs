@@ -3,34 +3,43 @@
 //! in the API crate, it tries to build the entire attestation service crate,
 //! which can break external projects
 
-use attestation_service::Data as OriginalData;
-use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
-use seismic_enclave::request_types::coco_as::Data as ApiData;
-use seismic_enclave::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
+use seismic_enclave::request_types::common::{HashAlgorithm, Data};
 
-pub trait IntoOriginalData {
-    fn into_original(self) -> OriginalData;
-}
-
-impl IntoOriginalData for ApiData {
-    fn into_original(self) -> OriginalData {
-        match self {
-            ApiData::Raw(bytes) => OriginalData::Raw(bytes),
-            ApiData::Structured(value) => OriginalData::Structured(value),
+impl From<HashAlgorithm> for attestation_service::HashAlgorithm {
+        fn from(algo: HashAlgorithm) -> Self {
+            match algo {
+                HashAlgorithm::Sha256 => attestation_service::HashAlgorithm::Sha256,
+                HashAlgorithm::Sha384 => attestation_service::HashAlgorithm::Sha384,
+                HashAlgorithm::Sha512 => attestation_service::HashAlgorithm::Sha512,
+            }
+        }
+    }
+    
+impl From<attestation_service::HashAlgorithm> for HashAlgorithm {
+    fn from(algo: attestation_service::HashAlgorithm) -> Self {
+        match algo {
+            attestation_service::HashAlgorithm::Sha256 => HashAlgorithm::Sha256,
+            attestation_service::HashAlgorithm::Sha384 => HashAlgorithm::Sha384,
+            attestation_service::HashAlgorithm::Sha512 => HashAlgorithm::Sha512,
         }
     }
 }
 
-pub trait IntoOriginalHashAlgorithm {
-    fn into_original(self) -> OriginalHashAlgorithm;
-}
-
-impl IntoOriginalHashAlgorithm for ApiHashAlgorithm {
-    fn into_original(self) -> OriginalHashAlgorithm {
-        match self {
-            ApiHashAlgorithm::Sha256 => OriginalHashAlgorithm::Sha256,
-            ApiHashAlgorithm::Sha384 => OriginalHashAlgorithm::Sha384,
-            ApiHashAlgorithm::Sha512 => OriginalHashAlgorithm::Sha512,
+impl From<Data> for attestation_service::Data {
+    fn from(data: Data) -> Self {
+        match data {
+            Data::Raw(bytes) => attestation_service::Data::Raw(bytes),
+            Data::Structured(value) => attestation_service::Data::Structured(value),
         }
     }
 }
+
+impl From<attestation_service::Data> for Data {
+    fn from(data: attestation_service::Data) -> Self {
+        match data {
+            attestation_service::Data::Raw(bytes) => Data::Raw(bytes),
+            attestation_service::Data::Structured(value) => Data::Structured(value),
+        }
+    }
+}
+

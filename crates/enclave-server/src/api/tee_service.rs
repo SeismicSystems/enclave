@@ -19,8 +19,6 @@ use super::traits::TeeServiceApi;
 use crate::attestation::agent::SeismicAttestationAgent;
 use attestation_agent::AttestationAPIs;
 
-use crate::attestation::verifier::into_original::IntoOriginalData;
-use crate::attestation::verifier::into_original::IntoOriginalHashAlgorithm;
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 use attestation_service::token::AttestationTokenBroker;
 use attestation_service::HashAlgorithm as OriginalHashAlgorithm;
@@ -142,9 +140,9 @@ where
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
-        let runtime_data: Option<Data> = request.runtime_data.map(|data| data.into_original());
+        let runtime_data: Option<Data> = request.runtime_data.map(|data| data.into());
         let runtime_data_hash_algorithm: HashAlgorithm = match request.runtime_data_hash_algorithm {
-            Some(alg) => alg.into_original(),
+            Some(alg) => alg.into(),
             None => OriginalHashAlgorithm::Sha256,
         };
 
