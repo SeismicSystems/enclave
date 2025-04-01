@@ -8,6 +8,7 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
 
+use crate::auth::JwtSecret;
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;

@@ -145,4 +145,3 @@ async fn test_server_requests() {
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
 }
->>>>>>> origin/verifier
