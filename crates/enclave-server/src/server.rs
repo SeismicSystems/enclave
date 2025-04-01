@@ -2,9 +2,6 @@ use crate::api::traits::TeeServiceApi;
 use crate::api::tee_service::TeeService;
 use crate::key_manager::NetworkKeyProvider;
 
-use alloy_sol_types::abi::token;
-use anyhow::{anyhow, Result};
-use attestation_service::token::AttestationTokenBroker;
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -16,7 +13,11 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 
+use alloy_sol_types::abi::token;
+use anyhow::{anyhow, Result};
+use attestation_service::token::AttestationTokenBroker;
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
@@ -24,9 +25,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
-
 use jsonrpsee::server::ServerBuilder;
-use seismic_enclave::auth::{AuthLayer, JwtAuthValidator, JwtSecret};
 
 /// The main server struct, with everything needed to run.
 pub struct EnclaveServer<K, T>
