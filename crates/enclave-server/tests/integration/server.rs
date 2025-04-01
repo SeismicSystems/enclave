@@ -11,8 +11,8 @@ use seismic_enclave_server::attestation::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
 use seismic_enclave_server::server::{EnclaveServer, init_tracing};
 use seismic_enclave::auth::JwtSecret;
-use crate::utils::get_random_port;
 
+use std::net::TcpListener;
 use anyhow::anyhow;
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use kbs_types::Tee;
@@ -36,6 +36,14 @@ pub fn is_sudo() -> bool {
 
     // Check if the user ID is 0 (which means the user is root)
     user_id == "0"
+}
+
+pub fn get_random_port() -> u16 {
+    TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
+        .expect("Failed to bind to a port")
+        .local_addr()
+        .unwrap()
+        .port()
 }
 
  async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
