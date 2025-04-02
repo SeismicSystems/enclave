@@ -1,7 +1,5 @@
-//! JWT (JSON Web Token) utilities for the Engine API.
+//! JWT (JSON Web Token) utilities
 
-// use alloc::string::String;
-// use alloy_primitives::hex;
 use core::{str::FromStr, time::Duration};
 use jsonwebtoken::get_current_timestamp;
 use rand::Rng;

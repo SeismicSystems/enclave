@@ -29,7 +29,7 @@ use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
 
 /// The main execution engine for secure enclave logic
-/// handles server apu calls after http parsing and authentication
+/// handles server api calls after http parsing and authentication
 /// controls central resources, e.g. key manager, attestation agent
 pub struct AttestationEngine<
     K: NetworkKeyProvider,

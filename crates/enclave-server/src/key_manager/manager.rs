@@ -64,7 +64,6 @@ pub struct KeyManager {
     //no-thread-safety yet
     purpose_keys: HashMap<KeyPurpose, Key>,
 }
-
 impl KeyManager {
     /// Constructs a new `KeyManager` from a 32-byte master key.
     ///

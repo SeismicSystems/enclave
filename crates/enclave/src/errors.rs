@@ -1,3 +1,5 @@
+//! Utility functions for converting errors into JSON-RPC error responses
+
 use anyhow::Error;
 
 /// Convert a bad evidence error into a JSON-RPC error response

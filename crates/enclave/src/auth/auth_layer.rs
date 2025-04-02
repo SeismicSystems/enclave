@@ -1,3 +1,6 @@
+//! A tower layer for the server's JWT auth
+//! When added to the server, it will validate the JWT token in every request.
+
 use super::AuthValidator;
 use jsonrpsee_http_client::{HttpRequest, HttpResponse};
 use pin_project::pin_project;

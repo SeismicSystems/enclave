@@ -1,3 +1,6 @@
+//! A tower layer for the client's JWT auth
+//! When added to the client, it will add a new JWT token to every request.
+
 use crate::auth::jwt::{Claims, JwtSecret};
 use http::{header::AUTHORIZATION, HeaderValue};
 use std::{

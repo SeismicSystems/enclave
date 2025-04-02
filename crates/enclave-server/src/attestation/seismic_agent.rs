@@ -14,7 +14,7 @@ use attestation_service::HashAlgorithm;
 use crate::attestation::verifier::DcapAttVerifier;
 
 /// a centralized struct for making and verifying attestations
-/// includes a mutex because the attestation agent is not thread safe
+/// includes a mutex because the inner attestation agent is not thread safe
 pub struct SeismicAttestationAgent<T: AttestationTokenBroker + Send + Sync> {
     attestation_agent: AttestationAgent,
     quote_mutex: Mutex<()>,

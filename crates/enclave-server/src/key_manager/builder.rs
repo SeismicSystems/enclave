@@ -15,7 +15,6 @@ impl Default for KeyManagerBuilder {
         Self::new()
     }
 }
-
 impl KeyManagerBuilder {
     /// Creates a new instance of the `KeyManagerBuilder`.
     pub fn new() -> Self {

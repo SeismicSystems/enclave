@@ -1,3 +1,5 @@
+//! A mock enclave server for testing purposes.
+
 use anyhow::Result;
 use jsonrpsee::{
     core::{async_trait, ClientError, RpcResult},

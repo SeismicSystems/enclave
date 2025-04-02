@@ -1,3 +1,6 @@
+//! A JWT validator for the server's JWT auth
+//! Impliments AuthValidator and gives some helpers
+
 use crate::auth::jwt::{JwtError, JwtSecret};
 use crate::auth::AuthValidator;
 use http::{header, HeaderMap, Response, StatusCode};
@@ -47,6 +50,7 @@ fn get_bearer(headers: &HeaderMap) -> Option<String> {
     let token: &str = &auth[index + prefix.len()..];
     Some(token.into())
 }
+
 /// convert a JWT error to an Http response
 fn err_response(err: JwtError) -> HttpResponse {
     // We build a response from an error message.

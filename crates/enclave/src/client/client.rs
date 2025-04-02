@@ -1,3 +1,6 @@
+//! A http client for interacting with a enclave server.
+//! Comnstructed from a [`EnclaveClientBuilder`].
+
 use anyhow::{anyhow, Result};
 use jsonrpsee::http_client::transport::HttpBackend;
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
