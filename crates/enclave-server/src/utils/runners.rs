@@ -4,8 +4,6 @@
 //! and should be ignored in automated testing workflows
 
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
-// use crate::snapshot::check_operator;
-use alloy_primitives::Bytes;
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -69,6 +67,7 @@ async fn see_default_config() {
 //#[tokio::test]
 //#[ignore]
 //async fn get_mrtd() {
+//    use alloy_primitives::Bytes;
 //    let rootfs_hash = Bytes::from(vec![0x00; 32]);
 //    let mrtd = Bytes::from(vec![0x00; 48]);
 //    let rtmr0 = Bytes::from(vec![0x00; 48]);
