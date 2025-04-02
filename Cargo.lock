@@ -4784,6 +4784,7 @@ dependencies = [
  "kbs-types",
  "log",
  "rand 0.9.0",
+ "reqwest 0.11.27",
  "schnorrkel",
  "scroll",
  "secp256k1",

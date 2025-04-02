@@ -27,7 +27,7 @@ pub struct ShareMasterKeyRequest {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShareMasterKeyResponse {
-    pub master_key_ciphertext: Vec<u8>,
+    pub master_key_ciphertext: [u8; 32],
     pub sharer_pk: secp256k1::PublicKey,
     pub attestation: Vec<u8>,
 }
