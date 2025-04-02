@@ -6578,7 +6578,6 @@ dependencies = [
  "strum 0.26.3",
  "tokio",
  "tower 0.4.13",
- "tracing-subscriber",
 ]
 
 [[package]]
