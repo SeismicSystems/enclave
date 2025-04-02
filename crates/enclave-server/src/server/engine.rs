@@ -224,6 +224,7 @@ mod tests {
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
+    use serial_test::serial;
 
     pub fn default_tee_service() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
@@ -235,6 +236,7 @@ mod tests {
         AttestationEngine::new(kp, saa)
     }
 
+    #[serial(attestation_agent)]
     #[tokio::test]
     pub async fn run_tests() {
         let tee_service: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
