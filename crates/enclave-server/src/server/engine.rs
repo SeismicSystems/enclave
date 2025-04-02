@@ -317,12 +317,11 @@ mod tests {
         let res = tee_service.decrypt(decryption_request).await;
 
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("Invalid ciphertext")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Invalid ciphertext"));
     }
 
     async fn test_attestation_evidence_handler_valid_request_sample<K, T>(

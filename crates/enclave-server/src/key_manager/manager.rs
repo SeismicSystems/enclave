@@ -135,7 +135,7 @@ impl NetworkKeyProvider for KeyManager {
             .expect("KeyManager should always have a snapshot key");
         let sk = secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid");
-        
+
         secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk)
     }
 
