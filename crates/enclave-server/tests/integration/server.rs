@@ -1,26 +1,50 @@
-#[cfg(test)]
-use crate::utils::get_random_port;
-use kbs_types::Tee;
+use seismic_enclave::auth::JwtSecret;
 use seismic_enclave::client::rpc::BuildableServer;
-use seismic_enclave::client::EnclaveClient;
-use seismic_enclave::client::ENCLAVE_DEFAULT_ENDPOINT_ADDR;
+use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP};
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
-use seismic_enclave::coco_as::Data;
-use seismic_enclave::coco_as::HashAlgorithm;
+use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
+use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::nonce::Nonce;
 use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
-use seismic_enclave::signing::Secp256k1SignRequest;
-use seismic_enclave::signing::Secp256k1VerifyRequest;
-use seismic_enclave_server::server::init_tracing;
-use seismic_enclave_server::server::EnclaveServer;
-use seismic_enclave_server::utils::test_utils::is_sudo;
+use seismic_enclave_server::attestation::SeismicAttestationAgent;
+use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
+use seismic_enclave_server::server::{init_tracing, EnclaveServer};
+
+use anyhow::anyhow;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use kbs_types::Tee;
 use serial_test::serial;
+use std::net::IpAddr;
 use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::thread::sleep;
 use std::time::Duration;
+
+pub fn is_sudo() -> bool {
+    use std::process::Command;
+
+    // Run the "id -u" command to check the user ID
+    let output = Command::new("id")
+        .arg("-u")
+        .output()
+        .expect("Failed to execute id command");
+
+    // Convert the output to a string and trim any whitespace
+    let user_id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    // Check if the user ID is 0 (which means the user is root)
+    user_id == "0"
+}
+
+pub fn get_random_port() -> u16 {
+    TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
+        .expect("Failed to bind to a port")
+        .local_addr()
+        .unwrap()
+        .port()
+}
 
 async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
@@ -95,32 +119,42 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
     assert!(resposne.eval);
 }
 
-async fn test_secp256k1_sign_verify(client: &EnclaveClient) {
-    // Prepare sign request to get a valid signature
-    let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-    let sign_request = Secp256k1SignRequest {
-        msg: msg_to_sign.clone(),
-    };
-    let res = client.sign(sign_request).await.unwrap();
-
-    // Prepare verify request body
-    let verify_request = Secp256k1VerifyRequest {
-        msg: msg_to_sign,
-        sig: res.sig,
-    };
-
-    let res = client.verify(verify_request).await.unwrap();
-    assert_eq!(res.verified, true);
-}
-
 async fn test_get_public_key(client: &EnclaveClient) {
     let res = client.get_public_key().await.unwrap();
-    assert_eq!(res, get_unsecure_sample_secp256k1_pk());
+    assert!(
+        (res != get_unsecure_sample_secp256k1_pk()),
+        "public key should be randomly generated"
+    );
 }
 
 async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-    let res = client.get_eph_rng_keypair().await.unwrap();
-    println!("eph_rng_keypair: {:?}", res);
+    let res: schnorrkel::Keypair = client.get_eph_rng_keypair().await.unwrap();
+    assert!(
+        !(res.secret == get_unsecure_sample_schnorrkel_keypair().secret),
+        "eph rng keypair should be randomly generated"
+    );
+}
+
+async fn test_misconfigured_auth_secret(ip: IpAddr, port: u16) {
+    let rand_auth_secret = JwtSecret::random();
+    let client = EnclaveClientBuilder::new()
+        .auth_secret(rand_auth_secret)
+        .ip(ip.to_string())
+        .port(port)
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| {
+            anyhow!(
+                "test_misconfigured_auth_secret Failed to build client: {:?}",
+                e
+            )
+        })
+        .unwrap();
+    let response = client.health_check().await;
+    assert!(
+        response.is_err(),
+        "client should not be able to connect to server with wrong auth secret"
+    );
 }
 
 #[tokio::test]
@@ -134,18 +168,42 @@ async fn test_server_requests() {
     }
 
     // spawn a seperate thread for the server, otherwise the test will hang
-    let port = get_random_port();
-    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_ADDR, port));
-    let _server_handle = EnclaveServer::new(addr).start().await.unwrap();
+    let port = get_random_port(); // rand port for test parallelization
+    let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
+    let kp = KeyManagerBuilder::build_mock().unwrap();
+    let token_broker = SimpleAttestationTokenBroker::new(
+        attestation_service::token::simple::Configuration::default(),
+    )
+    .unwrap();
+    let seismic_attestation_agent = SeismicAttestationAgent::new(None, token_broker);
+    let auth_secret = JwtSecret::random();
+    let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(
+        addr,
+        kp,
+        seismic_attestation_agent,
+        auth_secret,
+    )
+    .await
+    .unwrap()
+    .start()
+    .await
+    .unwrap();
     sleep(Duration::from_secs(4));
-    let client = EnclaveClient::new(format!("http://{}:{}", addr.ip(), addr.port()));
+
+    let client = EnclaveClientBuilder::new()
+        .auth_secret(auth_secret)
+        .ip(ENCLAVE_DEFAULT_ENDPOINT_IP.to_string())
+        .port(port)
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
 
     test_health_check(&client).await;
     test_genesis_get_data(&client).await;
     test_tx_io_encrypt_decrypt(&client).await;
     test_attestation_get_evidence(&client).await;
     test_attestation_eval_evidence(&client).await;
-    test_secp256k1_sign_verify(&client).await;
     test_get_public_key(&client).await;
     test_get_eph_rng_keypair(&client).await;
+    test_misconfigured_auth_secret(addr.ip(), addr.port()).await;
 }

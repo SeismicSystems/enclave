@@ -3,7 +3,7 @@ use alloy_provider::ProviderBuilder;
 use alloy_sol_types::sol;
 use std::sync::Arc;
 
-const OPERATOR_ADDR: &str = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // TODO: replace
+const OPERATOR_ADDR: &str = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Future work: replace
 
 // Define the Solidity ABI using the `sol!` macro
 sol! {

@@ -1,4 +1,3 @@
-// use alloy::network::ReceiptResponse;
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
     primitives::Bytes,
@@ -73,12 +72,4 @@ pub async fn deploy_contract(
     }
 
     Ok(())
-}
-
-pub fn get_random_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
-        .expect("Failed to bind to a port")
-        .local_addr()
-        .unwrap()
-        .port()
 }

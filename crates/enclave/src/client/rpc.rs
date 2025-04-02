@@ -1,48 +1,54 @@
-use std::net::SocketAddr;
+//! This module provides the JSON-RPC traits for the enclave server and client.
+//! Defines how server's are expected to be built and the shared API
 
-/// JSON-RPC Trait for Server and Client
 use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
+use std::net::SocketAddr;
 
+use crate::auth::JwtSecret;
+use crate::auth::{AuthLayer, JwtAuthValidator};
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
 use crate::signing::{
     Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
 };
-use crate::snapshot::{
-    PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
-    RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-};
-use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use tracing::info;
 
+/// A trait for building a server.
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
     fn methods(self) -> Methods;
+    fn auth_secret(&self) -> JwtSecret;
     async fn start(self) -> Result<ServerHandle>;
     async fn start_rpc_server(self) -> Result<ServerHandle>
     where
         Self: Sized,
     {
         let addr = self.addr();
-        let rpc_server = ServerBuilder::new().build(addr).await?;
+        let secret = self.auth_secret();
+        let http_middleware =
+            tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
+        let rpc_server = ServerBuilder::new()
+            .set_http_middleware(http_middleware)
+            .build(addr)
+            .await?;
         let module = self.methods();
+
         let server_handle = rpc_server.start(module);
-        info!(target: "rpc::enclave", "Server started at {}", addr);
         Ok(server_handle)
     }
 }
 
-#[derive_sync_client_trait] // get SyncEnclaveApi trait
-#[rpc(client, server)] // get EnclaveApiClient EnclaveApiServer trait
+/// The JSON-RPC trait for the enclave server and client, defining the API.
+#[derive_sync_client_trait] // get SyncEnclaveApi trait, which allows for sync calls, which seismic-reth requires
+#[rpc(client, server)] // get EnclaveApiClient and EnclaveApiServer traits
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
@@ -55,10 +61,6 @@ pub trait EnclaveApi {
     /// Retrieves genesis configuration data for blockchain initialization
     #[method(name = "getGenesisData")]
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse>;
-
-    /// Provides backup data for snapshot synchronization
-    #[method(name = "getSnapsyncBackup")]
-    async fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> RpcResult<SnapSyncResponse>;
 
     /// Signs a message using secp256k1 private key
     #[method(name = "sign")]
@@ -93,16 +95,4 @@ pub trait EnclaveApi {
     /// Generates an ephemeral keypair
     #[method(name = "eph_rng.get_keypair")]
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
-
-    #[method(name = "snapshot.prepare_encrypted_snapshot")]
-    async fn prepare_encrypted_snapshot(
-        &self,
-        request: PrepareEncryptedSnapshotRequest,
-    ) -> RpcResult<PrepareEncryptedSnapshotResponse>;
-
-    #[method(name = "snapshot.restore_from_encrypted_snapshot")]
-    async fn restore_from_encrypted_snapshot(
-        &self,
-        request: RestoreFromEncryptedSnapshotRequest,
-    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse>;
 }

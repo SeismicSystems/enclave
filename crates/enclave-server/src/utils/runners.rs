@@ -4,7 +4,7 @@
 //! and should be ignored in automated testing workflows
 
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
-use crate::snapshot::check_operator;
+// use crate::snapshot::check_operator;
 use alloy_primitives::Bytes;
 use anyhow::Ok;
 use attestation_service::config::Config;
@@ -66,34 +66,30 @@ async fn see_default_config() {
     println!("{:?}", config);
 }
 
-#[tokio::test]
-#[ignore]
-async fn get_mrtd() {
-    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    let mrtd = Bytes::from(vec![0x00; 48]);
-    let rtmr0 = Bytes::from(vec![0x00; 48]);
-    let rtmr3 = Bytes::from(vec![0x00; 48]);
+//#[tokio::test]
+//#[ignore]
+//async fn get_mrtd() {
+//    let rootfs_hash = Bytes::from(vec![0x00; 32]);
+//    let mrtd = Bytes::from(vec![0x00; 48]);
+//    let rtmr0 = Bytes::from(vec![0x00; 48]);
+//    let rtmr3 = Bytes::from(vec![0x00; 48]);
+//
+//    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+//        .await
+//        .unwrap();
+//}
 
-    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .await
-        .unwrap();
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn run_client_ping() {
-    use seismic_enclave::rpc::SyncEnclaveApiClient;
-    use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
-    use seismic_enclave::EnclaveClient;
-
-    let url = "http://yocto-1.seismicdev.net:7878";
-    // let url = "http://127.0.0.1:7878";
-    let client = EnclaveClient::new(url);
-
-    // // health check
-    // let resp = client.health_check().unwrap();
-    // println!("resp: {:?}", resp);
-
-    let req = RestoreFromEncryptedSnapshotRequest {};
-    let resp = client.restore_from_encrypted_snapshot(req);
-    println!("resp: {:?}", resp);
-}
+//#[tokio::test(flavor = "multi_thread")]
+//async fn run_client_ping() {
+//    use seismic_enclave::rpc::SyncEnclaveApiClient;
+//    use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
+//    use seismic_enclave::EnclaveClient;
+//
+//    let url = "http://yocto-1.seismicdev.net:7878";
+//    // let url = "http://127.0.0.1:7878";
+//    let client = EnclaveClient::new(url);
+//
+//    // // health check
+//    // let resp = client.health_check().unwrap();
+//    // println!("resp: {:?}", resp);
+//}

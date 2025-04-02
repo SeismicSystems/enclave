@@ -219,10 +219,10 @@ pub fn ecdh_encrypt(
     data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let shared_secret = SharedSecret::new(pk, &sk);
+    let shared_secret = SharedSecret::new(pk, sk);
     let aes_key =
         derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
-    let encrypted_data = aes_encrypt(&aes_key, &data, nonce)?;
+    let encrypted_data = aes_encrypt(&aes_key, data, nonce)?;
     Ok(encrypted_data)
 }
 
@@ -234,10 +234,10 @@ pub fn ecdh_decrypt(
     data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let shared_secret = SharedSecret::new(pk, &sk);
+    let shared_secret = SharedSecret::new(pk, sk);
     let aes_key =
         derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
-    let decrypted_data = aes_decrypt(&aes_key, &data, nonce)?;
+    let decrypted_data = aes_decrypt(&aes_key, data, nonce)?;
     Ok(decrypted_data)
 }
 

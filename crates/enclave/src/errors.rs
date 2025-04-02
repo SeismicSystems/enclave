@@ -1,3 +1,5 @@
+//! Utility functions for converting errors into JSON-RPC error responses
+
 use anyhow::Error;
 
 /// Convert a bad evidence error into a JSON-RPC error response
@@ -5,6 +7,24 @@ pub fn rpc_bad_evidence_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
     jsonrpsee::types::ErrorObject::owned(
         jsonrpsee::types::error::INVALID_PARAMS_CODE,
         format!("Error while evaluating evidence: {:?}", e),
+        None::<()>,
+    )
+}
+
+/// Convert a bad attestation error into a JSON-RPC error response
+pub fn rpc_bad_quote_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
+    jsonrpsee::types::ErrorObject::owned(
+        jsonrpsee::types::error::INVALID_PARAMS_CODE,
+        format!("Error while generating a quote: {:?}", e),
+        None::<()>,
+    )
+}
+
+/// Convert a bad genesis error into a JSON-RPC error response
+pub fn rpc_bad_genesis_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
+    jsonrpsee::types::ErrorObject::owned(
+        jsonrpsee::types::error::INVALID_PARAMS_CODE,
+        format!("Error while generating a genesis attestation: {:?}", e),
         None::<()>,
     )
 }

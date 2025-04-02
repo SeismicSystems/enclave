@@ -1,4 +1,4 @@
-use crate::key_manager::key_manager::KeyManager;
+use crate::key_manager::manager::KeyManager;
 
 use anyhow::Result;
 use rand::rngs::OsRng;
@@ -10,6 +10,11 @@ use rand::TryRngCore;
 /// or a deterministic mock version for testing purposes.
 pub struct KeyManagerBuilder {}
 
+impl Default for KeyManagerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl KeyManagerBuilder {
     /// Creates a new instance of the `KeyManagerBuilder`.
     pub fn new() -> Self {
