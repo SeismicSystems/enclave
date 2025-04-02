@@ -103,8 +103,8 @@ too_long_first_doc_paragraph = "allow"
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
-repository = "https://github.com/SeismicSystems/TEEService"
-homepage = "https://github.com/SeismicSystems/TEEService"
+repository = "https://github.com/SeismicSystems/enclave"
+homepage = "https://github.com/SeismicSystems/enclave"
 authors = ["Seismic Systems"]
 license = "MIT"
 readme = "README.md"
