@@ -257,15 +257,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aes-kw"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69fa2b352dcefb5f7f3a5fb840e02665d311d878955380515e4fd50095dd3d8c"
-dependencies = [
- "aes",
-]
-
-[[package]]
 name = "ahash"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1643,7 +1634,7 @@ dependencies = [
  "base64 0.22.1",
  "config",
  "const_format",
- "crypto 0.1.0 (git+https://github.com/confidential-containers/guest-components?rev=e6999a3)",
+ "crypto",
  "kbs-types",
  "kbs_protocol",
  "log",
@@ -2311,15 +2302,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "concat-kdf"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d72c1252426a83be2092dd5884a5f6e3b8e7180f6891b6263d2c21b92ec8816"
-dependencies = [
- "digest 0.10.7",
-]
-
-[[package]]
 name = "config"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2515,29 +2497,6 @@ name = "crunchy"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
-
-[[package]]
-name = "crypto"
-version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=d207191#d20719198b8febca4e6447ed05226efa3704f9b8"
-dependencies = [
- "aes-gcm",
- "aes-kw",
- "anyhow",
- "base64 0.22.1",
- "concat-kdf",
- "ctr",
- "kbs-types",
- "p256",
- "rand 0.8.5",
- "rand 0.9.0",
- "rsa",
- "serde",
- "serde_json",
- "sha2",
- "strum 0.26.3",
- "zeroize",
-]
 
 [[package]]
 name = "crypto"
@@ -4538,7 +4497,7 @@ dependencies = [
  "async-trait",
  "attester",
  "base64 0.22.1",
- "crypto 0.1.0 (git+https://github.com/confidential-containers/guest-components?rev=e6999a3)",
+ "crypto",
  "jwt-simple",
  "kbs-types",
  "log",
@@ -6650,7 +6609,6 @@ dependencies = [
  "byteorder",
  "bytes",
  "clap",
- "crypto 0.1.0 (git+https://github.com/confidential-containers/guest-components?rev=d207191)",
  "env_logger 0.11.7",
  "hex",
  "hkdf",
