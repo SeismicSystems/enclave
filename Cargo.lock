@@ -6576,8 +6576,10 @@ dependencies = [
  "serde_json",
  "sha2",
  "strum 0.26.3",
+ "syn 2.0.99",
  "tokio",
  "tower 0.4.13",
+ "zeroize",
 ]
 
 [[package]]
