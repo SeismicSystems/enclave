@@ -182,6 +182,9 @@ impl_mock_async_server_trait!(
     async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair,
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse,
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse,
+    async fn boot_retrieve_master_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse,
+    async fn boot_share_master_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse,
+    async fn boot_genesis(&self) -> (),
 );
 
 /// Mock enclave client for testing purposes.
