@@ -22,6 +22,7 @@ use seismic_enclave::{
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
     secp256k1_sign_digest, secp256k1_verify,
 };
+use seismic_enclave::boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse};
 
 use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
@@ -213,6 +214,18 @@ where
             eval: true,
             claims: Some(claims),
         })
+    }
+
+    async fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> RpcResult<RetrieveMasterKeyResponse> {
+        todo!("boot_retrieve_master_key not implemented for enclave server")
+    }
+
+    async fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> RpcResult<ShareMasterKeyResponse> {
+        todo!("boot_share_master_key not implemented for enclave server")
+    }
+
+    async fn boot_genesis(&self) -> RpcResult<()> {
+        todo!("boot_genesis not implemented for enclave server")
     }
 }
 
