@@ -203,7 +203,7 @@ where
 
 /// Derive implementation of the async [`EnclaveApiServer`] trait
 /// for [`EnclaveServer<K, T>`]
-/// Each implimentation logs using debug! and delegates to `self.inner`
+/// Each implimentation logs using debug! and delegates to `self.inner` engine
 macro_rules! impl_forwarding_async_server_trait {
     ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
         -> $ret:ty $(, log = $log_msg:literal)?),* $(,)?) => {

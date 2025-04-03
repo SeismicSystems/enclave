@@ -168,6 +168,7 @@ macro_rules! impl_mock_async_server_trait {
         impl EnclaveApiServer for MockEnclaveServer {
             $(
                 async fn $method_name(&self $(, $param: $param_ty)*) -> RpcResult<$ret> {
+                    // For each method, call the corresponding method on the mock server
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )*
@@ -213,6 +214,8 @@ macro_rules! impl_mock_sync_client_trait {
         impl SyncEnclaveApiClient for MockEnclaveClient {
             $(
                 fn $method_name(&self, $($param: $param_ty),*) -> $return_ty {
+                    // for each method, call the corresponding method on the mock server
+                    // simulates a client client rpc call where that code is executed
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )+
