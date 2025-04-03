@@ -36,8 +36,7 @@ pub struct ShareMasterKeyResponse {
 // for a new network genesis
 // For now this just means setting a new master_key from osrng
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GenesisBootRequest {
-}
+pub struct GenesisBootRequest {}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GenesisBootResponse {
     pub attestation: Vec<u8>,

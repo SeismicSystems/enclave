@@ -11,6 +11,10 @@ use std::net::SocketAddr;
 
 use crate::auth::JwtSecret;
 use crate::auth::{AuthLayer, JwtAuthValidator};
+use crate::boot::{
+    RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
+    ShareMasterKeyResponse,
+};
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
@@ -20,7 +24,6 @@ use crate::signing::{
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use crate::boot::{ShareMasterKeyRequest, ShareMasterKeyResponse, RetrieveMasterKeyRequest, RetrieveMasterKeyResponse};
 
 /// A trait for building a server.
 pub trait BuildableServer {
@@ -99,11 +102,17 @@ pub trait EnclaveApi {
 
     /// Retrieves the master key from an existing node
     #[method(name = "boot.retrieve_master_key")]
-    async fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> RpcResult<RetrieveMasterKeyResponse>;
+    async fn boot_retrieve_master_key(
+        &self,
+        _req: RetrieveMasterKeyRequest,
+    ) -> RpcResult<RetrieveMasterKeyResponse>;
 
     /// Shares the master key with an existing node
     #[method(name = "boot.share_master_key")]
-    async fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> RpcResult<ShareMasterKeyResponse>;
+    async fn boot_share_master_key(
+        &self,
+        _req: ShareMasterKeyRequest,
+    ) -> RpcResult<ShareMasterKeyResponse>;
 
     /// Genesis boot
     #[method(name = "boot.genesis_boot")]

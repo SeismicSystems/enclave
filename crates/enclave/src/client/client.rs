@@ -16,6 +16,10 @@ use tokio::runtime::{Handle, Runtime};
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 use crate::auth::{AuthClientLayer, AuthClientService, JwtSecret};
 use crate::{
+    boot::{
+        RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
+        ShareMasterKeyResponse,
+    },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     genesis::GenesisDataResponse,
@@ -24,7 +28,6 @@ use crate::{
         Secp256k1VerifyResponse,
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
-    boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse},
 };
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_IP: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);

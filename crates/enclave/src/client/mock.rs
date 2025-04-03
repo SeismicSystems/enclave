@@ -17,6 +17,10 @@ use super::{
 };
 use crate::auth::JwtSecret;
 use crate::{
+    boot::{
+        RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
+        ShareMasterKeyResponse,
+    },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     ecdh_decrypt, ecdh_encrypt,
@@ -28,7 +32,6 @@ use crate::{
         Secp256k1VerifyResponse,
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
-    boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse},
 };
 
 /// A mock enclave server for testing purposes.
