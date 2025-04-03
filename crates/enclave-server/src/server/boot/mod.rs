@@ -108,4 +108,16 @@ mod tests {
         assert!(booter.get_master_key().unwrap() == [0u8; 32], "master key does not match expected mock value");
     }
 
+    #[test]
+    fn test_genesis() {
+        let booter = Booter::new();
+        assert!(booter.get_master_key().is_none(), "master key should be empty");
+        booter.genesis_boot().unwrap();
+        assert!(booter.get_master_key().is_some(), "master key should not be empty");
+        let master_key = booter.get_master_key().unwrap();
+        booter.genesis_boot().unwrap();
+        let new_master_key = booter.get_master_key().unwrap();
+        assert!(master_key != new_master_key, "master key genesis should be random");
+    }
+
 }
