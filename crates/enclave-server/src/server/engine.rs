@@ -285,8 +285,12 @@ mod tests {
     use crate::key_manager::KeyManagerBuilder;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
+    use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
+    use std::net::IpAddr;
+    use std::net::SocketAddr;
+    use crate::utils::test_utils::get_random_port;
 
     pub fn default_tee_service() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
@@ -300,7 +304,7 @@ mod tests {
 
     #[serial(attestation_agent)]
     #[tokio::test]
-    pub async fn run_tests() {
+    pub async fn run_engine_tests() {
         let tee_service: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
             default_tee_service();
 
@@ -310,9 +314,10 @@ mod tests {
         let t4 = test_attestation_evidence_handler_valid_request_sample(&tee_service);
         let t5 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&tee_service);
         let t6 = test_genesis_get_data_handler_success_basic(&tee_service);
+        let t7 = test_boot_handlers(&tee_service);
 
         // Run all concurrently and await them
-        let (_r1, _r2, _r3, _r4, _r5, _r6) = tokio::join!(t1, t2, t3, t4, t5, t6);
+        let (_r1, _r2, _r3, _r4, _r5, _r6, _r7) = tokio::join!(t1, t2, t3, t4, t5, t6, t7);
     }
 
     async fn test_secp256k1_sign<K, T>(tee_service: &AttestationEngine<K, T>)
@@ -453,5 +458,44 @@ mod tests {
         // Call the handler
         let res = tee_service.get_genesis_data().await.unwrap();
         assert!(!res.evidence.is_empty());
+    }
+
+    async fn test_boot_handlers<K, T>(
+        tee_service: &AttestationEngine<K, T>,
+    ) where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+        use seismic_enclave::MockEnclaveServer;
+        use seismic_enclave::rpc::BuildableServer;
+
+        // TODO: test boot_genesis
+        // // test boot_genesis
+        // tee_service.boot_genesis().await.unwrap();
+        // let rand_master_key = tee_service.booter.get_master_key().unwrap();
+        // assert!(rand_master_key != [0u8; 32], "master key genesis should be random");
+
+        // test boot_retrieve_master_key against mock client
+        let port = get_random_port();
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
+        let mock_server = MockEnclaveServer::new(addr);
+        mock_server.start().await.unwrap();
+        tee_service
+            .boot_retrieve_master_key(RetrieveMasterKeyRequest {
+                addr,
+            })
+            .await
+            .unwrap();
+        assert!(tee_service.booter.get_master_key().is_some(), "master key not set");
+        assert!(tee_service.booter.get_master_key().unwrap() == [0u8; 32], "master key does not match expected mock value");
+
+        // TODO: test share_master_key
+        let new_node_booter = Booter::new();
+        let resp = tee_service.boot_share_master_key(ShareMasterKeyRequest { retriever_pk: new_node_booter.pk(), attestation: Vec::new() }).await.unwrap();
+        let key_plaintext = new_node_booter.process_share_response(resp).unwrap();
+        assert!(key_plaintext == [0u8; 32], "master key does not match expected mock value");
+
+        // TODO: test complete boot wiring
+
     }
 }

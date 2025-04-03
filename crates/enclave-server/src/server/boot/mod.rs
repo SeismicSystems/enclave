@@ -2,7 +2,6 @@
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
 use std::net::SocketAddr;
-use jsonrpsee::core::client;
 use seismic_enclave::request_types::boot::*;
 use anyhow::anyhow;
 use rand::rngs::OsRng;
@@ -36,6 +35,12 @@ impl Booter {
         let guard = self.km_master_key.lock().unwrap();
         guard.clone()
     }
+    pub fn pk(&self) -> secp256k1::PublicKey {
+        self.pk.clone()
+    }
+    pub fn sk(&self) -> secp256k1::SecretKey {
+        self.sk.clone()
+    }
 
     // assumes engine handler makes the pk and attested to it
     pub fn retrieve_master_key(
@@ -53,6 +58,13 @@ impl Booter {
         let res = client.boot_share_master_key(req)?;
 
         // decrypt ciphertext
+        let master_key = self.process_share_response(res)?;
+        let mut guard = self.km_master_key.lock().unwrap();
+        *guard = Some(master_key);
+        Ok(())
+    }
+
+    pub fn process_share_response(&self, res: ShareMasterKeyResponse) -> Result<[u8; 32], anyhow::Error> {
         let master_key_vec = ecdh_decrypt(
             &res.sharer_pk,
             &self.sk,
@@ -62,10 +74,7 @@ impl Booter {
         let master_key: [u8; 32] = master_key_vec
             .try_into()
             .map_err(|e| anyhow!("Error casting, master key had unexpected length: {:?}", e))?;
-
-        let mut guard = self.km_master_key.lock().unwrap();
-        *guard = Some(master_key);
-        Ok(())
+        Ok(master_key)
     }
 
     // assume engine has already verified the attestation
