@@ -2,9 +2,8 @@
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
 use std::net::SocketAddr;
-
+use jsonrpsee::core::client;
 use seismic_enclave::request_types::boot::*;
-
 use anyhow::anyhow;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
@@ -14,8 +13,6 @@ use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 use std::sync::Mutex;
 // use zeroize::{Zeroize, ZeroizeOnDrop};
-
-use seismic_enclave::EnclaveClient;
 
 pub struct Booter {
     // pk and sk are the Booter's keys used to derive encryption keys for communication with other nodes
@@ -45,6 +42,7 @@ impl Booter {
         &self,
         addr: SocketAddr,
         attestation: &Vec<u8>,
+        client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
         let req = ShareMasterKeyRequest {
             retriever_pk: self.pk.clone(),
@@ -52,7 +50,6 @@ impl Booter {
         };
 
         // TODO: How will auth work? enclave x will not have enclave y's jwt
-        let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         let res = client.boot_share_master_key(req)?;
 
         // decrypt ciphertext
@@ -92,4 +89,23 @@ impl Booter {
         *guard = Some(rng_bytes);
         Ok(())
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use seismic_enclave::MockEnclaveClient;
+
+    use super::*;
+
+    #[test]
+    fn test_retrieve_master_key_mock() {
+        let booter = Booter::new();
+        let client = MockEnclaveClient::default();
+        let res = booter.retrieve_master_key("127.0.0.1:8080".parse().unwrap(), &Vec::new(), &client);
+        assert!(res.is_ok(), "failed to retrieve master key: {:?}", res);
+        assert!(booter.get_master_key().is_some(), "master key not set");
+        assert!(booter.get_master_key().unwrap() == [0u8; 32], "master key does not match expected mock value");
+    }
+
 }

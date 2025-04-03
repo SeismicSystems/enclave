@@ -84,7 +84,7 @@ pub fn aes_decrypt(
 
     cipher
         .decrypt(&nonce_array.into(), ciphertext)
-        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))
+        .map_err(|_| anyhow!("AES decryption failed. Authentication tag does not match the given ciphertext/nonce"))
 }
 
 /// Derives an AES key from a shared secret using HKDF and SHA-256.

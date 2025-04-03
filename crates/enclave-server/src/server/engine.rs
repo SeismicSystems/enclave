@@ -230,12 +230,17 @@ where
         // TODO: make attestation of retriever key
         let attestation: Vec<u8> = Vec::new();
 
+        // TODO: create a client for the existing node
+        use seismic_enclave::EnclaveClient;
+        let client = EnclaveClient::mock(req.addr.ip().to_string(), req.addr.port()).unwrap();
+
         // Call the booter to retrieve the master key
         // will be stored in the booter if successful
         self.booter
             .retrieve_master_key(
                 req.addr,
                 &attestation,
+                &client,
             )
             .map_err(
                 |e| rpc_bad_argument_error(anyhow::anyhow!(e)) // TODO: better error

@@ -6,6 +6,7 @@ use jsonrpsee::{
     server::ServerHandle,
     Methods,
 };
+use rand::rngs::mock;
 use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
@@ -33,6 +34,7 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
+use crate::nonce::Nonce;
 
 /// A mock enclave server for testing purposes.
 /// Does not check the validity of the JWT token.
@@ -126,8 +128,24 @@ impl MockEnclaveServer {
         unimplemented!("boot_retrieve_master_key not implemented for mock server")
     }
 
-    fn boot_share_master_key(_req: ShareMasterKeyRequest) -> ShareMasterKeyResponse {
-        unimplemented!("boot_share_master_key not implemented for mock server")
+    fn boot_share_master_key(req: ShareMasterKeyRequest) -> ShareMasterKeyResponse {
+        // skip checking the attestation since it's a mock
+
+        // encrypt the master key
+        let sharer_sk = get_unsecure_sample_secp256k1_sk();
+        let sharer_pk = get_unsecure_sample_secp256k1_pk();
+        let mock_root_key = [0u8; 32];
+        let nonce = Nonce::new_rand();
+        let attestation: Vec<u8> = Vec::new(); // empty attestation
+
+        let master_key_ciphertext = ecdh_encrypt(
+            &req.retriever_pk,
+            &sharer_sk,
+            &mock_root_key,
+            nonce.clone(),
+        ).unwrap();
+
+        ShareMasterKeyResponse { nonce, master_key_ciphertext, sharer_pk, attestation }
     }
 
     fn boot_genesis() {
