@@ -5,6 +5,7 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use seismic_enclave::boot::{
     RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
@@ -32,6 +33,8 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
 
+use super::boot::Booter;
+
 /// The main execution engine for secure enclave logic
 /// handles server api calls after http parsing and authentication
 /// controls central resources, e.g. key manager, attestation agent
@@ -41,6 +44,7 @@ pub struct AttestationEngine<
 > {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
+    booter: Booter,
 }
 impl<K, T> AttestationEngine<K, T>
 where
@@ -51,6 +55,7 @@ where
         Self {
             key_provider: Arc::new(key_provider),
             attestation_agent: Arc::new(attestation_agent),
+            booter: Booter::new(),
         }
     }
 }
@@ -221,9 +226,25 @@ where
 
     async fn boot_retrieve_master_key(
         &self,
-        _req: RetrieveMasterKeyRequest,
+        req: RetrieveMasterKeyRequest,
     ) -> RpcResult<RetrieveMasterKeyResponse> {
-        todo!("boot_retrieve_master_key not implemented for enclave server")
+        // TODO: make attestation of retriever key
+        let attestation: Vec<u8> = Vec::new();
+
+        // Call the booter to retrieve the master key
+        // will be stored in the booter if successful
+        let res = self.booter
+            .retrieve_master_key(
+                req.addr,
+                &attestation,
+            )
+            .map_err(
+                |e| rpc_bad_argument_error(anyhow::anyhow!(e)) // TODO: better error
+            )?;
+        
+        let resp = RetrieveMasterKeyResponse {};
+
+        Ok(resp)
     }
 
     async fn boot_share_master_key(

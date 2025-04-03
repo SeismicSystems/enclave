@@ -1,4 +1,7 @@
+use std::net::SocketAddr;
+
 use serde::{Deserialize, Serialize};
+use crate::nonce::Nonce;
 
 // CompleteBoot endpoint is used to signal all boot steps are complete
 // and node should launch the real enclave server and reth
@@ -13,7 +16,7 @@ pub struct CompleteBootResponse {
 // via http from an existing node running the enclave server
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RetrieveMasterKeyRequest {
-    pub url: String,
+    pub addr: SocketAddr,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RetrieveMasterKeyResponse {}
@@ -27,6 +30,7 @@ pub struct ShareMasterKeyRequest {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShareMasterKeyResponse {
+    pub nonce: Nonce,
     pub master_key_ciphertext: [u8; 32],
     pub sharer_pk: secp256k1::PublicKey,
     pub attestation: Vec<u8>,
