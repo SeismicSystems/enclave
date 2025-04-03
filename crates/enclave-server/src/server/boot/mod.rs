@@ -75,7 +75,7 @@ impl Booter {
     pub fn share_master_key(
         &self,
         retriever_pk: &secp256k1::PublicKey,
-        existing_master_key: &Vec<u8>,
+        existing_master_key: &[u8; 32],
     ) -> Result<(Nonce, Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
         let nonce = Nonce::new_rand();
         let master_key_ciphertext =

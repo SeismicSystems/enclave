@@ -5,7 +5,6 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use seismic_enclave::boot::{
     RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
@@ -233,7 +232,7 @@ where
 
         // Call the booter to retrieve the master key
         // will be stored in the booter if successful
-        let res = self.booter
+        self.booter
             .retrieve_master_key(
                 req.addr,
                 &attestation,
@@ -249,9 +248,24 @@ where
 
     async fn boot_share_master_key(
         &self,
-        _req: ShareMasterKeyRequest,
+        req: ShareMasterKeyRequest,
     ) -> RpcResult<ShareMasterKeyResponse> {
-        todo!("boot_share_master_key not implemented for enclave server")
+        // TODO: verify the attestation of the retreiver key
+        // TODO: make own attestation of sharer key
+        let attestation: Vec<u8> = Vec::new();
+
+        let existing_km_root_key = self.key_provider.get_km_root_key();
+        let (nonce, master_key_ciphertext, sharer_pk) = self
+            .booter
+            .share_master_key(&req.retriever_pk, &existing_km_root_key)
+            .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
+
+        Ok(ShareMasterKeyResponse {
+            master_key_ciphertext,
+            nonce,
+            sharer_pk,
+            attestation,
+        })
     }
 
     async fn boot_genesis(&self) -> RpcResult<()> {

@@ -110,7 +110,7 @@ impl KeyManager {
     /// # Errors
     ///
     /// Returns an error if the key has not been derived.
-    fn get_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
+    fn get_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
         if let Some(key) = self.purpose_keys.get(&purpose) {
             Ok(key.clone())
         } else {
@@ -122,7 +122,7 @@ impl NetworkKeyProvider for KeyManager {
     /// Retrieves the secp256k1 secret key for transaction I/O signing.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey {
         let key = self
-            .get_key(KeyPurpose::TxIo)
+            .get_purpose_key(KeyPurpose::TxIo)
             .expect("KeyManager should always have a snapshot key");
         secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid")
@@ -131,7 +131,7 @@ impl NetworkKeyProvider for KeyManager {
     /// Retrieves the secp256k1 public key corresponding to the TxIo secret key.
     fn get_tx_io_pk(&self) -> secp256k1::PublicKey {
         let key = self
-            .get_key(KeyPurpose::TxIo)
+            .get_purpose_key(KeyPurpose::TxIo)
             .expect("KeyManager should always have a snapshot key");
         let sk = secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid");
@@ -142,7 +142,7 @@ impl NetworkKeyProvider for KeyManager {
     /// Retrieves the Schnorrkel keypair used for randomness generation.
     fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair {
         let mini_key = self
-            .get_key(KeyPurpose::RngPrecompile)
+            .get_purpose_key(KeyPurpose::RngPrecompile)
             .expect("KeyManager should always have a snapshot key");
         let mini_key_bytes = mini_key.as_ref();
         let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes)
@@ -155,10 +155,15 @@ impl NetworkKeyProvider for KeyManager {
     /// Retrieves the AES-256-GCM encryption key used for snapshot operations.
     fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
         let key = self
-            .get_key(KeyPurpose::Snapshot)
+            .get_purpose_key(KeyPurpose::Snapshot)
             .expect("KeyManager should always have a snapshot key");
         let bytes: [u8; 32] = key.as_ref().try_into().expect("Key should be 32 bytes");
         bytes.into()
+    }
+    /// Retrieves the root secp256k1 secret key used for key management.
+    fn get_km_root_key(&self) -> [u8; 32] {
+        let bytes: [u8; 32] = self.master_key.as_ref().try_into().unwrap();
+        bytes
     }
 }
 
@@ -172,7 +177,7 @@ mod tests {
         let key_manager = KeyManager::new(master_key_bytes).unwrap();
 
         for purpose in KeyPurpose::iter() {
-            let key = key_manager.get_key(purpose).unwrap();
+            let key = key_manager.get_purpose_key(purpose).unwrap();
             assert!(!key.as_ref().is_empty());
         }
     }
@@ -181,8 +186,8 @@ mod tests {
     fn test_purpose_specific_keys_are_consistent() {
         let master_key_bytes = [0u8; 32];
         let key_manager = KeyManager::new(master_key_bytes).unwrap();
-        let key_a = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
-        let key_b = key_manager.get_key(KeyPurpose::Snapshot).unwrap();
+        let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
+        let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
         assert_eq!(key_a.as_ref(), key_b.as_ref());
     }
 }

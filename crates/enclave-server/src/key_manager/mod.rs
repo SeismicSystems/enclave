@@ -9,6 +9,9 @@ pub use manager::KeyManager;
 ///
 /// Used to abstract over how keys are retrieved (e.g., real or mocked key managers).
 pub trait NetworkKeyProvider: Sync {
+    /// Retrieves the root secp256k1 secret key used for key management.
+    fn get_km_root_key(&self) -> [u8; 32];
+
     /// Retrieves the secp256k1 secret key used for transaction I/O.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey;
 
