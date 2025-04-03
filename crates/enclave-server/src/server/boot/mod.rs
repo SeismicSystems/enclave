@@ -1,6 +1,9 @@
 //! This module contains logic for allowing an operator
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
+use std::net::IpAddr;
+use std::net::SocketAddr;
+
 use seismic_enclave::request_types::boot::*;
 
 use anyhow::anyhow;
@@ -9,7 +12,10 @@ use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
+use seismic_enclave::rpc::SyncEnclaveApiClient;
 // use zeroize::{Zeroize, ZeroizeOnDrop};
+
+use seismic_enclave::EnclaveClient;
 
 pub struct Booter {
     pk: secp256k1::PublicKey,
@@ -34,7 +40,7 @@ impl Booter {
     // assumes engine handler makes the pk and attested to it
     pub async fn retrieve_master_key(
         &mut self,
-        url: &str,
+        addr: SocketAddr,
         retriever_pk: &secp256k1::PublicKey,
         retriever_sk: &secp256k1::SecretKey,
         nonce: Nonce,
@@ -47,8 +53,8 @@ impl Booter {
 
         // TODO: probably modify seismic-enclave rpc to have a method for this
         // How will auth work? enclave x will not have enclave y's jwt
-        let http_res = reqwest::Client::new().post(url).json(&req).send().await?;
-        let res: ShareMasterKeyResponse = http_res.json().await?;
+        let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
+        let res = client.boot_share_master_key(req)?;
 
         // decrypt ciphertext
         let master_key_vec = ecdh_decrypt(
