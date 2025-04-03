@@ -8,7 +8,6 @@ use rand::TryRngCore;
 use secp256k1::Secp256k1;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use seismic_enclave::{ecdh_encrypt, ecdh_decrypt, nonce::Nonce};
-use tracing::error;
 use anyhow::anyhow;
 // use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -47,8 +46,9 @@ impl Booter {
             .send().await?;
         let res: ShareMasterKeyResponse = http_res.json().await?;
 
-        // TODO: decrypt ciphertext
-        let master_key = ecdh_decrypt(&res.sharer_pk, &retriever_sk, &res.master_key_ciphertext, nonce)?;
+        // decrypt ciphertext
+        let master_key_vec = ecdh_decrypt(&res.sharer_pk, &retriever_sk, &res.master_key_ciphertext, nonce)?;
+        let master_key: [u8; 32] = master_key_vec.try_into().map_err(|e| anyhow!("Error casting, master key had unexpected length: {:?}", e))?;
 
         self.km_master_key = Some(master_key);
         Ok(())
