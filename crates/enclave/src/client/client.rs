@@ -24,6 +24,7 @@ use crate::{
         Secp256k1VerifyResponse,
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
+    boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse},
 };
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_IP: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
@@ -192,6 +193,9 @@ impl_sync_client_trait!(
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
+    fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
+    fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
+    fn boot_genesis(&self) -> Result<(),  ClientError>,
 );
 
 #[cfg(test)]

@@ -20,6 +20,7 @@ use crate::signing::{
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
+use crate::boot::{ShareMasterKeyRequest, ShareMasterKeyResponse, RetrieveMasterKeyRequest, RetrieveMasterKeyResponse};
 
 /// A trait for building a server.
 pub trait BuildableServer {
@@ -95,4 +96,16 @@ pub trait EnclaveApi {
     /// Generates an ephemeral keypair
     #[method(name = "eph_rng.get_keypair")]
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
+
+    /// Retrieves the master key from an existing node
+    #[method(name = "boot.retrieve_master_key")]
+    async fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> RpcResult<RetrieveMasterKeyResponse>;
+
+    /// Shares the master key with an existing node
+    #[method(name = "boot.share_master_key")]
+    async fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> RpcResult<ShareMasterKeyResponse>;
+
+    /// Genesis boot
+    #[method(name = "boot.genesis_boot")]
+    async fn boot_genesis(&self) -> RpcResult<()>;
 }

@@ -12,11 +12,11 @@ pub struct CompleteBootResponse {
 // RetieveMasterKey endpoint triggers the enclave to retrieve the master key
 // via http from an existing node running the enclave server
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RetieveMasterKeyRequest {
+pub struct RetrieveMasterKeyRequest {
     pub url: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RetieveMasterKeyResponse {}
+pub struct RetrieveMasterKeyResponse {}
 
 // ShareMasterKey endpoint triggers the enclave to share the master key with
 // an new enclave server that is booting

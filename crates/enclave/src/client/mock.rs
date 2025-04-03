@@ -28,6 +28,7 @@ use crate::{
         Secp256k1VerifyResponse,
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
+    boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse},
 };
 
 /// A mock enclave server for testing purposes.
@@ -117,6 +118,18 @@ impl MockEnclaveServer {
     ) -> AttestationEvalEvidenceResponse {
         unimplemented!("eval_attestation_evidence not implemented for mock server")
     }
+
+    fn boot_retrieve_master_key(_req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse {
+        unimplemented!("boot_retrieve_master_key not implemented for mock server")
+    }
+
+    fn boot_share_master_key(_req: ShareMasterKeyRequest) -> ShareMasterKeyResponse {
+        unimplemented!("boot_share_master_key not implemented for mock server")
+    }
+
+    fn boot_genesis() {
+        unimplemented!("boot_genesis not implemented for mock server")
+    }
 }
 
 impl Default for MockEnclaveServer {
@@ -200,6 +213,18 @@ impl EnclaveApiServer for MockEnclaveServer {
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
         Ok(MockEnclaveServer::get_eph_rng_keypair())
     }
+
+    async fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> RpcResult<RetrieveMasterKeyResponse> {
+        Ok(MockEnclaveServer::boot_retrieve_master_key(_req))
+    }
+
+    async fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> RpcResult<ShareMasterKeyResponse> {
+        Ok(MockEnclaveServer::boot_share_master_key(_req))
+    }
+
+    async fn boot_genesis(&self) -> RpcResult<()> {
+        Ok(MockEnclaveServer::boot_genesis())
+    }
 }
 
 /// Mock enclave client for testing purposes.
@@ -239,6 +264,9 @@ impl_mock_sync_client_trait!(
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
+    fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
+    fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
+    fn boot_genesis(&self) -> Result<(),  ClientError>,
 );
 
 #[cfg(test)]
