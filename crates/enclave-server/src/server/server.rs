@@ -3,6 +3,10 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
 
 use seismic_enclave::auth::JwtSecret;
+use seismic_enclave::boot::{
+    RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
+    ShareMasterKeyResponse,
+};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -14,7 +18,6 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use seismic_enclave::boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse};
 
 use anyhow::{anyhow, Result};
 use attestation_service::token::simple::{

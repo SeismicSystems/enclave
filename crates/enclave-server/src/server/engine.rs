@@ -6,6 +6,10 @@ use log::error;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+use seismic_enclave::boot::{
+    RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
+    ShareMasterKeyResponse,
+};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -22,7 +26,6 @@ use seismic_enclave::{
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
     secp256k1_sign_digest, secp256k1_verify,
 };
-use seismic_enclave::boot::{RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest, ShareMasterKeyResponse};
 
 use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
@@ -216,11 +219,17 @@ where
         })
     }
 
-    async fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> RpcResult<RetrieveMasterKeyResponse> {
+    async fn boot_retrieve_master_key(
+        &self,
+        _req: RetrieveMasterKeyRequest,
+    ) -> RpcResult<RetrieveMasterKeyResponse> {
         todo!("boot_retrieve_master_key not implemented for enclave server")
     }
 
-    async fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> RpcResult<ShareMasterKeyResponse> {
+    async fn boot_share_master_key(
+        &self,
+        _req: ShareMasterKeyRequest,
+    ) -> RpcResult<ShareMasterKeyResponse> {
         todo!("boot_share_master_key not implemented for enclave server")
     }
 

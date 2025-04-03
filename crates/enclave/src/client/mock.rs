@@ -246,7 +246,8 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::{client::tests::*, nonce::Nonce, rpc::EnclaveApiClient, EnclaveClient};
+    use crate::{nonce::Nonce, rpc::EnclaveApiClient, EnclaveClient};
+    use crate::client::tests::*;
 
     #[test]
     fn test_mock_client() {

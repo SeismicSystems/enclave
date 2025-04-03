@@ -11,8 +11,8 @@ use rand::rngs::OsRng;
 use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
-use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 use seismic_enclave::rpc::SyncEnclaveApiClient;
+use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 // use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use seismic_enclave::EnclaveClient;
@@ -51,8 +51,7 @@ impl Booter {
             attestation: attestation.clone(),
         };
 
-        // TODO: probably modify seismic-enclave rpc to have a method for this
-        // How will auth work? enclave x will not have enclave y's jwt
+        // TODO: How will auth work? enclave x will not have enclave y's jwt
         let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         let res = client.boot_share_master_key(req)?;
 
