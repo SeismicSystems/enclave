@@ -143,64 +143,32 @@ impl BuildableServer for MockEnclaveServer {
     }
 }
 
-#[async_trait]
-impl EnclaveApiServer for MockEnclaveServer {
-    /// Handler for: `getPublicKey`
-    async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(MockEnclaveServer::get_public_key())
-    }
-
-    /// Handler for: `healthCheck`
-    async fn health_check(&self) -> RpcResult<String> {
-        Ok(MockEnclaveServer::health_check())
-    }
-
-    /// Handler for: `getGenesisData`
-    async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
-        Ok(MockEnclaveServer::get_genesis_data())
-    }
-
-    /// Handler for: `encrypt`
-    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        Ok(MockEnclaveServer::encrypt(req))
-    }
-
-    /// Handler for: `decrypt`
-    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        Ok(MockEnclaveServer::decrypt(req))
-    }
-
-    /// Handler for: `getAttestationEvidence`
-    async fn get_attestation_evidence(
-        &self,
-        req: AttestationGetEvidenceRequest,
-    ) -> RpcResult<AttestationGetEvidenceResponse> {
-        Ok(MockEnclaveServer::get_attestation_evidence(req))
-    }
-
-    /// Handler for: `evalAttestationEvidence`
-    async fn eval_attestation_evidence(
-        &self,
-        req: AttestationEvalEvidenceRequest,
-    ) -> RpcResult<AttestationEvalEvidenceResponse> {
-        Ok(MockEnclaveServer::eval_attestation_evidence(req))
-    }
-
-    /// Handler for: `sign`
-    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        Ok(MockEnclaveServer::sign(req))
-    }
-
-    /// Handler for: `verify`
-    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        Ok(MockEnclaveServer::verify(req))
-    }
-
-    /// Handler for: 'eph_rng.get_keypair'
-    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        Ok(MockEnclaveServer::get_eph_rng_keypair())
-    }
+macro_rules! impl_mock_async_server_trait {
+    ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
+        -> $ret:ty),* $(,)?) => {
+        #[async_trait]
+        impl EnclaveApiServer for MockEnclaveServer {
+            $(
+                async fn $method_name(&self $(, $param: $param_ty)*) -> RpcResult<$ret> {
+                    Ok(MockEnclaveServer::$method_name($($param),*))
+                }
+            )*
+        }
+    };
 }
+impl_mock_async_server_trait!(
+    async fn health_check(&self) -> String,
+    async fn get_public_key(&self) -> secp256k1::PublicKey,
+    async fn get_genesis_data(&self) -> GenesisDataResponse,
+    async fn sign(&self, req: Secp256k1SignRequest) -> Secp256k1SignResponse,
+    async fn verify(&self, req: Secp256k1VerifyRequest) -> Secp256k1VerifyResponse,
+    async fn encrypt(&self, req: IoEncryptionRequest) -> IoEncryptionResponse,
+    async fn decrypt(&self, req: IoDecryptionRequest) -> IoDecryptionResponse,
+    async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair,
+    async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse,
+    async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse,
+);
+
 
 /// Mock enclave client for testing purposes.
 /// Useful for testing the against the mock server,
