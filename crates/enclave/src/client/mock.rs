@@ -12,7 +12,10 @@ use std::{
 };
 
 use super::{
-    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
+    rpc::{BuildableServer, 
+        EnclaveApiServer, 
+        SyncEnclaveApiClient,
+    },
     ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 use crate::auth::JwtSecret;
@@ -143,6 +146,8 @@ impl BuildableServer for MockEnclaveServer {
     }
 }
 
+/// Derive implementation of the async [`EnclaveApiServer`] trait 
+/// for [`MockEnclaveServer`] 
 macro_rules! impl_mock_async_server_trait {
     ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
         -> $ret:ty),* $(,)?) => {
@@ -179,12 +184,15 @@ impl Default for MockEnclaveClient {
         Self::new()
     }
 }
-
 impl MockEnclaveClient {
     pub fn new() -> Self {
         Self {}
     }
 }
+
+/// Derive implementation of the [`SyncEnclaveApiClient`] trait 
+/// for [`MockEnclaveClient`].
+/// based on functions implemented in the [`MockEnclaveServer`].
 macro_rules! impl_mock_sync_client_trait {
     ($(fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*) -> $return_ty:ty),* $(,)?) => {
         impl SyncEnclaveApiClient for MockEnclaveClient {

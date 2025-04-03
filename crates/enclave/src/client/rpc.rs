@@ -47,8 +47,8 @@ pub trait BuildableServer {
 }
 
 /// The JSON-RPC trait for the enclave server and client, defining the API.
-#[derive_sync_client_trait] // get SyncEnclaveApi trait, which allows for sync calls, which seismic-reth requires
-#[rpc(client, server)] // get EnclaveApiClient and EnclaveApiServer traits
+#[derive_sync_client_trait] // derive the SyncEnclaveApi trait, which allows for sync calls, which seismic-reth requires
+#[rpc(client, server)] // derive the EnclaveApiClient and EnclaveApiServer traits
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
