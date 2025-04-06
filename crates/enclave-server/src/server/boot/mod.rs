@@ -18,6 +18,8 @@ pub struct Booter {
     sk: secp256k1::SecretKey,
     // a root key for the key manager
     km_root_key: Mutex<Option<[u8; 32]>>, // mutex so that that functions can be called without &mut self in the engine
+    // tracks whether the booting process has been completed
+    completed: Mutex<bool>,
 }
 impl Booter {
     pub fn new() -> Self {
@@ -27,6 +29,7 @@ impl Booter {
             pk,
             sk,
             km_root_key: None.into(),
+            completed: Mutex::new(false),
         }
     }
     /// Get the root key for the enclave server
@@ -39,6 +42,20 @@ impl Booter {
     }
     pub fn sk(&self) -> secp256k1::SecretKey {
         self.sk.clone()
+    }
+    pub fn is_compelted(&self) -> bool {
+        let guard = self.completed.lock().unwrap();
+        *guard
+    }
+
+    pub fn mark_completed(&self) {
+        let mut completed_guard = self.completed.lock().unwrap();
+        *completed_guard = true;
+
+        // Zero the root key
+        // TODO: evaluate if this should involve zeroize 
+        let mut root_gurad = self.km_root_key.lock().unwrap();
+        *root_gurad = None;
     }
 
     // assumes engine handler makes the pk and attested to it

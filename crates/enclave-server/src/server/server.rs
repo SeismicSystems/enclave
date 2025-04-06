@@ -127,6 +127,7 @@ where
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
+        // TODO: remove key provider from builder?
         let key_provider = self
             .key_provider
             .ok_or_else(|| anyhow!("No key provider supplied to builder"))?;
@@ -142,6 +143,7 @@ where
         let v_token_broker = SimpleAttestationTokenBroker::new(token_broker_config)?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
+        // let inner = Arc::new(AttestationEngine::new(attestation_agent));
         let inner = Arc::new(AttestationEngine::new(key_provider, attestation_agent));
 
         Ok(EnclaveServer {
@@ -169,6 +171,7 @@ where
         token_broker: SeismicAttestationAgent<T>,
         auth_secret: JwtSecret,
     ) -> Result<Self> {
+        // let inner = Arc::new(AttestationEngine::new(token_broker));
         let inner = Arc::new(AttestationEngine::new(key_provider, token_broker));
 
         Ok(Self {

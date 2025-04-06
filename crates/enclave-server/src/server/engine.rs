@@ -25,6 +25,7 @@ use seismic_enclave::{
     ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error,
     rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
+    rpc_conflict_error,
 };
 
 use crate::attestation::SeismicAttestationAgent;
@@ -43,7 +44,7 @@ pub struct AttestationEngine<
 > {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
-    booter: Arc<Booter>,
+    booter: Booter,
 }
 impl<K, T> AttestationEngine<K, T>
 where
@@ -54,12 +55,42 @@ where
         Self {
             key_provider: Arc::new(key_provider),
             attestation_agent: Arc::new(attestation_agent),
-            booter: Arc::new(Booter::new()),
+            booter: Booter::new(),
         }
     }
 
-    pub fn key_provider(&self) -> Arc<K> {
-        self.key_provider.clone()
+    // // TODO: remove?
+    // pub fn new(attestation_agent: SeismicAttestationAgent<T>) -> Self {
+    //     Self {
+    //         key_provider: None,
+    //         attestation_agent: Arc::new(attestation_agent),
+    //         booter: Booter::new(),
+    //     }
+    // }
+
+    // // TODO: remove?
+    // pub fn new_with_key_provider(key_provider: K, attestation_agent: SeismicAttestationAgent<T>) -> Self {
+    //     Self {
+    //         key_provider: Some(Arc::new(key_provider)),
+    //         attestation_agent: Arc::new(attestation_agent),
+    //         booter: Booter::new(),
+    //     }
+    // }
+
+    /// helper function to get the key provider if it has been initialized
+    /// or return an RPC uninitialized resource error
+    pub fn key_provider(&self) -> Result<Arc<K>, jsonrpsee::types::ErrorObjectOwned> {
+        if !self.booter.is_compelted() {
+            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider not initialized")))
+        } else {
+            return Ok(self.key_provider.clone())
+        }
+        
+        // TODO: remove if unused
+        // match &self.key_provider {
+        //     Some(key_provider) => return Ok(key_provider.clone()),
+        //     None => ,
+        // }
     }
 }
 
@@ -75,12 +106,12 @@ where
 
     // Crypto operations implementations
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         Ok(key_provider.get_tx_io_pk())
     }
 
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         let sk = key_provider.get_tx_io_sk();
         let signature = secp256k1_sign_digest(&req.msg, sk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
@@ -88,7 +119,7 @@ where
     }
 
     async fn verify(&self, request: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         let pk = key_provider.get_tx_io_pk();
         let verified = secp256k1_verify(&request.msg, &request.sig, pk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
@@ -96,7 +127,7 @@ where
     }
 
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         let sk = key_provider.get_tx_io_sk();
         let encrypted_data = match ecdh_encrypt(&req.key, &sk, &req.data, req.nonce) {
             Ok(data) => data,
@@ -110,7 +141,7 @@ where
     }
 
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         let sk = key_provider.get_tx_io_sk();
         let decrypted_data = match ecdh_decrypt(&req.key, &sk, &req.data, req.nonce) {
             Ok(data) => data,
@@ -124,7 +155,7 @@ where
     }
 
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         Ok(key_provider.get_rng_keypair())
     }
 
@@ -154,7 +185,7 @@ where
 
     // Future Work: update what genesis data consists of, error responses
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         let io_pk = key_provider.get_tx_io_pk();
 
         // For now the genesis data is just the public key of the IO encryption keypair
@@ -266,7 +297,7 @@ where
         // TODO: make own attestation of sharer key
         let attestation: Vec<u8> = Vec::new();
 
-        let key_provider = self.key_provider();
+        let key_provider = self.key_provider()?;
         let existing_km_root_key = key_provider.get_root_key();
         let (nonce, root_key_ciphertext, sharer_pk) = self
             .booter
@@ -291,12 +322,12 @@ where
     async fn complete_boot(&self) -> RpcResult<()> {
         let root_key = match self.booter.get_root_key() {
             Some(root_key) => root_key,
-            None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No root key found"))),
+            None => return Err(rpc_conflict_error(anyhow::anyhow!("Booter has not initialized a root key. Either call boot_retrieve_root_key or boot_genesis first"))),
         };
-        let km: Arc<K> = self.key_provider();
-        km.set_root_key(root_key);
+        let existing_km = self.key_provider.clone();
+        existing_km.set_root_key(root_key);
+        self.booter.mark_completed();
 
-        // TODO: booter cleanup (mark complete somehow, boot functions error if already booted, other functions error if not booted)
         Ok(())
     }
 }
@@ -532,4 +563,7 @@ mod tests {
         // TODO: test complete boot wiring
         enclave_engine.complete_boot().await.unwrap();
     }
+
+
+    
 }
