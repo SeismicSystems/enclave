@@ -370,10 +370,13 @@ mod tests {
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let mock_server = MockEnclaveServer::new(addr);
         mock_server.start().await.unwrap();
+
+        println!("default_booted_enclave_engine: starting boot_retrieve_root_key (with client call)");
         enclave_engine
             .boot_retrieve_root_key(RetrieveMasterKeyRequest { addr })
             .await
             .unwrap();
+        println!("default_booted_enclave_engine: finished boot_retrieve_root_key (with client call)");
         enclave_engine.complete_boot().await.unwrap();
 
         enclave_engine

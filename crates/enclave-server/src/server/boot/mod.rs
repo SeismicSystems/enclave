@@ -10,6 +10,7 @@ use secp256k1::Secp256k1;
 use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 use std::sync::Mutex;
+use tracing::info;
 // use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub struct Booter {
@@ -70,7 +71,9 @@ impl Booter {
         };
 
         // TODO: How will auth work? enclave x will not have enclave y's jwt
+        info!("in boot_retrieve_root_key, beginning client boot_share_root_key call");
         let res = client.boot_share_root_key(req)?;
+        info!("in boot_retrieve_root_key, finished client boot_share_root_key call");
 
         // decrypt ciphertext
         let root_key = self.process_share_response(res)?;
