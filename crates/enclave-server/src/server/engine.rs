@@ -22,7 +22,9 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{
-    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
+    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
+    rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error,
+    rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
 };
 
 use crate::attestation::SeismicAttestationAgent;
@@ -41,7 +43,7 @@ pub struct AttestationEngine<
 > {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
-    booter: Booter,
+    booter: Arc<Booter>,
 }
 impl<K, T> AttestationEngine<K, T>
 where
@@ -50,9 +52,9 @@ where
 {
     pub fn new(key_provider: K, attestation_agent: SeismicAttestationAgent<T>) -> Self {
         Self {
-            key_provider: Arc::new(key_provider), 
+            key_provider: Arc::new(key_provider),
             attestation_agent: Arc::new(attestation_agent),
-            booter: Booter::new(),
+            booter: Arc::new(Booter::new()),
         }
     }
 
@@ -246,14 +248,11 @@ where
         // Call the booter to retrieve the root key
         // will be stored in the booter if successful
         self.booter
-            .retrieve_root_key(
-                &attestation,
-                &client,
-            )
+            .retrieve_root_key(&attestation, &client)
             .map_err(
-                |e| rpc_bad_argument_error(anyhow::anyhow!(e)) // TODO: better error
+                |e| rpc_bad_argument_error(anyhow::anyhow!(e)), // TODO: better error
             )?;
-        
+
         let resp = RetrieveMasterKeyResponse {};
 
         Ok(resp)
@@ -284,24 +283,21 @@ where
 
     async fn boot_genesis(&self) -> RpcResult<()> {
         self.booter
-        .genesis()
-        .map_err(
-            |e| rpc_internal_server_error(e)
-        )?;
+            .genesis()
+            .map_err(|e| rpc_internal_server_error(e))?;
         Ok(())
     }
 
     async fn complete_boot(&self) -> RpcResult<()> {
         let root_key = match self.booter.get_root_key() {
             Some(root_key) => root_key,
-            None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No root key found")))
+            None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No root key found"))),
         };
         let km: Arc<K> = self.key_provider();
         km.set_root_key(root_key);
 
-        // TODO: finish key manager setup (if any) and booter cleanup
+        // TODO: booter cleanup (mark complete somehow, boot functions error if already booted, other functions error if not booted)
         Ok(())
-        
     }
 }
 
@@ -310,13 +306,13 @@ mod tests {
     use super::*;
     use crate::key_manager::KeyManager;
     use crate::key_manager::KeyManagerBuilder;
+    use crate::utils::test_utils::get_random_port;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
     use std::net::SocketAddr;
-    use crate::utils::test_utils::get_random_port;
 
     pub fn default_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
@@ -486,14 +482,13 @@ mod tests {
         assert!(!res.evidence.is_empty());
     }
 
-    async fn test_boot_handlers<K, T>(
-        enclave_engine: &AttestationEngine<K, T>,
-    ) where
+    async fn test_boot_handlers<K, T>(enclave_engine: &AttestationEngine<K, T>)
+    where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-        use seismic_enclave::MockEnclaveServer;
         use seismic_enclave::rpc::BuildableServer;
+        use seismic_enclave::MockEnclaveServer;
 
         // TODO: test boot_genesis
         // // test boot_genesis
@@ -507,21 +502,34 @@ mod tests {
         let mock_server = MockEnclaveServer::new(addr);
         mock_server.start().await.unwrap();
         enclave_engine
-            .boot_retrieve_root_key(RetrieveMasterKeyRequest {
-                addr,
-            })
+            .boot_retrieve_root_key(RetrieveMasterKeyRequest { addr })
             .await
             .unwrap();
-        assert!(enclave_engine.booter.get_root_key().is_some(), "root key not set");
-        assert!(enclave_engine.booter.get_root_key().unwrap() == [0u8; 32], "root key does not match expected mock value");
+        assert!(
+            enclave_engine.booter.get_root_key().is_some(),
+            "root key not set"
+        );
+        assert!(
+            enclave_engine.booter.get_root_key().unwrap() == [0u8; 32],
+            "root key does not match expected mock value"
+        );
 
         // TODO: test share_root_key
         let new_node_booter = Booter::new();
-        let resp = enclave_engine.boot_share_root_key(ShareMasterKeyRequest { retriever_pk: new_node_booter.pk(), attestation: Vec::new() }).await.unwrap();
+        let resp = enclave_engine
+            .boot_share_root_key(ShareMasterKeyRequest {
+                retriever_pk: new_node_booter.pk(),
+                attestation: Vec::new(),
+            })
+            .await
+            .unwrap();
         let key_plaintext = new_node_booter.process_share_response(resp).unwrap();
-        assert!(key_plaintext == [0u8; 32], "root key does not match expected mock value");
+        assert!(
+            key_plaintext == [0u8; 32],
+            "root key does not match expected mock value"
+        );
 
         // TODO: test complete boot wiring
-
+        enclave_engine.complete_boot().await.unwrap();
     }
 }
