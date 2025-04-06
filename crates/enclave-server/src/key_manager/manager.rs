@@ -2,9 +2,9 @@ use super::NetworkKeyProvider;
 
 use hkdf::Hkdf;
 use sha2::Sha256;
+use std::sync::Mutex;
 use strum_macros::EnumIter;
 use zeroize::{Zeroize, ZeroizeOnDrop};
-use std::sync::Mutex;
 
 /// Salt used during HKDF key derivation for purpose-specific keys.
 const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";

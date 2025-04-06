@@ -7,10 +7,10 @@ use tokio::sync::Mutex;
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use attestation_agent::InitDataResult;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use attestation_service::token::AttestationTokenBroker;
 use attestation_service::Data;
 use attestation_service::HashAlgorithm;
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
 
 use crate::attestation::verifier::DcapAttVerifier;
 
@@ -117,7 +117,6 @@ impl<T: AttestationTokenBroker + Send + Sync> AttestationAPIs for SeismicAttesta
         self.attestation_agent.get_tee_type()
     }
 }
-
 
 /// A reasonable default mock attestation agent for testing
 pub fn seismic_aa_mock() -> SeismicAttestationAgent<SimpleAttestationTokenBroker> {

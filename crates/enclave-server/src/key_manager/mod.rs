@@ -19,7 +19,7 @@ pub trait NetworkKeyProvider: Sync {
     /// based on the newly provided root key.
     ///
     /// This method should use interior mutability, e.g. Mutex, to allow
-    /// mutation without requiring a mutable reference to the key manager. 
+    /// mutation without requiring a mutable reference to the key manager.
     /// This keeps the higher-level API ergonomics clean by avoiding the need
     /// for `&mut self` or external synchronization primitives.
     fn set_root_key(&self, root_key: [u8; 32]);

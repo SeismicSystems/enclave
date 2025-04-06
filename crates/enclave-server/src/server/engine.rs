@@ -23,9 +23,8 @@ use seismic_enclave::tx_io::{
 };
 use seismic_enclave::{
     ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
-    rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error,
+    rpc_bad_genesis_error, rpc_bad_quote_error, rpc_conflict_error, rpc_internal_server_error,
     rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
-    rpc_conflict_error,
 };
 
 use crate::attestation::SeismicAttestationAgent;
@@ -81,11 +80,13 @@ where
     /// or return an RPC uninitialized resource error
     pub fn key_provider(&self) -> Result<Arc<K>, jsonrpsee::types::ErrorObjectOwned> {
         if !self.booter.is_compelted() {
-            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider not initialized")))
+            return Err(rpc_conflict_error(anyhow::anyhow!(
+                "Key provider not initialized"
+            )));
         } else {
-            return Ok(self.key_provider.clone())
+            return Ok(self.key_provider.clone());
         }
-        
+
         // TODO: remove if unused
         // match &self.key_provider {
         //     Some(key_provider) => return Ok(key_provider.clone()),
@@ -270,7 +271,9 @@ where
         req: RetrieveMasterKeyRequest,
     ) -> RpcResult<RetrieveMasterKeyResponse> {
         if self.key_provider().is_ok() {
-            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider already initialized")))
+            return Err(rpc_conflict_error(anyhow::anyhow!(
+                "Key provider already initialized"
+            )));
         }
 
         // TODO: make attestation of retriever key
@@ -318,7 +321,9 @@ where
 
     async fn boot_genesis(&self) -> RpcResult<()> {
         if self.key_provider().is_ok() {
-            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider already initialized")))
+            return Err(rpc_conflict_error(anyhow::anyhow!(
+                "Key provider already initialized"
+            )));
         }
         self.booter
             .genesis()
@@ -328,7 +333,9 @@ where
 
     async fn complete_boot(&self) -> RpcResult<()> {
         if self.key_provider().is_ok() {
-            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider already initialized")))
+            return Err(rpc_conflict_error(anyhow::anyhow!(
+                "Key provider already initialized"
+            )));
         }
         let root_key = match self.booter.get_root_key() {
             Some(root_key) => root_key,
@@ -342,8 +349,9 @@ where
     }
 }
 
-use crate::key_manager::KeyManager;
+// TODO: clean up
 use crate::attestation::seismic_aa_mock;
+use crate::key_manager::KeyManager;
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
 pub fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
     let kp = KeyManager::new();
@@ -359,22 +367,13 @@ mod tests {
     use super::*;
     use crate::key_manager::KeyManager;
     use crate::key_manager::KeyManagerBuilder;
-    use crate::utils::test_utils::get_random_port;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
-    use std::net::SocketAddr;
-    use seismic_enclave::MockEnclaveServer;
-    use seismic_enclave::rpc::BuildableServer;
 
-    // TODO: refactor to remove this function
-    pub async fn default_booted_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
-        engine_mock_booted()
-    }
-
-    pub fn default_unbooted_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
+    pub fn default_unbooted_enclave_engine(
+    ) -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let v_token_broker = SimpleAttestationTokenBroker::new(
             attestation_service::token::simple::Configuration::default(),
@@ -388,7 +387,7 @@ mod tests {
     #[tokio::test]
     pub async fn run_engine_tests() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            default_booted_enclave_engine().await;
+            engine_mock_booted();
 
         let t1 = test_secp256k1_sign(&enclave_engine);
         let t2 = test_io_encryption(&enclave_engine);
@@ -544,7 +543,7 @@ mod tests {
     #[tokio::test]
     async fn test_boot_share_root_key() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            default_booted_enclave_engine().await;
+            engine_mock_booted();
 
         let new_node_booter = Booter::new();
         let resp = enclave_engine
@@ -564,7 +563,7 @@ mod tests {
     #[tokio::test]
     async fn test_complete_boot() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-        default_unbooted_enclave_engine();
+            default_unbooted_enclave_engine();
 
         // test that key functiosn error before complete_boot
         // TODO; check that share key errors
@@ -584,7 +583,5 @@ mod tests {
         // TODO: add other boot functions
         let res = enclave_engine.boot_genesis().await;
         assert!(res.is_err());
-
-        
     }
 }

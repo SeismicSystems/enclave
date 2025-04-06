@@ -1,12 +1,12 @@
 //! This module contains logic for allowing an operator
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
-use seismic_enclave::request_types::boot::*;
 use anyhow::anyhow;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
+use seismic_enclave::request_types::boot::*;
 use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 use std::sync::Mutex;
@@ -54,7 +54,7 @@ impl Booter {
         *completed_guard = true;
 
         // Zero the root key
-        // TODO: evaluate if this should involve zeroize 
+        // TODO: evaluate if this should involve zeroize
         let mut root_gurad = self.km_root_key.lock().unwrap();
         *root_gurad = None;
     }
@@ -82,7 +82,10 @@ impl Booter {
         Ok(())
     }
 
-    pub fn process_share_response(&self, res: ShareMasterKeyResponse) -> Result<[u8; 32], anyhow::Error> {
+    pub fn process_share_response(
+        &self,
+        res: ShareMasterKeyResponse,
+    ) -> Result<[u8; 32], anyhow::Error> {
         let root_key_vec = ecdh_decrypt(
             &res.sharer_pk,
             &self.sk(),
@@ -118,7 +121,6 @@ impl Booter {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use seismic_enclave::MockEnclaveClient;
@@ -132,7 +134,10 @@ mod tests {
         let res = booter.retrieve_root_key(&Vec::new(), &client);
         assert!(res.is_ok(), "failed to retrieve root key: {:?}", res);
         assert!(booter.get_root_key().is_some(), "root key not set");
-        assert!(booter.get_root_key().unwrap() == [0u8; 32], "root key does not match expected mock value");
+        assert!(
+            booter.get_root_key().unwrap() == [0u8; 32],
+            "root key does not match expected mock value"
+        );
     }
 
     #[test]
@@ -140,11 +145,16 @@ mod tests {
         let booter = Booter::new();
         assert!(booter.get_root_key().is_none(), "root key should be empty");
         booter.genesis().unwrap();
-        assert!(booter.get_root_key().is_some(), "root key should not be empty");
+        assert!(
+            booter.get_root_key().is_some(),
+            "root key should not be empty"
+        );
         let root_key = booter.get_root_key().unwrap();
         booter.genesis().unwrap();
         let new_root_key = booter.get_root_key().unwrap();
-        assert!(root_key != new_root_key, "root key genesis should be random");
+        assert!(
+            root_key != new_root_key,
+            "root key genesis should be random"
+        );
     }
-
 }

@@ -16,6 +16,7 @@ use super::{
     ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 use crate::auth::JwtSecret;
+use crate::nonce::Nonce;
 use crate::{
     boot::{
         RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
@@ -33,7 +34,6 @@ use crate::{
     },
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-use crate::nonce::Nonce;
 
 /// A mock enclave server for testing purposes.
 /// Does not check the validity of the JWT token.
@@ -138,14 +138,15 @@ impl MockEnclaveServer {
         let nonce = Nonce::new_rand();
         let attestation: Vec<u8> = Vec::new(); // empty attestation
 
-        let root_key_ciphertext = ecdh_encrypt(
-            &req.retriever_pk,
-            &sharer_sk,
-            &mock_root_key,
-            nonce.clone(),
-        ).unwrap();
+        let root_key_ciphertext =
+            ecdh_encrypt(&req.retriever_pk, &sharer_sk, &mock_root_key, nonce.clone()).unwrap();
 
-        ShareMasterKeyResponse { nonce, root_key_ciphertext, sharer_pk, attestation }
+        ShareMasterKeyResponse {
+            nonce,
+            root_key_ciphertext,
+            sharer_pk,
+            attestation,
+        }
     }
 
     fn boot_genesis() {
@@ -270,8 +271,8 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::{nonce::Nonce, rpc::EnclaveApiClient, EnclaveClient};
     use crate::client::tests::*;
+    use crate::{nonce::Nonce, rpc::EnclaveApiClient, EnclaveClient};
 
     #[test]
     fn test_mock_client() {

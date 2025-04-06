@@ -262,12 +262,13 @@ pub fn init_tracing() {
 #[cfg(test)]
 mod tests {
     use crate::attestation::SeismicAttestationAgent;
-    use crate::key_manager::{KeyManager, 
+    use crate::key_manager::NetworkKeyProvider;
+    use crate::key_manager::{
+        KeyManager,
         // KeyManagerBuilder
     };
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::{get_random_port, is_sudo};
-    use crate::key_manager::NetworkKeyProvider;
     use seismic_enclave::auth::JwtSecret;
     use seismic_enclave::client::rpc::BuildableServer;
     use seismic_enclave::client::{
