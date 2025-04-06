@@ -5,7 +5,6 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use anyhow::anyhow;
 
 use seismic_enclave::boot::{
     RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
@@ -23,7 +22,7 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{
-    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify, rpc_uninitialized_resource_error
+    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
 };
 
 use crate::attestation::SeismicAttestationAgent;
@@ -37,10 +36,10 @@ use super::boot::Booter;
 /// handles server api calls after http parsing and authentication
 /// controls central resources, e.g. key manager, attestation agent
 pub struct AttestationEngine<
-    K: NetworkKeyProvider,
+    K: NetworkKeyProvider + Send + Sync + 'static,
     T: AttestationTokenBroker + Send + Sync + 'static,
 > {
-    key_provider: Arc<K>, // Make this an Arc<Option<K>> ???
+    key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
     booter: Booter,
 }
@@ -297,8 +296,8 @@ where
             Some(master_key) => master_key,
             None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No master key found")))
         };
-
-        
+        let km: Arc<K> = self.key_provider();
+        km.set_root_key(master_key);
 
         // TODO: finish key manager setup (if any) and booter cleanup
         Ok(())

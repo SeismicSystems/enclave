@@ -48,7 +48,7 @@ impl Booter {
         client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
         let req = ShareMasterKeyRequest {
-            retriever_pk: self.pk.clone(),
+            retriever_pk: self.pk(),
             attestation: attestation.clone(),
         };
 
@@ -65,7 +65,7 @@ impl Booter {
     pub fn process_share_response(&self, res: ShareMasterKeyResponse) -> Result<[u8; 32], anyhow::Error> {
         let master_key_vec = ecdh_decrypt(
             &res.sharer_pk,
-            &self.sk,
+            &self.sk(),
             &res.master_key_ciphertext,
             res.nonce,
         )?;
@@ -83,8 +83,8 @@ impl Booter {
     ) -> Result<(Nonce, Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
         let nonce = Nonce::new_rand();
         let master_key_ciphertext =
-            ecdh_encrypt(&retriever_pk, &self.sk, existing_master_key, nonce.clone())?;
-        Ok((nonce, master_key_ciphertext, self.pk))
+            ecdh_encrypt(&retriever_pk, &self.sk(), existing_master_key, nonce.clone())?;
+        Ok((nonce, master_key_ciphertext, self.pk()))
     }
 
     pub fn genesis(&self) -> Result<(), anyhow::Error> {

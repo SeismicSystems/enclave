@@ -2,10 +2,9 @@ use super::NetworkKeyProvider;
 
 use hkdf::Hkdf;
 use sha2::Sha256;
-use std::collections::HashMap;
-use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use zeroize::{Zeroize, ZeroizeOnDrop};
+use std::sync::Mutex;
 
 /// Salt used during HKDF key derivation for purpose-specific keys.
 const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
@@ -60,46 +59,34 @@ impl KeyPurpose {
 /// Keys are derived using HKDF-SHA256 with domain separation.
 /// This struct supports retrieving keys. See KeyPurpose for the intended usages
 pub struct KeyManager {
-    master_key: Key,
-    //no-thread-safety yet
-    purpose_keys: HashMap<KeyPurpose, Key>,
+    master_key: Mutex<Key>,
 }
 impl KeyManager {
-    /// Iterates over KeyPurpose and derives all purpose keys.
-    fn derive_all_purpose_keys(&mut self) -> Result<(), anyhow::Error> {
-        for purpose in KeyPurpose::iter() {
-            self.derive_purpose_key(purpose)?;
-        }
-        Ok(())
-    }
-
-    /// Derives a key for a specific `KeyPurpose` and stores it internally.
+    /// Derives a key for a specific `KeyPurpose`
     ///
     /// # Errors
     ///
     /// Returns an error if HKDF expansion fails (though this is unlikely with correct parameters).
-    fn derive_purpose_key(&mut self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
-        let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), self.master_key.as_ref());
+    fn derive_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
+        let root_guard = self.master_key.lock().unwrap();
+        let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), root_guard.as_ref());
         let mut derived_key = vec![0u8; 32];
         hk.expand(&purpose.domain_separator(), &mut derived_key)
             .expect("32 is a valid length for Sha256 to output");
         let key = Key::new(derived_key);
-        self.purpose_keys.insert(purpose, key.clone());
 
         Ok(key)
     }
 
+    // TODO: consider removing this method
     /// Retrieves a previously derived key for a given purpose.
     ///
     /// # Errors
     ///
     /// Returns an error if the key has not been derived.
     fn get_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
-        if let Some(key) = self.purpose_keys.get(&purpose) {
-            Ok(key.clone())
-        } else {
-            anyhow::bail!("KeyManager does not have a key for purpose {:?}", purpose);
-        }
+        let key = self.derive_purpose_key(purpose)?;
+        Ok(key)
     }
 }
 impl NetworkKeyProvider for KeyManager {
@@ -112,17 +99,16 @@ impl NetworkKeyProvider for KeyManager {
     /// Returns an error if key derivation fails.
     fn new() -> Self {
         let master_key_bytes: [u8; 32] = [0u8; 32]; // TODO: initialize with random bytes
-        let mut km = Self {
-            master_key: Key(master_key_bytes.to_vec()),
-            purpose_keys: HashMap::new(), // purpose keys are derived on demand
+        let km = Self {
+            master_key: Mutex::new(Key(master_key_bytes.to_vec())),
         };
-        km.derive_all_purpose_keys().expect("Failed to derive all purpose keys");
         km
     }
 
-    fn set_root_key(&mut self, new_master_key: [u8; 32]) {
-        self.master_key = Key(new_master_key.to_vec());
-        self.derive_all_purpose_keys().expect("Failed to derive all purpose keys");
+    /// Sets the root key for the key manager, replacing any existing key material.
+    fn set_root_key(&self, new_master_key: [u8; 32]) {
+        let mut root_guard = self.master_key.lock().unwrap();
+        *root_guard = Key(new_master_key.to_vec());
     }
 
     /// Retrieves the secp256k1 secret key for transaction I/O signing.
@@ -166,9 +152,10 @@ impl NetworkKeyProvider for KeyManager {
         let bytes: [u8; 32] = key.as_ref().try_into().expect("Key should be 32 bytes");
         bytes.into()
     }
-    /// Retrieves the root secp256k1 secret key used for key management.
+    /// Retrieves a copy of the root secp256k1 secret key used for key management.
     fn get_km_root_key(&self) -> [u8; 32] {
-        let bytes: [u8; 32] = self.master_key.as_ref().try_into().unwrap();
+        let root_guard = self.master_key.lock().unwrap();
+        let bytes: [u8; 32] = root_guard.as_ref().try_into().unwrap();
         bytes
     }
 }
@@ -176,6 +163,7 @@ impl NetworkKeyProvider for KeyManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn test_all_purpose_keys_are_initialized() {

@@ -10,12 +10,19 @@ pub use manager::KeyManager;
 /// Used to abstract over how keys are retrieved (e.g., real or mocked key managers).
 pub trait NetworkKeyProvider: Sync {
     /// Constructs a new instance of the key manager.
-    /// Randomly initializes a root key and derives all relevant keys. // TODO: discuss if this is good. alternative is error if not initialized
+    /// Randomly initializes a root key,
+    /// which determines the derived purpose keys
     fn new() -> Self;
 
-    /// Sets the master key for the key manager.
-    /// and re-derives all relevant keys. // TODO: discuss if this is good
-    fn set_root_key(&mut self, master_key: [u8; 32]);
+    /// Sets the root key for the key manager, replacing any existing key material.
+    /// This update should propogate so that all derived keys are recalculated
+    /// based on the newly provided master key.
+    ///
+    /// This method should use interior mutability, e.g. Mutex, to allow
+    /// mutation without requiring a mutable reference to the key manager. 
+    /// This keeps the higher-level API ergonomics clean by avoiding the need
+    /// for `&mut self` or external synchronization primitives.
+    fn set_root_key(&self, master_key: [u8; 32]);
 
     /// Retrieves the root secp256k1 secret key used for key management.
     fn get_km_root_key(&self) -> [u8; 32];

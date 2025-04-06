@@ -42,7 +42,7 @@ impl KeyManagerBuilder {
     ///
     /// This method is intended for testing and non-production use.
     pub fn build_mock() -> Result<KeyManager> {
-        let mut km = KeyManager::new();
+        let km = KeyManager::new();
         km.set_root_key([0u8; 32]);
         Ok(km)
     }
