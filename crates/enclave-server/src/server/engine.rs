@@ -269,6 +269,10 @@ where
         &self,
         req: RetrieveMasterKeyRequest,
     ) -> RpcResult<RetrieveMasterKeyResponse> {
+        if self.key_provider().is_ok() {
+            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider already initialized")))
+        }
+
         // TODO: make attestation of retriever key
         let attestation: Vec<u8> = Vec::new();
 
@@ -313,6 +317,9 @@ where
     }
 
     async fn boot_genesis(&self) -> RpcResult<()> {
+        if self.key_provider().is_ok() {
+            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider already initialized")))
+        }
         self.booter
             .genesis()
             .map_err(|e| rpc_internal_server_error(e))?;
@@ -320,6 +327,9 @@ where
     }
 
     async fn complete_boot(&self) -> RpcResult<()> {
+        if self.key_provider().is_ok() {
+            return Err(rpc_conflict_error(anyhow::anyhow!("Key provider already initialized")))
+        }
         let root_key = match self.booter.get_root_key() {
             Some(root_key) => root_key,
             None => return Err(rpc_conflict_error(anyhow::anyhow!("Booter has not initialized a root key. Either call boot_retrieve_root_key or boot_genesis first"))),
@@ -344,8 +354,32 @@ mod tests {
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
     use std::net::SocketAddr;
+    use seismic_enclave::MockEnclaveServer;
+    use seismic_enclave::rpc::BuildableServer;
 
-    pub fn default_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
+    pub async fn default_booted_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
+        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let v_token_broker = SimpleAttestationTokenBroker::new(
+            attestation_service::token::simple::Configuration::default(),
+        )
+        .expect("Failed to create an AttestationAgent");
+        let saa = SeismicAttestationAgent::new(None, v_token_broker);
+        let enclave_engine = AttestationEngine::new(kp, saa);
+
+        let port = get_random_port();
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
+        let mock_server = MockEnclaveServer::new(addr);
+        mock_server.start().await.unwrap();
+        enclave_engine
+            .boot_retrieve_root_key(RetrieveMasterKeyRequest { addr })
+            .await
+            .unwrap();
+        enclave_engine.complete_boot().await.unwrap();
+
+        enclave_engine
+    }
+
+    pub fn default_unbooted_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let v_token_broker = SimpleAttestationTokenBroker::new(
             attestation_service::token::simple::Configuration::default(),
@@ -359,7 +393,7 @@ mod tests {
     #[tokio::test]
     pub async fn run_engine_tests() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            default_enclave_engine();
+            default_booted_enclave_engine().await;
 
         let t1 = test_secp256k1_sign(&enclave_engine);
         let t2 = test_io_encryption(&enclave_engine);
@@ -367,10 +401,9 @@ mod tests {
         let t4 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
         let t5 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&enclave_engine);
         let t6 = test_genesis_get_data_handler_success_basic(&enclave_engine);
-        let t7 = test_boot_handlers(&enclave_engine);
 
         // Run all concurrently and await them
-        let (_r1, _r2, _r3, _r4, _r5, _r6, _r7) = tokio::join!(t1, t2, t3, t4, t5, t6, t7);
+        let (_r1, _r2, _r3, _r4, _r5, _r6) = tokio::join!(t1, t2, t3, t4, t5, t6);
     }
 
     async fn test_secp256k1_sign<K, T>(enclave_engine: &AttestationEngine<K, T>)
@@ -513,39 +546,11 @@ mod tests {
         assert!(!res.evidence.is_empty());
     }
 
-    async fn test_boot_handlers<K, T>(enclave_engine: &AttestationEngine<K, T>)
-    where
-        K: NetworkKeyProvider + Send + Sync + 'static,
-        T: AttestationTokenBroker + Send + Sync + 'static,
-    {
-        use seismic_enclave::rpc::BuildableServer;
-        use seismic_enclave::MockEnclaveServer;
+    #[tokio::test]
+    async fn test_boot_share_root_key() {
+        let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
+            default_booted_enclave_engine().await;
 
-        // TODO: test boot_genesis
-        // // test boot_genesis
-        // enclave_engine.boot_genesis().await.unwrap();
-        // let rand_root_key = enclave_engine.booter.get_root_key().unwrap();
-        // assert!(rand_root_key != [0u8; 32], "root key genesis should be random");
-
-        // test boot_retrieve_root_key against mock client
-        let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
-        let mock_server = MockEnclaveServer::new(addr);
-        mock_server.start().await.unwrap();
-        enclave_engine
-            .boot_retrieve_root_key(RetrieveMasterKeyRequest { addr })
-            .await
-            .unwrap();
-        assert!(
-            enclave_engine.booter.get_root_key().is_some(),
-            "root key not set"
-        );
-        assert!(
-            enclave_engine.booter.get_root_key().unwrap() == [0u8; 32],
-            "root key does not match expected mock value"
-        );
-
-        // TODO: test share_root_key
         let new_node_booter = Booter::new();
         let resp = enclave_engine
             .boot_share_root_key(ShareMasterKeyRequest {
@@ -559,11 +564,32 @@ mod tests {
             key_plaintext == [0u8; 32],
             "root key does not match expected mock value"
         );
-
-        // TODO: test complete boot wiring
-        enclave_engine.complete_boot().await.unwrap();
     }
 
+    #[tokio::test]
+    async fn test_complete_boot() {
+        let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
+        default_unbooted_enclave_engine();
 
-    
+        // test that key functiosn error before complete_boot
+        // TODO; check that share key errors
+        let res = enclave_engine.get_public_key().await;
+        assert!(res.is_err());
+
+        // test that complete_boot works
+        enclave_engine.boot_genesis().await.unwrap();
+        enclave_engine.complete_boot().await.unwrap();
+
+        // test that key functions work after complete_boot
+        // TODO: check that share key works
+        let res = enclave_engine.get_public_key().await;
+        assert!(res.is_ok());
+
+        // test that boot functions error after complete_boot
+        // TODO: add other boot functions
+        let res = enclave_engine.boot_genesis().await;
+        assert!(res.is_err());
+
+        
+    }
 }

@@ -442,6 +442,9 @@ mod tests {
             .build()
             .unwrap();
 
+        client.boot_genesis().await.unwrap();
+        client.complete_boot().await.unwrap();
+
         test_health_check(&client).await;
         test_genesis_get_data(&client).await;
         test_tx_io_encrypt_decrypt(&client).await;
