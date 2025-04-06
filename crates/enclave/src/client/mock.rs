@@ -123,29 +123,29 @@ impl MockEnclaveServer {
         unimplemented!("eval_attestation_evidence not implemented for mock server")
     }
 
-    fn boot_retrieve_master_key(_req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse {
+    fn boot_retrieve_root_key(_req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse {
         // No-op, keys are hardcoded for mock server
         RetrieveMasterKeyResponse {}
     }
 
-    fn boot_share_master_key(req: ShareMasterKeyRequest) -> ShareMasterKeyResponse {
+    fn boot_share_root_key(req: ShareMasterKeyRequest) -> ShareMasterKeyResponse {
         // skip checking the attestation since it's a mock
 
-        // encrypt the master key
+        // encrypt the root key
         let sharer_sk = get_unsecure_sample_secp256k1_sk();
         let sharer_pk = get_unsecure_sample_secp256k1_pk();
         let mock_root_key = [0u8; 32];
         let nonce = Nonce::new_rand();
         let attestation: Vec<u8> = Vec::new(); // empty attestation
 
-        let master_key_ciphertext = ecdh_encrypt(
+        let root_key_ciphertext = ecdh_encrypt(
             &req.retriever_pk,
             &sharer_sk,
             &mock_root_key,
             nonce.clone(),
         ).unwrap();
 
-        ShareMasterKeyResponse { nonce, master_key_ciphertext, sharer_pk, attestation }
+        ShareMasterKeyResponse { nonce, root_key_ciphertext, sharer_pk, attestation }
     }
 
     fn boot_genesis() {
@@ -208,8 +208,8 @@ impl_mock_async_server_trait!(
     async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair,
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse,
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse,
-    async fn boot_retrieve_master_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse,
-    async fn boot_share_master_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse,
+    async fn boot_retrieve_root_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse,
+    async fn boot_share_root_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse,
     async fn boot_genesis(&self) -> (),
     async fn complete_boot(&self) -> (),
 );
@@ -256,8 +256,8 @@ impl_mock_sync_client_trait!(
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
-    fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
-    fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
+    fn boot_retrieve_root_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
+    fn boot_share_root_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
 );

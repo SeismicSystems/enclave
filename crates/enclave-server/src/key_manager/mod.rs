@@ -16,16 +16,16 @@ pub trait NetworkKeyProvider: Sync {
 
     /// Sets the root key for the key manager, replacing any existing key material.
     /// This update should propogate so that all derived keys are recalculated
-    /// based on the newly provided master key.
+    /// based on the newly provided root key.
     ///
     /// This method should use interior mutability, e.g. Mutex, to allow
     /// mutation without requiring a mutable reference to the key manager. 
     /// This keeps the higher-level API ergonomics clean by avoiding the need
     /// for `&mut self` or external synchronization primitives.
-    fn set_root_key(&self, master_key: [u8; 32]);
+    fn set_root_key(&self, root_key: [u8; 32]);
 
     /// Retrieves the root secp256k1 secret key used for key management.
-    fn get_km_root_key(&self) -> [u8; 32];
+    fn get_root_key(&self) -> [u8; 32];
 
     /// Retrieves the secp256k1 secret key used for transaction I/O.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey;

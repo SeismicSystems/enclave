@@ -236,8 +236,8 @@ impl_forwarding_async_server_trait!(
     async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair, log = "eph_rng.get_keypair",
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse, log = "getAttestationEvidence",
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse, log = "evalAttestationEvidence",
-    async fn boot_retrieve_master_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse, log = "boot_retrieve_master_key",
-    async fn boot_share_master_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse, log = "boot_share_master_key",
+    async fn boot_retrieve_root_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse, log = "boot_retrieve_root_key",
+    async fn boot_share_root_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse, log = "boot_share_root_key",
     async fn boot_genesis(&self) -> (), log = "boot_genesis",
     async fn complete_boot(&self) -> (), log = "complete_boot",
 );

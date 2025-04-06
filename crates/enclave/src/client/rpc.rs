@@ -100,16 +100,16 @@ pub trait EnclaveApi {
     #[method(name = "eph_rng.get_keypair")]
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
 
-    /// Retrieves the master key from an existing node
-    #[method(name = "boot.retrieve_master_key")]
-    async fn boot_retrieve_master_key(
+    /// Retrieves the root key from an existing node
+    #[method(name = "boot.retrieve_root_key")]
+    async fn boot_retrieve_root_key(
         &self,
         _req: RetrieveMasterKeyRequest,
     ) -> RpcResult<RetrieveMasterKeyResponse>;
 
-    /// Shares the master key with an existing node
-    #[method(name = "boot.share_master_key")]
-    async fn boot_share_master_key(
+    /// Shares the root key with an existing node
+    #[method(name = "boot.share_root_key")]
+    async fn boot_share_root_key(
         &self,
         _req: ShareMasterKeyRequest,
     ) -> RpcResult<ShareMasterKeyResponse>;

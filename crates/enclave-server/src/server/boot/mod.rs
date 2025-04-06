@@ -16,8 +16,8 @@ pub struct Booter {
     // pk and sk are the Booter's keys used to derive encryption keys for communication with other nodes
     pk: secp256k1::PublicKey,
     sk: secp256k1::SecretKey,
-    // a master key for the key manager
-    km_master_key: Mutex<Option<[u8; 32]>>, // mutex so that that functions can be called without &mut self in the engine
+    // a root key for the key manager
+    km_root_key: Mutex<Option<[u8; 32]>>, // mutex so that that functions can be called without &mut self in the engine
 }
 impl Booter {
     pub fn new() -> Self {
@@ -26,12 +26,12 @@ impl Booter {
         Self {
             pk,
             sk,
-            km_master_key: None.into(),
+            km_root_key: None.into(),
         }
     }
-    /// Get the master key for the enclave server
-    pub fn get_master_key(&self) -> Option<[u8; 32]> {
-        let guard = self.km_master_key.lock().unwrap();
+    /// Get the root key for the enclave server
+    pub fn get_root_key(&self) -> Option<[u8; 32]> {
+        let guard = self.km_root_key.lock().unwrap();
         guard.clone()
     }
     pub fn pk(&self) -> secp256k1::PublicKey {
@@ -42,7 +42,7 @@ impl Booter {
     }
 
     // assumes engine handler makes the pk and attested to it
-    pub fn retrieve_master_key(
+    pub fn retrieve_root_key(
         &self,
         attestation: &Vec<u8>,
         client: &dyn SyncEnclaveApiClient,
@@ -53,38 +53,38 @@ impl Booter {
         };
 
         // TODO: How will auth work? enclave x will not have enclave y's jwt
-        let res = client.boot_share_master_key(req)?;
+        let res = client.boot_share_root_key(req)?;
 
         // decrypt ciphertext
-        let master_key = self.process_share_response(res)?;
-        let mut guard = self.km_master_key.lock().unwrap();
-        *guard = Some(master_key);
+        let root_key = self.process_share_response(res)?;
+        let mut guard = self.km_root_key.lock().unwrap();
+        *guard = Some(root_key);
         Ok(())
     }
 
     pub fn process_share_response(&self, res: ShareMasterKeyResponse) -> Result<[u8; 32], anyhow::Error> {
-        let master_key_vec = ecdh_decrypt(
+        let root_key_vec = ecdh_decrypt(
             &res.sharer_pk,
             &self.sk(),
-            &res.master_key_ciphertext,
+            &res.root_key_ciphertext,
             res.nonce,
         )?;
-        let master_key: [u8; 32] = master_key_vec
+        let root_key: [u8; 32] = root_key_vec
             .try_into()
-            .map_err(|e| anyhow!("Error casting, master key had unexpected length: {:?}", e))?;
-        Ok(master_key)
+            .map_err(|e| anyhow!("Error casting, root key had unexpected length: {:?}", e))?;
+        Ok(root_key)
     }
 
     // assume engine has already verified the attestation
-    pub fn share_master_key(
+    pub fn share_root_key(
         &self,
         retriever_pk: &secp256k1::PublicKey,
-        existing_master_key: &[u8; 32],
+        existing_root_key: &[u8; 32],
     ) -> Result<(Nonce, Vec<u8>, secp256k1::PublicKey), anyhow::Error> {
         let nonce = Nonce::new_rand();
-        let master_key_ciphertext =
-            ecdh_encrypt(&retriever_pk, &self.sk(), existing_master_key, nonce.clone())?;
-        Ok((nonce, master_key_ciphertext, self.pk()))
+        let root_key_ciphertext =
+            ecdh_encrypt(&retriever_pk, &self.sk(), existing_root_key, nonce.clone())?;
+        Ok((nonce, root_key_ciphertext, self.pk()))
     }
 
     pub fn genesis(&self) -> Result<(), anyhow::Error> {
@@ -92,7 +92,7 @@ impl Booter {
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;
 
-        let mut guard = self.km_master_key.lock().unwrap();
+        let mut guard = self.km_root_key.lock().unwrap();
         *guard = Some(rng_bytes);
         Ok(())
     }
@@ -106,25 +106,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_retrieve_master_key_mock() {
+    fn test_retrieve_root_key_mock() {
         let booter = Booter::new();
         let client = MockEnclaveClient::default();
-        let res = booter.retrieve_master_key(&Vec::new(), &client);
-        assert!(res.is_ok(), "failed to retrieve master key: {:?}", res);
-        assert!(booter.get_master_key().is_some(), "master key not set");
-        assert!(booter.get_master_key().unwrap() == [0u8; 32], "master key does not match expected mock value");
+        let res = booter.retrieve_root_key(&Vec::new(), &client);
+        assert!(res.is_ok(), "failed to retrieve root key: {:?}", res);
+        assert!(booter.get_root_key().is_some(), "root key not set");
+        assert!(booter.get_root_key().unwrap() == [0u8; 32], "root key does not match expected mock value");
     }
 
     #[test]
     fn test_genesis() {
         let booter = Booter::new();
-        assert!(booter.get_master_key().is_none(), "master key should be empty");
+        assert!(booter.get_root_key().is_none(), "root key should be empty");
         booter.genesis().unwrap();
-        assert!(booter.get_master_key().is_some(), "master key should not be empty");
-        let master_key = booter.get_master_key().unwrap();
+        assert!(booter.get_root_key().is_some(), "root key should not be empty");
+        let root_key = booter.get_root_key().unwrap();
         booter.genesis().unwrap();
-        let new_master_key = booter.get_master_key().unwrap();
-        assert!(master_key != new_master_key, "master key genesis should be random");
+        let new_root_key = booter.get_root_key().unwrap();
+        assert!(root_key != new_root_key, "root key genesis should be random");
     }
 
 }

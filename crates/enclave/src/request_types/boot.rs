@@ -12,7 +12,7 @@ pub struct CompleteBootResponse {
     pub success: bool,
 }
 
-// RetieveMasterKey endpoint triggers the enclave to retrieve the master key
+// RetieveMasterKey endpoint triggers the enclave to retrieve the root key
 // via http from an existing node running the enclave server
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RetrieveMasterKeyRequest {
@@ -21,7 +21,7 @@ pub struct RetrieveMasterKeyRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RetrieveMasterKeyResponse {}
 
-// ShareMasterKey endpoint triggers the enclave to share the master key with
+// ShareMasterKey endpoint triggers the enclave to share the root key with
 // an new enclave server that is booting
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShareMasterKeyRequest {
@@ -31,14 +31,14 @@ pub struct ShareMasterKeyRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShareMasterKeyResponse {
     pub nonce: Nonce,
-    pub master_key_ciphertext: Vec<u8>,
+    pub root_key_ciphertext: Vec<u8>,
     pub sharer_pk: secp256k1::PublicKey,
     pub attestation: Vec<u8>,
 }
 
 // GenesisBoot endpoint triggers the server to boot in a configuration
 // for a new network genesis
-// For now this just means setting a new master_key from osrng
+// For now this just means setting a new root_key from osrng
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GenesisBootRequest {}
 #[derive(Debug, Serialize, Deserialize, Clone)]

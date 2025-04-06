@@ -196,8 +196,8 @@ impl_sync_client_trait!(
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
-    fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
-    fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
+    fn boot_retrieve_root_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
+    fn boot_share_root_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
 );

@@ -232,7 +232,7 @@ where
         })
     }
 
-    async fn boot_retrieve_master_key(
+    async fn boot_retrieve_root_key(
         &self,
         req: RetrieveMasterKeyRequest,
     ) -> RpcResult<RetrieveMasterKeyResponse> {
@@ -243,10 +243,10 @@ where
         use seismic_enclave::EnclaveClient;
         let client = EnclaveClient::mock(req.addr.ip().to_string(), req.addr.port()).unwrap();
 
-        // Call the booter to retrieve the master key
+        // Call the booter to retrieve the root key
         // will be stored in the booter if successful
         self.booter
-            .retrieve_master_key(
+            .retrieve_root_key(
                 &attestation,
                 &client,
             )
@@ -259,7 +259,7 @@ where
         Ok(resp)
     }
 
-    async fn boot_share_master_key(
+    async fn boot_share_root_key(
         &self,
         req: ShareMasterKeyRequest,
     ) -> RpcResult<ShareMasterKeyResponse> {
@@ -268,14 +268,14 @@ where
         let attestation: Vec<u8> = Vec::new();
 
         let key_provider = self.key_provider();
-        let existing_km_root_key = key_provider.get_km_root_key();
-        let (nonce, master_key_ciphertext, sharer_pk) = self
+        let existing_km_root_key = key_provider.get_root_key();
+        let (nonce, root_key_ciphertext, sharer_pk) = self
             .booter
-            .share_master_key(&req.retriever_pk, &existing_km_root_key)
+            .share_root_key(&req.retriever_pk, &existing_km_root_key)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
         Ok(ShareMasterKeyResponse {
-            master_key_ciphertext,
+            root_key_ciphertext,
             nonce,
             sharer_pk,
             attestation,
@@ -292,12 +292,12 @@ where
     }
 
     async fn complete_boot(&self) -> RpcResult<()> {
-        let master_key = match self.booter.get_master_key() {
-            Some(master_key) => master_key,
-            None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No master key found")))
+        let root_key = match self.booter.get_root_key() {
+            Some(root_key) => root_key,
+            None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No root key found")))
         };
         let km: Arc<K> = self.key_provider();
-        km.set_root_key(master_key);
+        km.set_root_key(root_key);
 
         // TODO: finish key manager setup (if any) and booter cleanup
         Ok(())
@@ -498,28 +498,28 @@ mod tests {
         // TODO: test boot_genesis
         // // test boot_genesis
         // tee_service.boot_genesis().await.unwrap();
-        // let rand_master_key = tee_service.booter.get_master_key().unwrap();
-        // assert!(rand_master_key != [0u8; 32], "master key genesis should be random");
+        // let rand_root_key = tee_service.booter.get_root_key().unwrap();
+        // assert!(rand_root_key != [0u8; 32], "root key genesis should be random");
 
-        // test boot_retrieve_master_key against mock client
+        // test boot_retrieve_root_key against mock client
         let port = get_random_port();
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let mock_server = MockEnclaveServer::new(addr);
         mock_server.start().await.unwrap();
         tee_service
-            .boot_retrieve_master_key(RetrieveMasterKeyRequest {
+            .boot_retrieve_root_key(RetrieveMasterKeyRequest {
                 addr,
             })
             .await
             .unwrap();
-        assert!(tee_service.booter.get_master_key().is_some(), "master key not set");
-        assert!(tee_service.booter.get_master_key().unwrap() == [0u8; 32], "master key does not match expected mock value");
+        assert!(tee_service.booter.get_root_key().is_some(), "root key not set");
+        assert!(tee_service.booter.get_root_key().unwrap() == [0u8; 32], "root key does not match expected mock value");
 
-        // TODO: test share_master_key
+        // TODO: test share_root_key
         let new_node_booter = Booter::new();
-        let resp = tee_service.boot_share_master_key(ShareMasterKeyRequest { retriever_pk: new_node_booter.pk(), attestation: Vec::new() }).await.unwrap();
+        let resp = tee_service.boot_share_root_key(ShareMasterKeyRequest { retriever_pk: new_node_booter.pk(), attestation: Vec::new() }).await.unwrap();
         let key_plaintext = new_node_booter.process_share_response(resp).unwrap();
-        assert!(key_plaintext == [0u8; 32], "master key does not match expected mock value");
+        assert!(key_plaintext == [0u8; 32], "root key does not match expected mock value");
 
         // TODO: test complete boot wiring
 

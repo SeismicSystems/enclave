@@ -54,12 +54,12 @@ impl KeyPurpose {
     }
 }
 
-/// Key manager for handling purpose-specific derived keys from a single master key.
+/// Key manager for handling purpose-specific derived keys from a single root key.
 ///
 /// Keys are derived using HKDF-SHA256 with domain separation.
 /// This struct supports retrieving keys. See KeyPurpose for the intended usages
 pub struct KeyManager {
-    master_key: Mutex<Key>,
+    root_key: Mutex<Key>,
 }
 impl KeyManager {
     /// Derives a key for a specific `KeyPurpose`
@@ -68,7 +68,7 @@ impl KeyManager {
     ///
     /// Returns an error if HKDF expansion fails (though this is unlikely with correct parameters).
     fn derive_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
-        let root_guard = self.master_key.lock().unwrap();
+        let root_guard = self.root_key.lock().unwrap();
         let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), root_guard.as_ref());
         let mut derived_key = vec![0u8; 32];
         hk.expand(&purpose.domain_separator(), &mut derived_key)
@@ -90,7 +90,7 @@ impl KeyManager {
     }
 }
 impl NetworkKeyProvider for KeyManager {
-    /// Constructs a new `KeyManager` from a 32-byte master key.
+    /// Constructs a new `KeyManager` from a 32-byte root key.
     ///
     /// This will immediately derive all known purpose keys.
     ///
@@ -98,17 +98,17 @@ impl NetworkKeyProvider for KeyManager {
     ///
     /// Returns an error if key derivation fails.
     fn new() -> Self {
-        let master_key_bytes: [u8; 32] = [0u8; 32]; // TODO: initialize with random bytes
+        let root_key_bytes: [u8; 32] = [0u8; 32]; // TODO: initialize with random bytes
         let km = Self {
-            master_key: Mutex::new(Key(master_key_bytes.to_vec())),
+            root_key: Mutex::new(Key(root_key_bytes.to_vec())),
         };
         km
     }
 
     /// Sets the root key for the key manager, replacing any existing key material.
-    fn set_root_key(&self, new_master_key: [u8; 32]) {
-        let mut root_guard = self.master_key.lock().unwrap();
-        *root_guard = Key(new_master_key.to_vec());
+    fn set_root_key(&self, new_root_key: [u8; 32]) {
+        let mut root_guard = self.root_key.lock().unwrap();
+        *root_guard = Key(new_root_key.to_vec());
     }
 
     /// Retrieves the secp256k1 secret key for transaction I/O signing.
@@ -153,8 +153,8 @@ impl NetworkKeyProvider for KeyManager {
         bytes.into()
     }
     /// Retrieves a copy of the root secp256k1 secret key used for key management.
-    fn get_km_root_key(&self) -> [u8; 32] {
-        let root_guard = self.master_key.lock().unwrap();
+    fn get_root_key(&self) -> [u8; 32] {
+        let root_guard = self.root_key.lock().unwrap();
         let bytes: [u8; 32] = root_guard.as_ref().try_into().unwrap();
         bytes
     }
