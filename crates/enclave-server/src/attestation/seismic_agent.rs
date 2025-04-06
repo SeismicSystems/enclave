@@ -10,6 +10,7 @@ use attestation_agent::InitDataResult;
 use attestation_service::token::AttestationTokenBroker;
 use attestation_service::Data;
 use attestation_service::HashAlgorithm;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
 
 use crate::attestation::verifier::DcapAttVerifier;
 
@@ -115,4 +116,15 @@ impl<T: AttestationTokenBroker + Send + Sync> AttestationAPIs for SeismicAttesta
     fn get_tee_type(&self) -> Tee {
         self.attestation_agent.get_tee_type()
     }
+}
+
+
+/// A reasonable default mock attestation agent for testing
+pub fn seismic_aa_mock() -> SeismicAttestationAgent<SimpleAttestationTokenBroker> {
+    let v_token_broker = SimpleAttestationTokenBroker::new(
+        attestation_service::token::simple::Configuration::default(),
+    )
+    .expect("Failed to create an AttestationAgent");
+    let saa = SeismicAttestationAgent::new(None, v_token_broker);
+    saa
 }

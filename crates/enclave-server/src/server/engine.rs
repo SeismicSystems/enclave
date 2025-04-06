@@ -342,6 +342,18 @@ where
     }
 }
 
+use crate::key_manager::KeyManager;
+use crate::attestation::seismic_aa_mock;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
+pub fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
+    let kp = KeyManager::new();
+    kp.set_root_key([0u8; 32]);
+    let saa = seismic_aa_mock();
+    let enclave_engine = AttestationEngine::new(kp, saa);
+    enclave_engine.booter.mark_completed();
+    enclave_engine
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,29 +369,9 @@ mod tests {
     use seismic_enclave::MockEnclaveServer;
     use seismic_enclave::rpc::BuildableServer;
 
+    // TODO: refactor to remove this function
     pub async fn default_booted_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
-        let kp = KeyManagerBuilder::build_mock().unwrap();
-        let v_token_broker = SimpleAttestationTokenBroker::new(
-            attestation_service::token::simple::Configuration::default(),
-        )
-        .expect("Failed to create an AttestationAgent");
-        let saa = SeismicAttestationAgent::new(None, v_token_broker);
-        let enclave_engine = AttestationEngine::new(kp, saa);
-
-        let port = get_random_port();
-        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
-        let mock_server = MockEnclaveServer::new(addr);
-        mock_server.start().await.unwrap();
-
-        println!("default_booted_enclave_engine: starting boot_retrieve_root_key (with client call)");
-        enclave_engine
-            .boot_retrieve_root_key(RetrieveMasterKeyRequest { addr })
-            .await
-            .unwrap();
-        println!("default_booted_enclave_engine: finished boot_retrieve_root_key (with client call)");
-        enclave_engine.complete_boot().await.unwrap();
-
-        enclave_engine
+        engine_mock_booted()
     }
 
     pub fn default_unbooted_enclave_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
