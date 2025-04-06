@@ -318,7 +318,7 @@ mod tests {
     use std::net::SocketAddr;
     use crate::utils::test_utils::get_random_port;
 
-    pub fn default_tee_service() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
+    pub fn default_engine() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let v_token_broker = SimpleAttestationTokenBroker::new(
             attestation_service::token::simple::Configuration::default(),
@@ -331,22 +331,22 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     pub async fn run_engine_tests() {
-        let tee_service: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            default_tee_service();
+        let engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
+            default_engine();
 
-        let t1 = test_secp256k1_sign(&tee_service);
-        let t2 = test_io_encryption(&tee_service);
-        let t3 = test_decrypt_invalid_ciphertext(&tee_service);
-        let t4 = test_attestation_evidence_handler_valid_request_sample(&tee_service);
-        let t5 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&tee_service);
-        let t6 = test_genesis_get_data_handler_success_basic(&tee_service);
-        let t7 = test_boot_handlers(&tee_service);
+        let t1 = test_secp256k1_sign(&engine);
+        let t2 = test_io_encryption(&engine);
+        let t3 = test_decrypt_invalid_ciphertext(&engine);
+        let t4 = test_attestation_evidence_handler_valid_request_sample(&engine);
+        let t5 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&engine);
+        let t6 = test_genesis_get_data_handler_success_basic(&engine);
+        let t7 = test_boot_handlers(&engine);
 
         // Run all concurrently and await them
         let (_r1, _r2, _r3, _r4, _r5, _r6, _r7) = tokio::join!(t1, t2, t3, t4, t5, t6, t7);
     }
 
-    async fn test_secp256k1_sign<K, T>(tee_service: &AttestationEngine<K, T>)
+    async fn test_secp256k1_sign<K, T>(engine: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -357,7 +357,7 @@ mod tests {
             msg: msg_to_sign.clone(),
         };
 
-        let res = tee_service.sign(sign_request).await.unwrap();
+        let res = engine.sign(sign_request).await.unwrap();
 
         // Prepare verify request body
         let verify_request = Secp256k1VerifyRequest {
@@ -365,11 +365,11 @@ mod tests {
             sig: res.sig,
         };
 
-        let res = tee_service.verify(verify_request).await.unwrap();
+        let res = engine.verify(verify_request).await.unwrap();
         assert!(res.verified);
     }
 
-    async fn test_io_encryption<K, T>(tee_service: &AttestationEngine<K, T>)
+    async fn test_io_encryption<K, T>(engine: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -382,7 +382,7 @@ mod tests {
             nonce: nonce.clone(),
         };
 
-        let res = tee_service.encrypt(req).await.unwrap();
+        let res = engine.encrypt(req).await.unwrap();
 
         // check that decryption returns the original data
         // Prepare decrypt request body
@@ -392,12 +392,12 @@ mod tests {
             nonce: nonce.clone(),
         };
 
-        let res = tee_service.decrypt(req).await.unwrap();
+        let res = engine.decrypt(req).await.unwrap();
 
         assert_eq!(res.decrypted_data, data_to_encrypt);
     }
 
-    async fn test_decrypt_invalid_ciphertext<K, T>(tee_service: &AttestationEngine<K, T>)
+    async fn test_decrypt_invalid_ciphertext<K, T>(engine: &AttestationEngine<K, T>)
     where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -409,7 +409,7 @@ mod tests {
             data: bad_ciphertext,
             nonce: nonce.clone(),
         };
-        let res = tee_service.decrypt(decryption_request).await;
+        let res = engine.decrypt(decryption_request).await;
 
         assert!(res.is_err());
         assert!(res
@@ -420,7 +420,7 @@ mod tests {
     }
 
     async fn test_attestation_evidence_handler_valid_request_sample<K, T>(
-        tee_service: &AttestationEngine<K, T>,
+        engine: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -432,7 +432,7 @@ mod tests {
         };
 
         // Call the handler
-        let res = tee_service
+        let res = engine
             .get_attestation_evidence(evidence_request)
             .await
             .unwrap();
@@ -442,7 +442,7 @@ mod tests {
     }
 
     async fn test_attestation_evidence_handler_aztdxvtpm_runtime_data<K, T>(
-        tee_service: &AttestationEngine<K, T>,
+        engine: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -463,11 +463,11 @@ mod tests {
             runtime_data: runtime_data_2.to_vec(),
         };
 
-        let res_1 = tee_service
+        let res_1 = engine
             .get_attestation_evidence(evidence_request_1)
             .await
             .unwrap();
-        let res_2 = tee_service
+        let res_2 = engine
             .get_attestation_evidence(evidence_request_2)
             .await
             .unwrap();
@@ -476,18 +476,18 @@ mod tests {
     }
 
     async fn test_genesis_get_data_handler_success_basic<K, T>(
-        tee_service: &AttestationEngine<K, T>,
+        engine: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
         // Call the handler
-        let res = tee_service.get_genesis_data().await.unwrap();
+        let res = engine.get_genesis_data().await.unwrap();
         assert!(!res.evidence.is_empty());
     }
 
     async fn test_boot_handlers<K, T>(
-        tee_service: &AttestationEngine<K, T>,
+        engine: &AttestationEngine<K, T>,
     ) where
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
@@ -497,8 +497,8 @@ mod tests {
 
         // TODO: test boot_genesis
         // // test boot_genesis
-        // tee_service.boot_genesis().await.unwrap();
-        // let rand_root_key = tee_service.booter.get_root_key().unwrap();
+        // engine.boot_genesis().await.unwrap();
+        // let rand_root_key = engine.booter.get_root_key().unwrap();
         // assert!(rand_root_key != [0u8; 32], "root key genesis should be random");
 
         // test boot_retrieve_root_key against mock client
@@ -506,18 +506,18 @@ mod tests {
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let mock_server = MockEnclaveServer::new(addr);
         mock_server.start().await.unwrap();
-        tee_service
+        engine
             .boot_retrieve_root_key(RetrieveMasterKeyRequest {
                 addr,
             })
             .await
             .unwrap();
-        assert!(tee_service.booter.get_root_key().is_some(), "root key not set");
-        assert!(tee_service.booter.get_root_key().unwrap() == [0u8; 32], "root key does not match expected mock value");
+        assert!(engine.booter.get_root_key().is_some(), "root key not set");
+        assert!(engine.booter.get_root_key().unwrap() == [0u8; 32], "root key does not match expected mock value");
 
         // TODO: test share_root_key
         let new_node_booter = Booter::new();
-        let resp = tee_service.boot_share_root_key(ShareMasterKeyRequest { retriever_pk: new_node_booter.pk(), attestation: Vec::new() }).await.unwrap();
+        let resp = engine.boot_share_root_key(ShareMasterKeyRequest { retriever_pk: new_node_booter.pk(), attestation: Vec::new() }).await.unwrap();
         let key_plaintext = new_node_booter.process_share_response(resp).unwrap();
         assert!(key_plaintext == [0u8; 32], "root key does not match expected mock value");
 
