@@ -369,8 +369,10 @@ mod tests {
     use crate::key_manager::KeyManagerBuilder;
     use crate::utils::test_utils::is_sudo;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
+    use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
+    use std::net::SocketAddr;
 
     pub fn default_unbooted_enclave_engine(
     ) -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
@@ -565,9 +567,16 @@ mod tests {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
             default_unbooted_enclave_engine();
 
+            let mock_addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, 0));
+            let mock_share_req = ShareMasterKeyRequest {
+                retriever_pk: get_unsecure_sample_secp256k1_pk(),
+                attestation: vec![0u8; 32],
+            };
+
         // test that key functiosn error before complete_boot
-        // TODO; check that share key errors
         let res = enclave_engine.get_public_key().await;
+        assert!(res.is_err());
+        let res = enclave_engine.boot_share_root_key(mock_share_req.clone()).await;
         assert!(res.is_err());
 
         // test that complete_boot works
@@ -575,13 +584,17 @@ mod tests {
         enclave_engine.complete_boot().await.unwrap();
 
         // test that key functions work after complete_boot
-        // TODO: check that share key works
         let res = enclave_engine.get_public_key().await;
+        assert!(res.is_ok());
+        let res = enclave_engine.boot_share_root_key(mock_share_req.clone()).await;
         assert!(res.is_ok());
 
         // test that boot functions error after complete_boot
-        // TODO: add other boot functions
         let res = enclave_engine.boot_genesis().await;
+        assert!(res.is_err());
+        let res = enclave_engine.boot_retrieve_root_key(RetrieveMasterKeyRequest { addr: mock_addr }).await;
+        assert!(res.is_err());
+        let res = enclave_engine.complete_boot().await;
         assert!(res.is_err());
     }
 }
