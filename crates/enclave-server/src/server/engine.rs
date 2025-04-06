@@ -288,7 +288,7 @@ where
         self.booter
             .retrieve_root_key(&attestation, &client)
             .map_err(
-                |e| rpc_bad_argument_error(anyhow::anyhow!(e)), // TODO: better error
+                |e| rpc_bad_argument_error(anyhow::anyhow!(e)),
             )?;
 
         let resp = RetrieveMasterKeyResponse {};

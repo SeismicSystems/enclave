@@ -72,7 +72,9 @@ impl Booter {
 
         // TODO: How will auth work? enclave x will not have enclave y's jwt
         info!("in boot_retrieve_root_key, beginning client boot_share_root_key call");
-        let res = client.boot_share_root_key(req)?;
+        let res = client.boot_share_root_key(req).map_err(
+            |e| anyhow!("Error while requesting external service to share root key: {:?}", e),
+        )?;
         info!("in boot_retrieve_root_key, finished client boot_share_root_key call");
 
         // decrypt ciphertext
