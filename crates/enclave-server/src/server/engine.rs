@@ -542,6 +542,7 @@ mod tests {
         assert!(!res.evidence.is_empty());
     }
 
+    #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_boot_share_root_key() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
@@ -562,6 +563,7 @@ mod tests {
         );
     }
 
+    #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_complete_boot() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
