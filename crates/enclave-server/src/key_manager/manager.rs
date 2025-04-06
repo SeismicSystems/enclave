@@ -65,22 +65,6 @@ pub struct KeyManager {
     purpose_keys: HashMap<KeyPurpose, Key>,
 }
 impl KeyManager {
-    /// Constructs a new `KeyManager` from a 32-byte master key.
-    ///
-    /// This will immediately derive all known purpose keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if key derivation fails.
-    pub fn new(master_key_bytes: [u8; 32]) -> Result<Self, anyhow::Error> {
-        let mut km = Self {
-            master_key: Key(master_key_bytes.to_vec()),
-            purpose_keys: HashMap::new(), // purpose keys are derived on demand
-        };
-        km.derive_all_purpose_keys()?;
-        Ok(km)
-    }
-
     /// Iterates over KeyPurpose and derives all purpose keys.
     fn derive_all_purpose_keys(&mut self) -> Result<(), anyhow::Error> {
         for purpose in KeyPurpose::iter() {
@@ -119,6 +103,28 @@ impl KeyManager {
     }
 }
 impl NetworkKeyProvider for KeyManager {
+    /// Constructs a new `KeyManager` from a 32-byte master key.
+    ///
+    /// This will immediately derive all known purpose keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key derivation fails.
+    fn new() -> Self {
+        let master_key_bytes: [u8; 32] = [0u8; 32]; // TODO: initialize with random bytes
+        let mut km = Self {
+            master_key: Key(master_key_bytes.to_vec()),
+            purpose_keys: HashMap::new(), // purpose keys are derived on demand
+        };
+        km.derive_all_purpose_keys().expect("Failed to derive all purpose keys");
+        km
+    }
+
+    fn set_root_key(&mut self, new_master_key: [u8; 32]) {
+        self.master_key = Key(new_master_key.to_vec());
+        self.derive_all_purpose_keys().expect("Failed to derive all purpose keys");
+    }
+
     /// Retrieves the secp256k1 secret key for transaction I/O signing.
     fn get_tx_io_sk(&self) -> secp256k1::SecretKey {
         let key = self
@@ -173,8 +179,7 @@ mod tests {
 
     #[test]
     fn test_all_purpose_keys_are_initialized() {
-        let master_key_bytes = [0u8; 32];
-        let key_manager = KeyManager::new(master_key_bytes).unwrap();
+        let key_manager = KeyManager::new();
 
         for purpose in KeyPurpose::iter() {
             let key = key_manager.get_purpose_key(purpose).unwrap();
@@ -184,8 +189,7 @@ mod tests {
 
     #[test]
     fn test_purpose_specific_keys_are_consistent() {
-        let master_key_bytes = [0u8; 32];
-        let key_manager = KeyManager::new(master_key_bytes).unwrap();
+        let key_manager = KeyManager::new();
         let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
         let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
         assert_eq!(key_a.as_ref(), key_b.as_ref());

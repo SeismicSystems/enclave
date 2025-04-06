@@ -5,6 +5,7 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
+use anyhow::anyhow;
 
 use seismic_enclave::boot::{
     RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
@@ -22,9 +23,7 @@ use seismic_enclave::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{
-    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
-    rpc_bad_genesis_error, rpc_bad_quote_error, rpc_invalid_ciphertext_error,
-    secp256k1_sign_digest, secp256k1_verify,
+    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_genesis_error, rpc_bad_quote_error, rpc_internal_server_error, rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify, rpc_uninitialized_resource_error
 };
 
 use crate::attestation::SeismicAttestationAgent;
@@ -41,7 +40,7 @@ pub struct AttestationEngine<
     K: NetworkKeyProvider,
     T: AttestationTokenBroker + Send + Sync + 'static,
 > {
-    key_provider: Arc<K>,
+    key_provider: Arc<K>, // Make this an Arc<Option<K>> ???
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
     booter: Booter,
 }
@@ -52,10 +51,14 @@ where
 {
     pub fn new(key_provider: K, attestation_agent: SeismicAttestationAgent<T>) -> Self {
         Self {
-            key_provider: Arc::new(key_provider),
+            key_provider: Arc::new(key_provider), 
             attestation_agent: Arc::new(attestation_agent),
             booter: Booter::new(),
         }
+    }
+
+    pub fn key_provider(&self) -> Arc<K> {
+        self.key_provider.clone()
     }
 }
 
@@ -71,25 +74,29 @@ where
 
     // Crypto operations implementations
     async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        Ok(self.key_provider.get_tx_io_pk())
+        let key_provider = self.key_provider();
+        Ok(key_provider.get_tx_io_pk())
     }
 
     async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        let sk = self.key_provider.get_tx_io_sk();
+        let key_provider = self.key_provider();
+        let sk = key_provider.get_tx_io_sk();
         let signature = secp256k1_sign_digest(&req.msg, sk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
         Ok(Secp256k1SignResponse { sig: signature })
     }
 
     async fn verify(&self, request: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        let pk = self.key_provider.get_tx_io_pk();
+        let key_provider = self.key_provider();
+        let pk = key_provider.get_tx_io_pk();
         let verified = secp256k1_verify(&request.msg, &request.sig, pk)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
         Ok(Secp256k1VerifyResponse { verified })
     }
 
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        let sk = self.key_provider.get_tx_io_sk();
+        let key_provider = self.key_provider();
+        let sk = key_provider.get_tx_io_sk();
         let encrypted_data = match ecdh_encrypt(&req.key, &sk, &req.data, req.nonce) {
             Ok(data) => data,
             Err(e) => {
@@ -102,7 +109,8 @@ where
     }
 
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        let sk = self.key_provider.get_tx_io_sk();
+        let key_provider = self.key_provider();
+        let sk = key_provider.get_tx_io_sk();
         let decrypted_data = match ecdh_decrypt(&req.key, &sk, &req.data, req.nonce) {
             Ok(data) => data,
             Err(e) => {
@@ -115,7 +123,8 @@ where
     }
 
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        Ok(self.key_provider.get_rng_keypair())
+        let key_provider = self.key_provider();
+        Ok(key_provider.get_rng_keypair())
     }
 
     // Attestation operations implementations
@@ -144,7 +153,8 @@ where
 
     // Future Work: update what genesis data consists of, error responses
     async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
-        let io_pk = self.key_provider.get_tx_io_pk();
+        let key_provider = self.key_provider();
+        let io_pk = key_provider.get_tx_io_pk();
 
         // For now the genesis data is just the public key of the IO encryption keypair
         // But this is expected to change in the future
@@ -238,7 +248,6 @@ where
         // will be stored in the booter if successful
         self.booter
             .retrieve_master_key(
-                req.addr,
                 &attestation,
                 &client,
             )
@@ -259,7 +268,8 @@ where
         // TODO: make own attestation of sharer key
         let attestation: Vec<u8> = Vec::new();
 
-        let existing_km_root_key = self.key_provider.get_km_root_key();
+        let key_provider = self.key_provider();
+        let existing_km_root_key = key_provider.get_km_root_key();
         let (nonce, master_key_ciphertext, sharer_pk) = self
             .booter
             .share_master_key(&req.retriever_pk, &existing_km_root_key)
@@ -274,7 +284,25 @@ where
     }
 
     async fn boot_genesis(&self) -> RpcResult<()> {
-        todo!("boot_genesis not implemented for enclave server")
+        self.booter
+        .genesis()
+        .map_err(
+            |e| rpc_internal_server_error(e)
+        )?;
+        Ok(())
+    }
+
+    async fn complete_boot(&self) -> RpcResult<()> {
+        let master_key = match self.booter.get_master_key() {
+            Some(master_key) => master_key,
+            None => return Err(rpc_bad_genesis_error(anyhow::anyhow!("No master key found")))
+        };
+
+        
+
+        // TODO: finish key manager setup (if any) and booter cleanup
+        Ok(())
+        
     }
 }
 
@@ -288,7 +316,6 @@ mod tests {
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
-    use std::net::IpAddr;
     use std::net::SocketAddr;
     use crate::utils::test_utils::get_random_port;
 

@@ -239,6 +239,7 @@ impl_forwarding_async_server_trait!(
     async fn boot_retrieve_master_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse, log = "boot_retrieve_master_key",
     async fn boot_share_master_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse, log = "boot_share_master_key",
     async fn boot_genesis(&self) -> (), log = "boot_genesis",
+    async fn complete_boot(&self) -> (), log = "complete_boot",
 );
 
 pub fn init_tracing() {
@@ -258,9 +259,12 @@ pub fn init_tracing() {
 #[cfg(test)]
 mod tests {
     use crate::attestation::SeismicAttestationAgent;
-    use crate::key_manager::{KeyManager, KeyManagerBuilder};
+    use crate::key_manager::{KeyManager, 
+        // KeyManagerBuilder
+    };
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::{get_random_port, is_sudo};
+    use crate::key_manager::NetworkKeyProvider;
     use seismic_enclave::auth::JwtSecret;
     use seismic_enclave::client::rpc::BuildableServer;
     use seismic_enclave::client::{
@@ -407,7 +411,7 @@ mod tests {
         // spawn a seperate thread for the server, otherwise the test will hang
         let port = get_random_port(); // rand port for test parallelization
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
-        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let kp = KeyManager::new();
         let token_broker = SimpleAttestationTokenBroker::new(
             attestation_service::token::simple::Configuration::default(),
         )

@@ -6,7 +6,6 @@ use jsonrpsee::{
     server::ServerHandle,
     Methods,
 };
-use rand::rngs::mock;
 use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
@@ -125,7 +124,8 @@ impl MockEnclaveServer {
     }
 
     fn boot_retrieve_master_key(_req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse {
-        unimplemented!("boot_retrieve_master_key not implemented for mock server")
+        // No-op, keys are hardcoded for mock server
+        RetrieveMasterKeyResponse {}
     }
 
     fn boot_share_master_key(req: ShareMasterKeyRequest) -> ShareMasterKeyResponse {
@@ -149,7 +149,11 @@ impl MockEnclaveServer {
     }
 
     fn boot_genesis() {
-        unimplemented!("boot_genesis not implemented for mock server")
+        // No-op, keys are hardcoded for mock server
+    }
+
+    fn complete_boot() {
+        // No-op, keys are hardcoded for mock server
     }
 }
 
@@ -207,6 +211,7 @@ impl_mock_async_server_trait!(
     async fn boot_retrieve_master_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse,
     async fn boot_share_master_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse,
     async fn boot_genesis(&self) -> (),
+    async fn complete_boot(&self) -> (),
 );
 
 /// Mock enclave client for testing purposes.
@@ -254,6 +259,7 @@ impl_mock_sync_client_trait!(
     fn boot_retrieve_master_key(&self, _req: RetrieveMasterKeyRequest) -> Result<RetrieveMasterKeyResponse,  ClientError>,
     fn boot_share_master_key(&self, _req: ShareMasterKeyRequest) -> Result<ShareMasterKeyResponse,  ClientError>,
     fn boot_genesis(&self) -> Result<(),  ClientError>,
+    fn complete_boot(&self) -> Result<(),  ClientError>,
 );
 
 #[cfg(test)]

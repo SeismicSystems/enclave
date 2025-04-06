@@ -2,6 +2,9 @@
 
 use anyhow::Error;
 
+/// JSON-RPC custom error code representing a conflict due to uninitialized resource
+pub const UNINITIALIZED_RESOURCE_CODE: i32 = -32001;
+
 /// Convert a bad evidence error into a JSON-RPC error response
 pub fn rpc_bad_evidence_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
     jsonrpsee::types::ErrorObject::owned(
@@ -56,11 +59,11 @@ pub fn rpc_invalid_ciphertext_error(e: Error) -> jsonrpsee::types::ErrorObjectOw
     )
 }
 
-// convert a missing snapshot error into a JSON-RPC error response
-pub fn rpc_missing_snapshot_error() -> jsonrpsee::types::ErrorObjectOwned {
+/// Convert an uninitialized resource error into a JSON-RPC error response
+pub fn rpc_uninitialized_resource_error(e: Error) -> jsonrpsee::types::ErrorObjectOwned {
     jsonrpsee::types::ErrorObject::owned(
-        jsonrpsee::types::error::INVALID_PARAMS_CODE,
-        "Snapshot file not found. Snapshot must be prepared/uploaded before attempting this action.",
+        UNINITIALIZED_RESOURCE_CODE,
+        format!("Attempting to use uninitialized resource: {}", e),
         None::<()>,
     )
 }

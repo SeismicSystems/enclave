@@ -1,7 +1,6 @@
 //! This module contains logic for allowing an operator
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
-use std::net::SocketAddr;
 use seismic_enclave::request_types::boot::*;
 use anyhow::anyhow;
 use rand::rngs::OsRng;
@@ -45,7 +44,6 @@ impl Booter {
     // assumes engine handler makes the pk and attested to it
     pub fn retrieve_master_key(
         &self,
-        addr: SocketAddr,
         attestation: &Vec<u8>,
         client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
@@ -89,7 +87,7 @@ impl Booter {
         Ok((nonce, master_key_ciphertext, self.pk))
     }
 
-    pub fn genesis_boot(&self) -> Result<(), anyhow::Error> {
+    pub fn genesis(&self) -> Result<(), anyhow::Error> {
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;
@@ -111,7 +109,7 @@ mod tests {
     fn test_retrieve_master_key_mock() {
         let booter = Booter::new();
         let client = MockEnclaveClient::default();
-        let res = booter.retrieve_master_key("127.0.0.1:8080".parse().unwrap(), &Vec::new(), &client);
+        let res = booter.retrieve_master_key(&Vec::new(), &client);
         assert!(res.is_ok(), "failed to retrieve master key: {:?}", res);
         assert!(booter.get_master_key().is_some(), "master key not set");
         assert!(booter.get_master_key().unwrap() == [0u8; 32], "master key does not match expected mock value");
@@ -121,10 +119,10 @@ mod tests {
     fn test_genesis() {
         let booter = Booter::new();
         assert!(booter.get_master_key().is_none(), "master key should be empty");
-        booter.genesis_boot().unwrap();
+        booter.genesis().unwrap();
         assert!(booter.get_master_key().is_some(), "master key should not be empty");
         let master_key = booter.get_master_key().unwrap();
-        booter.genesis_boot().unwrap();
+        booter.genesis().unwrap();
         let new_master_key = booter.get_master_key().unwrap();
         assert!(master_key != new_master_key, "master key genesis should be random");
     }

@@ -117,4 +117,8 @@ pub trait EnclaveApi {
     /// Genesis boot
     #[method(name = "boot.genesis_boot")]
     async fn boot_genesis(&self) -> RpcResult<()>;
+
+    /// Completes the genesis boot
+    #[method(name = "boot.complete_boot")]
+    async fn complete_boot(&self) -> RpcResult<()>;
 }
