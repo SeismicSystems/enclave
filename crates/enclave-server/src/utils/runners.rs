@@ -3,9 +3,9 @@
 //! They are for dev convenience only
 //! and should be ignored in automated testing workflows
 
+use crate::attestation::seismic_aa_mock;
 use crate::attestation::SeismicAttestationAgent;
 use attestation_agent::AttestationAPIs;
-use crate::attestation::seismic_aa_mock;
 
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;

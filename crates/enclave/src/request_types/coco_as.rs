@@ -26,7 +26,7 @@ pub enum HashAlgorithm {
 
 /// Runtime/Init Data used to check the binding relationship with report data
 /// in Evidence
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Data {
     /// This will be used as the expected runtime/init data to check against
     /// the one inside evidence.
@@ -37,15 +37,6 @@ pub enum Data {
     /// it into a compact string, and perform hash calculation on the whole
     /// to check against the one inside evidence.
     Structured(Value),
-}
-impl PartialEq for Data {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Data::Raw(a), Data::Raw(b)) => a == b,
-            (Data::Structured(a), Data::Structured(b)) => a == b,
-            _ => false,
-        }
-    }
 }
 
 /// Represents the request to evaluate attestation evidence.

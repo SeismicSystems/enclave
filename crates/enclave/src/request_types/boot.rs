@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
-use crate::nonce::Nonce;
 use crate::coco_as::AttestationEvalEvidenceRequest;
+use crate::nonce::Nonce;
 use serde::{Deserialize, Serialize};
 
 // CompleteBoot endpoint is used to signal all boot steps are complete

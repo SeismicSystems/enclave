@@ -1,10 +1,18 @@
 use attestation_agent::AttestationAPIs;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use attestation_service::token::AttestationTokenBroker;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+use super::boot::Booter;
+use crate::attestation::seismic_aa_mock;
+use crate::attestation::SeismicAttestationAgent;
+use crate::key_manager::KeyManager;
+use crate::key_manager::NetworkKeyProvider;
+use crate::server::into_original::IntoOriginalData;
+use crate::server::into_original::IntoOriginalHashAlgorithm;
 use seismic_enclave::boot::{
     RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
     ShareMasterKeyResponse,
@@ -26,13 +34,6 @@ use seismic_enclave::{
     rpc_bad_genesis_error, rpc_bad_quote_error, rpc_conflict_error, rpc_internal_server_error,
     rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
 };
-
-use crate::attestation::SeismicAttestationAgent;
-use crate::key_manager::NetworkKeyProvider;
-use crate::server::into_original::IntoOriginalData;
-use crate::server::into_original::IntoOriginalHashAlgorithm;
-
-use super::boot::Booter;
 
 /// The main execution engine for secure enclave logic
 /// handles server api calls after http parsing and authentication
@@ -225,11 +226,13 @@ where
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
         // Convert the request's runtime data hash algorithm to the original enum
-        let runtime_data: Option<attestation_service::Data> = request.runtime_data.map(|data| data.into_original());
-        let runtime_data_hash_algorithm: attestation_service::HashAlgorithm = match request.runtime_data_hash_algorithm {
-            Some(alg) => alg.into_original(),
-            None => attestation_service::HashAlgorithm::Sha256,
-        };
+        let runtime_data: Option<attestation_service::Data> =
+            request.runtime_data.map(|data| data.into_original());
+        let runtime_data_hash_algorithm: attestation_service::HashAlgorithm =
+            match request.runtime_data_hash_algorithm {
+                Some(alg) => alg.into_original(),
+                None => attestation_service::HashAlgorithm::Sha256,
+            };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
         let eval_result = self
@@ -258,9 +261,8 @@ where
             Ok(claims) => claims,
             Err(e) => {
                 error!("Failed to parse AS token: {}", e);
-                return Err(rpc_bad_argument_error(anyhow::anyhow!(
-                    // TODO: should this be an internal server error?
-                    "Error while parsing AS token: {e}"
+                return Err(rpc_internal_server_error(anyhow::anyhow!(
+                    "Attestation evaluation passed, but encountered error while parsing AS token: {e}"
                 )));
             }
         };
@@ -304,10 +306,8 @@ where
         req: ShareMasterKeyRequest,
     ) -> RpcResult<ShareMasterKeyResponse> {
         use seismic_enclave::coco_as::Data;
-        // TODO: verify the attestation of the retreiver key
         // TODO: make into() for ShareMasterKeyRequest -> EvalAttestationEvidenceRequest
-        // TODO: do I need the output of the eval?
-        // TODO: do I need to enforce a specific tee here, or is it covered in the policy?
+        // TODO: do I need to enforce a specific tee here, or is it covered in the policy? do I need the output of the eval?
         let _ = self
             .eval_attestation_evidence(AttestationEvalEvidenceRequest {
                 evidence: req.eval_context.evidence, // todo: attestation is in req twice
@@ -367,10 +367,6 @@ where
     }
 }
 
-// TODO: clean up
-use crate::attestation::seismic_aa_mock;
-use crate::key_manager::KeyManager;
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
 #[allow(dead_code)]
 pub fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
     let kp = KeyManager::new();
@@ -388,13 +384,13 @@ mod tests {
     use crate::key_manager::KeyManager;
     use crate::key_manager::KeyManagerBuilder;
     use crate::utils::test_utils::is_sudo;
+    use crate::utils::test_utils::pub_key_eval_request;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
     use std::net::SocketAddr;
     use std::vec;
-    use crate::utils::test_utils::pub_key_eval_request;
 
     pub fn default_unbooted_enclave_engine(
     ) -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
@@ -569,12 +565,12 @@ mod tests {
     async fn test_boot_share_root_key() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
             engine_mock_booted();
-        
+
         let new_node_booter = Booter::mock();
         let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
         assert_eq!(
-            seismic_enclave::coco_as::Data::Raw(new_node_booter.pk().serialize().to_vec()), 
-            eval_context.clone().runtime_data.unwrap(), 
+            seismic_enclave::coco_as::Data::Raw(new_node_booter.pk().serialize().to_vec()),
+            eval_context.clone().runtime_data.unwrap(),
             "test misconfigured, attestation should be of the new booter's public key"
         );
         let resp = enclave_engine
@@ -610,13 +606,18 @@ mod tests {
         // test that key functiosn error before complete_boot
         let res = enclave_engine.get_public_key().await;
         assert!(res.is_err());
-        let res = enclave_engine.boot_share_root_key(mock_share_req.clone()).await;
+        let res = enclave_engine
+            .boot_share_root_key(mock_share_req.clone())
+            .await;
         assert!(res.is_err());
 
         // test that complete_boot works
         enclave_engine.boot_genesis().await.unwrap();
         enclave_engine.complete_boot().await.unwrap();
-        assert!(enclave_engine.booter.is_compelted(), "booting should be marked complete");
+        assert!(
+            enclave_engine.booter.is_compelted(),
+            "booting should be marked complete"
+        );
 
         // test that key functions work after complete_boot
         let _ = enclave_engine.get_public_key().await?;
@@ -626,18 +627,27 @@ mod tests {
 
         // test that boot functions error after complete_boot
         let res = enclave_engine.boot_genesis().await;
-        assert!(res.is_err(), "boot_genesis should return error after complete_boot");
-        
+        assert!(
+            res.is_err(),
+            "boot_genesis should return error after complete_boot"
+        );
+
         let policy = "share_root".to_string();
         let res = enclave_engine
-            .boot_retrieve_root_key(RetrieveMasterKeyRequest { 
+            .boot_retrieve_root_key(RetrieveMasterKeyRequest {
                 addr: mock_addr,
-                attestation_policy_id: policy, 
-             })
+                attestation_policy_id: policy,
+            })
             .await;
-        assert!(res.is_err(), "boot_retrieve_root_key should return error after complete_boot");
+        assert!(
+            res.is_err(),
+            "boot_retrieve_root_key should return error after complete_boot"
+        );
         let res = enclave_engine.complete_boot().await;
-        assert!(res.is_err(), "complete_boot should return error after complete_boot");
+        assert!(
+            res.is_err(),
+            "complete_boot should return error after complete_boot"
+        );
 
         Ok(())
     }

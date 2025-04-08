@@ -2,18 +2,18 @@
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
 use anyhow::anyhow;
+use kbs_types::Tee;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
+use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
 use seismic_enclave::request_types::boot::*;
 use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
+use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};
 use std::sync::Mutex;
 use tracing::info;
-use seismic_enclave::coco_as::{Data, HashAlgorithm, AttestationEvalEvidenceRequest};
-use kbs_types::Tee;
-use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};
 // use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub struct Booter {
@@ -96,9 +96,12 @@ impl Booter {
 
         // TODO: How will auth work? enclave x will not have enclave y's jwt
         info!("in boot_retrieve_root_key, beginning client boot_share_root_key call");
-        let res = client.boot_share_root_key(req).map_err(
-            |e| anyhow!("Error while requesting external service to share root key: {:?}", e),
-        )?;
+        let res = client.boot_share_root_key(req).map_err(|e| {
+            anyhow!(
+                "Error while requesting external service to share root key: {:?}",
+                e
+            )
+        })?;
         info!("in boot_retrieve_root_key, finished client boot_share_root_key call");
 
         // decrypt ciphertext

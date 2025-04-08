@@ -78,12 +78,10 @@ impl KeyManager {
         Ok(key)
     }
 
-    // TODO: consider removing this method
-    /// Retrieves a previously derived key for a given purpose.
+    /// Retrieves a purpose specific key derived from the root key
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the key has not been derived.
+    /// Current implementation simply re-derives the key each time this function is called
+    /// Future implementations may cache the derived key, in which case this function will do more
     fn get_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
         let key = self.derive_purpose_key(purpose)?;
         Ok(key)
