@@ -9,8 +9,6 @@ use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
 use std::net::SocketAddr;
 
-use crate::auth::JwtSecret;
-use crate::auth::{AuthLayer, JwtAuthValidator};
 use crate::boot::{
     RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
     ShareMasterKeyResponse,
@@ -29,20 +27,13 @@ use crate::tx_io::{
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
     fn methods(self) -> Methods;
-    fn auth_secret(&self) -> JwtSecret;
     async fn start(self) -> Result<ServerHandle>;
     async fn start_rpc_server(self) -> Result<ServerHandle>
     where
         Self: Sized,
     {
         let addr = self.addr();
-        let secret = self.auth_secret();
-        let http_middleware =
-            tower::ServiceBuilder::new().layer(AuthLayer::new(JwtAuthValidator::new(secret)));
-        let rpc_server = ServerBuilder::new()
-            .set_http_middleware(http_middleware)
-            .build(addr)
-            .await?;
+        let rpc_server = ServerBuilder::new().build(addr).await?;
         let module = self.methods();
 
         let server_handle = rpc_server.start(module);

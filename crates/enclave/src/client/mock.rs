@@ -15,7 +15,6 @@ use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
-use crate::auth::JwtSecret;
 use crate::nonce::Nonce;
 use crate::{
     boot::{
@@ -171,10 +170,6 @@ impl BuildableServer for MockEnclaveServer {
 
     fn methods(self) -> Methods {
         self.into_rpc().into()
-    }
-
-    fn auth_secret(&self) -> JwtSecret {
-        JwtSecret::mock_default()
     }
 
     async fn start(self) -> Result<ServerHandle> {
