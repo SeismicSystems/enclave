@@ -201,14 +201,13 @@ mod tests {
         let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
+        let policies = verifier.list_policies().await.unwrap();
+        assert_eq!(policies.len(), fixture.get_policy_ids().len() + 1, "verifier should inherit policies from the fixture + 1 default policy");
+
         let policy_id = "allow".to_string();
         let expected_content = fixture.get_policy_content(&policy_id).unwrap();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
         assert_eq!(&retrieved_policy, expected_content);
-
-        let policies = verifier.list_policies().await.unwrap();
-        // 4 policies = our three policies + default policy
-        assert_eq!(policies.len(), 4);
 
         // Update a policy
         let policy_id = "yocto".to_string();
