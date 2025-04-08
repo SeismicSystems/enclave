@@ -162,11 +162,11 @@ mod tests {
     use crate::utils::test_utils::read_vector_txt;
     use attestation_service::token::simple::Configuration;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use base64::Engine;
+    use crate::utils::test_utils::pub_key_eval_request;
     use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
     use std::env;
     use tokio::test;
+    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 
     #[test]
     async fn test_parse_as_token() {
@@ -317,14 +317,6 @@ mod tests {
 
     #[test]
     async fn verifier_test_eval_evidence_az_tdx() {
-        // This test requires actual TDX evidence files
-        // Skip if files are not available
-        let evidence_path = "../../examples/tdx_encoded_evidence.txt";
-        if !std::path::Path::new(evidence_path).exists() {
-            println!("Skipping test_eval_evidence_az_tdx: evidence file not found");
-            return;
-        }
-
         // Create verifier with the policy fixture
         let mut verifier =
             DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
@@ -332,18 +324,16 @@ mod tests {
         let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
-        // Read TDX evidence
-        let tdx_evidence_encoded = std::fs::read_to_string(evidence_path).unwrap();
-        let tdx_evidence = URL_SAFE_NO_PAD
-            .decode(tdx_evidence_encoded.as_str())
-            .unwrap();
+        // Get the sample evidence
+        let eval_req: seismic_enclave::coco_as::AttestationEvalEvidenceRequest = pub_key_eval_request();
+        let runtime_data = get_unsecure_sample_secp256k1_pk().serialize().to_vec();
 
         // Evaluate the evidence
         let raw_claims = verifier
             .evaluate(
-                tdx_evidence,
+                eval_req.evidence,
                 Tee::AzTdxVtpm,
-                Some(Data::Raw("".into())),
+                Some(Data::Raw(runtime_data)),
                 HashAlgorithm::Sha256,
                 None,
                 HashAlgorithm::Sha256,
