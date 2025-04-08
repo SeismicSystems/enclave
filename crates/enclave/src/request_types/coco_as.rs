@@ -12,7 +12,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 
 /// Hash algorithms used to calculate runtime/init data binding
-#[derive(Debug, Display, EnumString, AsRefStr)]
+#[derive(Debug, Display, EnumString, AsRefStr, Clone)]
 pub enum HashAlgorithm {
     #[strum(ascii_case_insensitive)]
     Sha256,
@@ -38,6 +38,15 @@ pub enum Data {
     /// to check against the one inside evidence.
     Structured(Value),
 }
+impl PartialEq for Data {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Data::Raw(a), Data::Raw(b)) => a == b,
+            (Data::Structured(a), Data::Structured(b)) => a == b,
+            _ => false,
+        }
+    }
+}
 
 /// Represents the request to evaluate attestation evidence.
 ///
@@ -58,7 +67,7 @@ pub enum Data {
 /// - For empty data in `AzTdxVtpm`, set the following:
 ///   - `runtime_data = Some(Data::Raw("".into()))`
 ///   - `runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,

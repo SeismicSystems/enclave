@@ -11,6 +11,9 @@ use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 use std::sync::Mutex;
 use tracing::info;
+use seismic_enclave::coco_as::{Data, HashAlgorithm, AttestationEvalEvidenceRequest};
+use kbs_types::Tee;
+use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};
 // use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub struct Booter {
@@ -33,6 +36,18 @@ impl Booter {
             completed: Mutex::new(false),
         }
     }
+
+    /// a mock booter useful for testing
+    /// uses unsecure sample secp256k1 keys instead of a random ones
+    pub fn mock() -> Self {
+        Self {
+            pk: get_unsecure_sample_secp256k1_pk(),
+            sk: get_unsecure_sample_secp256k1_sk(),
+            km_root_key: None.into(),
+            completed: Mutex::new(false),
+        }
+    }
+
     /// Get the root key for the enclave server
     pub fn get_root_key(&self) -> Option<[u8; 32]> {
         let guard = self.km_root_key.lock().unwrap();
@@ -62,12 +77,21 @@ impl Booter {
     // assumes engine handler makes the pk and attested to it
     pub fn retrieve_root_key(
         &self,
+        tee: Tee,
         attestation: &Vec<u8>,
         client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
+        let eval_context = AttestationEvalEvidenceRequest {
+            evidence: attestation.clone(),
+            tee,
+            runtime_data: Some(Data::Raw(self.pk().serialize().to_vec())),
+            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: Vec::new(),
+        };
         let req = ShareMasterKeyRequest {
             retriever_pk: self.pk(),
             attestation: attestation.clone(),
+            eval_context,
         };
 
         // TODO: How will auth work? enclave x will not have enclave y's jwt
@@ -133,7 +157,8 @@ mod tests {
     fn test_retrieve_root_key_mock() {
         let booter = Booter::new();
         let client = MockEnclaveClient::default();
-        let res = booter.retrieve_root_key(&Vec::new(), &client);
+        let tee = kbs_types::Tee::AzTdxVtpm;
+        let res = booter.retrieve_root_key(tee, &Vec::new(), &client);
         assert!(res.is_ok(), "failed to retrieve root key: {:?}", res);
         assert!(booter.get_root_key().is_some(), "root key not set");
         assert!(

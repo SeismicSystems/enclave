@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use crate::nonce::Nonce;
+use crate::coco_as::AttestationEvalEvidenceRequest;
 use serde::{Deserialize, Serialize};
 
 // CompleteBoot endpoint is used to signal all boot steps are complete
@@ -17,6 +18,7 @@ pub struct CompleteBootResponse {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RetrieveMasterKeyRequest {
     pub addr: SocketAddr,
+    pub attestation_policy_id: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RetrieveMasterKeyResponse {}
@@ -27,6 +29,7 @@ pub struct RetrieveMasterKeyResponse {}
 pub struct ShareMasterKeyRequest {
     pub retriever_pk: secp256k1::PublicKey,
     pub attestation: Vec<u8>,
+    pub eval_context: AttestationEvalEvidenceRequest,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShareMasterKeyResponse {

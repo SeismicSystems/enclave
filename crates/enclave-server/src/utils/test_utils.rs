@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::net::TcpListener;
+use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
+use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 
 /// Checks if the current user has root (sudo) privileges.
 ///
@@ -65,4 +67,16 @@ pub fn get_random_port() -> u16 {
         .local_addr()
         .unwrap()
         .port()
+}
+
+pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
+    use seismic_enclave::coco_as::{Data, HashAlgorithm};
+    let evidence = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();
+    AttestationEvalEvidenceRequest {
+        evidence, 
+        tee: kbs_types::Tee::AzTdxVtpm,
+        runtime_data: Some(Data::Raw(get_unsecure_sample_secp256k1_pk().serialize().to_vec())),
+        runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+        policy_ids: vec!["allow".to_string()],
+    }
 }
