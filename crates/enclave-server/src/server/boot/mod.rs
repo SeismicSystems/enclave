@@ -7,7 +7,6 @@ use rand::rngs::OsRng;
 use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
-use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
 use seismic_enclave::request_types::boot::*;
 use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
@@ -69,7 +68,6 @@ impl Booter {
         *completed_guard = true;
 
         // Zero the root key
-        // TODO: evaluate if this should involve zeroize
         let mut root_gurad = self.km_root_key.lock().unwrap();
         *root_gurad = None;
     }
@@ -81,20 +79,12 @@ impl Booter {
         attestation: &Vec<u8>,
         client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
-        let eval_context = AttestationEvalEvidenceRequest {
-            evidence: attestation.clone(),
-            tee,
-            runtime_data: Some(Data::Raw(self.pk().serialize().to_vec())),
-            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: Vec::new(),
-        };
         let req = ShareRootKeyRequest {
             retriever_pk: self.pk(),
-            attestation: attestation.clone(),
-            eval_context,
+            tee,
+            evidence: attestation.clone(),
         };
 
-        // TODO: How will auth work? enclave x will not have enclave y's jwt
         info!("in boot_retrieve_root_key, beginning client boot_share_root_key call");
         let res = client.boot_share_root_key(req).map_err(|e| {
             anyhow!(

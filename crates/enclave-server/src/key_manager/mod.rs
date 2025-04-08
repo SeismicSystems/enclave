@@ -1,4 +1,4 @@
-mod builder; // TODO: remove if not used
+mod builder;
 mod manager;
 
 // re-export important types

@@ -78,7 +78,6 @@ pub struct AttestationEvalEvidenceRequest {
 /// - `claims`: A summary of the claims included in the attestation evidence. This may be `None` if there are no claims.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AttestationEvalEvidenceResponse {
-    pub eval: bool,
     pub claims: Option<ASCoreTokenClaims>,
 }
 

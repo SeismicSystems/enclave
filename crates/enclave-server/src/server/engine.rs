@@ -243,7 +243,6 @@ where
         };
 
         Ok(AttestationEvalEvidenceResponse {
-            eval: true, // TODO: remove this bool, returns error response if eval fails
             claims: Some(claims),
         })
     }
@@ -258,7 +257,7 @@ where
             )));
         }
 
-        // TODO: make attestation of retriever key
+        // TODO: make attestation of retriever key, currently not caught by tests becuase mock sharers don't verify attestations
         let tee = self.attestation_agent.get_tee_type();
         let attestation: Vec<u8> = Vec::new();
 
@@ -284,18 +283,7 @@ where
         &self,
         req: ShareRootKeyRequest,
     ) -> RpcResult<ShareRootKeyResponse> {
-        use seismic_enclave::coco_as::Data;
-        // TODO: make into() for ShareRootKeyRequest -> EvalAttestationEvidenceRequest
-        // TODO: do I need to enforce a specific tee here, or is it covered in the policy? do I need the output of the eval?
-        let _ = self
-            .eval_attestation_evidence(AttestationEvalEvidenceRequest {
-                evidence: req.eval_context.evidence, // TODO: attestation is in req twice
-                tee: req.eval_context.tee,
-                runtime_data: Some(Data::Raw(req.retriever_pk.serialize().to_vec())),
-                runtime_data_hash_algorithm: req.eval_context.runtime_data_hash_algorithm,
-                policy_ids: vec!["share_root".to_string()], // FUTURE WORK: make sure the share_root policy is up to date with on-chain voting
-            })
-            .await?;
+        let _ = self.eval_attestation_evidence(req.clone().into()).await?;
 
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
@@ -552,9 +540,9 @@ mod tests {
         );
         let resp = enclave_engine
             .boot_share_root_key(ShareRootKeyRequest {
-                eval_context,
+                evidence: eval_context.evidence,
+                tee: eval_context.tee,
                 retriever_pk: new_node_booter.pk(),
-                attestation: Vec::new(),
             })
             .await
             .unwrap();
@@ -575,9 +563,9 @@ mod tests {
 
         let mock_addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, 0));
         let mock_share_req = ShareRootKeyRequest {
-            eval_context,
+            evidence: eval_context.evidence,
+            tee: eval_context.tee,
             retriever_pk: get_unsecure_sample_secp256k1_pk(),
-            attestation: vec![0u8; 32],
         };
 
         // test that key functiosn error before complete_boot

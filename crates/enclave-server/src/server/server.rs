@@ -115,7 +115,6 @@ where
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
-        // TODO: remove key provider from builder?
         let key_provider = self
             .key_provider
             .ok_or_else(|| anyhow!("No key provider supplied to builder"))?;
@@ -331,12 +330,10 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let resposne = client
+        client
             .eval_attestation_evidence(eval_request)
             .await
             .unwrap();
-
-        assert!(resposne.eval);
     }
 
     async fn test_get_public_key(client: &EnclaveClient) {
