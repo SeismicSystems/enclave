@@ -10,8 +10,7 @@ use seismic_enclave_derive::derive_sync_client_trait;
 use std::net::SocketAddr;
 
 use crate::boot::{
-    RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
-    ShareMasterKeyResponse,
+    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
 };
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -95,15 +94,15 @@ pub trait EnclaveApi {
     #[method(name = "boot.retrieve_root_key")]
     async fn boot_retrieve_root_key(
         &self,
-        _req: RetrieveMasterKeyRequest,
-    ) -> RpcResult<RetrieveMasterKeyResponse>;
+        _req: RetrieveRootKeyRequest,
+    ) -> RpcResult<RetrieveRootKeyResponse>;
 
     /// Shares the root key with an existing node
     #[method(name = "boot.share_root_key")]
     async fn boot_share_root_key(
         &self,
-        _req: ShareMasterKeyRequest,
-    ) -> RpcResult<ShareMasterKeyResponse>;
+        _req: ShareRootKeyRequest,
+    ) -> RpcResult<ShareRootKeyResponse>;
 
     /// Genesis boot
     #[method(name = "boot.genesis_boot")]

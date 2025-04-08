@@ -88,7 +88,7 @@ impl Booter {
             runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
             policy_ids: Vec::new(),
         };
-        let req = ShareMasterKeyRequest {
+        let req = ShareRootKeyRequest {
             retriever_pk: self.pk(),
             attestation: attestation.clone(),
             eval_context,
@@ -113,7 +113,7 @@ impl Booter {
 
     pub fn process_share_response(
         &self,
-        res: ShareMasterKeyResponse,
+        res: ShareRootKeyResponse,
     ) -> Result<[u8; 32], anyhow::Error> {
         let root_key_vec = ecdh_decrypt(
             &res.sharer_pk,

@@ -3,8 +3,7 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
 
 use seismic_enclave::boot::{
-    RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
-    ShareMasterKeyResponse,
+    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
 };
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -218,8 +217,8 @@ impl_forwarding_async_server_trait!(
     async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair, log = "eph_rng.get_keypair",
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse, log = "getAttestationEvidence",
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse, log = "evalAttestationEvidence",
-    async fn boot_retrieve_root_key(&self, req: RetrieveMasterKeyRequest) -> RetrieveMasterKeyResponse, log = "boot_retrieve_root_key",
-    async fn boot_share_root_key(&self, req: ShareMasterKeyRequest) -> ShareMasterKeyResponse, log = "boot_share_root_key",
+    async fn boot_retrieve_root_key(&self, req: RetrieveRootKeyRequest) -> RetrieveRootKeyResponse, log = "boot_retrieve_root_key",
+    async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse, log = "boot_share_root_key",
     async fn boot_genesis(&self) -> (), log = "boot_genesis",
     async fn complete_boot(&self) -> (), log = "complete_boot",
 );

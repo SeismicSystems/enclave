@@ -14,8 +14,7 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
 use seismic_enclave::boot::{
-    RetrieveMasterKeyRequest, RetrieveMasterKeyResponse, ShareMasterKeyRequest,
-    ShareMasterKeyResponse,
+    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
 };
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::ASCoreTokenClaims;
@@ -275,8 +274,8 @@ where
 
     async fn boot_retrieve_root_key(
         &self,
-        req: RetrieveMasterKeyRequest,
-    ) -> RpcResult<RetrieveMasterKeyResponse> {
+        req: RetrieveRootKeyRequest,
+    ) -> RpcResult<RetrieveRootKeyResponse> {
         if self.key_provider().is_ok() {
             return Err(rpc_conflict_error(anyhow::anyhow!(
                 "Key provider already initialized"
@@ -287,8 +286,12 @@ where
         let tee = self.attestation_agent.get_tee_type();
         let attestation: Vec<u8> = Vec::new();
 
-        // TODO: replace mock with real client. currently using mock to avoid JWT issues
-        let client = EnclaveClient::mock(req.addr.ip().to_string(), req.addr.port()).unwrap();
+        let client_builder = EnclaveClient::builder();
+        let client = client_builder
+            .ip(req.addr.ip().to_string())
+            .port(req.addr.port())
+            .build()
+            .unwrap();
 
         // Call the booter to retrieve the root key
         // will be stored in the booter if successful
@@ -296,17 +299,17 @@ where
             .retrieve_root_key(tee, &attestation, &client)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
-        let resp = RetrieveMasterKeyResponse {};
+        let resp = RetrieveRootKeyResponse {};
 
         Ok(resp)
     }
 
     async fn boot_share_root_key(
         &self,
-        req: ShareMasterKeyRequest,
-    ) -> RpcResult<ShareMasterKeyResponse> {
+        req: ShareRootKeyRequest,
+    ) -> RpcResult<ShareRootKeyResponse> {
         use seismic_enclave::coco_as::Data;
-        // TODO: make into() for ShareMasterKeyRequest -> EvalAttestationEvidenceRequest
+        // TODO: make into() for ShareRootKeyRequest -> EvalAttestationEvidenceRequest
         // TODO: do I need to enforce a specific tee here, or is it covered in the policy? do I need the output of the eval?
         let _ = self
             .eval_attestation_evidence(AttestationEvalEvidenceRequest {
@@ -329,7 +332,7 @@ where
         // TODO: make own attestation of sharer key
         // return relevant response
         let sharer_attestation: Vec<u8> = Vec::new();
-        Ok(ShareMasterKeyResponse {
+        Ok(ShareRootKeyResponse {
             root_key_ciphertext,
             nonce,
             sharer_pk,
@@ -383,14 +386,19 @@ mod tests {
     use super::*;
     use crate::key_manager::KeyManager;
     use crate::key_manager::KeyManagerBuilder;
+    use crate::utils::test_utils::get_random_port;
     use crate::utils::test_utils::is_sudo;
     use crate::utils::test_utils::pub_key_eval_request;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
+    use seismic_enclave::rpc::BuildableServer;
+    use seismic_enclave::MockEnclaveServer;
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
     use std::net::SocketAddr;
+    use std::time::Duration;
     use std::vec;
+    use tokio::time::sleep;
 
     pub fn default_unbooted_enclave_engine(
     ) -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
@@ -574,7 +582,7 @@ mod tests {
             "test misconfigured, attestation should be of the new booter's public key"
         );
         let resp = enclave_engine
-            .boot_share_root_key(ShareMasterKeyRequest {
+            .boot_share_root_key(ShareRootKeyRequest {
                 eval_context,
                 retriever_pk: new_node_booter.pk(),
                 attestation: Vec::new(),
@@ -597,7 +605,7 @@ mod tests {
         let eval_context = pub_key_eval_request();
 
         let mock_addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, 0));
-        let mock_share_req = ShareMasterKeyRequest {
+        let mock_share_req = ShareRootKeyRequest {
             eval_context,
             retriever_pk: get_unsecure_sample_secp256k1_pk(),
             attestation: vec![0u8; 32],
@@ -634,7 +642,7 @@ mod tests {
 
         let policy = "share_root".to_string();
         let res = enclave_engine
-            .boot_retrieve_root_key(RetrieveMasterKeyRequest {
+            .boot_retrieve_root_key(RetrieveRootKeyRequest {
                 addr: mock_addr,
                 attestation_policy_id: policy,
             })

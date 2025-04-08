@@ -13,26 +13,26 @@ pub struct CompleteBootResponse {
     pub success: bool,
 }
 
-// RetieveMasterKey endpoint triggers the enclave to retrieve the root key
+// RetieveRootKey endpoint triggers the enclave to retrieve the root key
 // via http from an existing node running the enclave server
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RetrieveMasterKeyRequest {
+pub struct RetrieveRootKeyRequest {
     pub addr: SocketAddr,
     pub attestation_policy_id: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RetrieveMasterKeyResponse {}
+pub struct RetrieveRootKeyResponse {}
 
-// ShareMasterKey endpoint triggers the enclave to share the root key with
+// ShareRootKey endpoint triggers the enclave to share the root key with
 // an new enclave server that is booting
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ShareMasterKeyRequest {
+pub struct ShareRootKeyRequest {
     pub retriever_pk: secp256k1::PublicKey,
     pub attestation: Vec<u8>,
     pub eval_context: AttestationEvalEvidenceRequest,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ShareMasterKeyResponse {
+pub struct ShareRootKeyResponse {
     pub nonce: Nonce,
     pub root_key_ciphertext: Vec<u8>,
     pub sharer_pk: secp256k1::PublicKey,
