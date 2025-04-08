@@ -134,7 +134,6 @@ impl MockEnclaveServer {
         let sharer_pk = get_unsecure_sample_secp256k1_pk();
         let mock_root_key = [0u8; 32];
         let nonce = Nonce::new_rand();
-        let attestation: Vec<u8> = Vec::new(); // empty attestation
 
         let root_key_ciphertext =
             ecdh_encrypt(&req.retriever_pk, &sharer_sk, &mock_root_key, nonce.clone()).unwrap();
@@ -143,7 +142,6 @@ impl MockEnclaveServer {
             nonce,
             root_key_ciphertext,
             sharer_pk,
-            attestation,
         }
     }
 

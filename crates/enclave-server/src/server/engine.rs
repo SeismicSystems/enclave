@@ -305,14 +305,11 @@ where
             .share_root_key(&req.retriever_pk, &existing_km_root_key)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
-        // TODO: make own attestation of sharer key
         // return relevant response
-        let sharer_attestation: Vec<u8> = Vec::new();
         Ok(ShareRootKeyResponse {
             root_key_ciphertext,
             nonce,
             sharer_pk,
-            attestation: sharer_attestation,
         })
     }
 

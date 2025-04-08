@@ -36,7 +36,6 @@ pub struct ShareRootKeyResponse {
     pub nonce: Nonce,
     pub root_key_ciphertext: Vec<u8>,
     pub sharer_pk: secp256k1::PublicKey,
-    pub attestation: Vec<u8>,
 }
 
 // GenesisBoot endpoint triggers the server to boot in a configuration
