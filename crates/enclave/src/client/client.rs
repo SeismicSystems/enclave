@@ -1,7 +1,7 @@
 //! A http client for interacting with a enclave server.
 //! Comnstructed from a [`EnclaveClientBuilder`].
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use jsonrpsee::http_client::transport::HttpBackend;
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
@@ -14,7 +14,6 @@ use std::{
 use tokio::runtime::{Handle, Runtime};
 
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
-use crate::auth::{AuthClientLayer, AuthClientService, JwtSecret};
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
@@ -33,13 +32,12 @@ static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 /// The inner async HTTP client.
 /// Useful to define here in case the HttpClient<T> generic changes
-type EnclaveHttpClient = HttpClient<AuthClientService<HttpBackend>>;
+type EnclaveHttpClient = HttpClient<HttpBackend>;
 
 /// Builder for [`EnclaveClient`].
 pub struct EnclaveClientBuilder {
     ip: Option<String>,
     port: Option<u16>,
-    auth_secret: Option<JwtSecret>,
     timeout: Option<Duration>,
     url: Option<String>,
 }
@@ -54,7 +52,6 @@ impl EnclaveClientBuilder {
         Self {
             ip: None,
             port: None,
-            auth_secret: None,
             timeout: None,
             url: None,
         }
@@ -67,11 +64,6 @@ impl EnclaveClientBuilder {
 
     pub fn port(mut self, port: u16) -> Self {
         self.port = Some(port);
-        self
-    }
-
-    pub fn auth_secret(mut self, auth_secret: JwtSecret) -> Self {
-        self.auth_secret = Some(auth_secret);
         self
     }
 
@@ -95,15 +87,7 @@ impl EnclaveClientBuilder {
             )
         });
 
-        // auth seceret is required as server rejects all messages without it
-        let auth_secret = self
-            .auth_secret
-            .ok_or_else(|| anyhow!("No auth secret supplied to builder"))?;
-        let secret_layer = AuthClientLayer::new(auth_secret);
-        let middleware = tower::ServiceBuilder::default().layer(secret_layer);
-
         let async_client: EnclaveHttpClient = jsonrpsee::http_client::HttpClientBuilder::default()
-            .set_http_middleware(middleware)
             .request_timeout(
                 self.timeout
                     .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
@@ -158,9 +142,7 @@ impl EnclaveClient {
     /// A client enclave bade to work with the default mock server
     /// Useful for testing
     pub fn mock(ip: String, port: u16) -> Result<Self> {
-        let auth_secret = JwtSecret::mock_default();
         let client = EnclaveClientBuilder::new()
-            .auth_secret(auth_secret)
             .ip(ip)
             .port(port)
             .timeout(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS))
