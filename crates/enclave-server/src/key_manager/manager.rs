@@ -89,14 +89,7 @@ impl KeyManager {
 }
 impl NetworkKeyProvider for KeyManager {
     /// Constructs a new `KeyManager` from a 32-byte root key.
-    ///
-    /// This will immediately derive all known purpose keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if key derivation fails.
-    fn new() -> Self {
-        let root_key_bytes: [u8; 32] = [0u8; 32]; // TODO: initialize with random bytes
+    fn new(root_key_bytes: [u8; 32]) -> Self {
         let km = Self {
             root_key: Mutex::new(Key(root_key_bytes.to_vec())),
         };
@@ -165,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_all_purpose_keys_are_initialized() {
-        let key_manager = KeyManager::new();
+        let key_manager = KeyManager::new([0u8; 32]);
 
         for purpose in KeyPurpose::iter() {
             let key = key_manager.get_purpose_key(purpose).unwrap();
@@ -175,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_purpose_specific_keys_are_consistent() {
-        let key_manager = KeyManager::new();
+        let key_manager = KeyManager::new([0u8; 32]);
         let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
         let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
         assert_eq!(key_a.as_ref(), key_b.as_ref());

@@ -88,7 +88,7 @@ where
             return Ok(self.key_provider.clone());
         }
 
-        // TODO: remove if unused
+        // TODO: remove?
         // match &self.key_provider {
         //     Some(key_provider) => return Ok(key_provider.clone()),
         //     None => ,
@@ -369,7 +369,7 @@ where
 
 #[allow(dead_code)]
 pub fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
-    let kp = KeyManager::new();
+    let kp = KeyManager::new([0u8; 32]);
     kp.set_root_key([0u8; 32]);
     let saa = seismic_aa_mock();
     let mut enclave_engine = AttestationEngine::new(kp, saa);

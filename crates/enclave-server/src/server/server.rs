@@ -415,7 +415,7 @@ mod tests {
         // spawn a seperate thread for the server, otherwise the test will hang
         let port = get_random_port(); // rand port for test parallelization
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
-        let kp = KeyManager::new();
+        let kp = KeyManager::new([0u8; 32]);
         let token_broker = SimpleAttestationTokenBroker::new(
             attestation_service::token::simple::Configuration::default(),
         )

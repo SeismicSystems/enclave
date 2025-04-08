@@ -12,7 +12,7 @@ pub trait NetworkKeyProvider: Sync {
     /// Constructs a new instance of the key manager.
     /// Randomly initializes a root key,
     /// which determines the derived purpose keys
-    fn new() -> Self;
+    fn new(root_key_bytes: [u8; 32]) -> Self;
 
     /// Sets the root key for the key manager, replacing any existing key material.
     /// This update should propogate so that all derived keys are recalculated

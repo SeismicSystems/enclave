@@ -34,7 +34,7 @@ impl KeyManagerBuilder {
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;
 
-        let km = KeyManager::new();
+        let km = KeyManager::new(rng_bytes);
         Ok(km)
     }
 
@@ -42,7 +42,7 @@ impl KeyManagerBuilder {
     ///
     /// This method is intended for testing and non-production use.
     pub fn build_mock() -> Result<KeyManager> {
-        let km = KeyManager::new();
+        let km = KeyManager::new([0u8; 32]);
         km.set_root_key([0u8; 32]);
         Ok(km)
     }
