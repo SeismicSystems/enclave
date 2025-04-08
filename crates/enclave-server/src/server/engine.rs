@@ -283,6 +283,7 @@ where
         &self,
         req: ShareRootKeyRequest,
     ) -> RpcResult<ShareRootKeyResponse> {
+        // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
         let _ = self.eval_attestation_evidence(req.clone().into()).await?;
 
         // Encrypt the existing root key
