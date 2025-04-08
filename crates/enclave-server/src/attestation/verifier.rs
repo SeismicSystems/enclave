@@ -159,14 +159,14 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 mod tests {
     use super::*;
     use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
+    use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::read_vector_txt;
     use attestation_service::token::simple::Configuration;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use crate::utils::test_utils::pub_key_eval_request;
+    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
     use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
     use std::env;
     use tokio::test;
-    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 
     #[test]
     async fn test_parse_as_token() {
@@ -202,7 +202,11 @@ mod tests {
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         let policies = verifier.list_policies().await.unwrap();
-        assert_eq!(policies.len(), fixture.get_policy_ids().len() + 1, "verifier should inherit policies from the fixture + 1 default policy");
+        assert_eq!(
+            policies.len(),
+            fixture.get_policy_ids().len() + 1,
+            "verifier should inherit policies from the fixture + 1 default policy"
+        );
 
         let policy_id = "allow".to_string();
         let expected_content = fixture.get_policy_content(&policy_id).unwrap();
@@ -325,7 +329,8 @@ mod tests {
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
         // Get the sample evidence
-        let eval_req: seismic_enclave::coco_as::AttestationEvalEvidenceRequest = pub_key_eval_request();
+        let eval_req: seismic_enclave::coco_as::AttestationEvalEvidenceRequest =
+            pub_key_eval_request();
         let runtime_data = get_unsecure_sample_secp256k1_pk().serialize().to_vec();
 
         // Evaluate the evidence

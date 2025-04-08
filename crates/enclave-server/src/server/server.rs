@@ -127,7 +127,6 @@ where
         let v_token_broker = SimpleAttestationTokenBroker::new(token_broker_config)?;
         let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
 
-        // let inner = Arc::new(AttestationEngine::new(attestation_agent));
         let inner = Arc::new(AttestationEngine::new(key_provider, attestation_agent));
 
         Ok(EnclaveServer {
@@ -153,7 +152,6 @@ where
         key_provider: K,
         token_broker: SeismicAttestationAgent<T>,
     ) -> Result<Self> {
-        // let inner = Arc::new(AttestationEngine::new(token_broker));
         let inner = Arc::new(AttestationEngine::new(key_provider, token_broker));
 
         Ok(Self {
@@ -239,11 +237,8 @@ pub fn init_tracing() {
 #[cfg(test)]
 mod tests {
     use crate::attestation::SeismicAttestationAgent;
+    use crate::key_manager::KeyManager;
     use crate::key_manager::NetworkKeyProvider;
-    use crate::key_manager::{
-        KeyManager,
-        // KeyManagerBuilder
-    };
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::{get_random_port, is_sudo};
     use seismic_enclave::client::rpc::BuildableServer;

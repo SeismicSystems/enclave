@@ -69,6 +69,9 @@ pub fn get_random_port() -> u16 {
         .port()
 }
 
+/// A mock attestation evaluation request for testing
+/// Based on a saved sample attestation file
+/// attests to a public secp256k1 key from an AzTdxVtpm machine
 pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
     use seismic_enclave::coco_as::{Data, HashAlgorithm};
     let evidence = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();

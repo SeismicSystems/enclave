@@ -43,18 +43,18 @@ pub struct AttestationEngine<
 > {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent<T>>,
-    booter: Booter,
+    booter: Arc<Booter>,
 }
 impl<K, T> AttestationEngine<K, T>
 where
-    K: NetworkKeyProvider + Send + Sync + 'static,
+    K: NetworkKeyProvider + Send,
     T: AttestationTokenBroker + Send + Sync + 'static,
 {
     pub fn new(key_provider: K, attestation_agent: SeismicAttestationAgent<T>) -> Self {
         Self {
             key_provider: Arc::new(key_provider),
             attestation_agent: Arc::new(attestation_agent),
-            booter: Booter::new(),
+            booter: Arc::new(Booter::new()),
         }
     }
 
@@ -247,6 +247,9 @@ where
         })
     }
 
+    /// Retrieves the network root key from an existing node
+    /// and updates this node's booter root key
+    /// Operator is expected to call complete_boot after this
     async fn boot_retrieve_root_key(
         &self,
         req: RetrieveRootKeyRequest,
@@ -279,11 +282,16 @@ where
         Ok(resp)
     }
 
+    /// Endpoint for requesting the network's root key from an existing node
+    /// Checks the the new node is authorized to retrieve the root key and
+    /// encrypts the existing root key for the new node
     async fn boot_share_root_key(
         &self,
         req: ShareRootKeyRequest,
     ) -> RpcResult<ShareRootKeyResponse> {
         // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
+
+        // Verify new enclave's attestation
         let _ = self.eval_attestation_evidence(req.clone().into()).await?;
 
         // Encrypt the existing root key
@@ -291,7 +299,7 @@ where
         let existing_km_root_key = key_provider.get_root_key();
         let (nonce, root_key_ciphertext, sharer_pk) = self
             .booter
-            .share_root_key(&req.retriever_pk, &existing_km_root_key)
+            .encrypt_root_key(&req.retriever_pk, &existing_km_root_key)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
         // return relevant response
@@ -302,6 +310,8 @@ where
         })
     }
 
+    /// Endpoint for generating a new genesis network root key
+    /// User is expected to call complete_boot after this
     async fn boot_genesis(&self) -> RpcResult<()> {
         if self.key_provider().is_ok() {
             return Err(rpc_conflict_error(anyhow::anyhow!(
@@ -314,6 +324,7 @@ where
         Ok(())
     }
 
+    /// Completes the booting process by setting the key manager
     async fn complete_boot(&self) -> RpcResult<()> {
         if self.key_provider().is_ok() {
             return Err(rpc_conflict_error(anyhow::anyhow!(
@@ -338,7 +349,7 @@ pub async fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttesta
     kp.set_root_key([0u8; 32]);
     let saa = seismic_aa_mock().await;
     let mut enclave_engine = AttestationEngine::new(kp, saa);
-    enclave_engine.booter = Booter::mock();
+    enclave_engine.booter = Booter::mock().into();
     enclave_engine.booter.mark_completed();
     enclave_engine
 }

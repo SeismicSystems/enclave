@@ -87,7 +87,7 @@ impl PolicyFixture {
 
         policy_map.insert(
             "share_root".to_string(),
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY), // FUTURE WORK: update this 
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY), // FUTURE WORK: update this
         );
 
         Self { policy_map }

@@ -47,9 +47,8 @@ schnorrkel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
+reqwest.workspace = true
 clap = { version = "4.5", features = ["derive"] }
-
-reqwest = { version = "0.11", features = ["json"] }
 
 [dev-dependencies]
 serial_test = "3.2.0"

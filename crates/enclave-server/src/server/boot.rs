@@ -13,7 +13,6 @@ use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
 use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};
 use std::sync::Mutex;
 use tracing::info;
-// use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub struct Booter {
     // pk and sk are the Booter's keys used to derive encryption keys for communication with other nodes
@@ -52,17 +51,21 @@ impl Booter {
         let guard = self.km_root_key.lock().unwrap();
         guard.clone()
     }
+    /// Get the Secp256k1 public key for communication with other nodes
     pub fn pk(&self) -> secp256k1::PublicKey {
         self.pk.clone()
     }
+    /// Get the Secp256k1 secret key for communication with other nodes
     pub fn sk(&self) -> secp256k1::SecretKey {
         self.sk.clone()
     }
+    /// Get the completion status of the booting process
+    /// Used to enable/disable certain engine endpoints
     pub fn is_compelted(&self) -> bool {
         let guard = self.completed.lock().unwrap();
         *guard
     }
-
+    /// Mark the booting process as completed
     pub fn mark_completed(&self) {
         let mut completed_guard = self.completed.lock().unwrap();
         *completed_guard = true;
@@ -72,7 +75,18 @@ impl Booter {
         *root_gurad = None;
     }
 
-    // assumes engine handler makes the pk and attested to it
+    /// Retrieves the network root key from an existing node and updates this node's root key.
+    ///
+    /// # Arguments
+    ///
+    /// * `tee` - The TEE (Trusted Execution Environment) type of the node retrieving the key.
+    /// * `attestation` - A byte vector containing the attestation from the existing node about the retriever's public key.
+    /// * `client` - A reference to an implementation of the `SyncEnclaveApiClient` trait, used to communicate with the existing node.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the key was successfully retrieved and stored.
+    /// * `Err(anyhow::Error)` if the retrieval, decryption, or storage failed.
     pub fn retrieve_root_key(
         &self,
         tee: Tee,
@@ -101,6 +115,12 @@ impl Booter {
         Ok(())
     }
 
+    /// Decrypts a shared root key from a `ShareRootKeyResponse`.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok([u8; 32])` with the decrypted root key if successful.
+    /// * `Err(anyhow::Error)` if decryption fails or if the key is not the expected length.
     pub fn process_share_response(
         &self,
         res: ShareRootKeyResponse,
@@ -117,8 +137,18 @@ impl Booter {
         Ok(root_key)
     }
 
-    // assume engine has already verified the attestation
-    pub fn share_root_key(
+    /// Encrypts an existing root key for a specified retriever using ECDH.
+    ///
+    /// # Arguments
+    ///
+    /// * `retriever_pk` - The public key of the node retrieving the root key.
+    /// * `existing_root_key` - A reference to the root key `[u8; 32]` to be encrypted.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok((Nonce, Vec<u8>, secp256k1::PublicKey))` containing the nonce, ciphertext, and sharer's public key if successful.
+    /// * `Err(anyhow::Error)` if encryption fails.
+    pub fn encrypt_root_key(
         &self,
         retriever_pk: &secp256k1::PublicKey,
         existing_root_key: &[u8; 32],
@@ -129,6 +159,8 @@ impl Booter {
         Ok((nonce, root_key_ciphertext, self.pk()))
     }
 
+    /// Generate a new genesis network root key
+    /// root key is generated using OsRng
     pub fn genesis(&self) -> Result<(), anyhow::Error> {
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
