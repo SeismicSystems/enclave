@@ -73,7 +73,7 @@ async fn see_default_config() {
 async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
     let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
     let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
-    let saa = seismic_aa_mock();
+    let saa = seismic_aa_mock().await;
     let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
     println!("{:?}", tdx_evidence);
     assert!(false); // so I can see the print statement

@@ -58,24 +58,6 @@ where
         }
     }
 
-    // // TODO: remove?
-    // pub fn new(attestation_agent: SeismicAttestationAgent<T>) -> Self {
-    //     Self {
-    //         key_provider: None,
-    //         attestation_agent: Arc::new(attestation_agent),
-    //         booter: Booter::new(),
-    //     }
-    // }
-
-    // // TODO: remove?
-    // pub fn new_with_key_provider(key_provider: K, attestation_agent: SeismicAttestationAgent<T>) -> Self {
-    //     Self {
-    //         key_provider: Some(Arc::new(key_provider)),
-    //         attestation_agent: Arc::new(attestation_agent),
-    //         booter: Booter::new(),
-    //     }
-    // }
-
     /// helper function to get the key provider if it has been initialized
     /// or return an RPC uninitialized resource error
     pub fn key_provider(&self) -> Result<Arc<K>, jsonrpsee::types::ErrorObjectOwned> {
@@ -86,12 +68,6 @@ where
         } else {
             return Ok(self.key_provider.clone());
         }
-
-        // TODO: remove?
-        // match &self.key_provider {
-        //     Some(key_provider) => return Ok(key_provider.clone()),
-        //     None => ,
-        // }
     }
 }
 
@@ -313,11 +289,11 @@ where
         // TODO: do I need to enforce a specific tee here, or is it covered in the policy? do I need the output of the eval?
         let _ = self
             .eval_attestation_evidence(AttestationEvalEvidenceRequest {
-                evidence: req.eval_context.evidence, // todo: attestation is in req twice
+                evidence: req.eval_context.evidence, // TODO: attestation is in req twice
                 tee: req.eval_context.tee,
                 runtime_data: Some(Data::Raw(req.retriever_pk.serialize().to_vec())),
                 runtime_data_hash_algorithm: req.eval_context.runtime_data_hash_algorithm,
-                policy_ids: vec!["allow".to_string()], // TODO: create a share_root policy in the policy fixture
+                policy_ids: vec!["share_root".to_string()], // FUTURE WORK: make sure the share_root policy is up to date with on-chain voting
             })
             .await?;
 
@@ -371,10 +347,10 @@ where
 }
 
 #[allow(dead_code)]
-pub fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
+pub async fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
     let kp = KeyManager::new([0u8; 32]);
     kp.set_root_key([0u8; 32]);
-    let saa = seismic_aa_mock();
+    let saa = seismic_aa_mock().await;
     let mut enclave_engine = AttestationEngine::new(kp, saa);
     enclave_engine.booter = Booter::mock();
     enclave_engine.booter.mark_completed();
@@ -400,14 +376,10 @@ mod tests {
     use std::vec;
     use tokio::time::sleep;
 
-    pub fn default_unbooted_enclave_engine(
+    pub async fn default_unbooted_enclave_engine(
     ) -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
-        let v_token_broker = SimpleAttestationTokenBroker::new(
-            attestation_service::token::simple::Configuration::default(),
-        )
-        .expect("Failed to create an AttestationAgent");
-        let saa = SeismicAttestationAgent::new(None, v_token_broker);
+        let saa = seismic_aa_mock().await;
         AttestationEngine::new(kp, saa)
     }
 
@@ -415,7 +387,7 @@ mod tests {
     #[tokio::test]
     pub async fn run_engine_tests() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            engine_mock_booted();
+            engine_mock_booted().await;
 
         let t1 = test_secp256k1_sign(&enclave_engine);
         let t2 = test_io_encryption(&enclave_engine);
@@ -572,7 +544,7 @@ mod tests {
     #[tokio::test]
     async fn test_boot_share_root_key() {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            engine_mock_booted();
+            engine_mock_booted().await;
 
         let new_node_booter = Booter::mock();
         let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
@@ -600,7 +572,7 @@ mod tests {
     #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            default_unbooted_enclave_engine();
+            default_unbooted_enclave_engine().await;
 
         let eval_context = pub_key_eval_request();
 
@@ -660,12 +632,11 @@ mod tests {
         Ok(())
     }
 
-
     #[serial(attestation_agent)]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_boot_retrieve_root_key() -> Result<(), anyhow::Error> {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
-            default_unbooted_enclave_engine();
+            default_unbooted_enclave_engine().await;
 
         // assert the booter root key begins uninitialized
         assert!(enclave_engine.booter.get_root_key().is_none());
