@@ -659,4 +659,34 @@ mod tests {
 
         Ok(())
     }
+
+
+    #[serial(attestation_agent)]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_boot_retrieve_root_key() -> Result<(), anyhow::Error> {
+        let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
+            default_unbooted_enclave_engine();
+
+        // assert the booter root key begins uninitialized
+        assert!(enclave_engine.booter.get_root_key().is_none());
+
+        // start a mock server
+        let port = get_random_port();
+        let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
+        let _server_handle = MockEnclaveServer::new(addr.clone()).start().await?;
+        let _ = sleep(Duration::from_secs(2)).await;
+
+        // run the request
+        let _ = enclave_engine
+            .boot_retrieve_root_key(RetrieveRootKeyRequest {
+                addr,
+                attestation_policy_id: "share_root".to_string(),
+            })
+            .await?;
+
+        // check that the root key is now initialized to the mock value
+        assert_eq!(enclave_engine.booter.get_root_key().unwrap(), [0u8; 32]);
+
+        Ok(())
+    }
 }
