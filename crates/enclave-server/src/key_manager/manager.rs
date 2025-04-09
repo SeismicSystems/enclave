@@ -67,11 +67,13 @@ impl KeyManager {
     /// # Errors
     ///
     /// Returns an error if HKDF expansion fails (though this is unlikely with correct parameters).
-    fn derive_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
+    fn derive_purpose_key(&self, purpose: KeyPurpose, epoch: u64) -> Result<Key, anyhow::Error> {
         let root_guard = self.root_key.lock().unwrap();
         let hk = Hkdf::<Sha256>::new(Some(PURPOSE_DERIVE_SALT), root_guard.as_ref());
+        let mut info = purpose.domain_separator();
+        info.extend_from_slice(&epoch.to_be_bytes());
         let mut derived_key = vec![0u8; 32];
-        hk.expand(&purpose.domain_separator(), &mut derived_key)
+        hk.expand(&info, &mut derived_key)
             .expect("32 is a valid length for Sha256 to output");
         let key = Key::new(derived_key);
 
@@ -82,8 +84,8 @@ impl KeyManager {
     ///
     /// Current implementation simply re-derives the key each time this function is called
     /// Future implementations may cache the derived key, in which case this function will do more
-    fn get_purpose_key(&self, purpose: KeyPurpose) -> Result<Key, anyhow::Error> {
-        let key = self.derive_purpose_key(purpose)?;
+    fn get_purpose_key(&self, purpose: KeyPurpose, epoch: u64) -> Result<Key, anyhow::Error> {
+        let key = self.derive_purpose_key(purpose, epoch)?;
         Ok(key)
     }
 }
@@ -103,18 +105,18 @@ impl NetworkKeyProvider for KeyManager {
     }
 
     /// Retrieves the secp256k1 secret key for transaction I/O signing.
-    fn get_tx_io_sk(&self) -> secp256k1::SecretKey {
+    fn get_tx_io_sk(&self, epoch: u64) -> secp256k1::SecretKey {
         let key = self
-            .get_purpose_key(KeyPurpose::TxIo)
+            .get_purpose_key(KeyPurpose::TxIo, epoch)
             .expect("KeyManager should always have a snapshot key");
         secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid")
     }
 
     /// Retrieves the secp256k1 public key corresponding to the TxIo secret key.
-    fn get_tx_io_pk(&self) -> secp256k1::PublicKey {
+    fn get_tx_io_pk(&self, epoch: u64) -> secp256k1::PublicKey {
         let key = self
-            .get_purpose_key(KeyPurpose::TxIo)
+            .get_purpose_key(KeyPurpose::TxIo, epoch)
             .expect("KeyManager should always have a snapshot key");
         let sk = secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid");
@@ -123,9 +125,9 @@ impl NetworkKeyProvider for KeyManager {
     }
 
     /// Retrieves the Schnorrkel keypair used for randomness generation.
-    fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair {
+    fn get_rng_keypair(&self, epoch: u64) -> schnorrkel::keys::Keypair {
         let mini_key = self
-            .get_purpose_key(KeyPurpose::RngPrecompile)
+            .get_purpose_key(KeyPurpose::RngPrecompile, epoch)
             .expect("KeyManager should always have a snapshot key");
         let mini_key_bytes = mini_key.as_ref();
         let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes)
@@ -136,9 +138,9 @@ impl NetworkKeyProvider for KeyManager {
     }
 
     /// Retrieves the AES-256-GCM encryption key used for snapshot operations.
-    fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
+    fn get_snapshot_key(&self, epoch: u64) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
         let key = self
-            .get_purpose_key(KeyPurpose::Snapshot)
+            .get_purpose_key(KeyPurpose::Snapshot, epoch)
             .expect("KeyManager should always have a snapshot key");
         let bytes: [u8; 32] = key.as_ref().try_into().expect("Key should be 32 bytes");
         bytes.into()
@@ -161,7 +163,7 @@ mod tests {
         let key_manager = KeyManager::new([0u8; 32]);
 
         for purpose in KeyPurpose::iter() {
-            let key = key_manager.get_purpose_key(purpose).unwrap();
+            let key = key_manager.get_purpose_key(purpose, 0).unwrap();
             assert!(!key.as_ref().is_empty());
         }
     }
@@ -169,8 +171,16 @@ mod tests {
     #[test]
     fn test_purpose_specific_keys_are_consistent() {
         let key_manager = KeyManager::new([0u8; 32]);
-        let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
-        let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot).unwrap();
+        let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot, 0).unwrap();
+        let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot, 0).unwrap();
         assert_eq!(key_a.as_ref(), key_b.as_ref());
+    }
+
+    #[test]
+    fn test_epoch_key_rotation() {
+        let key_manager = KeyManager::new([0u8; 32]);
+        let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot, 0).unwrap();
+        let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot, 1).unwrap();
+        assert_ne!(key_a.as_ref(), key_b.as_ref());
     }
 }
