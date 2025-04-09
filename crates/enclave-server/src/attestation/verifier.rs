@@ -158,12 +158,12 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::policy_fixture::{PolicyFixture, YOCTO_POLICY_UPDATED};
+    use crate::utils::policy_fixture::{PolicyFixture, ALLOW_POLICY, DENY_POLICY};
+    use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::read_vector_txt;
     use attestation_service::token::simple::Configuration;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use base64::Engine;
+    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
     use seismic_enclave::request_types::coco_as::ASCoreTokenClaims;
     use std::env;
     use tokio::test;
@@ -204,26 +204,33 @@ mod tests {
         let policy_id = "allow".to_string();
         let expected_content = fixture.get_policy_content(&policy_id).unwrap();
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
-        assert_eq!(&retrieved_policy, expected_content);
+        assert_eq!(
+            &retrieved_policy, expected_content,
+            "allow policy not retrieved correctly"
+        );
 
-        let policies = verifier.list_policies().await.unwrap();
-        // 4 policies = our three policies + default policy
-        assert_eq!(policies.len(), 4);
-
-        // Update a policy
-        let policy_id = "yocto".to_string();
+        // Add and update a policy
+        let policy_id = "test_management".to_string();
         verifier
-            .set_policy(
-                policy_id.clone(),
-                fixture.encode_policy(YOCTO_POLICY_UPDATED),
-            )
+            .set_policy(policy_id.clone(), fixture.encode_policy(ALLOW_POLICY))
             .await
             .unwrap();
-
-        // Verify update
         let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
-        let encoded_policy = fixture.encode_policy(YOCTO_POLICY_UPDATED);
-        assert_eq!(retrieved_policy, encoded_policy);
+        let encoded_policy = fixture.encode_policy(ALLOW_POLICY);
+        assert_eq!(
+            retrieved_policy, encoded_policy,
+            "test_management policy not added correctly"
+        );
+        verifier
+            .set_policy(policy_id.clone(), fixture.encode_policy(DENY_POLICY))
+            .await
+            .unwrap();
+        let retrieved_policy = verifier.get_policy(policy_id.clone()).await.unwrap();
+        let encoded_policy = fixture.encode_policy(DENY_POLICY);
+        assert_eq!(
+            retrieved_policy, encoded_policy,
+            "test_management policy not updated correctly"
+        );
 
         // Try getting non-existent policy
         let result = verifier.get_policy("non-existent".to_string()).await;
@@ -318,14 +325,6 @@ mod tests {
 
     #[test]
     async fn verifier_test_eval_evidence_az_tdx() {
-        // This test requires actual TDX evidence files
-        // Skip if files are not available
-        let evidence_path = "../../examples/tdx_encoded_evidence.txt";
-        if !std::path::Path::new(evidence_path).exists() {
-            println!("Skipping test_eval_evidence_az_tdx: evidence file not found");
-            return;
-        }
-
         // Create verifier with the policy fixture
         let mut verifier =
             DcapAttVerifier::<SimpleAttestationTokenBroker>::new_simple(Configuration::default())
@@ -333,18 +332,17 @@ mod tests {
         let fixture = PolicyFixture::testing_mock();
         fixture.configure_verifier(&mut verifier).await.unwrap();
 
-        // Read TDX evidence
-        let tdx_evidence_encoded = std::fs::read_to_string(evidence_path).unwrap();
-        let tdx_evidence = URL_SAFE_NO_PAD
-            .decode(tdx_evidence_encoded.as_str())
-            .unwrap();
+        // Get the sample evidence
+        let eval_req: seismic_enclave::coco_as::AttestationEvalEvidenceRequest =
+            pub_key_eval_request();
+        let runtime_data = get_unsecure_sample_secp256k1_pk().serialize().to_vec();
 
         // Evaluate the evidence
         let raw_claims = verifier
             .evaluate(
-                tdx_evidence,
+                eval_req.evidence,
                 Tee::AzTdxVtpm,
-                Some(Data::Raw("".into())),
+                Some(Data::Raw(runtime_data)),
                 HashAlgorithm::Sha256,
                 None,
                 HashAlgorithm::Sha256,

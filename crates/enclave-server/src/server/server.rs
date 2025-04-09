@@ -2,6 +2,9 @@ use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
 
+use seismic_enclave::boot::{
+    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
+};
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use seismic_enclave::genesis::GenesisDataResponse;
@@ -179,76 +182,43 @@ where
     }
 }
 
-#[async_trait]
-impl<K, T> EnclaveApiServer for EnclaveServer<K, T>
-where
-    K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
-{
-    /// Handler for: `getPublicKey`
-    async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
-        self.inner.get_public_key().await
-    }
-
-    /// Handler for: `healthCheck`
-    async fn health_check(&self) -> RpcResult<String> {
-        self.inner.health_check().await
-    }
-
-    /// Handler for: `getGenesisData`
-    async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
-        debug!(target: "rpc::enclave", "Serving getGenesisData");
-        self.inner.get_genesis_data().await
-    }
-
-    /// Handler for: `encrypt`
-    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        debug!(target: "rpc::enclave", "Serving encrypt");
-        self.inner.encrypt(req).await
-    }
-
-    /// Handler for: `decrypt`
-    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        debug!(target: "rpc::enclave", "Serving decrypt");
-        self.inner.decrypt(req).await
-    }
-
-    /// Handler for: `getAttestationEvidence`
-    async fn get_attestation_evidence(
-        &self,
-        req: AttestationGetEvidenceRequest,
-    ) -> RpcResult<AttestationGetEvidenceResponse> {
-        debug!(target: "rpc::enclave", "Serving getAttestationEvidence");
-        self.inner.get_attestation_evidence(req).await
-    }
-
-    /// Handler for: `evalAttestationEvidence`
-    async fn eval_attestation_evidence(
-        &self,
-        req: AttestationEvalEvidenceRequest,
-    ) -> RpcResult<AttestationEvalEvidenceResponse> {
-        debug!(target: "rpc::enclave", "Serving evalAttestationEvidence");
-        self.inner.eval_attestation_evidence(req).await
-    }
-
-    /// Handler for: `sign`
-    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        debug!(target: "rpc::enclave", "Serving sign");
-        self.inner.sign(req).await
-    }
-
-    /// Handler for: `verify`
-    async fn verify(&self, req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        debug!(target: "rpc::enclave", "Serving verify");
-        self.inner.verify(req).await
-    }
-
-    /// Handler for: 'eph_rng.get_keypair'
-    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        debug!(target: "rpc::enclave", "Serving eph_rng.get_keypair");
-        self.inner.get_eph_rng_keypair().await
-    }
+/// Derive implementation of the async [`EnclaveApiServer`] trait
+/// for [`EnclaveServer<K, T>`]
+/// Each implimentation logs using debug! and delegates to `self.inner` engine
+macro_rules! impl_forwarding_async_server_trait {
+    ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
+        -> $ret:ty $(, log = $log_msg:literal)?),* $(,)?) => {
+        #[async_trait]
+        impl<K, T> EnclaveApiServer for EnclaveServer<K, T>
+        where
+            K: NetworkKeyProvider + Send + Sync + 'static,
+            T: AttestationTokenBroker + Send + Sync + 'static,
+        {
+            $(
+                async fn $method_name(&self $(, $param: $param_ty)*) -> RpcResult<$ret> {
+                    $(debug!(target: "rpc::enclave", "Serving {}", $log_msg);)?
+                    self.inner.$method_name($($param),*).await
+                }
+            )*
+        }
+    };
 }
+impl_forwarding_async_server_trait!(
+    async fn health_check(&self) -> String,
+    async fn get_public_key(&self) -> secp256k1::PublicKey,
+    async fn get_genesis_data(&self) -> GenesisDataResponse, log = "getGenesisData",
+    async fn sign(&self, req: Secp256k1SignRequest) -> Secp256k1SignResponse, log = "sign",
+    async fn verify(&self, req: Secp256k1VerifyRequest) -> Secp256k1VerifyResponse, log = "verify",
+    async fn encrypt(&self, req: IoEncryptionRequest) -> IoEncryptionResponse, log = "encrypt",
+    async fn decrypt(&self, req: IoDecryptionRequest) -> IoDecryptionResponse, log = "decrypt",
+    async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair, log = "eph_rng.get_keypair",
+    async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse, log = "getAttestationEvidence",
+    async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse, log = "evalAttestationEvidence",
+    async fn boot_retrieve_root_key(&self, req: RetrieveRootKeyRequest) -> RetrieveRootKeyResponse, log = "boot_retrieve_root_key",
+    async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse, log = "boot_share_root_key",
+    async fn boot_genesis(&self) -> (), log = "boot_genesis",
+    async fn complete_boot(&self) -> (), log = "complete_boot",
+);
 
 pub fn init_tracing() {
     // Read log level from RUST_LOG
@@ -267,7 +237,8 @@ pub fn init_tracing() {
 #[cfg(test)]
 mod tests {
     use crate::attestation::SeismicAttestationAgent;
-    use crate::key_manager::{KeyManager, KeyManagerBuilder};
+    use crate::key_manager::KeyManager;
+    use crate::key_manager::NetworkKeyProvider;
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::{get_random_port, is_sudo};
     use seismic_enclave::client::rpc::BuildableServer;
@@ -354,12 +325,10 @@ mod tests {
             policy_ids: vec!["allow".to_string()],
         };
 
-        let resposne = client
+        client
             .eval_attestation_evidence(eval_request)
             .await
             .unwrap();
-
-        assert!(resposne.eval);
     }
 
     async fn test_get_public_key(client: &EnclaveClient) {
@@ -391,7 +360,7 @@ mod tests {
         // spawn a seperate thread for the server, otherwise the test will hang
         let port = get_random_port(); // rand port for test parallelization
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
-        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let kp = KeyManager::new([0u8; 32]);
         let token_broker = SimpleAttestationTokenBroker::new(
             attestation_service::token::simple::Configuration::default(),
         )
@@ -415,6 +384,9 @@ mod tests {
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap();
+
+        client.boot_genesis().await.unwrap();
+        client.complete_boot().await.unwrap();
 
         test_health_check(&client).await;
         test_genesis_get_data(&client).await;

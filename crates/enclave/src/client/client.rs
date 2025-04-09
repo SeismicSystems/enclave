@@ -15,6 +15,9 @@ use tokio::runtime::{Handle, Runtime};
 
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
 use crate::{
+    boot::{
+        RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
+    },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     genesis::GenesisDataResponse,
@@ -174,6 +177,10 @@ impl_sync_client_trait!(
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
+    fn boot_retrieve_root_key(&self, _req: RetrieveRootKeyRequest) -> Result<RetrieveRootKeyResponse,  ClientError>,
+    fn boot_share_root_key(&self, _req: ShareRootKeyRequest) -> Result<ShareRootKeyResponse,  ClientError>,
+    fn boot_genesis(&self) -> Result<(),  ClientError>,
+    fn complete_boot(&self) -> Result<(),  ClientError>,
 );
 
 #[cfg(test)]

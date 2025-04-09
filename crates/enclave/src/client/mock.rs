@@ -15,7 +15,11 @@ use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
+use crate::nonce::Nonce;
 use crate::{
+    boot::{
+        RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
+    },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     ecdh_decrypt, ecdh_encrypt,
@@ -116,6 +120,38 @@ impl MockEnclaveServer {
     ) -> AttestationEvalEvidenceResponse {
         unimplemented!("eval_attestation_evidence not implemented for mock server")
     }
+
+    fn boot_retrieve_root_key(_req: RetrieveRootKeyRequest) -> RetrieveRootKeyResponse {
+        // No-op, keys are hardcoded for mock server
+        RetrieveRootKeyResponse {}
+    }
+
+    fn boot_share_root_key(req: ShareRootKeyRequest) -> ShareRootKeyResponse {
+        // skip checking the attestation since it's a mock
+
+        // encrypt the root key
+        let sharer_sk = get_unsecure_sample_secp256k1_sk();
+        let sharer_pk = get_unsecure_sample_secp256k1_pk();
+        let mock_root_key = [0u8; 32];
+        let nonce = Nonce::new_rand();
+
+        let root_key_ciphertext =
+            ecdh_encrypt(&req.retriever_pk, &sharer_sk, &mock_root_key, nonce.clone()).unwrap();
+
+        ShareRootKeyResponse {
+            nonce,
+            root_key_ciphertext,
+            sharer_pk,
+        }
+    }
+
+    fn boot_genesis() {
+        // No-op, keys are hardcoded for mock server
+    }
+
+    fn complete_boot() {
+        // No-op, keys are hardcoded for mock server
+    }
 }
 
 impl Default for MockEnclaveServer {
@@ -147,6 +183,7 @@ macro_rules! impl_mock_async_server_trait {
         impl EnclaveApiServer for MockEnclaveServer {
             $(
                 async fn $method_name(&self $(, $param: $param_ty)*) -> RpcResult<$ret> {
+                    // For each method, call the corresponding method on the mock server
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )*
@@ -164,6 +201,10 @@ impl_mock_async_server_trait!(
     async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair,
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse,
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse,
+    async fn boot_retrieve_root_key(&self, req: RetrieveRootKeyRequest) -> RetrieveRootKeyResponse,
+    async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse,
+    async fn boot_genesis(&self) -> (),
+    async fn complete_boot(&self) -> (),
 );
 
 /// Mock enclave client for testing purposes.
@@ -189,6 +230,8 @@ macro_rules! impl_mock_sync_client_trait {
         impl SyncEnclaveApiClient for MockEnclaveClient {
             $(
                 fn $method_name(&self, $($param: $param_ty),*) -> $return_ty {
+                    // for each method, call the corresponding method on the mock server
+                    // simulates a client client rpc call where that code is executed
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )+
@@ -206,6 +249,10 @@ impl_mock_sync_client_trait!(
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
+    fn boot_retrieve_root_key(&self, _req: RetrieveRootKeyRequest) -> Result<RetrieveRootKeyResponse,  ClientError>,
+    fn boot_share_root_key(&self, _req: ShareRootKeyRequest) -> Result<ShareRootKeyResponse,  ClientError>,
+    fn boot_genesis(&self) -> Result<(),  ClientError>,
+    fn complete_boot(&self) -> Result<(),  ClientError>,
 );
 
 #[cfg(test)]
@@ -216,7 +263,8 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::{client::tests::*, nonce::Nonce, rpc::EnclaveApiClient, EnclaveClient};
+    use crate::client::tests::*;
+    use crate::{nonce::Nonce, rpc::EnclaveApiClient, EnclaveClient};
 
     #[test]
     fn test_mock_client() {

@@ -33,20 +33,6 @@ allow if {
 }
 "#;
 
-pub const YOCTO_POLICY_UPDATED: &str = r#"
-package policy
-
-import rego.v1
-
-default allow = false
-
-allow if {
-	input["aztdxvtpm.quote.body.mr_td"] == "bb379f8e734a755832509f61403f99db2258a70a01e1172a499d6d364101b0675455b4e372a35c1f006541f2de0d7155"
-	input["aztdxvtpm.quote.body.mr_seam"] == "9790d89a10210ec6968a773cee2ca05b5aa97309f36727a968527be4606fc19e6f73acce350946c9d46a9bf7a63f8431"
-	input["aztdxvtpm.tpm.pcr04"] == "fc846c8703feffa34e7c70cc62701f534abd3a59942a04a20081f0bff7cf1822"
-}
-"#;
-
 pub struct PolicyFixture {
     pub policy_map: HashMap<String, String>,
 }
@@ -83,6 +69,11 @@ impl PolicyFixture {
         policy_map.insert(
             "yocto".to_string(),
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY),
+        );
+
+        policy_map.insert(
+            "share_root".to_string(),
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY), // FUTURE WORK: update this
         );
 
         Self { policy_map }

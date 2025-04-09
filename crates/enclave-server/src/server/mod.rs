@@ -1,3 +1,4 @@
+mod boot;
 mod engine;
 mod into_original;
 mod server;

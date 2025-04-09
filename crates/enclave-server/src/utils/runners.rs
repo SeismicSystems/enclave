@@ -3,6 +3,10 @@
 //! They are for dev convenience only
 //! and should be ignored in automated testing workflows
 
+use crate::attestation::seismic_aa_mock;
+use crate::attestation::SeismicAttestationAgent;
+use attestation_agent::AttestationAPIs;
+
 use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
 use attestation_service::config::Config;
@@ -62,6 +66,18 @@ fn see_as_token() -> Result<(), anyhow::Error> {
 async fn see_default_config() {
     let config = Config::default();
     println!("{:?}", config);
+}
+
+#[tokio::test]
+#[ignore]
+async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
+    let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
+    let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
+    let saa = seismic_aa_mock().await;
+    let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
+    println!("{:?}", tdx_evidence);
+    assert!(false); // so I can see the print statement
+    Ok(())
 }
 
 //#[tokio::test]

@@ -9,6 +9,9 @@ use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
 use std::net::SocketAddr;
 
+use crate::boot::{
+    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
+};
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
 use crate::genesis::GenesisDataResponse;
@@ -86,4 +89,26 @@ pub trait EnclaveApi {
     /// Generates an ephemeral keypair
     #[method(name = "eph_rng.get_keypair")]
     async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
+
+    /// Retrieves the root key from an existing node
+    #[method(name = "boot.retrieve_root_key")]
+    async fn boot_retrieve_root_key(
+        &self,
+        _req: RetrieveRootKeyRequest,
+    ) -> RpcResult<RetrieveRootKeyResponse>;
+
+    /// Shares the root key with an existing node
+    #[method(name = "boot.share_root_key")]
+    async fn boot_share_root_key(
+        &self,
+        _req: ShareRootKeyRequest,
+    ) -> RpcResult<ShareRootKeyResponse>;
+
+    /// Genesis boot
+    #[method(name = "boot.genesis_boot")]
+    async fn boot_genesis(&self) -> RpcResult<()>;
+
+    /// Completes the genesis boot
+    #[method(name = "boot.complete_boot")]
+    async fn complete_boot(&self) -> RpcResult<()>;
 }
