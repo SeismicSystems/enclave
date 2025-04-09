@@ -171,16 +171,24 @@ mod tests {
     #[test]
     fn test_purpose_specific_keys_are_consistent() {
         let key_manager = KeyManager::new([0u8; 32]);
-        let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot, 0).unwrap();
-        let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot, 0).unwrap();
+        let key_a = key_manager
+            .get_purpose_key(KeyPurpose::Snapshot, 0)
+            .unwrap();
+        let key_b = key_manager
+            .get_purpose_key(KeyPurpose::Snapshot, 0)
+            .unwrap();
         assert_eq!(key_a.as_ref(), key_b.as_ref());
     }
 
     #[test]
     fn test_epoch_key_rotation() {
         let key_manager = KeyManager::new([0u8; 32]);
-        let key_a = key_manager.get_purpose_key(KeyPurpose::Snapshot, 0).unwrap();
-        let key_b = key_manager.get_purpose_key(KeyPurpose::Snapshot, 1).unwrap();
+        let key_a = key_manager
+            .get_purpose_key(KeyPurpose::Snapshot, 0)
+            .unwrap();
+        let key_b = key_manager
+            .get_purpose_key(KeyPurpose::Snapshot, 1)
+            .unwrap();
         assert_ne!(key_a.as_ref(), key_b.as_ref());
     }
 }

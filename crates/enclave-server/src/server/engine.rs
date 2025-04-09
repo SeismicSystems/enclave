@@ -3,7 +3,6 @@ use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use attestation_service::token::AttestationTokenBroker;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use super::boot::Booter;
@@ -19,19 +18,12 @@ use seismic_enclave::boot::{
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::ASCoreTokenClaims;
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use seismic_enclave::genesis::{GenesisData, GenesisDataResponse};
+use seismic_enclave::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
 use seismic_enclave::rpc::EnclaveApiServer;
-use seismic_enclave::signing::{
-    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
-};
-use seismic_enclave::tx_io::{
-    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
-};
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
-    ecdh_decrypt, ecdh_encrypt, rpc_bad_argument_error, rpc_bad_evidence_error,
-    rpc_bad_genesis_error, rpc_bad_quote_error, rpc_conflict_error, rpc_internal_server_error,
-    rpc_invalid_ciphertext_error, secp256k1_sign_digest, secp256k1_verify,
+    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_quote_error, rpc_conflict_error,
+    rpc_internal_server_error,
 };
 
 /// The main execution engine for secure enclave logic
@@ -81,59 +73,19 @@ where
         Ok("OK".into())
     }
 
-    // Crypto operations implementations
-    async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey> {
+    async fn get_purpose_keys(
+        &self,
+        req: GetPurposeKeysRequest,
+    ) -> RpcResult<GetPurposeKeysResponse> {
         let key_provider = self.key_provider()?;
-        Ok(key_provider.get_tx_io_pk())
-    }
-
-    async fn sign(&self, req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse> {
-        let key_provider = self.key_provider()?;
-        let sk = key_provider.get_tx_io_sk();
-        let signature = secp256k1_sign_digest(&req.msg, sk)
-            .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
-        Ok(Secp256k1SignResponse { sig: signature })
-    }
-
-    async fn verify(&self, request: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse> {
-        let key_provider = self.key_provider()?;
-        let pk = key_provider.get_tx_io_pk();
-        let verified = secp256k1_verify(&request.msg, &request.sig, pk)
-            .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
-        Ok(Secp256k1VerifyResponse { verified })
-    }
-
-    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
-        let key_provider = self.key_provider()?;
-        let sk = key_provider.get_tx_io_sk();
-        let encrypted_data = match ecdh_encrypt(&req.key, &sk, &req.data, req.nonce) {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to encrypt data: {}", e);
-                return Err(rpc_bad_argument_error(e));
-            }
+        let epoch = req.epoch;
+        let resp = GetPurposeKeysResponse {
+            tx_io_sk: key_provider.get_tx_io_sk(epoch),
+            tx_io_pk: key_provider.get_tx_io_pk(epoch),
+            snapshot_key_bytes: key_provider.get_snapshot_key(epoch).into(),
+            rng_keypair: key_provider.get_rng_keypair(epoch),
         };
-
-        Ok(IoEncryptionResponse { encrypted_data })
-    }
-
-    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
-        let key_provider = self.key_provider()?;
-        let sk = key_provider.get_tx_io_sk();
-        let decrypted_data = match ecdh_decrypt(&req.key, &sk, &req.data, req.nonce) {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to decrypt data: {}", e);
-                return Err(rpc_invalid_ciphertext_error(e));
-            }
-        };
-
-        Ok(IoDecryptionResponse { decrypted_data })
-    }
-
-    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair> {
-        let key_provider = self.key_provider()?;
-        Ok(key_provider.get_rng_keypair())
+        Ok(resp)
     }
 
     // Attestation operations implementations
@@ -158,39 +110,6 @@ where
         };
 
         Ok(AttestationGetEvidenceResponse { evidence })
-    }
-
-    // Future Work: update what genesis data consists of, error responses
-    async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse> {
-        let key_provider = self.key_provider()?;
-        let io_pk = key_provider.get_tx_io_pk();
-
-        // For now the genesis data is just the public key of the IO encryption keypair
-        // But this is expected to change in the future
-        let genesis_data = GenesisData { io_pk };
-
-        // hash the genesis data and attest to it
-        let genesis_data_bytes = match genesis_data.to_bytes() {
-            Ok(bytes) => bytes,
-            Err(e) => return Err(rpc_bad_genesis_error(anyhow::anyhow!(e))),
-        };
-        let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
-
-        // Get the evidence from the attestation agent
-        let evidence = match self
-            .attestation_agent
-            .get_evidence(&hash_bytes)
-            .await
-            .map_err(|e| format!("Error while getting evidence: {:?}", e))
-        {
-            Ok(evidence) => evidence,
-            Err(e) => return Err(rpc_bad_quote_error(anyhow::anyhow!(e))),
-        };
-
-        Ok(GenesisDataResponse {
-            data: genesis_data,
-            evidence,
-        })
     }
 
     /// Evaluate the provided attestation evidence against a policy
@@ -367,10 +286,10 @@ mod tests {
     use crate::utils::test_utils::is_sudo;
     use crate::utils::test_utils::pub_key_eval_request;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
+    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
     use seismic_enclave::rpc::BuildableServer;
     use seismic_enclave::MockEnclaveServer;
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
-    use seismic_enclave::{get_unsecure_sample_secp256k1_pk, nonce::Nonce};
     use serial_test::serial;
     use std::net::SocketAddr;
     use std::time::Duration;
@@ -390,88 +309,12 @@ mod tests {
         let enclave_engine: AttestationEngine<KeyManager, SimpleAttestationTokenBroker> =
             engine_mock_booted().await;
 
-        let t1 = test_secp256k1_sign(&enclave_engine);
-        let t2 = test_io_encryption(&enclave_engine);
-        let t3 = test_decrypt_invalid_ciphertext(&enclave_engine);
-        let t4 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
-        let t5 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&enclave_engine);
-        let t6 = test_genesis_get_data_handler_success_basic(&enclave_engine);
+        let t1 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
+        let t2 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&enclave_engine);
+        // todo: add test for get_purpose_keys
 
         // Run all concurrently and await them
-        let (_r1, _r2, _r3, _r4, _r5, _r6) = tokio::join!(t1, t2, t3, t4, t5, t6);
-    }
-
-    async fn test_secp256k1_sign<K, T>(enclave_engine: &AttestationEngine<K, T>)
-    where
-        K: NetworkKeyProvider + Send + Sync + 'static,
-        T: AttestationTokenBroker + Send + Sync + 'static,
-    {
-        // Prepare sign request body
-        let msg_to_sign: Vec<u8> = vec![84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101]; // "Test Message"
-        let sign_request = Secp256k1SignRequest {
-            msg: msg_to_sign.clone(),
-        };
-
-        let res = enclave_engine.sign(sign_request).await.unwrap();
-
-        // Prepare verify request body
-        let verify_request = Secp256k1VerifyRequest {
-            msg: msg_to_sign,
-            sig: res.sig,
-        };
-
-        let res = enclave_engine.verify(verify_request).await.unwrap();
-        assert!(res.verified);
-    }
-
-    async fn test_io_encryption<K, T>(enclave_engine: &AttestationEngine<K, T>)
-    where
-        K: NetworkKeyProvider + Send + Sync + 'static,
-        T: AttestationTokenBroker + Send + Sync + 'static,
-    {
-        let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let nonce = Nonce::new_rand();
-        let req = IoEncryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: data_to_encrypt.clone(),
-            nonce: nonce.clone(),
-        };
-
-        let res = enclave_engine.encrypt(req).await.unwrap();
-
-        // check that decryption returns the original data
-        // Prepare decrypt request body
-        let req = IoDecryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: res.encrypted_data,
-            nonce: nonce.clone(),
-        };
-
-        let res = enclave_engine.decrypt(req).await.unwrap();
-
-        assert_eq!(res.decrypted_data, data_to_encrypt);
-    }
-
-    async fn test_decrypt_invalid_ciphertext<K, T>(enclave_engine: &AttestationEngine<K, T>)
-    where
-        K: NetworkKeyProvider + Send + Sync + 'static,
-        T: AttestationTokenBroker + Send + Sync + 'static,
-    {
-        let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let nonce = Nonce::new_rand();
-        let decryption_request = IoDecryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: bad_ciphertext,
-            nonce: nonce.clone(),
-        };
-        let res = enclave_engine.decrypt(decryption_request).await;
-
-        assert!(res.is_err());
-        assert!(res
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("Invalid ciphertext"));
+        let (_r1, _r2) = tokio::join!(t1, t2);
     }
 
     async fn test_attestation_evidence_handler_valid_request_sample<K, T>(
@@ -530,17 +373,6 @@ mod tests {
         assert_ne!(res_1.evidence, res_2.evidence);
     }
 
-    async fn test_genesis_get_data_handler_success_basic<K, T>(
-        enclave_engine: &AttestationEngine<K, T>,
-    ) where
-        K: NetworkKeyProvider + Send + Sync + 'static,
-        T: AttestationTokenBroker + Send + Sync + 'static,
-    {
-        // Call the handler
-        let res = enclave_engine.get_genesis_data().await.unwrap();
-        assert!(!res.evidence.is_empty());
-    }
-
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_boot_share_root_key() {
@@ -584,8 +416,10 @@ mod tests {
             retriever_pk: get_unsecure_sample_secp256k1_pk(),
         };
 
-        // test that key functiosn error before complete_boot
-        let res = enclave_engine.get_public_key().await;
+        // test that key functions error before complete_boot
+        let res = enclave_engine
+            .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+            .await;
         assert!(res.is_err());
         let res = enclave_engine
             .boot_share_root_key(mock_share_req.clone())
@@ -601,7 +435,9 @@ mod tests {
         );
 
         // test that key functions work after complete_boot
-        let _ = enclave_engine.get_public_key().await?;
+        let _ = enclave_engine
+            .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+            .await?;
         let _ = enclave_engine
             .boot_share_root_key(mock_share_req.clone())
             .await?;

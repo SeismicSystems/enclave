@@ -14,13 +14,7 @@ use crate::boot::{
 };
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use crate::genesis::GenesisDataResponse;
-use crate::signing::{
-    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
-};
-use crate::tx_io::{
-    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
-};
+use crate::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
 
 /// A trait for building a server.
 pub trait BuildableServer {
@@ -49,20 +43,11 @@ pub trait EnclaveApi {
     async fn health_check(&self) -> RpcResult<String>;
 
     /// Get the secp256k1 public key
-    #[method(name = "getPublicKey")]
-    async fn get_public_key(&self) -> RpcResult<secp256k1::PublicKey>;
-
-    /// Retrieves genesis configuration data for blockchain initialization
-    #[method(name = "getGenesisData")]
-    async fn get_genesis_data(&self) -> RpcResult<GenesisDataResponse>;
-
-    /// Signs a message using secp256k1 private key
-    #[method(name = "sign")]
-    async fn sign(&self, _req: Secp256k1SignRequest) -> RpcResult<Secp256k1SignResponse>;
-
-    /// Verifies a secp256k1 signature against a message
-    #[method(name = "verify")]
-    async fn verify(&self, _req: Secp256k1VerifyRequest) -> RpcResult<Secp256k1VerifyResponse>;
+    #[method(name = "getPurposeKeys")]
+    async fn get_purpose_keys(
+        &self,
+        req: GetPurposeKeysRequest,
+    ) -> RpcResult<GetPurposeKeysResponse>;
 
     /// Generates attestation evidence from the attestation authority
     #[method(name = "getAttestationEvidence")]
@@ -77,18 +62,6 @@ pub trait EnclaveApi {
         &self,
         _req: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse>;
-
-    /// Encrypts transaction data using ECDH and AES
-    #[method(name = "encrypt")]
-    async fn encrypt(&self, _req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse>;
-
-    /// Decrypts transaction data using ECDH and AES
-    #[method(name = "decrypt")]
-    async fn decrypt(&self, _req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse>;
-
-    /// Generates an ephemeral keypair
-    #[method(name = "eph_rng.get_keypair")]
-    async fn get_eph_rng_keypair(&self) -> RpcResult<schnorrkel::keys::Keypair>;
 
     /// Retrieves the root key from an existing node
     #[method(name = "boot.retrieve_root_key")]
