@@ -162,6 +162,7 @@ impl Booter {
     /// Generate a new genesis network root key
     /// root key is generated using OsRng
     pub fn genesis(&self) -> Result<(), anyhow::Error> {
+        // FUTURE WORK: consider using key shares instead of OsRng
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;

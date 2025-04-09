@@ -260,9 +260,13 @@ where
             )));
         }
 
-        // TODO: make attestation of retriever key, currently not caught by tests becuase mock sharers don't verify attestations
         let tee = self.attestation_agent.get_tee_type();
-        let attestation: Vec<u8> = Vec::new();
+        let retriver_pk_bytes = self.booter.pk().serialize();
+        let attestation: Vec<u8> = self
+            .attestation_agent
+            .get_evidence(&retriver_pk_bytes)
+            .await
+            .map_err(|e| rpc_internal_server_error(e))?;
 
         let client_builder = EnclaveClient::builder();
         let client = client_builder
