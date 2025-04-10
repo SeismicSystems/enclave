@@ -14,15 +14,16 @@ name = "seismic_enclave_server"
 path = "src/lib.rs"
 
 [features]
-default = []         # empty default, no supervisorctl, as yocto_builds do not include it
-supervisorctl = []
+default = ["tdx-attestation"]
+tdx-attestation = ["attestation-agent/az-tdx-vtpm-attester"]
+local-build = []  # doesn't pull in linux tdx libs
 
 [dependencies]
 seismic-enclave.workspace = true
 
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
-attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
+attestation-agent = { git = "https://github.com/confidential-containers/guest-components", default-features = false, rev="e6999a3"}
 verifier = { git = "https://github.com/confidential-containers/trustee", rev = "1fdd67d", package = "verifier" }
 
 aes-gcm.workspace = true
