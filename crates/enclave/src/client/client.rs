@@ -216,6 +216,9 @@ pub mod tests {
         let resposne = client.health_check().unwrap();
         assert_eq!(resposne, "OK");
     }
-
-    // TODO: add test for get_purpose_keys
+    
+    pub fn sync_test_get_purpose_keys<C: SyncEnclaveApiClient>(client: &C) {
+        let response = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).unwrap();
+        assert!(response.snapshot_key_bytes.len() > 0);
+    }
 }

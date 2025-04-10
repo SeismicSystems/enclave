@@ -286,7 +286,9 @@ mod tests {
     use crate::utils::test_utils::is_sudo;
     use crate::utils::test_utils::pub_key_eval_request;
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
+    use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
     use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+    use seismic_enclave::get_unsecure_sample_secp256k1_sk;
     use seismic_enclave::rpc::BuildableServer;
     use seismic_enclave::MockEnclaveServer;
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
@@ -311,10 +313,10 @@ mod tests {
 
         let t1 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
         let t2 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&enclave_engine);
-        // todo: add test for get_purpose_keys
+        let t3 = test_get_purpose_keys(&enclave_engine);
 
         // Run all concurrently and await them
-        let (_r1, _r2) = tokio::join!(t1, t2);
+        let (_r1, _r2, _r3) = tokio::join!(t1, t2, t3);
     }
 
     async fn test_attestation_evidence_handler_valid_request_sample<K, T>(
@@ -371,6 +373,20 @@ mod tests {
             .unwrap();
 
         assert_ne!(res_1.evidence, res_2.evidence);
+    }
+
+    async fn test_get_purpose_keys<K, T>(enclave_engine: &AttestationEngine<K, T>)
+    where
+        K: NetworkKeyProvider + Send + Sync + 'static,
+        T: AttestationTokenBroker + Send + Sync + 'static,
+    {
+        let res = enclave_engine.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await;
+        assert!(res.is_ok());
+        let resp = res.unwrap();
+        assert_eq!(resp.snapshot_key_bytes, [0u8; 32], "Snapshot key is not mock value");
+        assert_eq!(resp.tx_io_pk, get_unsecure_sample_secp256k1_pk());
+        assert_eq!(resp.tx_io_sk, get_unsecure_sample_secp256k1_sk());
+        assert_eq!(resp.rng_keypair.secret, get_unsecure_sample_schnorrkel_keypair().secret);
     }
 
     #[serial(attestation_agent)]

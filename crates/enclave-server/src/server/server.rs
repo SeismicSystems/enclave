@@ -224,6 +224,7 @@ pub fn init_tracing() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::attestation::SeismicAttestationAgent;
     use crate::key_manager::KeyManager;
     use crate::key_manager::NetworkKeyProvider;
@@ -284,7 +285,11 @@ mod tests {
             .unwrap();
     }
 
-    // TODO: add test for get_purpose_keys
+    async fn test_get_purpose_keys(client: &EnclaveClient) {
+        let response = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await.unwrap();
+        assert!(response.snapshot_key_bytes.len() == 32);
+        assert_ne!(response.snapshot_key_bytes, [0u8; 32], "Snapshot key is not all zeros");
+    }
 
     #[tokio::test]
     #[serial(attestation_agent)]
@@ -330,6 +335,6 @@ mod tests {
         test_health_check(&client).await;
         test_attestation_get_evidence(&client).await;
         test_attestation_eval_evidence(&client).await;
-        // TODO: add test for get_purpose_keys
+        test_get_purpose_keys(&client).await;
     }
 }
