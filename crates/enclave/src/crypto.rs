@@ -206,6 +206,7 @@ pub fn get_unsecure_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
     mini_secret_key.expand(ExpansionMode::Uniform).into()
 }
 
+/// Returns a sample AES key for testing purposes.
 pub fn get_unsecure_sample_aesgcm_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
     let key: aes_gcm::Key<aes_gcm::Aes256Gcm> = [0u8; 32].into();
     key

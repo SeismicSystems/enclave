@@ -49,12 +49,10 @@ impl MockEnclaveServer {
 
     /// Mock implementation of the get_public_key method.
     pub fn get_purpose_keys(_req: GetPurposeKeysRequest) -> GetPurposeKeysResponse {
-        // snapshopshot key derived from zero root key
-        let snapshot_key_bytes =  [171, 109, 212, 19, 240, 112, 223, 86, 62, 193, 33, 206, 103, 199, 246, 180, 253, 235, 185, 108, 83, 97, 135, 109, 48, 92, 48, 120, 222, 142, 133, 107];
         GetPurposeKeysResponse {
             tx_io_sk: get_unsecure_sample_secp256k1_sk(),
             tx_io_pk: get_unsecure_sample_secp256k1_pk(),
-            snapshot_key_bytes,
+            snapshot_key_bytes: [0u8; 32],
             rng_keypair: get_unsecure_sample_schnorrkel_keypair(),
         }
     }

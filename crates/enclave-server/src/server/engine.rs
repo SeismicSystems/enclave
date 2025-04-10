@@ -280,23 +280,18 @@ pub async fn engine_mock_booted() -> AttestationEngine<KeyManager, SimpleAttesta
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key_manager::KeyManager;
     use crate::key_manager::KeyManagerBuilder;
     use crate::utils::test_utils::get_random_port;
     use crate::utils::test_utils::is_sudo;
     use crate::utils::test_utils::pub_key_eval_request;
-    use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
-    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
-    use seismic_enclave::get_unsecure_sample_secp256k1_sk;
     use seismic_enclave::rpc::BuildableServer;
     use seismic_enclave::MockEnclaveServer;
     use seismic_enclave::ENCLAVE_DEFAULT_ENDPOINT_IP;
     use serial_test::serial;
     use std::net::SocketAddr;
     use std::time::Duration;
-    use std::vec;
     use tokio::time::sleep;
+    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 
     pub async fn default_unbooted_enclave_engine(
     ) -> AttestationEngine<KeyManager, SimpleAttestationTokenBroker> {
@@ -380,13 +375,16 @@ mod tests {
         K: NetworkKeyProvider + Send + Sync + 'static,
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
-        let res = enclave_engine.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await;
+        let epoch = 0;
+        let res = enclave_engine.get_purpose_keys(GetPurposeKeysRequest { epoch: epoch }).await;
         assert!(res.is_ok());
         let resp = res.unwrap();
-        assert_eq!(resp.snapshot_key_bytes, [0u8; 32], "Snapshot key is not mock value");
-        assert_eq!(resp.tx_io_pk, get_unsecure_sample_secp256k1_pk());
-        assert_eq!(resp.tx_io_sk, get_unsecure_sample_secp256k1_sk());
-        assert_eq!(resp.rng_keypair.secret, get_unsecure_sample_schnorrkel_keypair().secret);
+
+        let kp = enclave_engine.key_provider().unwrap();
+        assert_eq!(resp.tx_io_pk, kp.get_tx_io_pk(epoch));
+        assert_eq!(resp.tx_io_sk, kp.get_tx_io_sk(epoch));
+        assert_eq!(resp.rng_keypair.secret, kp.get_rng_keypair(epoch).secret);
+        assert_eq!(resp.snapshot_key_bytes, Into::<[u8; 32]>::into(kp.get_snapshot_key(epoch)));
     }
 
     #[serial(attestation_agent)]
