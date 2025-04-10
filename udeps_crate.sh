@@ -11,7 +11,6 @@ fi
 
 echo "📦 Analyzing crate: $CRATE_DIR"
 echo "🔍 Parsing dependencies from $CRATE_TOML..."
-echo "" > "$TMP_FILE"
 
 # Collect deps from [dependencies] and [dev-dependencies]
 deps=()
@@ -145,9 +144,8 @@ if [[ -s "$TMP_FILE" ]]; then
   echo ""
   echo "✂️ Consider removing them from $CRATE_TOML"
   echo "Note: Run with verbose mode for detailed matching: $0 $CRATE_DIR true"
+  rm "$TMP_FILE"
 else
   echo ""
   echo "✅ All dependencies appear to be used!"
 fi
-
-rm "$TMP_FILE"

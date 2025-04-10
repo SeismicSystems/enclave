@@ -20,12 +20,7 @@ use crate::{
     },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
-    genesis::GenesisDataResponse,
-    signing::{
-        Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
-        Secp256k1VerifyResponse,
-    },
-    tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
+    keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
 };
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_IP: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
@@ -168,13 +163,7 @@ macro_rules! impl_sync_client_trait {
 }
 impl_sync_client_trait!(
     fn health_check(&self) -> Result<String, ClientError>,
-    fn get_public_key(&self) -> Result<secp256k1::PublicKey, ClientError>,
-    fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
-    fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError>,
-    fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
-    fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
-    fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
-    fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
+    fn get_purpose_keys(&self, _req: GetPurposeKeysRequest) -> Result<GetPurposeKeysResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
     fn boot_retrieve_root_key(&self, _req: RetrieveRootKeyRequest) -> Result<RetrieveRootKeyResponse,  ClientError>,
@@ -185,12 +174,9 @@ impl_sync_client_trait!(
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{
-        get_unsecure_sample_secp256k1_pk, nonce::Nonce, rpc::BuildableServer, MockEnclaveServer,
-    };
+    use crate::{rpc::BuildableServer, MockEnclaveServer};
 
     use super::*;
-    use secp256k1::{rand, Secp256k1};
     use std::{
         net::{SocketAddr, TcpListener},
         time::Duration,
@@ -215,9 +201,6 @@ pub mod tests {
 
         let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         sync_test_health_check(&client);
-        sync_test_get_public_key(&client);
-        sync_test_get_eph_rng_keypair(&client);
-        sync_test_tx_io_encrypt_decrypt(&client);
         Ok(())
     }
 
@@ -229,46 +212,15 @@ pub mod tests {
             .port()
     }
 
-    pub fn sync_test_tx_io_encrypt_decrypt<C: SyncEnclaveApiClient>(client: &C) {
-        // make the request struct
-        let secp = Secp256k1::new();
-        let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
-        let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let nonce = Nonce::new_rand();
-        let encryption_request = IoEncryptionRequest {
-            key: public_key,
-            data: data_to_encrypt.clone(),
-            nonce: nonce.clone(),
-        };
-
-        // make the http request
-        let encryption_response = client.encrypt(encryption_request).unwrap();
-
-        // check the response
-        assert!(!encryption_response.encrypted_data.is_empty());
-
-        let decryption_request = IoDecryptionRequest {
-            key: public_key,
-            data: encryption_response.encrypted_data,
-            nonce: nonce.clone(),
-        };
-
-        let decryption_response = client.decrypt(decryption_request).unwrap();
-        assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
-    }
-
     pub fn sync_test_health_check<C: SyncEnclaveApiClient>(client: &C) {
         let resposne = client.health_check().unwrap();
         assert_eq!(resposne, "OK");
     }
 
-    pub fn sync_test_get_public_key<C: SyncEnclaveApiClient>(client: &C) {
-        let res = client.get_public_key().unwrap();
-        assert_eq!(res, get_unsecure_sample_secp256k1_pk());
-    }
-
-    pub fn sync_test_get_eph_rng_keypair<C: SyncEnclaveApiClient>(client: &C) {
-        let res = client.get_eph_rng_keypair().unwrap();
-        println!("eph_rng_keypair: {:?}", res);
+    pub fn sync_test_get_purpose_keys<C: SyncEnclaveApiClient>(client: &C) {
+        let response = client
+            .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+            .unwrap();
+        assert!(response.snapshot_key_bytes.len() > 0);
     }
 }

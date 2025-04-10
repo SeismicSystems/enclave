@@ -9,7 +9,7 @@ use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
 use seismic_enclave::request_types::boot::*;
 use seismic_enclave::rpc::SyncEnclaveApiClient;
-use seismic_enclave::{ecdh_decrypt, ecdh_encrypt, nonce::Nonce};
+use seismic_enclave::{crypto::Nonce, ecdh_decrypt, ecdh_encrypt};
 use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};
 use std::sync::Mutex;
 use tracing::info;

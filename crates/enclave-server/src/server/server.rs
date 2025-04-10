@@ -7,14 +7,8 @@ use seismic_enclave::boot::{
 };
 use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use seismic_enclave::genesis::GenesisDataResponse;
+use seismic_enclave::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
 use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
-use seismic_enclave::signing::{
-    Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest, Secp256k1VerifyResponse,
-};
-use seismic_enclave::tx_io::{
-    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
-};
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
 use anyhow::{anyhow, Result};
@@ -205,13 +199,7 @@ macro_rules! impl_forwarding_async_server_trait {
 }
 impl_forwarding_async_server_trait!(
     async fn health_check(&self) -> String,
-    async fn get_public_key(&self) -> secp256k1::PublicKey,
-    async fn get_genesis_data(&self) -> GenesisDataResponse, log = "getGenesisData",
-    async fn sign(&self, req: Secp256k1SignRequest) -> Secp256k1SignResponse, log = "sign",
-    async fn verify(&self, req: Secp256k1VerifyRequest) -> Secp256k1VerifyResponse, log = "verify",
-    async fn encrypt(&self, req: IoEncryptionRequest) -> IoEncryptionResponse, log = "encrypt",
-    async fn decrypt(&self, req: IoDecryptionRequest) -> IoDecryptionResponse, log = "decrypt",
-    async fn get_eph_rng_keypair(&self) -> schnorrkel::keys::Keypair, log = "eph_rng.get_keypair",
+    async fn get_purpose_keys(&self, req: GetPurposeKeysRequest) -> GetPurposeKeysResponse, log = "getPurposeKeys",
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse, log = "getAttestationEvidence",
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse, log = "evalAttestationEvidence",
     async fn boot_retrieve_root_key(&self, req: RetrieveRootKeyRequest) -> RetrieveRootKeyResponse, log = "boot_retrieve_root_key",
@@ -236,6 +224,7 @@ pub fn init_tracing() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::attestation::SeismicAttestationAgent;
     use crate::key_manager::KeyManager;
     use crate::key_manager::NetworkKeyProvider;
@@ -247,10 +236,6 @@ mod tests {
     };
     use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
     use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
-    use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
-    use seismic_enclave::get_unsecure_sample_secp256k1_pk;
-    use seismic_enclave::nonce::Nonce;
-    use seismic_enclave::request_types::tx_io::*;
     use seismic_enclave::rpc::EnclaveApiClient;
 
     use attestation_service::token::simple::SimpleAttestationTokenBroker;
@@ -260,40 +245,9 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
 
-    async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
-        // make the request struct
-        let data_to_encrypt = vec![72, 101, 108, 108, 111];
-        let nonce = Nonce::new_rand();
-        let encryption_request = IoEncryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: data_to_encrypt.clone(),
-            nonce: nonce.clone(),
-        };
-
-        // make the http request
-        let encryption_response = client.encrypt(encryption_request).await.unwrap();
-
-        // check the response
-        assert!(!encryption_response.encrypted_data.is_empty());
-
-        let decryption_request = IoDecryptionRequest {
-            key: get_unsecure_sample_secp256k1_pk(),
-            data: encryption_response.encrypted_data,
-            nonce: nonce.clone(),
-        };
-
-        let decryption_response = client.decrypt(decryption_request).await.unwrap();
-        assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
-    }
-
     async fn test_health_check(client: &EnclaveClient) {
         let resposne = client.health_check().await.unwrap();
         assert_eq!(resposne, "OK");
-    }
-
-    async fn test_genesis_get_data(client: &EnclaveClient) {
-        let resposne = client.get_genesis_data().await.unwrap();
-        assert!(!resposne.evidence.is_empty());
     }
 
     async fn test_attestation_get_evidence(client: &EnclaveClient) {
@@ -331,19 +285,15 @@ mod tests {
             .unwrap();
     }
 
-    async fn test_get_public_key(client: &EnclaveClient) {
-        let res = client.get_public_key().await.unwrap();
-        assert!(
-            (res != get_unsecure_sample_secp256k1_pk()),
-            "public key should be randomly generated"
-        );
-    }
-
-    async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-        let res: schnorrkel::Keypair = client.get_eph_rng_keypair().await.unwrap();
-        assert!(
-            !(res.secret == get_unsecure_sample_schnorrkel_keypair().secret),
-            "eph rng keypair should be randomly generated"
+    async fn test_get_purpose_keys(client: &EnclaveClient) {
+        let response = client
+            .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+            .await
+            .unwrap();
+        assert!(response.snapshot_key_bytes.len() == 32);
+        assert_ne!(
+            response.snapshot_key_bytes, [0u8; 32],
+            "Snapshot key is not all zeros"
         );
     }
 
@@ -389,11 +339,8 @@ mod tests {
         client.complete_boot().await.unwrap();
 
         test_health_check(&client).await;
-        test_genesis_get_data(&client).await;
-        test_tx_io_encrypt_decrypt(&client).await;
         test_attestation_get_evidence(&client).await;
         test_attestation_eval_evidence(&client).await;
-        test_get_public_key(&client).await;
-        test_get_eph_rng_keypair(&client).await;
+        test_get_purpose_keys(&client).await;
     }
 }

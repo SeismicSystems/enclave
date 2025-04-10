@@ -13,7 +13,6 @@ use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
-use seismic_enclave::request_types::genesis::GenesisData;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
@@ -30,20 +29,6 @@ fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
     let tdx_evidence: Vec<u8> = super::test_utils::read_vector_txt(path.to_string())?;
 
     get_tdx_evidence_claims(tdx_evidence)?;
-
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn run_hash_genesis_data() -> Result<(), anyhow::Error> {
-    let genesis_data = GenesisData {
-        io_pk: get_unsecure_sample_secp256k1_pk(),
-    };
-
-    let genesis_data_bytes = genesis_data.to_bytes()?;
-    let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
-    println!("{:?}", hash_bytes);
 
     Ok(())
 }

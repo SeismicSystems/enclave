@@ -28,14 +28,14 @@ pub trait NetworkKeyProvider: Sync {
     fn get_root_key(&self) -> [u8; 32];
 
     /// Retrieves the secp256k1 secret key used for transaction I/O.
-    fn get_tx_io_sk(&self) -> secp256k1::SecretKey;
+    fn get_tx_io_sk(&self, epoch: u64) -> secp256k1::SecretKey;
 
     /// Retrieves the secp256k1 public key corresponding to the transaction I/O secret key.
-    fn get_tx_io_pk(&self) -> secp256k1::PublicKey;
+    fn get_tx_io_pk(&self, epoch: u64) -> secp256k1::PublicKey;
 
     /// Retrieves the Schnorrkel keypair used for generating randomness.
-    fn get_rng_keypair(&self) -> schnorrkel::keys::Keypair;
+    fn get_rng_keypair(&self, epoch: u64) -> schnorrkel::keys::Keypair;
 
     /// Retrieves the AES-256-GCM encryption key used for snapshot encryption.
-    fn get_snapshot_key(&self) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
+    fn get_snapshot_key(&self, epoch: u64) -> aes_gcm::Key<aes_gcm::Aes256Gcm>;
 }
