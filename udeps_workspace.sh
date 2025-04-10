@@ -21,7 +21,6 @@ if ! grep -q '^\[workspace.dependencies\]' "$WORKSPACE_TOML"; then
 fi
 
 echo "🔍 Scanning [workspace.dependencies] in $WORKSPACE_TOML..."
-echo "" > "$TMP_FILE"
 
 # Extract lines after the section until the next section, clean comments and whitespace
 deps=()
@@ -90,9 +89,8 @@ if [[ -s "$TMP_FILE" ]]; then
     cat "$TMP_FILE"
     echo ""
     echo "✂️ You can now manually remove them from [workspace.dependencies] in $WORKSPACE_TOML."
+    rm "$TMP_FILE"
 else
     echo ""
     echo "✅ No unused workspace dependencies found!"
 fi
-
-rm "$TMP_FILE"
