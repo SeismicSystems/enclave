@@ -4,4 +4,3 @@ pub mod boot;
 pub mod coco_aa;
 pub mod coco_as;
 pub mod keys;
-pub mod nonce;

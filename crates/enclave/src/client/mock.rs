@@ -21,10 +21,10 @@ use crate::{
     },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
+    crypto::Nonce,
     ecdh_encrypt, get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
     keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
-    nonce::Nonce,
 };
 
 /// A mock enclave server for testing purposes.
