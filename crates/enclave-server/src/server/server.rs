@@ -286,9 +286,15 @@ mod tests {
     }
 
     async fn test_get_purpose_keys(client: &EnclaveClient) {
-        let response = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await.unwrap();
+        let response = client
+            .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+            .await
+            .unwrap();
         assert!(response.snapshot_key_bytes.len() == 32);
-        assert_ne!(response.snapshot_key_bytes, [0u8; 32], "Snapshot key is not all zeros");
+        assert_ne!(
+            response.snapshot_key_bytes, [0u8; 32],
+            "Snapshot key is not all zeros"
+        );
     }
 
     #[tokio::test]
