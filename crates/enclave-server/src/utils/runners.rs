@@ -54,7 +54,7 @@ async fn see_default_config() {
 }
 
 #[tokio::test]
-// #[ignore]
+#[ignore]
 async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
     let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
     let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
