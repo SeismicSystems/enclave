@@ -14,7 +14,7 @@ name = "seismic_enclave_server"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["az-tdx-vtpm-attester"]
 az-tdx-vtpm-attester = ["attestation-agent/az-tdx-vtpm-attester", "verifier/az-tdx-vtpm-verifier", "az-tdx-vtpm"]
 
 [dependencies]
