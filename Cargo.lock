@@ -295,7 +295,7 @@ dependencies = [
 [[package]]
 name = "attestation-service"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/trustee?rev=4a58881#4a588817c8bc8587d943a83f02f06eb351f11320"
+source = "git+https://github.com/confidential-containers/trustee?rev=8565e7f#8565e7fe11f6be8d5f744580e8cf1f1b8cadbde9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3603,7 +3603,7 @@ dependencies = [
 [[package]]
 name = "reference-value-provider-service"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/trustee?rev=4a58881#4a588817c8bc8587d943a83f02f06eb351f11320"
+source = "git+https://github.com/confidential-containers/trustee?rev=8565e7f#8565e7fe11f6be8d5f744580e8cf1f1b8cadbde9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5274,7 +5274,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/trustee?rev=4a58881#4a588817c8bc8587d943a83f02f06eb351f11320"
+source = "git+https://github.com/confidential-containers/trustee?rev=8565e7f#8565e7fe11f6be8d5f744580e8cf1f1b8cadbde9"
 dependencies = [
  "anyhow",
  "asn1-rs",

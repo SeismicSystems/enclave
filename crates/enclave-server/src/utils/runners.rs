@@ -68,19 +68,14 @@ async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
 }
 
 pub fn print_active_feature() {
-    #[cfg(feature = "local-build")]
+    #[cfg(feature = "az-tdx-vtpm-attester")]
     {
-        println!("local-build");
+        println!("az-tdx-vtpm-attester enabled");
     }
 
-    #[cfg(all(not(feature = "local-build"), feature = "tdx-attestation"))]
+    #[cfg(not(feature = "az-tdx-vtpm-attester"))]
     {
-        println!("tdx-attestation");
-    }
-
-    #[cfg(all(not(feature = "local-build"), not(feature = "tdx-attestation")))]
-    {
-        println!("No active feature: expected one of `local_build` or `tdx-attestation`");
+        println!("az-tdx-vtpm-attester not enabled");
     }
 }
 

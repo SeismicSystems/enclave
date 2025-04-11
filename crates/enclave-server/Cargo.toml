@@ -20,10 +20,10 @@ az-tdx-vtpm-attester = ["attestation-agent/az-tdx-vtpm-attester", "verifier/az-t
 [dependencies]
 seismic-enclave.workspace = true
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
-attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="4a58881", default-features = false}
-time = { version = "0.3.40", features = ["std"] } # necessary for attestation-service at rev="4a58881"
+attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="8565e7f", default-features = false}
+time = { version = "0.3.40", features = ["std"] } # necessary for attestation-service at rev="8565e7f"
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="2823b8c", default-features = false}
-verifier = { git = "https://github.com/confidential-containers/trustee", rev = "4a58881", package = "verifier", default-features = false}
+verifier = { git = "https://github.com/confidential-containers/trustee", rev = "8565e7f", package = "verifier", default-features = false}
 az-tdx-vtpm = {workspace = true, optional = true}
 
 aes-gcm.workspace = true
