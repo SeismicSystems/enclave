@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [features]
 default = ["az-tdx-vtpm-attester"]
-az-tdx-vtpm-attester = ["attestation-agent/az-tdx-vtpm-attester", "verifier/az-tdx-vtpm-verifier", "az-tdx-vtpm"]
+az-tdx-vtpm-attester = ["attestation-agent/az-tdx-vtpm-attester", "verifier/az-tdx-vtpm-verifier", "verifier/az-snp-vtpm-verifier", "az-tdx-vtpm"]
 
 [dependencies]
 seismic-enclave.workspace = true
