@@ -14,17 +14,16 @@ name = "seismic_enclave_server"
 path = "src/lib.rs"
 
 [features]
-default = ["tdx-attestation"]
-tdx-attestation = ["attestation-agent/az-tdx-vtpm-attester"]
-local-build = []  # doesn't pull in linux tdx libs
+default = ["non-linux-tdx"]
+tdx-attestation = ["attestation-agent/az-tdx-vtpm-attester", "verifier/az-tdx-vtpm-verifier"]
+non-linux-tdx = []  # doesn't pull in linux tdx libs
 
 [dependencies]
 seismic-enclave.workspace = true
-
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", default-features = false, rev="e6999a3"}
-verifier = { git = "https://github.com/confidential-containers/trustee", rev = "1fdd67d", package = "verifier" }
+verifier = { git = "https://github.com/confidential-containers/trustee", rev = "1fdd67d", default-features = false, package = "verifier"}
 
 aes-gcm.workspace = true
 zeroize.workspace = true
