@@ -60,9 +60,23 @@ async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
     let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
     let saa = seismic_aa_mock().await;
     let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
+    print_active_feature();
+    println!("{:?}", saa.get_tee_type());
     println!("{:?}", tdx_evidence);
     assert!(false); // so I can see the print statement
     Ok(())
+}
+
+pub fn print_active_feature() {
+    #[cfg(feature = "az-tdx-vtpm-attester")]
+    {
+        println!("az-tdx-vtpm-attester enabled");
+    }
+
+    #[cfg(not(feature = "az-tdx-vtpm-attester"))]
+    {
+        println!("az-tdx-vtpm-attester not enabled");
+    }
 }
 
 //#[tokio::test]

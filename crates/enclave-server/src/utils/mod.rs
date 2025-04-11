@@ -5,6 +5,7 @@ pub mod test_utils;
 /// and converting it to a human readable format. It is mainly used for debugging
 /// the logic is mostly copied and pasted from https://github.com/confidential-containers/trustee/tree/main/deps/verifier/src/tdx
 #[allow(dead_code)]
+#[cfg(feature = "az-tdx-vtpm-attester")]
 pub mod tdx_evidence_helpers;
 
 /// runners has cargo tests so I can
@@ -12,4 +13,5 @@ pub mod tdx_evidence_helpers;
 /// They are for dev convenience only
 /// test runners are for dev convenience only
 #[allow(unused_imports)]
+#[cfg(feature = "az-tdx-vtpm-attester")]
 pub mod runners;
