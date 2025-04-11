@@ -5,6 +5,7 @@ use attestation_service::{Data, HashAlgorithm};
 use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;
+use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::collections::HashMap;
 use verifier::{InitDataHash, ReportData};
 
@@ -141,7 +142,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
                     // Serialize the structured data (keys in alphabetical order)
                     let hash_materials =
                         serde_json::to_vec(&structured).context("parse JSON structured data")?;
-                    let digest = hash_algorithm.accumulate_hash(hash_materials);
+                    let digest = self.accumulate_hash(hash_algorithm, hash_materials);
                     Ok((Some(digest), structured))
                 }
             },
@@ -152,6 +153,26 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     async fn get_reference_data(&self) -> Result<HashMap<String, Vec<String>>> {
         let reference_data: HashMap<String, Vec<String>> = HashMap::new();
         Ok(reference_data)
+    }
+
+    fn accumulate_hash(&self, hash_algorithm: HashAlgorithm, materials: Vec<u8>) -> Vec<u8> {
+        match hash_algorithm {
+            HashAlgorithm::Sha256 => {
+                let mut hasher = Sha256::new();
+                hasher.update(materials);
+                hasher.finalize().to_vec()
+            }
+            HashAlgorithm::Sha384 => {
+                let mut hasher = Sha384::new();
+                hasher.update(materials);
+                hasher.finalize().to_vec()
+            }
+            HashAlgorithm::Sha512 => {
+                let mut hasher = Sha512::new();
+                hasher.update(materials);
+                hasher.finalize().to_vec()
+            }
+        }
     }
 }
 
