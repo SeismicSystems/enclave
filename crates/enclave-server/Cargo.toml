@@ -21,9 +21,10 @@ supervisorctl = []
 seismic-enclave.workspace = true
 
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
-attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
-attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
-verifier = { git = "https://github.com/confidential-containers/trustee", rev = "1fdd67d", package = "verifier" }
+attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="4a58881"}
+time = { version = "0.3.40", features = ["std"] } # necessary for attestation-service at rev="4a58881"
+attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="2823b8c"}
+verifier = { git = "https://github.com/confidential-containers/trustee", rev = "4a58881", package = "verifier" }
 
 aes-gcm.workspace = true
 zeroize.workspace = true
@@ -47,6 +48,7 @@ schnorrkel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
+
 clap = { version = "4.5", features = ["derive"] }
 
 [dev-dependencies]
