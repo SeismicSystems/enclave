@@ -54,15 +54,34 @@ async fn see_default_config() {
 }
 
 #[tokio::test]
-#[ignore]
+// #[ignore]
 async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
     let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
     let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
     let saa = seismic_aa_mock().await;
     let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
+    print_active_feature();
+    println!("{:?}", saa.get_tee_type());
     println!("{:?}", tdx_evidence);
     assert!(false); // so I can see the print statement
     Ok(())
+}
+
+pub fn print_active_feature() {
+    #[cfg(feature = "local-build")]
+    {
+        println!("local-build");
+    }
+
+    #[cfg(all(not(feature = "local-build"), feature = "tdx-attestation"))]
+    {
+        println!("tdx-attestation");
+    }
+
+    #[cfg(all(not(feature = "local-build"), not(feature = "tdx-attestation")))]
+    {
+        println!("No active feature: expected one of `local_build` or `tdx-attestation`");
+    }
 }
 
 //#[tokio::test]
