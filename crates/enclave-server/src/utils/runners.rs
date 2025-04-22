@@ -50,7 +50,6 @@ async fn see_default_config() {
     println!("{:?}", config);
 }
 
-
 //#[tokio::test]
 //#[ignore]
 //async fn get_mrtd() {
