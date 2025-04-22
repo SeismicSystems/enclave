@@ -13,5 +13,4 @@ pub mod tdx_evidence_helpers;
 /// They are for dev convenience only
 /// test runners are for dev convenience only
 #[allow(unused_imports)]
-#[cfg(feature = "az-tdx-vtpm-attester")]
 pub mod runners;
