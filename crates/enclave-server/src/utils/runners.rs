@@ -84,6 +84,7 @@ async fn see_default_config() {
 mod attester_tests {
     use super::*;
     use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
+    use crate::utils::test_utils::read_vector_txt;
 
     #[tokio::test]
     #[ignore]
@@ -102,9 +103,8 @@ mod attester_tests {
     #[test]
     #[ignore]
     fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-        // let path = "./src/coco_as/examples/yocto_20241023223507.txt";
-        let path = "./src/coco_as/examples/yocto_20241025193121.txt";
-        let tdx_evidence: Vec<u8> = super::test_utils::read_vector_txt(path.to_string())?;
+        let path = "./src/coco_as/examples/yocto_20241025193121.txt"; // Note this file has moved
+        let tdx_evidence: Vec<u8> = read_vector_txt(path.to_string())?;
 
         get_tdx_evidence_claims(tdx_evidence)?;
 
