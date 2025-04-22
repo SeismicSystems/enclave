@@ -7,7 +7,6 @@ use crate::attestation::seismic_aa_mock;
 use crate::attestation::SeismicAttestationAgent;
 use attestation_agent::AttestationAPIs;
 
-use super::tdx_evidence_helpers::get_tdx_evidence_claims;
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -17,20 +16,18 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
 
-#[allow(dead_code)]
-#[allow(unused_imports)]
-use seismic_enclave::request_types::*;
-
 #[test]
 #[ignore]
-fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-    // let path = "./src/coco_as/examples/yocto_20241023223507.txt";
-    let path = "./src/coco_as/examples/yocto_20241025193121.txt";
-    let tdx_evidence: Vec<u8> = super::test_utils::read_vector_txt(path.to_string())?;
+pub fn print_active_feature() {
+    #[cfg(feature = "az-tdx-vtpm-attester")]
+    {
+        println!("az-tdx-vtpm-attester enabled");
+    }
 
-    get_tdx_evidence_claims(tdx_evidence)?;
-
-    Ok(())
+    #[cfg(not(feature = "az-tdx-vtpm-attester"))]
+    {
+        println!("az-tdx-vtpm-attester not enabled");
+    }
 }
 
 #[test]
@@ -53,31 +50,6 @@ async fn see_default_config() {
     println!("{:?}", config);
 }
 
-#[tokio::test]
-#[ignore]
-async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
-    let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
-    let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
-    let saa = seismic_aa_mock().await;
-    let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
-    print_active_feature();
-    println!("{:?}", saa.get_tee_type());
-    println!("{:?}", tdx_evidence);
-    assert!(false); // so I can see the print statement
-    Ok(())
-}
-
-pub fn print_active_feature() {
-    #[cfg(feature = "az-tdx-vtpm-attester")]
-    {
-        println!("az-tdx-vtpm-attester enabled");
-    }
-
-    #[cfg(not(feature = "az-tdx-vtpm-attester"))]
-    {
-        println!("az-tdx-vtpm-attester not enabled");
-    }
-}
 
 //#[tokio::test]
 //#[ignore]
@@ -107,3 +79,35 @@ pub fn print_active_feature() {
 //    // let resp = client.health_check().unwrap();
 //    // println!("resp: {:?}", resp);
 //}
+
+#[cfg(feature = "az-tdx-vtpm-attester")]
+mod attester_tests {
+    use super::*;
+    use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
+
+    #[tokio::test]
+    #[ignore]
+    async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
+        let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
+        let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
+        let saa = seismic_aa_mock().await;
+        let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
+        print_active_feature();
+        println!("{:?}", saa.get_tee_type());
+        println!("{:?}", tdx_evidence);
+        assert!(false); // so I can see the print statement
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
+        // let path = "./src/coco_as/examples/yocto_20241023223507.txt";
+        let path = "./src/coco_as/examples/yocto_20241025193121.txt";
+        let tdx_evidence: Vec<u8> = super::test_utils::read_vector_txt(path.to_string())?;
+
+        get_tdx_evidence_claims(tdx_evidence)?;
+
+        Ok(())
+    }
+}
