@@ -34,6 +34,7 @@ use super::{
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 
+#[derive(Debug, Clone)]
 pub struct MockEnclaveServer {
     addr: SocketAddr,
 }
@@ -240,6 +241,7 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct MockEnclaveClient;
 impl MockEnclaveClient {
     pub fn new() -> Self {
