@@ -1,3 +1,4 @@
+use clap::builder;
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
     future::Future,
@@ -68,6 +69,20 @@ impl EnclaveClientBuilder {
     }
 }
 
+impl Default for EnclaveClientBuilder {
+    fn default() -> Self {
+        let mut builder = EnclaveClientBuilder::new();
+
+        let url = format!(
+            "http://{}:{}",
+            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
+        );
+        builder = builder.url(url);
+        builder = builder.timeout(Duration::from_secs(5));
+        builder
+    }
+}
+
 impl SyncEnclaveApiClientBuilder<EnclaveClient> for EnclaveClientBuilder {
     fn build(self) -> EnclaveClient {
         let url = self.url.unwrap_or_else(|| {
@@ -100,15 +115,8 @@ pub struct EnclaveClient {
 
 impl Default for EnclaveClient {
     fn default() -> Self {
-        let url = format!(
-            "http://{}:{}",
-            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        );
-        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
-            .request_timeout(Duration::from_secs(5))
-            .build(url)
-            .unwrap();
-        Self::new_from_client(async_client)
+        let default_builder = EnclaveClientBuilder::default();
+        default_builder.build()
     }
 }
 
