@@ -8,6 +8,7 @@ use std::{
 };
 use tokio::runtime::{Handle, Runtime};
 
+use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder};
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
@@ -23,7 +24,6 @@ use crate::{
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-use super::rpc::{SyncEnclaveApiClientBuilder, EnclaveApiClient, SyncEnclaveApiClient};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
@@ -66,6 +66,25 @@ impl EnclaveClientBuilder {
         self.url = Some(url.into());
         self
     }
+
+    fn build(self) -> EnclaveClient {
+        let url = self.url.unwrap_or_else(|| {
+            format!(
+                "http://{}:{}",
+                self.addr
+                    .unwrap_or_else(|| ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string()),
+                self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
+            )
+        });
+        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
+            .request_timeout(
+                self.timeout
+                    .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
+            )
+            .build(url)
+            .unwrap();
+        EnclaveClient::new_from_client(async_client)
+    }
 }
 
 impl Default for EnclaveClientBuilder {
@@ -84,22 +103,7 @@ impl Default for EnclaveClientBuilder {
 
 impl SyncEnclaveApiClientBuilder<EnclaveClient> for EnclaveClientBuilder {
     fn build(self) -> EnclaveClient {
-        let url = self.url.unwrap_or_else(|| {
-            format!(
-                "http://{}:{}",
-                self.addr
-                    .unwrap_or_else(|| ENCLAVE_DEFAULT_ENDPOINT_ADDR.to_string()),
-                self.port.unwrap_or(ENCLAVE_DEFAULT_ENDPOINT_PORT)
-            )
-        });
-        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
-            .request_timeout(
-                self.timeout
-                    .unwrap_or(Duration::from_secs(ENCLAVE_DEFAULT_TIMEOUT_SECONDS)),
-            )
-            .build(url)
-            .unwrap();
-        EnclaveClient::new_from_client(async_client)
+        EnclaveClientBuilder::build(self)
     }
 }
 
