@@ -67,7 +67,7 @@ impl EnclaveClientBuilder {
         self
     }
 
-    fn build(self) -> EnclaveClient {
+    pub fn build(self) -> EnclaveClient {
         let url = self.url.unwrap_or_else(|| {
             format!(
                 "http://{}:{}",
