@@ -1,4 +1,3 @@
-use clap::builder;
 use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use std::{
     future::Future,
