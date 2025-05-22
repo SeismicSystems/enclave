@@ -23,8 +23,7 @@ use crate::{
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-
-use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
+use super::rpc::{SyncEnclaveApiClientBuilder, EnclaveApiClient, SyncEnclaveApiClient};
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
@@ -67,8 +66,10 @@ impl EnclaveClientBuilder {
         self.url = Some(url.into());
         self
     }
+}
 
-    pub fn build(self) -> EnclaveClient {
+impl SyncEnclaveApiClientBuilder<EnclaveClient> for EnclaveClientBuilder {
+    fn build(self) -> EnclaveClient {
         let url = self.url.unwrap_or_else(|| {
             format!(
                 "http://{}:{}",
