@@ -279,6 +279,11 @@ impl_mock_sync_client_trait!(
 
 #[derive(Debug, Clone)]
 pub struct MockEnclaveClientBuilder {}
+impl MockEnclaveClientBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 impl SyncEnclaveApiClientBuilder<MockEnclaveClient> for MockEnclaveClientBuilder {
     fn build(self) -> MockEnclaveClient {
         MockEnclaveClient::new()
