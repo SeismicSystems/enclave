@@ -277,6 +277,7 @@ impl_mock_sync_client_trait!(
     fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
+#[derive(Debug, Clone)]
 pub struct MockEnclaveClientBuilder {}
 impl SyncEnclaveApiClientBuilder<MockEnclaveClient> for MockEnclaveClientBuilder {
     fn build(self) -> MockEnclaveClient {
