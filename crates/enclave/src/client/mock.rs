@@ -28,11 +28,11 @@ use crate::{
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-
 use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
     ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
+use crate::rpc::SyncEnclaveApiClientBuilder;
 
 #[derive(Debug, Clone)]
 pub struct MockEnclaveServer {
@@ -241,7 +241,7 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MockEnclaveClient;
 impl MockEnclaveClient {
     pub fn new() -> Self {
@@ -276,6 +276,20 @@ impl_mock_sync_client_trait!(
     fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
     fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
+
+#[derive(Debug, Clone, Default)]
+pub struct MockEnclaveClientBuilder {}
+impl MockEnclaveClientBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+impl SyncEnclaveApiClientBuilder for MockEnclaveClientBuilder {
+    type Client = MockEnclaveClient;
+    fn build(self) -> MockEnclaveClient {
+        MockEnclaveClient::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {
