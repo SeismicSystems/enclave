@@ -241,7 +241,7 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MockEnclaveClient;
 impl MockEnclaveClient {
     pub fn new() -> Self {
@@ -277,7 +277,7 @@ impl_mock_sync_client_trait!(
     fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MockEnclaveClientBuilder {}
 impl MockEnclaveClientBuilder {
     pub fn new() -> Self {
