@@ -101,7 +101,8 @@ impl Default for EnclaveClientBuilder {
     }
 }
 
-impl SyncEnclaveApiClientBuilder<EnclaveClient> for EnclaveClientBuilder {
+impl SyncEnclaveApiClientBuilder for EnclaveClientBuilder {
+    type Client = EnclaveClient;
     fn build(self) -> EnclaveClient {
         EnclaveClientBuilder::build(self)
     }

@@ -284,7 +284,8 @@ impl MockEnclaveClientBuilder {
         Self {}
     }
 }
-impl SyncEnclaveApiClientBuilder<MockEnclaveClient> for MockEnclaveClientBuilder {
+impl SyncEnclaveApiClientBuilder for MockEnclaveClientBuilder {
+    type Client = MockEnclaveClient;
     fn build(self) -> MockEnclaveClient {
         MockEnclaveClient::new()
     }
