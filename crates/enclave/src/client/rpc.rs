@@ -41,8 +41,10 @@ pub trait BuildableServer {
     }
 }
 
-pub trait SyncEnclaveApiClientBuilder<C: SyncEnclaveApiClient> {
-    fn build(self) -> C;
+
+pub trait SyncEnclaveApiClientBuilder {
+    type Client: SyncEnclaveApiClient;
+    fn build(self) -> Self::Client;
 }
 
 #[derive_sync_client_trait] // get SyncEnclaveApi trait
