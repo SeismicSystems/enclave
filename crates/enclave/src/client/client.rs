@@ -30,6 +30,7 @@ pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
+#[derive(Debug, Clone)]
 pub struct EnclaveClientBuilder {
     addr: Option<String>,
     port: Option<u16>,
