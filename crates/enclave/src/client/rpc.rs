@@ -7,8 +7,8 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
 use std::fmt::Debug;
-use tracing::info;
 use std::net::SocketAddr;
+use tracing::info;
 
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -41,7 +41,6 @@ pub trait BuildableServer {
         Ok(server_handle)
     }
 }
-
 
 pub trait SyncEnclaveApiClientBuilder: Clone + Debug + Send + Sync + Unpin {
     type Client: SyncEnclaveApiClient + Clone + Debug + Send + Sync + Unpin;
