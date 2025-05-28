@@ -43,8 +43,8 @@ pub trait BuildableServer {
 }
 
 
-pub trait SyncEnclaveApiClientBuilder: Clone + Debug {
-    type Client: SyncEnclaveApiClient + Clone + Debug;
+pub trait SyncEnclaveApiClientBuilder: Clone + Debug + Send + Sync + Unpin {
+    type Client: SyncEnclaveApiClient + Clone + Debug + Send + Sync + Unpin;
     fn build(self) -> Self::Client;
 }
 
