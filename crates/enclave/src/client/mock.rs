@@ -10,6 +10,11 @@ use jsonrpsee::{
     Methods,
 };
 
+use super::{
+    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
+    ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+};
+use crate::rpc::SyncEnclaveApiClientBuilder;
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
@@ -28,11 +33,6 @@ use crate::{
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
-use super::{
-    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
-    ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
-};
-use crate::rpc::SyncEnclaveApiClientBuilder;
 
 #[derive(Debug, Clone)]
 pub struct MockEnclaveServer {
