@@ -1,12 +1,14 @@
-use std::net::SocketAddr;
+//! JSON-RPC Trait for Server and Client
 
-/// JSON-RPC Trait for Server and Client
 use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
+use std::fmt::Debug;
+use tracing::info;
+use std::net::SocketAddr;
 
 use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
 use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
@@ -22,7 +24,6 @@ use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
     IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
-use tracing::info;
 
 pub trait BuildableServer {
     fn addr(&self) -> SocketAddr;
@@ -42,8 +43,8 @@ pub trait BuildableServer {
 }
 
 
-pub trait SyncEnclaveApiClientBuilder {
-    type Client: SyncEnclaveApiClient;
+pub trait SyncEnclaveApiClientBuilder: Clone + Debug {
+    type Client: SyncEnclaveApiClient + Clone + Debug;
     fn build(self) -> Self::Client;
 }
 
