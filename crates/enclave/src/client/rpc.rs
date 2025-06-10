@@ -19,7 +19,9 @@ use crate::snapshot::{
     RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
 };
 use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
-use crate::tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse};
+use crate::tx_io::{
+    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
+};
 use tracing::info;
 
 pub trait BuildableServer {

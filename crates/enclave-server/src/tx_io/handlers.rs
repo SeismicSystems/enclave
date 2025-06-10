@@ -45,7 +45,9 @@ pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncr
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
-pub async fn tx_io_decrypt_handler(request: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
+pub async fn tx_io_decrypt_handler(
+    request: IoDecryptionRequest,
+) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
     let decrypted_data = match ecdh_decrypt(
         &request.key,
