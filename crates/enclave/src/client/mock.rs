@@ -26,7 +26,7 @@ use crate::{
         RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
     },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
-    tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
+    tx_io::{DecryptionRequest, DecryptionResponse, EncryptionRequest, EncryptionResponse},
 };
 use super::{
     rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
@@ -60,31 +60,31 @@ impl MockEnclaveServer {
     }
 
     /// Mock implementation of the encrypt method.
-    pub fn encrypt(req: IoEncryptionRequest) -> IoEncryptionResponse {
+    pub fn encrypt(req: EncryptionRequest) -> EncryptionResponse {
         // Use the sample secret key for encryption
-        let encrypted_data = ecdh_encrypt(
+        match ecdh_encrypt(
             &req.key,
             &get_unsecure_sample_secp256k1_sk(),
             &req.data,
             req.nonce,
-        )
-        .unwrap();
-
-        IoEncryptionResponse { encrypted_data }
+        ) {
+            Ok(encrypted_data) => EncryptionResponse::Success(encrypted_data),
+            Err(e) => EncryptionResponse::Error(e.to_string()),
+        }
     }
 
     /// Mock implementation of the decrypt method.
-    pub fn decrypt(req: IoDecryptionRequest) -> IoDecryptionResponse {
+    pub fn decrypt(req: DecryptionRequest) -> DecryptionResponse {
         // Use the sample secret key for decryption
-        let decrypted_data = ecdh_decrypt(
+        match ecdh_decrypt(
             &req.key,
             &get_unsecure_sample_secp256k1_sk(),
             &req.data,
             req.nonce,
-        )
-        .unwrap();
-
-        IoDecryptionResponse { decrypted_data }
+        ) {
+            Ok(decrypted_data) => DecryptionResponse::Success(decrypted_data),
+            Err(e) => DecryptionResponse::Error(e.to_string()),
+        }
     }
 
     /// Mock implementation of the get_public_key method.
@@ -184,12 +184,12 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 
     /// Handler for: `encrypt`
-    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
+    async fn encrypt(&self, req: EncryptionRequest) -> RpcResult<EncryptionResponse> {
         Ok(MockEnclaveServer::encrypt(req))
     }
 
     /// Handler for: `decrypt`
-    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
+    async fn decrypt(&self, req: DecryptionRequest) -> RpcResult<DecryptionResponse> {
         Ok(MockEnclaveServer::decrypt(req))
     }
 
@@ -267,8 +267,8 @@ impl_mock_sync_client_trait!(
     fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
     fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> Result<SnapSyncResponse, ClientError>,
     fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError>,
-    fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
-    fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
+    fn encrypt(&self, req: EncryptionRequest) -> Result<EncryptionResponse, ClientError>,
+    fn decrypt(&self, req: DecryptionRequest) -> Result<DecryptionResponse, ClientError>,
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
@@ -331,7 +331,7 @@ mod tests {
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let nonce = Nonce::new_rand();
-        let encryption_request = IoEncryptionRequest {
+        let encryption_request = EncryptionRequest {
             key: public_key,
             data: data_to_encrypt.clone(),
             nonce: nonce.clone(),
@@ -340,17 +340,18 @@ mod tests {
         // make the http request
         let encryption_response = client.deref().encrypt(encryption_request).await.unwrap();
 
+        let data = encryption_response.unwrap();
         // check the response
-        assert!(!encryption_response.encrypted_data.is_empty());
+        assert!(!data.is_empty());
 
-        let decryption_request = IoDecryptionRequest {
+        let decryption_request = DecryptionRequest {
             key: public_key,
-            data: encryption_response.encrypted_data,
+            data,
             nonce: nonce.clone(),
         };
 
         let decryption_response = client.decrypt(decryption_request).unwrap();
-        assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
+        assert_eq!(decryption_response.unwrap(), data_to_encrypt);
     }
 
     async fn async_test_health_check(client: &EnclaveClient) {

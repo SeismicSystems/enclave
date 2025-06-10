@@ -20,7 +20,7 @@ use crate::snapshot::{
 };
 use crate::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use crate::tx_io::{
-    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
+    DecryptionRequest, DecryptionResponse, EncryptionRequest, EncryptionResponse,
 };
 use tracing::info;
 
@@ -88,11 +88,11 @@ pub trait EnclaveApi {
 
     /// Encrypts transaction data using ECDH and AES
     #[method(name = "encrypt")]
-    async fn encrypt(&self, _req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse>;
+    async fn encrypt(&self, _req: EncryptionRequest) -> RpcResult<EncryptionResponse>;
 
     /// Decrypts transaction data using ECDH and AES
     #[method(name = "decrypt")]
-    async fn decrypt(&self, _req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse>;
+    async fn decrypt(&self, _req: DecryptionRequest) -> RpcResult<DecryptionResponse>;
 
     /// Generates an ephemeral keypair
     #[method(name = "eph_rng.get_keypair")]
