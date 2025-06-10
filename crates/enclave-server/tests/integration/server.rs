@@ -26,7 +26,7 @@ async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // make the request struct
     let data_to_encrypt = vec![72, 101, 108, 108, 111];
     let nonce = Nonce::new_rand();
-    let encryption_request = IoEncryptionRequest {
+    let encryption_request = EncryptionRequest {
         key: get_unsecure_sample_secp256k1_pk(),
         data: data_to_encrypt.clone(),
         nonce: nonce.clone(),
@@ -38,7 +38,7 @@ async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
     // check the response
     assert!(!encryption_response.encrypted_data.is_empty());
 
-    let decryption_request = IoDecryptionRequest {
+    let decryption_request = DecryptionRequest {
         key: get_unsecure_sample_secp256k1_pk(),
         data: encryption_response.encrypted_data,
         nonce: nonce.clone(),
