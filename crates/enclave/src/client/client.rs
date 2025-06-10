@@ -22,7 +22,7 @@ use crate::{
         RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
     },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
-    tx_io::{DecryptionRequest, DecryptionResponse, EncryptionRequest, EncryptionResponse},
+    tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
@@ -184,8 +184,8 @@ impl_sync_client_trait!(
     fn get_genesis_data(&self) -> Result<GenesisDataResponse, ClientError>,
     fn get_snapsync_backup(&self, _req: SnapSyncRequest) -> Result<SnapSyncResponse, ClientError>,
     fn sign(&self, _req: Secp256k1SignRequest) -> Result<Secp256k1SignResponse, ClientError>,
-    fn encrypt(&self, req: EncryptionRequest) -> Result<EncryptionResponse, ClientError>,
-    fn decrypt(&self, req: DecryptionRequest) -> Result<DecryptionResponse, ClientError>,
+    fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError>,
+    fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError>,
     fn get_eph_rng_keypair(&self) -> Result<schnorrkel::keys::Keypair, ClientError>,
     fn verify(&self, _req: Secp256k1VerifyRequest) -> Result<Secp256k1VerifyResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
@@ -246,7 +246,7 @@ pub mod tests {
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let nonce = Nonce::new_rand();
-        let encryption_request = EncryptionRequest {
+        let encryption_request = IoEncryptionRequest {
             key: public_key,
             data: data_to_encrypt.clone(),
             nonce: nonce.clone(),
@@ -258,7 +258,7 @@ pub mod tests {
         // check the response
         assert!(!encryption_response.encrypted_data.is_empty());
 
-        let decryption_request = DecryptionRequest {
+        let decryption_request = IoDecryptionRequest {
             key: public_key,
             data: encryption_response.encrypted_data,
             nonce: nonce.clone(),

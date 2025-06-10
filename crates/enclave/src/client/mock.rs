@@ -32,7 +32,7 @@ use crate::{
     },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
     tx_io::{
-        DecryptionRequest, DecryptionResponse, EncryptionRequest, EncryptionResponse,
+        IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
         MockEnclaveResponse,
     },
 };
@@ -63,7 +63,7 @@ impl MockEnclaveServer {
     }
 
     /// Mock implementation of the encrypt method.
-    pub fn encrypt(req: EncryptionRequest) -> MockEnclaveResponse {
+    pub fn encrypt(req: IoEncryptionRequest) -> MockEnclaveResponse {
         // Use the sample secret key for encryption
         match ecdh_encrypt(
             &req.key,
@@ -77,7 +77,7 @@ impl MockEnclaveServer {
     }
 
     /// Mock implementation of the decrypt method.
-    pub fn decrypt(req: DecryptionRequest) -> MockEnclaveResponse {
+    pub fn decrypt(req: IoDecryptionRequest) -> MockEnclaveResponse {
         // Use the sample secret key for decryption
         match ecdh_decrypt(
             &req.key,
@@ -187,9 +187,9 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 
     /// Handler for: `encrypt`
-    async fn encrypt(&self, req: EncryptionRequest) -> RpcResult<EncryptionResponse> {
+    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         match MockEnclaveServer::encrypt(req) {
-            MockEnclaveResponse::Success(data) => Ok(EncryptionResponse {
+            MockEnclaveResponse::Success(data) => Ok(IoEncryptionResponse {
                 encrypted_data: data,
             }),
             MockEnclaveResponse::Error(e) => Err(rpc_bad_argument_error(e)),
@@ -197,9 +197,9 @@ impl EnclaveApiServer for MockEnclaveServer {
     }
 
     /// Handler for: `decrypt`
-    async fn decrypt(&self, req: DecryptionRequest) -> RpcResult<DecryptionResponse> {
+    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         match MockEnclaveServer::decrypt(req) {
-            MockEnclaveResponse::Success(data) => Ok(DecryptionResponse {
+            MockEnclaveResponse::Success(data) => Ok(IoDecryptionResponse {
                 decrypted_data: data,
             }),
             MockEnclaveResponse::Error(e) => Err(rpc_invalid_ciphertext_error(e)),
@@ -271,16 +271,16 @@ macro_rules! impl_mock_sync_client_trait {
                 }
             )+
 
-            fn encrypt(&self, req: EncryptionRequest) -> Result<EncryptionResponse, ClientError> {
+            fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError> {
                 match MockEnclaveServer::encrypt(req) {
-                    MockEnclaveResponse::Success(data) => Ok(EncryptionResponse { encrypted_data: data }),
+                    MockEnclaveResponse::Success(data) => Ok(IoEncryptionResponse { encrypted_data: data }),
                     MockEnclaveResponse::Error(e) => Err(rpc_bad_argument_error(e).into()),
                 }
             }
 
-            fn decrypt(&self, req: DecryptionRequest) -> Result<DecryptionResponse, ClientError> {
+            fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError> {
                 match MockEnclaveServer::decrypt(req) {
-                    MockEnclaveResponse::Success(data) => Ok(DecryptionResponse { decrypted_data: data }),
+                    MockEnclaveResponse::Success(data) => Ok(IoDecryptionResponse { decrypted_data: data }),
                     MockEnclaveResponse::Error(e) => Err(rpc_invalid_ciphertext_error(e).into()),
                 }
             }
@@ -356,7 +356,7 @@ mod tests {
         let (_secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let nonce = Nonce::new_rand();
-        let encryption_request = EncryptionRequest {
+        let encryption_request = IoEncryptionRequest {
             key: public_key,
             data: data_to_encrypt.clone(),
             nonce: nonce.clone(),
@@ -368,7 +368,7 @@ mod tests {
         // check the response
         assert!(!encryption_response.encrypted_data.is_empty());
 
-        let decryption_request = DecryptionRequest {
+        let decryption_request = IoDecryptionRequest {
             key: public_key,
             data: encryption_response.encrypted_data,
             nonce: nonce.clone(),

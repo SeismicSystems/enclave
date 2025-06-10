@@ -20,7 +20,7 @@ use seismic_enclave::snapshot::{
 };
 use seismic_enclave::snapsync::{SnapSyncRequest, SnapSyncResponse};
 use seismic_enclave::tx_io::{
-    DecryptionRequest, DecryptionResponse, EncryptionRequest, EncryptionResponse,
+    IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
 };
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
@@ -110,13 +110,13 @@ impl EnclaveApiServer for EnclaveServer {
     }
 
     /// Handler for: `encrypt`
-    async fn encrypt(&self, req: EncryptionRequest) -> RpcResult<EncryptionResponse> {
+    async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         debug!(target: "rpc::enclave", "Serving encrypt");
         tx_io_encrypt_handler(req).await
     }
 
     /// Handler for: `decrypt`
-    async fn decrypt(&self, req: DecryptionRequest) -> RpcResult<DecryptionResponse> {
+    async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         debug!(target: "rpc::enclave", "Serving decrypt");
         tx_io_decrypt_handler(req).await
     }

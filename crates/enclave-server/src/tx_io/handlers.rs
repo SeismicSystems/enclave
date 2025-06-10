@@ -21,7 +21,7 @@ use crate::get_secp256k1_sk;
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or encrypting the data fails.
-pub async fn tx_io_encrypt_handler(req: EncryptionRequest) -> RpcResult<EncryptionResponse> {
+pub async fn tx_io_encrypt_handler(req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
     // load key and encrypt data
     let encrypted_data = match ecdh_encrypt(&req.key, &get_secp256k1_sk(), &req.data, req.nonce) {
         Ok(data) => data,
@@ -31,7 +31,7 @@ pub async fn tx_io_encrypt_handler(req: EncryptionRequest) -> RpcResult<Encrypti
         }
     };
 
-    Ok(EncryptionResponse { encrypted_data })
+    Ok(IoEncryptionResponse { encrypted_data })
 }
 
 /// Handles an IO decryption request, decrypting the provided encrypted data using AES.
@@ -45,7 +45,7 @@ pub async fn tx_io_encrypt_handler(req: EncryptionRequest) -> RpcResult<Encrypti
 ///
 /// # Errors
 /// The function may panic if parsing the request body, creating the shared secret, or decrypting the data fails.
-pub async fn tx_io_decrypt_handler(request: DecryptionRequest) -> RpcResult<DecryptionResponse> {
+pub async fn tx_io_decrypt_handler(request: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
     // load key and decrypt data
     let decrypted_data = match ecdh_decrypt(
         &request.key,
@@ -60,7 +60,7 @@ pub async fn tx_io_decrypt_handler(request: DecryptionRequest) -> RpcResult<Decr
         }
     };
 
-    Ok(DecryptionResponse { decrypted_data })
+    Ok(IoDecryptionResponse { decrypted_data })
 }
 
 #[cfg(test)]
@@ -73,7 +73,7 @@ mod tests {
         // Prepare encryption request body
         let data_to_encrypt = vec![72, 101, 108, 108, 111];
         let nonce = Nonce::new_rand();
-        let req = EncryptionRequest {
+        let req = IoEncryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: data_to_encrypt.clone(),
             nonce: nonce.clone().into(),
@@ -85,7 +85,7 @@ mod tests {
 
         // check that decryption returns the original data
         // Prepare decrypt request body
-        let req = DecryptionRequest {
+        let req = IoDecryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: res.encrypted_data,
             nonce: nonce.clone(),
@@ -102,7 +102,7 @@ mod tests {
     async fn test_decrypt_invalid_ciphertext() {
         let bad_ciphertext = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let nonce = Nonce::new_rand();
-        let decryption_request = DecryptionRequest {
+        let decryption_request = IoDecryptionRequest {
             key: get_unsecure_sample_secp256k1_pk(),
             data: bad_ciphertext,
             nonce: nonce.clone(),
