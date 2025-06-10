@@ -31,10 +31,7 @@ use crate::{
         RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
     },
     snapsync::{SnapSyncRequest, SnapSyncResponse},
-    tx_io::{
-        IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse,
-        MockEnclaveResponse,
-    },
+    tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
 #[derive(Debug, Clone)]
@@ -63,31 +60,25 @@ impl MockEnclaveServer {
     }
 
     /// Mock implementation of the encrypt method.
-    pub fn encrypt(req: IoEncryptionRequest) -> MockEnclaveResponse {
+    pub fn encrypt(req: IoEncryptionRequest) -> Result<Vec<u8>, anyhow::Error> {
         // Use the sample secret key for encryption
-        match ecdh_encrypt(
+        ecdh_encrypt(
             &req.key,
             &get_unsecure_sample_secp256k1_sk(),
             &req.data,
             req.nonce,
-        ) {
-            Ok(data) => MockEnclaveResponse::Success(data),
-            Err(e) => MockEnclaveResponse::Error(e),
-        }
+        )
     }
 
     /// Mock implementation of the decrypt method.
-    pub fn decrypt(req: IoDecryptionRequest) -> MockEnclaveResponse {
+    pub fn decrypt(req: IoDecryptionRequest) -> Result<Vec<u8>, anyhow::Error> {
         // Use the sample secret key for decryption
-        match ecdh_decrypt(
+        ecdh_decrypt(
             &req.key,
             &get_unsecure_sample_secp256k1_sk(),
             &req.data,
             req.nonce,
-        ) {
-            Ok(data) => MockEnclaveResponse::Success(data),
-            Err(e) => MockEnclaveResponse::Error(e),
-        }
+        )
     }
 
     /// Mock implementation of the get_public_key method.
@@ -189,20 +180,20 @@ impl EnclaveApiServer for MockEnclaveServer {
     /// Handler for: `encrypt`
     async fn encrypt(&self, req: IoEncryptionRequest) -> RpcResult<IoEncryptionResponse> {
         match MockEnclaveServer::encrypt(req) {
-            MockEnclaveResponse::Success(data) => Ok(IoEncryptionResponse {
+            Ok(data) => Ok(IoEncryptionResponse {
                 encrypted_data: data,
             }),
-            MockEnclaveResponse::Error(e) => Err(rpc_bad_argument_error(e)),
+            Err(e) => Err(rpc_bad_argument_error(e)),
         }
     }
 
     /// Handler for: `decrypt`
     async fn decrypt(&self, req: IoDecryptionRequest) -> RpcResult<IoDecryptionResponse> {
         match MockEnclaveServer::decrypt(req) {
-            MockEnclaveResponse::Success(data) => Ok(IoDecryptionResponse {
+            Ok(data) => Ok(IoDecryptionResponse {
                 decrypted_data: data,
             }),
-            MockEnclaveResponse::Error(e) => Err(rpc_invalid_ciphertext_error(e)),
+            Err(e) => Err(rpc_invalid_ciphertext_error(e)),
         }
     }
 
@@ -273,15 +264,15 @@ macro_rules! impl_mock_sync_client_trait {
 
             fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError> {
                 match MockEnclaveServer::encrypt(req) {
-                    MockEnclaveResponse::Success(data) => Ok(IoEncryptionResponse { encrypted_data: data }),
-                    MockEnclaveResponse::Error(e) => Err(rpc_bad_argument_error(e).into()),
+                    Ok(data) => Ok(IoEncryptionResponse { encrypted_data: data }),
+                    Err(e) => Err(rpc_bad_argument_error(e).into()),
                 }
             }
 
             fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError> {
                 match MockEnclaveServer::decrypt(req) {
-                    MockEnclaveResponse::Success(data) => Ok(IoDecryptionResponse { decrypted_data: data }),
-                    MockEnclaveResponse::Error(e) => Err(rpc_invalid_ciphertext_error(e).into()),
+                    Ok(data) => Ok(IoDecryptionResponse { decrypted_data: data }),
+                    Err(e) => Err(rpc_invalid_ciphertext_error(e).into()),
                 }
             }
         }

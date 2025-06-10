@@ -45,17 +45,3 @@ pub struct IoDecryptionRequest {
 pub struct IoDecryptionResponse {
     pub decrypted_data: Vec<u8>,
 }
-
-pub enum MockEnclaveResponse {
-    Success(Vec<u8>),
-    Error(anyhow::Error),
-}
-
-impl MockEnclaveResponse {
-    pub fn unwrap(self) -> Vec<u8> {
-        match self {
-            MockEnclaveResponse::Success(data) => data,
-            MockEnclaveResponse::Error(e) => panic!("{:?}", e),
-        }
-    }
-}
