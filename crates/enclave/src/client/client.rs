@@ -8,6 +8,7 @@ use std::{
 };
 use tokio::runtime::{Handle, Runtime};
 
+use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder};
 use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
@@ -24,13 +25,12 @@ use crate::{
     tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
-use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
-
 pub const ENCLAVE_DEFAULT_ENDPOINT_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 pub const ENCLAVE_DEFAULT_TIMEOUT_SECONDS: u64 = 5;
 static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
+#[derive(Debug, Clone)]
 pub struct EnclaveClientBuilder {
     addr: Option<String>,
     port: Option<u16>,
@@ -88,6 +88,27 @@ impl EnclaveClientBuilder {
     }
 }
 
+impl Default for EnclaveClientBuilder {
+    fn default() -> Self {
+        let mut builder = EnclaveClientBuilder::new();
+
+        let url = format!(
+            "http://{}:{}",
+            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
+        );
+        builder = builder.url(url);
+        builder = builder.timeout(Duration::from_secs(5));
+        builder
+    }
+}
+
+impl SyncEnclaveApiClientBuilder for EnclaveClientBuilder {
+    type Client = EnclaveClient;
+    fn build(self) -> EnclaveClient {
+        EnclaveClientBuilder::build(self)
+    }
+}
+
 /// A client for the enclave API.
 #[derive(Debug, Clone)]
 pub struct EnclaveClient {
@@ -99,15 +120,8 @@ pub struct EnclaveClient {
 
 impl Default for EnclaveClient {
     fn default() -> Self {
-        let url = format!(
-            "http://{}:{}",
-            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        );
-        let async_client = jsonrpsee::http_client::HttpClientBuilder::default()
-            .request_timeout(Duration::from_secs(5))
-            .build(url)
-            .unwrap();
-        Self::new_from_client(async_client)
+        let default_builder = EnclaveClientBuilder::default();
+        default_builder.build()
     }
 }
 
