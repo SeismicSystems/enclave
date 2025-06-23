@@ -19,32 +19,15 @@ use crate::{
         rpc::{
             BuildableServer, EnclaveApiServer, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder,
         },
-        ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+        ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
     },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     crypto::Nonce,
-    ecdh_decrypt, ecdh_encrypt,
-    genesis::GenesisDataResponse,
+    ecdh_encrypt,
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
     keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
-    rpc_bad_argument_error, rpc_invalid_ciphertext_error,
-    signing::{
-        Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
-        Secp256k1VerifyResponse,
-    },
-    snapshot::{
-        PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
-        RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
-    },
-    snapsync::{SnapSyncRequest, SnapSyncResponse},
-    tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
-};
-
-use super::{
-    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
-    ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 
 #[derive(Debug, Clone)]
@@ -196,20 +179,6 @@ macro_rules! impl_mock_sync_client_trait {
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )+
-
-            fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError> {
-                match MockEnclaveServer::encrypt(req) {
-                    Ok(data) => Ok(IoEncryptionResponse { encrypted_data: data }),
-                    Err(e) => Err(rpc_bad_argument_error(e).into()),
-                }
-            }
-
-            fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError> {
-                match MockEnclaveServer::decrypt(req) {
-                    Ok(data) => Ok(IoDecryptionResponse { decrypted_data: data }),
-                    Err(e) => Err(rpc_invalid_ciphertext_error(e).into()),
-                }
-            }
         }
     };
 }
