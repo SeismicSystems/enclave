@@ -11,24 +11,43 @@ use std::{
     str::FromStr,
 };
 
-use super::{
-    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
-    ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
-};
 use crate::{
     boot::{
         RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
     },
+    client::{
+        rpc::{
+            BuildableServer, EnclaveApiServer, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder,
+        },
+        ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+    },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     crypto::Nonce,
-    ecdh_encrypt, get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
+    ecdh_decrypt, ecdh_encrypt,
+    genesis::GenesisDataResponse,
+    get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
     keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
+    rpc_bad_argument_error, rpc_invalid_ciphertext_error,
+    signing::{
+        Secp256k1SignRequest, Secp256k1SignResponse, Secp256k1VerifyRequest,
+        Secp256k1VerifyResponse,
+    },
+    snapshot::{
+        PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
+        RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
+    },
+    snapsync::{SnapSyncRequest, SnapSyncResponse},
+    tx_io::{IoDecryptionRequest, IoDecryptionResponse, IoEncryptionRequest, IoEncryptionResponse},
 };
 
-/// A mock enclave server for testing purposes.
-/// Does not check the validity of the JWT token.
+use super::{
+    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
+    ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+};
+
+#[derive(Debug, Clone)]
 pub struct MockEnclaveServer {
     addr: SocketAddr,
 }
@@ -151,15 +170,13 @@ impl_mock_async_server_trait!(
     async fn complete_boot(&self) -> (),
 );
 
+    
+
 /// Mock enclave client for testing purposes.
 /// Useful for testing the against the mock server,
 /// as it can be easily set up instead of going through the EnclaveClientBuilder
+#[derive(Debug, Clone, Default)]
 pub struct MockEnclaveClient;
-impl Default for MockEnclaveClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl MockEnclaveClient {
     pub fn new() -> Self {
         Self {}
@@ -179,6 +196,20 @@ macro_rules! impl_mock_sync_client_trait {
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )+
+
+            fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError> {
+                match MockEnclaveServer::encrypt(req) {
+                    Ok(data) => Ok(IoEncryptionResponse { encrypted_data: data }),
+                    Err(e) => Err(rpc_bad_argument_error(e).into()),
+                }
+            }
+
+            fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError> {
+                match MockEnclaveServer::decrypt(req) {
+                    Ok(data) => Ok(IoDecryptionResponse { decrypted_data: data }),
+                    Err(e) => Err(rpc_invalid_ciphertext_error(e).into()),
+                }
+            }
         }
     };
 }
@@ -192,6 +223,20 @@ impl_mock_sync_client_trait!(
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
 );
+
+#[derive(Debug, Clone, Default)]
+pub struct MockEnclaveClientBuilder {}
+impl MockEnclaveClientBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+impl SyncEnclaveApiClientBuilder for MockEnclaveClientBuilder {
+    type Client = MockEnclaveClient;
+    fn build(self) -> MockEnclaveClient {
+        MockEnclaveClient::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {
