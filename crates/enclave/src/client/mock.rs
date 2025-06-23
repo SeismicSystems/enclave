@@ -24,8 +24,7 @@ use crate::{
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     crypto::Nonce,
-    ecdh_encrypt,
-    get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
+    ecdh_encrypt, get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
     keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
 };
@@ -152,8 +151,6 @@ impl_mock_async_server_trait!(
     async fn boot_genesis(&self) -> (),
     async fn complete_boot(&self) -> (),
 );
-
-    
 
 /// Mock enclave client for testing purposes.
 /// Useful for testing the against the mock server,
