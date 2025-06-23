@@ -11,13 +11,15 @@ use std::{
     str::FromStr,
 };
 
-use super::{
-    rpc::{BuildableServer, EnclaveApiServer, SyncEnclaveApiClient},
-    ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
-};
 use crate::{
     boot::{
         RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
+    },
+    client::{
+        rpc::{
+            BuildableServer, EnclaveApiServer, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder,
+        },
+        ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
     },
     coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
     coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
@@ -27,8 +29,7 @@ use crate::{
     keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
 };
 
-/// A mock enclave server for testing purposes.
-/// Does not check the validity of the JWT token.
+#[derive(Debug, Clone)]
 pub struct MockEnclaveServer {
     addr: SocketAddr,
 }
@@ -154,12 +155,8 @@ impl_mock_async_server_trait!(
 /// Mock enclave client for testing purposes.
 /// Useful for testing the against the mock server,
 /// as it can be easily set up instead of going through the EnclaveClientBuilder
+#[derive(Debug, Clone, Default)]
 pub struct MockEnclaveClient;
-impl Default for MockEnclaveClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl MockEnclaveClient {
     pub fn new() -> Self {
         Self {}
@@ -192,6 +189,20 @@ impl_mock_sync_client_trait!(
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
 );
+
+#[derive(Debug, Clone, Default)]
+pub struct MockEnclaveClientBuilder {}
+impl MockEnclaveClientBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+impl SyncEnclaveApiClientBuilder for MockEnclaveClientBuilder {
+    type Client = MockEnclaveClient;
+    fn build(self) -> MockEnclaveClient {
+        MockEnclaveClient::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {

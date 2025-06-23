@@ -7,6 +7,7 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::Methods;
 use seismic_enclave_derive::derive_sync_client_trait;
+use std::fmt::Debug;
 use std::net::SocketAddr;
 
 use crate::boot::{
@@ -32,6 +33,11 @@ pub trait BuildableServer {
         let server_handle = rpc_server.start(module);
         Ok(server_handle)
     }
+}
+
+pub trait SyncEnclaveApiClientBuilder: Clone + Debug + Send + Sync + Unpin {
+    type Client: SyncEnclaveApiClient + Clone + Debug + Send + Sync + Unpin;
+    fn build(self) -> Self::Client;
 }
 
 /// The JSON-RPC trait for the enclave server and client, defining the API.

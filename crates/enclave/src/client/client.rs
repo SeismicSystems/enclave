@@ -13,7 +13,7 @@ use std::{
 };
 use tokio::runtime::{Handle, Runtime};
 
-use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient};
+use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder};
 use crate::{
     boot::{
         RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
@@ -33,16 +33,12 @@ static ENCLAVE_CLIENT_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 type EnclaveHttpClient = HttpClient<HttpBackend>;
 
 /// Builder for [`EnclaveClient`].
+#[derive(Debug, Clone)]
 pub struct EnclaveClientBuilder {
     ip: Option<String>,
     port: Option<u16>,
     timeout: Option<Duration>,
     url: Option<String>,
-}
-impl Default for EnclaveClientBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl EnclaveClientBuilder {
@@ -94,6 +90,27 @@ impl EnclaveClientBuilder {
             .unwrap();
 
         Ok(EnclaveClient::new_from_client(async_client))
+    }
+}
+
+impl Default for EnclaveClientBuilder {
+    fn default() -> Self {
+        let mut builder = EnclaveClientBuilder::new();
+
+        let url = format!(
+            "http://{}:{}",
+            ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT
+        );
+        builder = builder.url(url);
+        builder = builder.timeout(Duration::from_secs(5));
+        builder
+    }
+}
+
+impl SyncEnclaveApiClientBuilder for EnclaveClientBuilder {
+    type Client = EnclaveClient;
+    fn build(self) -> EnclaveClient {
+        EnclaveClientBuilder::build(self).unwrap()
     }
 }
 
