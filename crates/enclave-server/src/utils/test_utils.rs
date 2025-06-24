@@ -68,7 +68,7 @@ pub fn get_random_port() -> u16 {
 pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
     use seismic_enclave::coco_as::{Data, HashAlgorithm};
     let evidence = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();
-    AttestationEvalEvidenceRequest {
+    let req = AttestationEvalEvidenceRequest {
         evidence,
         tee: kbs_types::Tee::AzTdxVtpm,
         runtime_data: Some(Data::Raw(
@@ -76,5 +76,7 @@ pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
         )),
         runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         policy_ids: vec!["allow".to_string()],
-    }
+    };
+    // println!("pub_key_eval_request: {:?}", req);
+    req
 }

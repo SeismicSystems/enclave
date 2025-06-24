@@ -114,6 +114,7 @@ where
         &self,
         request: AttestationEvalEvidenceRequest,
     ) -> RpcResult<AttestationEvalEvidenceResponse> {
+        println!("here 1");
         // Convert the request's runtime data hash algorithm to the original enum
         let runtime_data: Option<attestation_service::Data> =
             request.runtime_data.map(|data| data.into_original());
@@ -124,6 +125,11 @@ where
             };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
+        println!("here 2");
+        println!("evidence bytes: {:?}", request.evidence);
+        let thing: attestation_service::TeeEvidence = request.evidence.clone().into();
+        println!("evidence into: {:?}", thing);
+
         let verification_request = VerificationRequest {
             evidence: request.evidence.into(),
             tee: request.tee,
@@ -132,11 +138,13 @@ where
             init_data: None,
             init_data_hash_algorithm: HashAlgorithm::Sha256,
         };
+        println!("here 3");
         let eval_result = self
             .attestation_agent
             .evaluate(vec![verification_request], request.policy_ids)
             .await;
 
+        println!("here 4");
         // Retrieve the claims from the AS token
         let as_token: String = match eval_result {
             Ok(as_token) => as_token,
@@ -146,6 +154,7 @@ where
             }
         };
 
+        println!("here 5");
         let claims: ASCoreTokenClaims = match ASCoreTokenClaims::from_jwt(&as_token) {
             Ok(claims) => claims,
             Err(e) => {
@@ -210,7 +219,9 @@ where
         // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
 
         // Verify new enclave's attestation
+        println!("starting eval_attestation_evidence");
         let _ = self.eval_attestation_evidence(req.clone().into()).await?;
+        println!("eval_attestation_evidence complete");
 
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
