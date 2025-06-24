@@ -1,6 +1,10 @@
+#[allow(unused)]
 mod attestation;
+#[allow(unused)]
 mod key_manager;
+#[allow(unused)]
 mod server;
+#[allow(unused)]
 mod utils;
 
 use crate::key_manager::KeyManager;
