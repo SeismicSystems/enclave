@@ -6,17 +6,15 @@ pub mod key_manager;
 pub mod server;
 pub mod utils;
 
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
-use clap::arg;
-use clap::Parser;
-use std::net::IpAddr;
-use time as _;
-use tracing::info; // see Cargo.toml for explanation
-
 use crate::key_manager::KeyManager;
 use crate::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use clap::{arg, Parser};
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use std::net::IpAddr;
+use time as _; // see Cargo.toml for explanation
+use tracing::info;
 
 /// Command line arguments for the enclave server
 #[derive(Parser, Debug)]
