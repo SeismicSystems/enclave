@@ -1,7 +1,10 @@
 use attestation_agent::AttestationAPIs;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use std::hash::Hash;
 use std::sync::Arc;
+use attestation_service::VerificationRequest;
+use attestation_service::HashAlgorithm;
 
 use super::boot::Booter;
 use crate::attestation::seismic_aa_mock;
@@ -124,15 +127,18 @@ where
             };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
+        let verification_request = VerificationRequest {
+            evidence: request.evidence.into(),
+            tee: request.tee,
+            runtime_data,
+            runtime_data_hash_algorithm,
+            init_data: None,
+            init_data_hash_algorithm: HashAlgorithm::Sha256,
+        };
         let eval_result = self
             .attestation_agent
             .evaluate(
-                request.evidence,
-                request.tee,
-                runtime_data,
-                runtime_data_hash_algorithm,
-                None,
-                attestation_service::HashAlgorithm::Sha256,
+                vec![verification_request],
                 request.policy_ids,
             )
             .await;
