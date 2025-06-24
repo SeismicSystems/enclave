@@ -9,10 +9,6 @@ license.workspace = true
 readme.workspace = true
 description = "Seismic enclave backend"
 
-[lib]
-name = "seismic_enclave_server"
-path = "src/lib.rs"
-
 [dependencies]
 seismic-enclave.workspace = true
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating

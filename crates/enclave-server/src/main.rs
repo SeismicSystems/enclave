@@ -1,13 +1,22 @@
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
+
+pub mod attestation;
+pub mod key_manager;
+pub mod server;
+pub mod utils;
+
 use attestation_service::token::simple::SimpleAttestationTokenBroker;
 use clap::arg;
 use clap::Parser;
-use seismic_enclave_server::key_manager::KeyManager;
 use std::net::IpAddr;
-use tracing::info;
+use time as _;
+use tracing::info; // see Cargo.toml for explanation
 
+use crate::key_manager::KeyManager;
+use crate::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
-use seismic_enclave_server::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
 
 /// Command line arguments for the enclave server
 #[derive(Parser, Debug)]
