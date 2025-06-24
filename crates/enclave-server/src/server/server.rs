@@ -59,8 +59,8 @@ where
             key_provider: None,
             attestation_config_path: None,
             token_broker_config: Some(attestation_service::token::AttestationTokenConfig::Simple(
-            simple::Configuration::default(),
-        )),
+                simple::Configuration::default(),
+            )),
         }
     }
 }

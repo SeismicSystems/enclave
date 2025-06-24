@@ -21,7 +21,10 @@ pub struct SeismicAttestationAgent {
 
 impl SeismicAttestationAgent {
     /// Create a new SeismicAttestationAgent wrapper
-    pub async fn new(aa_config_path: Option<&str>, as_config: attestation_service::config::Config) -> Self {
+    pub async fn new(
+        aa_config_path: Option<&str>,
+        as_config: attestation_service::config::Config,
+    ) -> Self {
         Self {
             quote_mutex: Mutex::new(()),
             attestation_agent: AttestationAgent::new(aa_config_path)
@@ -60,10 +63,7 @@ impl SeismicAttestationAgent {
         policy_ids: Vec<String>,
     ) -> Result<String> {
         self.verifier
-            .evaluate(
-                verification_requests,
-                policy_ids,
-            )
+            .evaluate(verification_requests, policy_ids)
             .await
     }
 

@@ -1,9 +1,9 @@
 use attestation_agent::AttestationAPIs;
+use attestation_service::HashAlgorithm;
+use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use std::sync::Arc;
-use attestation_service::VerificationRequest;
-use attestation_service::HashAlgorithm;
 
 use super::boot::Booter;
 use crate::attestation::seismic_aa_mock;
@@ -29,9 +29,7 @@ use seismic_enclave::{
 /// The main execution engine for secure enclave logic
 /// handles server api calls after http parsing and authentication
 /// controls central resources, e.g. key manager, attestation agent
-pub struct AttestationEngine<
-    K: NetworkKeyProvider + Send + Sync + 'static,
-> {
+pub struct AttestationEngine<K: NetworkKeyProvider + Send + Sync + 'static> {
     key_provider: Arc<K>,
     attestation_agent: Arc<SeismicAttestationAgent>,
     booter: Arc<Booter>,
@@ -136,10 +134,7 @@ where
         };
         let eval_result = self
             .attestation_agent
-            .evaluate(
-                vec![verification_request],
-                request.policy_ids,
-            )
+            .evaluate(vec![verification_request], request.policy_ids)
             .await;
 
         // Retrieve the claims from the AS token
@@ -293,8 +288,7 @@ mod tests {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    pub async fn default_unbooted_enclave_engine(
-    ) -> AttestationEngine<KeyManager> {
+    pub async fn default_unbooted_enclave_engine() -> AttestationEngine<KeyManager> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
         let saa = seismic_aa_mock().await;
         AttestationEngine::new(kp, saa)
@@ -303,8 +297,7 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     pub async fn run_engine_tests() {
-        let enclave_engine: AttestationEngine<KeyManager> =
-            engine_mock_booted().await;
+        let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
 
         let t1 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
         let t2 = test_attestation_evidence_handler_aztdxvtpm_runtime_data(&enclave_engine);
@@ -392,8 +385,7 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_boot_share_root_key() {
-        let enclave_engine: AttestationEngine<KeyManager> =
-            engine_mock_booted().await;
+        let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
 
         let new_node_booter = Booter::mock();
         let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
@@ -420,8 +412,7 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
-        let enclave_engine: AttestationEngine<KeyManager> =
-            default_unbooted_enclave_engine().await;
+        let enclave_engine: AttestationEngine<KeyManager> = default_unbooted_enclave_engine().await;
 
         let eval_context = pub_key_eval_request();
 
@@ -488,8 +479,7 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_boot_retrieve_root_key() -> Result<(), anyhow::Error> {
-        let enclave_engine: AttestationEngine<KeyManager> =
-            default_unbooted_enclave_engine().await;
+        let enclave_engine: AttestationEngine<KeyManager> = default_unbooted_enclave_engine().await;
 
         // assert the booter root key begins uninitialized
         assert!(enclave_engine.booter.get_root_key().is_none());
