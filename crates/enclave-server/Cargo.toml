@@ -54,6 +54,8 @@ serial_test = "3.2.0"
 default = ["az-tdx-vtpm-attester"]
 az-tdx-vtpm-attester = [
     "attestation-agent/az-tdx-vtpm-attester", 
+    "attestation-service/az-tdx-vtpm-verifier",
+    "attestation-service/az-snp-vtpm-verifier",
     "az-tdx-vtpm",
     "hex",
     "scroll",
