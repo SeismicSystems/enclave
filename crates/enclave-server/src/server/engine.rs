@@ -1,7 +1,6 @@
 use attestation_agent::AttestationAPIs;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
-use std::hash::Hash;
 use std::sync::Arc;
 use attestation_service::VerificationRequest;
 use attestation_service::HashAlgorithm;

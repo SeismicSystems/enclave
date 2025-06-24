@@ -1,7 +1,7 @@
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::net::TcpListener;
 
 /// Checks if the current user has root (sudo) privileges.
@@ -52,13 +52,6 @@ pub fn read_vector_txt(path: String) -> io::Result<Vec<u8>> {
 
     // Return the vector
     Ok(vec)
-}
-
-pub fn print_flush<S: AsRef<str>>(s: S) {
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock(); // lock ensures safe writing
-    write!(handle, "{}", s.as_ref()).unwrap();
-    handle.flush().unwrap();
 }
 
 pub fn get_random_port() -> u16 {
