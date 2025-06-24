@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker};
+use attestation_service::TeeClaims;
+use attestation_service::TeeEvidence;
 use attestation_service::{Data, HashAlgorithm};
 use kbs_types::Tee;
 use log::{debug, info};
@@ -73,7 +75,7 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
     /// Evaluate evidence against policies
     pub async fn evaluate(
         &self,
-        evidence: Vec<u8>,
+        evidence: TeeEvidence,
         tee: Tee,
         runtime_data: Option<Data>,
         runtime_data_hash_algorithm: HashAlgorithm,
@@ -105,14 +107,22 @@ impl<T: AttestationTokenBroker + Send + Sync> DcapAttVerifier<T> {
         };
 
         // Evaluate the evidence using the verifier
-        let claims_from_tee_evidence = verifier
-            .evaluate(&evidence, &report_data, &init_data_hash)
+        let (claim, tee_class) = verifier
+            .evaluate(evidence, &report_data, &init_data_hash)
             .await
             .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?;
         info!("{:?} Verifier/endorsement check passed.", tee);
 
         let reference_data_map = self.get_reference_data().await?;
         debug!("reference_data_map: {:#?}", reference_data_map);
+
+        let tee_claims = TeeClaims {
+            tee,
+            tee_class,
+            claims: vec![claim],
+            init_data_claims,
+            runtime_data_claims,
+        };
 
         let attestation_results_token = self
             .token_broker
