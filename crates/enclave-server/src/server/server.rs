@@ -234,7 +234,7 @@ mod tests {
     };
     use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
     use seismic_enclave::rpc::EnclaveApiClient;
-    
+
     use serial_test::serial;
     use std::net::SocketAddr;
     use std::thread::sleep;

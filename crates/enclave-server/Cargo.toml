@@ -9,13 +9,16 @@ license.workspace = true
 readme.workspace = true
 description = "Seismic enclave backend"
 
+[lib]
+name = "seismic_enclave_server"
+path = "src/lib.rs"
+
 [dependencies]
 seismic-enclave.workspace = true
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", default-features = false}
 aa_crypto = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", package = "crypto", default-features = false}
 attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="b81a0de", default-features = false}
-verifier = { git = "https://github.com/confidential-containers/trustee", rev = "b81a0de", package = "verifier", default-features = false}
 az-tdx-vtpm = {workspace = true, optional = true}
 
 aes-gcm.workspace = true
@@ -51,8 +54,6 @@ serial_test = "3.2.0"
 default = ["az-tdx-vtpm-attester"]
 az-tdx-vtpm-attester = [
     "attestation-agent/az-tdx-vtpm-attester", 
-    "verifier/az-tdx-vtpm-verifier", 
-    "verifier/az-snp-vtpm-verifier", 
     "az-tdx-vtpm",
     "hex",
     "scroll",

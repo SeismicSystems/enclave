@@ -1,21 +1,11 @@
-#[allow(unused)]
-mod attestation;
-#[allow(unused)]
-mod key_manager;
-#[allow(unused)]
-mod server;
-#[allow(unused)]
-mod utils;
-
-use crate::key_manager::KeyManager;
 use clap::arg;
 use clap::Parser;
-use std::net::IpAddr;
-use tracing::info;
-
-use crate::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
+use seismic_enclave_server::key_manager::KeyManager;
+use seismic_enclave_server::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
+use std::net::IpAddr;
+use tracing::info;
 
 /// Command line arguments for the enclave server
 #[derive(Parser, Debug)]
