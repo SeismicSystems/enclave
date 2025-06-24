@@ -12,6 +12,7 @@ use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
+use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
 use seismic_enclave::boot::{
     RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
 };
@@ -25,7 +26,6 @@ use seismic_enclave::{
     rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_quote_error, rpc_conflict_error,
     rpc_internal_server_error,
 };
-use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
 
 /// The main execution engine for secure enclave logic
 /// handles server api calls after http parsing and authentication
@@ -128,7 +128,7 @@ where
         // TODO: change AttestationEvalEvidenceRequest so this step is not needed?
         let evidence = tdx_attestation_bytes_to_evidence_struct(&request.evidence).unwrap();
         let evidence: attestation_service::TeeEvidence = serde_json::to_value(evidence).unwrap();
-        
+
         // Evaluate attestation evidence (no lock needed for evaluation)
         let verification_request = VerificationRequest {
             evidence: evidence,
