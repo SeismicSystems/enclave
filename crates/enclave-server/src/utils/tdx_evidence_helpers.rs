@@ -11,6 +11,12 @@ use az_tdx_vtpm::{imds, report};
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
 
+pub fn tdx_attestation_bytes_to_evidence_struct(attestation_bytes: &[u8]) -> Result<Evidence> {
+    let evidence = serde_json::from_slice::<Evidence>(attestation_bytes)
+        .context("Failed to deserialize Azure vTPM TDX evidence")?;
+    Ok(evidence)
+}
+
 pub(crate) fn get_tdx_quote() -> Result<Quote> {
     let td_report = report::get_report().map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
 
