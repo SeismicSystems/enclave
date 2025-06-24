@@ -233,10 +233,8 @@ mod tests {
         EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP,
     };
     use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-    use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
     use seismic_enclave::rpc::EnclaveApiClient;
-
-    use kbs_types::Tee;
+    
     use serial_test::serial;
     use std::net::SocketAddr;
     use std::thread::sleep;
