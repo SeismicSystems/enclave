@@ -1,7 +1,7 @@
 use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::net::TcpListener;
 
 /// Checks if the current user has root (sudo) privileges.
@@ -54,13 +54,6 @@ pub fn read_vector_txt(path: String) -> io::Result<Vec<u8>> {
     Ok(vec)
 }
 
-pub fn print_flush<S: AsRef<str>>(s: S) {
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock(); // lock ensures safe writing
-    write!(handle, "{}", s.as_ref()).unwrap();
-    handle.flush().unwrap();
-}
-
 pub fn get_random_port() -> u16 {
     TcpListener::bind("127.0.0.1:0") // 0 means OS assigns a free port
         .expect("Failed to bind to a port")
@@ -75,7 +68,7 @@ pub fn get_random_port() -> u16 {
 pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
     use seismic_enclave::coco_as::{Data, HashAlgorithm};
     let evidence = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();
-    AttestationEvalEvidenceRequest {
+    let req = AttestationEvalEvidenceRequest {
         evidence,
         tee: kbs_types::Tee::AzTdxVtpm,
         runtime_data: Some(Data::Raw(
@@ -83,5 +76,7 @@ pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
         )),
         runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
         policy_ids: vec!["allow".to_string()],
-    }
+    };
+    // println!("pub_key_eval_request: {:?}", req);
+    req
 }

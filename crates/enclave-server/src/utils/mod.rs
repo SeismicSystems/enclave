@@ -1,4 +1,6 @@
 pub mod policy_fixture;
+
+#[cfg(test)]
 pub mod test_utils;
 
 /// tdx_evidence_helpers contains helpers for dealing with Vec<u8> evidence

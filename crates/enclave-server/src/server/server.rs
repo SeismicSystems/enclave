@@ -12,10 +12,8 @@ use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
 use anyhow::{anyhow, Result};
-use attestation_service::token::simple::{
-    Configuration as BrokerConfiguration, SimpleAttestationTokenBroker,
-};
-use attestation_service::token::AttestationTokenBroker;
+use attestation_service::token::simple;
+use attestation_service::token::AttestationTokenConfig;
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::server::ServerHandle;
 use jsonrpsee::Methods;
@@ -27,16 +25,15 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 /// The main server struct, with everything needed to run.
 /// Can be constructed with the [`EnclaveServerBuilder`]
 /// and started with the inherited [`start_rpc_server`] method
-pub struct EnclaveServer<K, T>
+pub struct EnclaveServer<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     /// The address to listen on
     addr: SocketAddr,
     /// The main execution engine for secure enclave logic
     /// controls central resources, e.g. key manager, attestation agent
-    inner: Arc<AttestationEngine<K, T>>,
+    inner: Arc<AttestationEngine<K>>,
 }
 
 /// A builder that lets us configure the server
@@ -47,7 +44,7 @@ where
     addr: Option<SocketAddr>,
     key_provider: Option<K>,
     attestation_config_path: Option<String>,
-    token_broker_config: Option<BrokerConfiguration>,
+    token_broker_config: Option<AttestationTokenConfig>,
 }
 impl<K> Default for EnclaveServerBuilder<K>
 where
@@ -61,7 +58,9 @@ where
             )),
             key_provider: None,
             attestation_config_path: None,
-            token_broker_config: Some(BrokerConfiguration::default()),
+            token_broker_config: Some(attestation_service::token::AttestationTokenConfig::Simple(
+                simple::Configuration::default(),
+            )),
         }
     }
 }
@@ -97,7 +96,7 @@ where
         self
     }
 
-    pub fn with_token_broker_config(mut self, config: BrokerConfiguration) -> Self {
+    pub fn with_token_broker_config(mut self, config: AttestationTokenConfig) -> Self {
         self.token_broker_config = Some(config);
         self
     }
@@ -105,7 +104,7 @@ where
     /// Build the final `EnclaveServer` object.
     /// Currently only support SimpleAttestationTokenBroker for the attestation verifier
     /// Because getting the types to compile is a pain
-    pub async fn build(self) -> Result<EnclaveServer<K, SimpleAttestationTokenBroker>> {
+    pub async fn build(self) -> Result<EnclaveServer<K>> {
         let final_addr = self.addr.ok_or_else(|| {
             anyhow!("No address found in builder (should not happen if default is set)")
         })?;
@@ -118,8 +117,9 @@ where
 
         // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
-        let v_token_broker = SimpleAttestationTokenBroker::new(token_broker_config)?;
-        let attestation_agent = SeismicAttestationAgent::new(config_path, v_token_broker);
+        let mut att_serv_config: attestation_service::config::Config = Default::default();
+        att_serv_config.attestation_token_broker = token_broker_config;
+        let attestation_agent = SeismicAttestationAgent::new(config_path, att_serv_config).await;
 
         let inner = Arc::new(AttestationEngine::new(key_provider, attestation_agent));
 
@@ -130,10 +130,9 @@ where
     }
 }
 
-impl<K, T> EnclaveServer<K, T>
+impl<K> EnclaveServer<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     /// Create a new builder with default address
     pub fn builder() -> EnclaveServerBuilder<K> {
@@ -144,7 +143,7 @@ where
     pub async fn new(
         addr: impl Into<SocketAddr>,
         key_provider: K,
-        token_broker: SeismicAttestationAgent<T>,
+        token_broker: SeismicAttestationAgent,
     ) -> Result<Self> {
         let inner = Arc::new(AttestationEngine::new(key_provider, token_broker));
 
@@ -154,10 +153,9 @@ where
         })
     }
 }
-impl<K, T> BuildableServer for EnclaveServer<K, T>
+impl<K> BuildableServer for EnclaveServer<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
-    T: AttestationTokenBroker + Send + Sync + 'static,
 {
     fn addr(&self) -> SocketAddr {
         self.addr
@@ -183,10 +181,9 @@ macro_rules! impl_forwarding_async_server_trait {
     ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
         -> $ret:ty $(, log = $log_msg:literal)?),* $(,)?) => {
         #[async_trait]
-        impl<K, T> EnclaveApiServer for EnclaveServer<K, T>
+        impl<K> EnclaveApiServer for EnclaveServer<K>
         where
             K: NetworkKeyProvider + Send + Sync + 'static,
-            T: AttestationTokenBroker + Send + Sync + 'static,
         {
             $(
                 async fn $method_name(&self $(, $param: $param_ty)*) -> RpcResult<$ret> {
@@ -229,17 +226,15 @@ mod tests {
     use crate::key_manager::KeyManager;
     use crate::key_manager::NetworkKeyProvider;
     use crate::server::{init_tracing, EnclaveServer};
+    use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::{get_random_port, is_sudo};
     use seismic_enclave::client::rpc::BuildableServer;
     use seismic_enclave::client::{
         EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP,
     };
     use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-    use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
     use seismic_enclave::rpc::EnclaveApiClient;
 
-    use attestation_service::token::simple::SimpleAttestationTokenBroker;
-    use kbs_types::Tee;
     use serial_test::serial;
     use std::net::SocketAddr;
     use std::thread::sleep;
@@ -268,16 +263,7 @@ mod tests {
 
     async fn test_attestation_eval_evidence(client: &EnclaveClient) {
         // Mock a valid AttestationEvalEvidenceRequest
-        let eval_request = AttestationEvalEvidenceRequest {
-            evidence: vec![
-                123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
-                95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
-            ], // Example evidence data
-            tee: Tee::Sample,
-            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
-            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-            policy_ids: vec!["allow".to_string()],
-        };
+        let eval_request = pub_key_eval_request();
 
         client
             .eval_attestation_evidence(eval_request)
@@ -311,21 +297,20 @@ mod tests {
         let port = get_random_port(); // rand port for test parallelization
         let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
         let kp = KeyManager::new([0u8; 32]);
-        let token_broker = SimpleAttestationTokenBroker::new(
-            attestation_service::token::simple::Configuration::default(),
-        )
-        .unwrap();
-        let seismic_attestation_agent = SeismicAttestationAgent::new(None, token_broker);
-        let _server_handle = EnclaveServer::<KeyManager, SimpleAttestationTokenBroker>::new(
-            addr,
-            kp,
-            seismic_attestation_agent,
-        )
-        .await
-        .unwrap()
-        .start()
-        .await
-        .unwrap();
+
+        let token_broker_config = attestation_service::token::AttestationTokenConfig::Simple(
+            simple::Configuration::default(),
+        );
+        let mut att_serv_config: attestation_service::config::Config = Default::default();
+        att_serv_config.attestation_token_broker = token_broker_config;
+
+        let seismic_attestation_agent = SeismicAttestationAgent::new(None, att_serv_config).await;
+        let _server_handle = EnclaveServer::<KeyManager>::new(addr, kp, seismic_attestation_agent)
+            .await
+            .unwrap()
+            .start()
+            .await
+            .unwrap();
         sleep(Duration::from_secs(4));
 
         let client = EnclaveClientBuilder::new()

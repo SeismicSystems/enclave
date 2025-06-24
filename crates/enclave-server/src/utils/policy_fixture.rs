@@ -1,9 +1,9 @@
 //! Attestation Verifier Policies and the PolicyFixture object
 //! Useful for testing the attestation verifier
 
-use crate::attestation::DcapAttVerifier;
 use anyhow::Result;
 use attestation_service::token::AttestationTokenBroker;
+use attestation_service::AttestationService;
 use base64::Engine;
 use std::collections::HashMap;
 
@@ -86,7 +86,7 @@ impl PolicyFixture {
     }
 
     /// Configure the verifier with all policies in this fixture
-    pub async fn configure_verifier<T>(&self, verifier: &mut DcapAttVerifier<T>) -> Result<()>
+    pub async fn configure_verifier<T>(&self, verifier: &mut AttestationService) -> Result<()>
     where
         T: AttestationTokenBroker + Send + Sync + 'static,
     {

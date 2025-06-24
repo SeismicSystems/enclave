@@ -1,18 +1,16 @@
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
-
 mod seismic_agent;
-mod verifier;
-
-// re-exports
 pub use seismic_agent::SeismicAttestationAgent;
-pub use verifier::DcapAttVerifier;
+
+use attestation_service::token::simple;
 
 /// A reasonable default mock attestation agent for testing
-pub async fn seismic_aa_mock() -> SeismicAttestationAgent<SimpleAttestationTokenBroker> {
-    let v_token_broker = SimpleAttestationTokenBroker::new(
-        attestation_service::token::simple::Configuration::default(),
-    )
-    .expect("Failed to create an AttestationAgent");
-    let saa = SeismicAttestationAgent::new(None, v_token_broker);
+pub async fn seismic_aa_mock() -> SeismicAttestationAgent {
+    let token_broker_config = attestation_service::token::AttestationTokenConfig::Simple(
+        simple::Configuration::default(),
+    );
+    let mut att_serv_config: attestation_service::config::Config = Default::default();
+    att_serv_config.attestation_token_broker = token_broker_config;
+
+    let saa = SeismicAttestationAgent::new(None, att_serv_config).await;
     saa
 }
