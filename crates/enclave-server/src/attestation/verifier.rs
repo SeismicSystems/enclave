@@ -1,15 +1,15 @@
 use anyhow::{anyhow, Context, Result};
 use attestation_service::token::simple::{self};
 use attestation_service::token::{ear_broker, AttestationTokenBroker};
-use attestation_service::TeeClaims;
-use attestation_service::TeeEvidence;
 use attestation_service::{Data, HashAlgorithm};
+use attestation_service::TeeEvidence;
 use kbs_types::Tee;
 use log::{debug, info};
 use serde_json::Value;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::collections::HashMap;
 use verifier::{InitDataHash, ReportData};
+use attestation_service::TeeClaims;
 
 /// A lightweight, concurrency-friendly DCAP attestation verifier
 pub struct DcapAttVerifier<T: AttestationTokenBroker + Send + Sync> {
