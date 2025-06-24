@@ -13,10 +13,6 @@ description = "Seismic enclave backend"
 name = "seismic_enclave_server"
 path = "src/lib.rs"
 
-[features]
-default = ["az-tdx-vtpm-attester"]
-az-tdx-vtpm-attester = ["attestation-agent/az-tdx-vtpm-attester", "verifier/az-tdx-vtpm-verifier", "verifier/az-snp-vtpm-verifier", "az-tdx-vtpm"]
-
 [dependencies]
 seismic-enclave.workspace = true
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
@@ -30,14 +26,11 @@ aes-gcm.workspace = true
 zeroize.workspace = true
 anyhow.workspace = true
 base64.workspace = true
-hex.workspace = true
 hkdf.workspace = true
 jsonrpsee.workspace = true
 kbs-types.workspace = true
 log.workspace = true
-scroll.workspace = true
 secp256k1.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 strum.workspace = true
@@ -48,10 +41,28 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
 
+hex = {workspace = true, optional = true }
+scroll = { workspace = true, optional = true }
+serde = {workspace = true, optional = true }
+
 clap = { version = "4.5", features = ["derive"] }
 
 [dev-dependencies]
 serial_test = "3.2.0"
+
+
+[features]
+default = ["az-tdx-vtpm-attester"]
+az-tdx-vtpm-attester = [
+    "attestation-agent/az-tdx-vtpm-attester", 
+    "verifier/az-tdx-vtpm-verifier", 
+    "verifier/az-snp-vtpm-verifier", 
+    "az-tdx-vtpm",
+    "hex",
+    "scroll",
+    "serde",
+]
+
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
