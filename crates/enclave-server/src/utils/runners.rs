@@ -80,6 +80,7 @@ async fn see_default_config() {
 //}
 
 #[cfg(feature = "az-tdx-vtpm-attester")]
+#[cfg(test)]
 mod attester_tests {
     use super::*;
     use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
