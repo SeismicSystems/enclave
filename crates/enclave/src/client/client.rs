@@ -129,6 +129,12 @@ impl Deref for EnclaveClient {
         &self.async_client
     }
 }
+impl Default for EnclaveClient {
+    fn default() -> Self {
+        EnclaveClientBuilder::default().build().unwrap()
+    }
+}
+
 impl EnclaveClient {
     pub fn builder() -> EnclaveClientBuilder {
         EnclaveClientBuilder::new()
