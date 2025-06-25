@@ -176,20 +176,6 @@ macro_rules! impl_mock_sync_client_trait {
                     Ok(MockEnclaveServer::$method_name($($param),*))
                 }
             )+
-
-            fn encrypt(&self, req: IoEncryptionRequest) -> Result<IoEncryptionResponse, ClientError> {
-                match MockEnclaveServer::encrypt(req) {
-                    Ok(data) => Ok(IoEncryptionResponse { encrypted_data: data }),
-                    Err(e) => Err(rpc_bad_argument_error(e).into()),
-                }
-            }
-
-            fn decrypt(&self, req: IoDecryptionRequest) -> Result<IoDecryptionResponse, ClientError> {
-                match MockEnclaveServer::decrypt(req) {
-                    Ok(data) => Ok(IoDecryptionResponse { decrypted_data: data }),
-                    Err(e) => Err(rpc_invalid_ciphertext_error(e).into()),
-                }
-            }
         }
     };
 }

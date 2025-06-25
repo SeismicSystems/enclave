@@ -114,27 +114,6 @@ impl SyncEnclaveApiClientBuilder for EnclaveClientBuilder {
     }
 }
 
-impl Default for EnclaveClientBuilder {
-    fn default() -> Self {
-        let mut builder = EnclaveClientBuilder::new();
-
-        let url = format!(
-            "http://{}:{}",
-            ENCLAVE_DEFAULT_ENDPOINT_ADDR, ENCLAVE_DEFAULT_ENDPOINT_PORT
-        );
-        builder = builder.url(url);
-        builder = builder.timeout(Duration::from_secs(5));
-        builder
-    }
-}
-
-impl SyncEnclaveApiClientBuilder for EnclaveClientBuilder {
-    type Client = EnclaveClient;
-    fn build(self) -> EnclaveClient {
-        EnclaveClientBuilder::build(self)
-    }
-}
-
 /// A client for the enclave API.
 #[derive(Debug, Clone)]
 pub struct EnclaveClient {

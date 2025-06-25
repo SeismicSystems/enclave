@@ -1,10 +1,6 @@
 use kbs_types::Tee;
-use serde::de::{self, MapAccess, Visitor};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt;
-use std::str::FromStr;
 use strum::{AsRefStr, Display, EnumString};
 
 use anyhow::{anyhow, Result};
@@ -12,7 +8,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 
 /// Hash algorithms used to calculate runtime/init data binding
-#[derive(Debug, Display, EnumString, AsRefStr, Clone)]
+#[derive(Debug, Display, EnumString, AsRefStr, Clone, Serialize, Deserialize)]
 pub enum HashAlgorithm {
     #[strum(ascii_case_insensitive)]
     Sha256,
@@ -26,7 +22,7 @@ pub enum HashAlgorithm {
 
 /// Runtime/Init Data used to check the binding relationship with report data
 /// in Evidence
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Data {
     /// This will be used as the expected runtime/init data to check against
     /// the one inside evidence.
@@ -58,7 +54,7 @@ pub enum Data {
 /// - For empty data in `AzTdxVtpm`, set the following:
 ///   - `runtime_data = Some(Data::Raw("".into()))`
 ///   - `runtime_data_hash_algorithm = Some(HashAlgorithm::Sha256)`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttestationEvalEvidenceRequest {
     pub evidence: Vec<u8>,
     pub tee: Tee,
@@ -138,137 +134,137 @@ pub struct ASCustomizedClaims {
     pub runtime_data: Value,
 }
 
-impl Serialize for AttestationEvalEvidenceRequest {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("AttestationEvalEvidenceRequest", 5)?; // Adjust the number of fields
-        state.serialize_field("evidence", &self.evidence)?;
-        state.serialize_field("tee", &self.tee)?;
+// impl Serialize for AttestationEvalEvidenceRequest {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: Serializer,
+//     {
+//         let mut state = serializer.serialize_struct("AttestationEvalEvidenceRequest", 5)?; // Adjust the number of fields
+//         state.serialize_field("evidence", &self.evidence)?;
+//         state.serialize_field("tee", &self.tee)?;
 
-        match &self.runtime_data {
-            Some(Data::Raw(bytes)) => state.serialize_field("runtime_data", bytes)?,
-            Some(Data::Structured(value)) => state.serialize_field("runtime_data", value)?,
-            None => state.serialize_field("runtime_data", &Option::<()>::None)?,
-        };
+//         match &self.runtime_data {
+//             Some(Data::Raw(bytes)) => state.serialize_field("runtime_data", bytes)?,
+//             Some(Data::Structured(value)) => state.serialize_field("runtime_data", value)?,
+//             None => state.serialize_field("runtime_data", &Option::<()>::None)?,
+//         };
 
-        let runtime_data_hash_algorithm = self
-            .runtime_data_hash_algorithm
-            .as_ref()
-            .map(ToString::to_string);
-        state.serialize_field("runtime_data_hash_algorithm", &runtime_data_hash_algorithm)?;
+//         let runtime_data_hash_algorithm = self
+//             .runtime_data_hash_algorithm
+//             .as_ref()
+//             .map(ToString::to_string);
+//         state.serialize_field("runtime_data_hash_algorithm", &runtime_data_hash_algorithm)?;
 
-        state.serialize_field("policy_ids", &self.policy_ids)?;
+//         state.serialize_field("policy_ids", &self.policy_ids)?;
 
-        state.end()
-    }
-}
+//         state.end()
+//     }
+// }
 
-impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "snake_case")]
-        enum Field {
-            Evidence,
-            Tee,
-            RuntimeData,
-            RuntimeDataHashAlgorithm,
-            PolicyIds, // New field for deserialization
-        }
+// impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         #[derive(Deserialize)]
+//         #[serde(field_identifier, rename_all = "snake_case")]
+//         enum Field {
+//             Evidence,
+//             Tee,
+//             RuntimeData,
+//             RuntimeDataHashAlgorithm,
+//             PolicyIds, // New field for deserialization
+//         }
 
-        struct AttestationEvalEvidenceRequestVisitor;
+//         struct AttestationEvalEvidenceRequestVisitor;
 
-        impl<'de> Visitor<'de> for AttestationEvalEvidenceRequestVisitor {
-            type Value = AttestationEvalEvidenceRequest;
+//         impl<'de> Visitor<'de> for AttestationEvalEvidenceRequestVisitor {
+//             type Value = AttestationEvalEvidenceRequest;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct AttestationEvalEvidenceRequest")
-            }
+//             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+//                 formatter.write_str("struct AttestationEvalEvidenceRequest")
+//             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<AttestationEvalEvidenceRequest, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut evidence = None;
-                let mut tee = None;
-                let mut runtime_data = None;
-                let mut runtime_data_hash_algorithm = None;
-                let mut policy_ids = None; // For policy_ids
+//             fn visit_map<V>(self, mut map: V) -> Result<AttestationEvalEvidenceRequest, V::Error>
+//             where
+//                 V: MapAccess<'de>,
+//             {
+//                 let mut evidence = None;
+//                 let mut tee = None;
+//                 let mut runtime_data = None;
+//                 let mut runtime_data_hash_algorithm = None;
+//                 let mut policy_ids = None; // For policy_ids
 
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Evidence => {
-                            evidence = Some(map.next_value()?);
-                        }
-                        Field::Tee => {
-                            tee = Some(map.next_value()?);
-                        }
-                        Field::RuntimeData => {
-                            // Deserialize runtime_data only once
-                            let value: Option<serde_json::Value> = map.next_value()?;
+//                 while let Some(key) = map.next_key()? {
+//                     match key {
+//                         Field::Evidence => {
+//                             evidence = Some(map.next_value()?);
+//                         }
+//                         Field::Tee => {
+//                             tee = Some(map.next_value()?);
+//                         }
+//                         Field::RuntimeData => {
+//                             // Deserialize runtime_data only once
+//                             let value: Option<serde_json::Value> = map.next_value()?;
 
-                            // Check for None
-                            if let Some(value) = value {
-                                // Check if it's a byte array (Vec<u8>)
-                                if let Ok(bytes) = serde_json::from_value::<Vec<u8>>(value.clone())
-                                {
-                                    runtime_data = Some(Data::Raw(bytes));
-                                } else {
-                                    // If not Vec<u8>, treat it as structured data (Value)
-                                    runtime_data = Some(Data::Structured(value));
-                                }
-                            } else {
-                                // If it was None (null in JSON), set runtime_data to None
-                                runtime_data = None;
-                            }
-                        }
-                        Field::RuntimeDataHashAlgorithm => {
-                            let alg_str: Option<String> = map.next_value()?;
-                            if alg_str.is_some() {
-                                runtime_data_hash_algorithm =
-                                    alg_str.and_then(|alg| HashAlgorithm::from_str(&alg).ok());
-                            }
-                        }
-                        Field::PolicyIds => {
-                            // Deserialize policy_ids
-                            policy_ids = Some(map.next_value()?);
-                        }
-                    }
-                }
+//                             // Check for None
+//                             if let Some(value) = value {
+//                                 // Check if it's a byte array (Vec<u8>)
+//                                 if let Ok(bytes) = serde_json::from_value::<Vec<u8>>(value.clone())
+//                                 {
+//                                     runtime_data = Some(Data::Raw(bytes));
+//                                 } else {
+//                                     // If not Vec<u8>, treat it as structured data (Value)
+//                                     runtime_data = Some(Data::Structured(value));
+//                                 }
+//                             } else {
+//                                 // If it was None (null in JSON), set runtime_data to None
+//                                 runtime_data = None;
+//                             }
+//                         }
+//                         Field::RuntimeDataHashAlgorithm => {
+//                             let alg_str: Option<String> = map.next_value()?;
+//                             if alg_str.is_some() {
+//                                 runtime_data_hash_algorithm =
+//                                     alg_str.and_then(|alg| HashAlgorithm::from_str(&alg).ok());
+//                             }
+//                         }
+//                         Field::PolicyIds => {
+//                             // Deserialize policy_ids
+//                             policy_ids = Some(map.next_value()?);
+//                         }
+//                     }
+//                 }
 
-                let evidence = evidence.ok_or_else(|| de::Error::missing_field("evidence"))?;
-                let tee = tee.ok_or_else(|| de::Error::missing_field("tee"))?;
-                let policy_ids =
-                    policy_ids.ok_or_else(|| de::Error::missing_field("policy_ids"))?;
+//                 let evidence = evidence.ok_or_else(|| de::Error::missing_field("evidence"))?;
+//                 let tee = tee.ok_or_else(|| de::Error::missing_field("tee"))?;
+//                 let policy_ids =
+//                     policy_ids.ok_or_else(|| de::Error::missing_field("policy_ids"))?;
 
-                Ok(AttestationEvalEvidenceRequest {
-                    evidence,
-                    tee,
-                    runtime_data,
-                    runtime_data_hash_algorithm,
-                    policy_ids,
-                })
-            }
-        }
+//                 Ok(AttestationEvalEvidenceRequest {
+//                     evidence,
+//                     tee,
+//                     runtime_data,
+//                     runtime_data_hash_algorithm,
+//                     policy_ids,
+//                 })
+//             }
+//         }
 
-        const FIELDS: &[&str] = &[
-            "evidence",
-            "tee",
-            "runtime_data",
-            "runtime_data_hash_algorithm",
-            "policy_ids",
-        ];
-        deserializer.deserialize_struct(
-            "AttestationEvalEvidenceRequest",
-            FIELDS,
-            AttestationEvalEvidenceRequestVisitor,
-        )
-    }
-}
+//         const FIELDS: &[&str] = &[
+//             "evidence",
+//             "tee",
+//             "runtime_data",
+//             "runtime_data_hash_algorithm",
+//             "policy_ids",
+//         ];
+//         deserializer.deserialize_struct(
+//             "AttestationEvalEvidenceRequest",
+//             FIELDS,
+//             AttestationEvalEvidenceRequestVisitor,
+//         )
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
