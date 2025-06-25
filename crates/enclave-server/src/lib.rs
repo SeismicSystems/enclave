@@ -4,7 +4,7 @@
 pub mod attestation;
 pub mod key_manager;
 pub mod snapshot;
-pub mod snapsync;
+// pub mod snapsync;
 pub mod server;
 pub mod utils;
 
