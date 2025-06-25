@@ -16,3 +16,9 @@ pub mod tdx_evidence_helpers;
 /// test runners are for dev convenience only
 #[allow(unused_imports)]
 pub mod runners;
+
+
+#[cfg(not(feature = "supervisorctl"))]
+ pub mod service;
+ #[cfg(feature = "supervisorctl")]
+ pub mod supervisorctl;
