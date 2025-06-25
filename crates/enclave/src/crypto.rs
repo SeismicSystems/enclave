@@ -11,7 +11,37 @@ use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::{fs, io::Read, io::Write};
 
-use crate::nonce::{Nonce, AESGCM_NONCE_SIZE};
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use sha2::digest::{consts::U12, generic_array::GenericArray};
+
+pub const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
+
+/// The intermediate type to represent a nonce in the enclave
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Nonce(pub [u8; AESGCM_NONCE_SIZE]);
+
+impl Nonce {
+    pub fn new_rand() -> Self {
+        let mut rng = rand::rng();
+        // Generate a random U96 value
+        let mut bytes = [0u8; 12]; // 96 bits = 12 bytes
+        rng.fill_bytes(&mut bytes);
+        Nonce(bytes)
+    }
+}
+
+impl From<Nonce> for aes_gcm::Nonce<U12> {
+    fn from(nonce: Nonce) -> Self {
+        GenericArray::clone_from_slice(&nonce.0)
+    }
+}
+
+impl From<[u8; AESGCM_NONCE_SIZE]> for Nonce {
+    fn from(bytes: [u8; AESGCM_NONCE_SIZE]) -> Self {
+        Nonce(bytes)
+    }
+}
 
 /// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
 ///
@@ -84,7 +114,7 @@ pub fn aes_decrypt(
 
     cipher
         .decrypt(&nonce_array.into(), ciphertext)
-        .map_err(|e| anyhow!("AES decryption failed: {:?}", e))
+        .map_err(|_| anyhow!("AES decryption failed. Authentication tag does not match the given ciphertext/nonce"))
 }
 
 /// Derives an AES key from a shared secret using HKDF and SHA-256.
@@ -206,6 +236,7 @@ pub fn get_unsecure_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
     mini_secret_key.expand(ExpansionMode::Uniform).into()
 }
 
+/// Returns a sample AES key for testing purposes.
 pub fn get_unsecure_sample_aesgcm_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
     let key: aes_gcm::Key<aes_gcm::Aes256Gcm> = [0u8; 32].into();
     key
@@ -219,10 +250,10 @@ pub fn ecdh_encrypt(
     data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let shared_secret = SharedSecret::new(pk, &sk);
+    let shared_secret = SharedSecret::new(pk, sk);
     let aes_key =
         derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
-    let encrypted_data = aes_encrypt(&aes_key, &data, nonce)?;
+    let encrypted_data = aes_encrypt(&aes_key, data, nonce)?;
     Ok(encrypted_data)
 }
 
@@ -234,10 +265,10 @@ pub fn ecdh_decrypt(
     data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let shared_secret = SharedSecret::new(pk, &sk);
+    let shared_secret = SharedSecret::new(pk, sk);
     let aes_key =
         derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
-    let decrypted_data = aes_decrypt(&aes_key, &data, nonce)?;
+    let decrypted_data = aes_decrypt(&aes_key, data, nonce)?;
     Ok(decrypted_data)
 }
 

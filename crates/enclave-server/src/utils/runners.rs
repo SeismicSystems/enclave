@@ -3,47 +3,31 @@
 //! They are for dev convenience only
 //! and should be ignored in automated testing workflows
 
-use super::tdx_evidence_helpers::get_tdx_evidence_claims;
-use crate::snapshot::check_operator;
-use alloy_primitives::Bytes;
+use crate::attestation::seismic_aa_mock;
+use crate::attestation::SeismicAttestationAgent;
+use attestation_agent::AttestationAPIs;
+
 use anyhow::Ok;
 use attestation_service::config::Config;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
-use seismic_enclave::request_types::genesis::GenesisData;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str::FromStr;
 
-#[allow(dead_code)]
-#[allow(unused_imports)]
-use seismic_enclave::request_types::*;
-
 #[test]
 #[ignore]
-fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-    // let path = "./src/coco_as/examples/yocto_20241023223507.txt";
-    let path = "./src/coco_as/examples/yocto_20241025193121.txt";
-    let tdx_evidence: Vec<u8> = super::test_utils::read_vector_txt(path.to_string())?;
+pub fn print_active_feature() {
+    #[cfg(feature = "az-tdx-vtpm-attester")]
+    {
+        println!("az-tdx-vtpm-attester enabled");
+    }
 
-    get_tdx_evidence_claims(tdx_evidence)?;
-
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn run_hash_genesis_data() -> Result<(), anyhow::Error> {
-    let genesis_data = GenesisData {
-        io_pk: get_unsecure_sample_secp256k1_pk(),
-    };
-
-    let genesis_data_bytes = genesis_data.to_bytes()?;
-    let hash_bytes: [u8; 32] = Sha256::digest(genesis_data_bytes).into();
-    println!("{:?}", hash_bytes);
-
-    Ok(())
+    #[cfg(not(feature = "az-tdx-vtpm-attester"))]
+    {
+        println!("az-tdx-vtpm-attester not enabled");
+    }
 }
 
 #[test]
@@ -66,34 +50,64 @@ async fn see_default_config() {
     println!("{:?}", config);
 }
 
-#[tokio::test]
-#[ignore]
-async fn get_mrtd() {
-    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    let mrtd = Bytes::from(vec![0x00; 48]);
-    let rtmr0 = Bytes::from(vec![0x00; 48]);
-    let rtmr3 = Bytes::from(vec![0x00; 48]);
+//#[tokio::test]
+//#[ignore]
+//async fn get_mrtd() {
+//    use alloy_primitives::Bytes;
+//    let rootfs_hash = Bytes::from(vec![0x00; 32]);
+//    let mrtd = Bytes::from(vec![0x00; 48]);
+//    let rtmr0 = Bytes::from(vec![0x00; 48]);
+//    let rtmr3 = Bytes::from(vec![0x00; 48]);
+//
+//    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+//        .await
+//        .unwrap();
+//}
 
-    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .await
-        .unwrap();
-}
+//#[tokio::test(flavor = "multi_thread")]
+//async fn run_client_ping() {
+//    use seismic_enclave::rpc::SyncEnclaveApiClient;
+//    use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
+//    use seismic_enclave::EnclaveClient;
+//
+//    let url = "http://yocto-1.seismicdev.net:7878";
+//    // let url = "http://127.0.0.1:7878";
+//    let client = EnclaveClient::new(url);
+//
+//    // // health check
+//    // let resp = client.health_check().unwrap();
+//    // println!("resp: {:?}", resp);
+//}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn run_client_ping() {
-    use seismic_enclave::rpc::SyncEnclaveApiClient;
-    use seismic_enclave::snapshot::RestoreFromEncryptedSnapshotRequest;
-    use seismic_enclave::EnclaveClient;
+#[cfg(feature = "az-tdx-vtpm-attester")]
+#[cfg(test)]
+mod attester_tests {
+    use super::*;
+    use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
+    use crate::utils::test_utils::read_vector_txt;
 
-    let url = "http://yocto-1.seismicdev.net:7878";
-    // let url = "http://127.0.0.1:7878";
-    let client = EnclaveClient::new(url);
+    #[tokio::test]
+    #[ignore]
+    async fn run_create_tdx_evidence() -> Result<(), anyhow::Error> {
+        let unsecure_secp256k1_pk = get_unsecure_sample_secp256k1_pk();
+        let runtime_data = unsecure_secp256k1_pk.serialize().to_vec();
+        let saa = seismic_aa_mock().await;
+        let tdx_evidence = saa.get_evidence(&runtime_data.to_vec()).await?;
+        print_active_feature();
+        println!("{:?}", saa.get_tee_type());
+        println!("{:?}", tdx_evidence);
+        assert!(false); // so I can see the print statement
+        Ok(())
+    }
 
-    // // health check
-    // let resp = client.health_check().unwrap();
-    // println!("resp: {:?}", resp);
+    #[test]
+    #[ignore]
+    fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
+        let path = "./src/coco_as/examples/yocto_20241025193121.txt"; // Note this file has moved
+        let tdx_evidence: Vec<u8> = read_vector_txt(path.to_string())?;
 
-    let req = RestoreFromEncryptedSnapshotRequest {};
-    let resp = client.restore_from_encrypted_snapshot(req);
-    println!("resp: {:?}", resp);
+        get_tdx_evidence_claims(tdx_evidence)?;
+
+        Ok(())
+    }
 }
