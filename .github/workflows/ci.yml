@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, upstream-merge-reth, upstream-merge]
+    branches: [main, dev]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}

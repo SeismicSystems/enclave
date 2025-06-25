@@ -13,62 +13,55 @@ description = "Seismic enclave backend"
 name = "seismic_enclave_server"
 path = "src/lib.rs"
 
-[features]
-default = []         # empty default, no supervisorctl, as yocto_builds do not include it
-supervisorctl = []
-
 [dependencies]
 seismic-enclave.workspace = true
-clap = { version = "4.5", features = ["derive"] }
-
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
-attestation-service = { git = "https://github.com/confidential-containers/trustee", features = ["all-verifier"], rev="1fdd67d"}
-attestation-agent = { git = "https://github.com/confidential-containers/guest-components", features = ["az-tdx-vtpm-attester"], rev="e6999a3"}
+attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", default-features = false}
+aa_crypto = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", package = "crypto", default-features = false}
+attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="b81a0de", default-features = false}
+az-tdx-vtpm = {workspace = true, optional = true}
 
 aes-gcm.workspace = true
+zeroize.workspace = true
 anyhow.workspace = true
-az-tdx-vtpm.workspace = true
 base64.workspace = true
-bincode.workspace = true
-byteorder.workspace = true
-bytes.workspace = true
-env_logger.workspace = true
-hex.workspace = true
 hkdf.workspace = true
 jsonrpsee.workspace = true
 kbs-types.workspace = true
-libc.workspace = true
 log.workspace = true
-once_cell.workspace = true
-routerify.workspace = true
-scroll.workspace = true
 secp256k1.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
 tokio.workspace = true
 schnorrkel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-alloy-sol-types = { version = "0.8", default-features = false }
-alloy-primitives = { version = "0.8", default-features = false }
-alloy-contract = { version = "0.8", default-features = false }
-alloy-provider = "0.8"
+rand.workspace = true
+
+hex = {workspace = true, optional = true }
+scroll = { workspace = true, optional = true }
+serde = {workspace = true, optional = true }
+
+clap = { version = "4.5", features = ["derive"] }
 
 [dev-dependencies]
 serial_test = "3.2.0"
-tempfile = "3.17.1"
-reqwest.workspace = true
-alloy = { version = "0.11", features = [
-    "eips",
-    "full",
-    "hyper",
-    "json-rpc",
-    "node-bindings",
-    "rpc-client",
-     "rpc-types-debug",
-    "rpc-types-trace",
-] }
+
+
+[features]
+default = ["az-tdx-vtpm-attester"]
+az-tdx-vtpm-attester = [
+    "attestation-agent/az-tdx-vtpm-attester", 
+    "attestation-service/az-tdx-vtpm-verifier",
+    "attestation-service/az-snp-vtpm-verifier",
+    "az-tdx-vtpm",
+    "hex",
+    "scroll",
+    "serde",
+]
+
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
