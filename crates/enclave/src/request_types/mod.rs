@@ -1,6 +1,11 @@
 //! Request types for the enclave server
 
-pub mod boot;
-pub mod coco_aa;
-pub mod coco_as;
-pub mod keys;
+mod boot;
+mod coco_aa;
+mod coco_as;
+mod keys;
+
+pub use boot::*;
+pub use coco_aa::*;
+pub use coco_as::*;
+pub use keys::*;

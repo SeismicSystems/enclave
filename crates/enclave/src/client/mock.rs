@@ -12,21 +12,16 @@ use std::{
 };
 
 use crate::{
-    boot::{
-        RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
-    },
     client::{
         rpc::{
             BuildableServer, EnclaveApiServer, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder,
         },
         ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
     },
-    coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
-    coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
     crypto::Nonce,
     ecdh_encrypt, get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
-    keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
+    request_types::*,
 };
 
 #[derive(Debug, Clone)]

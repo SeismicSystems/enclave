@@ -2,12 +2,7 @@ use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
 
-use seismic_enclave::boot::{
-    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
-};
-use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
-use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use seismic_enclave::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
+use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 
@@ -232,7 +227,7 @@ mod tests {
     use seismic_enclave::client::{
         EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP,
     };
-    use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
+    use seismic_enclave::request_types::AttestationGetEvidenceRequest;
     use seismic_enclave::rpc::EnclaveApiClient;
 
     use serial_test::serial;
