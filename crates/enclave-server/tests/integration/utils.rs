@@ -7,7 +7,6 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::net::TcpListener;
 
 // Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_PK: &str =
@@ -72,4 +71,11 @@ pub async fn deploy_contract(
     }
 
     Ok(())
+}
+
+pub fn print_flush<S: AsRef<str>>(s: S) {
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock(); // lock ensures safe writing
+    write!(handle, "{}", s.as_ref()).unwrap();
+    handle.flush().unwrap();
 }
