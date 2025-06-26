@@ -27,7 +27,7 @@ use std::path::Path;
 /// - The input snapshot file does not exist.
 /// - Encryption fails due to an internal error in the encryption process.
 pub fn encrypt_snapshot(
-    kp: &dyn NetworkKeyProvider,
+    kp: &impl NetworkKeyProvider,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -73,7 +73,7 @@ pub fn encrypt_snapshot(
 /// - The encrypted snapshot file does not exist.
 /// - Decryption fails due to an incorrect or unavailable key, or an internal decryption error.
 pub fn decrypt_snapshot(
-    kp: &dyn NetworkKeyProvider,
+    kp: &impl NetworkKeyProvider,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -99,7 +99,7 @@ pub fn decrypt_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key_manager::builder::KeyManagerBuilder;
+    use crate::key_manager::KeyManagerBuilder;
     use crate::snapshot::SNAPSHOT_FILE;
     use crate::utils::test_utils::{generate_dummy_file, read_first_n_bytes};
 

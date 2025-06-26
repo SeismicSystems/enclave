@@ -42,7 +42,7 @@ pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 /// Returns an error if any step in the process (stopping Reth, compression, encryption,
 /// removing temporary data, or restarting Reth) fails.
 pub fn prepare_encrypted_snapshot(
-   kp: &dyn NetworkKeyProvider,
+   kp: &impl NetworkKeyProvider,
    reth_data_dir: &str,
    data_disk_dir: &str,
    snapshot_dir: &str,
@@ -80,7 +80,7 @@ pub fn prepare_encrypted_snapshot(
 /// Returns an error if any step in the process (stopping Reth, decryption, decompression,
 /// removing temporary data, or restarting Reth) fails.
 pub fn restore_from_encrypted_snapshot(
-   kp: &dyn NetworkKeyProvider,
+   kp: &impl NetworkKeyProvider,
    reth_data_dir: &str,
    data_disk_dir: &str,
    snapshot_dir: &str,
