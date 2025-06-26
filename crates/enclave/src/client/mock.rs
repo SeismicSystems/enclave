@@ -233,7 +233,7 @@ mod tests {
     }
 
     async fn async_test_health_check(client: &EnclaveClient) {
-        let resposne = client.deref().health_check().await.unwrap();
-        assert_eq!(resposne, "OK");
+        let response = client.deref().health_check().await.unwrap();
+        assert_eq!(response, "OK");
     }
 }

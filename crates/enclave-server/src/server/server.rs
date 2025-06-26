@@ -241,8 +241,8 @@ mod tests {
     use std::time::Duration;
 
     async fn test_health_check(client: &EnclaveClient) {
-        let resposne = client.health_check().await.unwrap();
-        assert_eq!(resposne, "OK");
+        let response = client.health_check().await.unwrap();
+        assert_eq!(response, "OK");
     }
 
     async fn test_attestation_get_evidence(client: &EnclaveClient) {

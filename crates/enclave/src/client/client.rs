@@ -236,8 +236,8 @@ pub mod tests {
     }
 
     pub fn sync_test_health_check<C: SyncEnclaveApiClient>(client: &C) {
-        let resposne = client.health_check().unwrap();
-        assert_eq!(resposne, "OK");
+        let response = client.health_check().unwrap();
+        assert_eq!(response, "OK");
     }
 
     pub fn sync_test_get_purpose_keys<C: SyncEnclaveApiClient>(client: &C) {
