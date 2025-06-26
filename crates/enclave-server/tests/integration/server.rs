@@ -6,6 +6,7 @@ use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorit
 use seismic_enclave::crypto::Nonce;
 use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+use seismic_enclave::keys::GetPurposeKeysRequest;
 // use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave_server::attestation::SeismicAttestationAgent;
@@ -47,31 +48,9 @@ pub fn get_random_port() -> u16 {
         .port()
 }
 
-// async fn test_tx_io_encrypt_decrypt(client: &EnclaveClient) {
-//     // make the request struct
-//     let data_to_encrypt = vec![72, 101, 108, 108, 111];
-//     let nonce = Nonce::new_rand();
-//     let encryption_request = IoEncryptionRequest {
-//         key: get_unsecure_sample_secp256k1_pk(),
-//         data: data_to_encrypt.clone(),
-//         nonce: nonce.clone(),
-//     };
-
-//     // make the http request
-//     let encryption_response = client.encrypt(encryption_request).await.unwrap();
-
-//     // check the response
-//     assert!(!encryption_response.encrypted_data.is_empty());
-
-//     let decryption_request = IoDecryptionRequest {
-//         key: get_unsecure_sample_secp256k1_pk(),
-//         data: encryption_response.encrypted_data,
-//         nonce: nonce.clone(),
-//     };
-
-//     let decryption_response = client.decrypt(decryption_request).await.unwrap();
-//     assert_eq!(decryption_response.decrypted_data, data_to_encrypt);
-// }
+async fn test_get_purpose_keys(client: &EnclaveClient) {
+    let res = client.get_purpose_keys(GetPurposeKeysRequest {epoch: 0}).await.unwrap();
+}
 
 async fn test_health_check(client: &EnclaveClient) {
     let response = client.health_check().await.unwrap();
@@ -110,22 +89,6 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
 
     assert!(response.claims.is_some());
 }
-
-// async fn test_get_public_key(client: &EnclaveClient) {
-//     let res = client.get_public_key().await.unwrap();
-//     assert!(
-//         (res != get_unsecure_sample_secp256k1_pk()),
-//         "public key should be randomly generated"
-//     );
-// }
-
-// async fn test_get_eph_rng_keypair(client: &EnclaveClient) {
-//     let res: schnorrkel::Keypair = client.get_eph_rng_keypair().await.unwrap();
-//     assert!(
-//         !(res.secret == get_unsecure_sample_schnorrkel_keypair().secret),
-//         "eph rng keypair should be randomly generated"
-//     );
-// }
 
 // async fn test_misconfigured_auth_secret(ip: IpAddr, port: u16) {
 //     let rand_auth_secret = JwtSecret::random();
@@ -193,12 +156,13 @@ async fn test_server_requests() {
         .build()
         .unwrap();
 
+    client.boot_genesis().await.unwrap();
+    client.complete_boot().await.unwrap();
+
     test_health_check(&client).await;
-    // test_genesis_get_data(&client).await;
-    // test_tx_io_encrypt_decrypt(&client).await;
+    test_get_purpose_keys(&client).await;
     test_attestation_get_evidence(&client).await;
     test_attestation_eval_evidence(&client).await;
-    // test_get_public_key(&client).await;
-    // test_get_eph_rng_keypair(&client).await;
+    // test_genesis_get_data(&client).await;
     // test_misconfigured_auth_secret(addr.ip(), addr.port()).await;
 }
