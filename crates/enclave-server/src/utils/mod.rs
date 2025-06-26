@@ -18,8 +18,7 @@ pub mod tdx_evidence_helpers;
 #[allow(unused_imports)]
 pub mod runners;
 
-
 #[cfg(not(feature = "supervisorctl"))]
- pub mod service;
- #[cfg(feature = "supervisorctl")]
- pub mod supervisorctl;
+pub mod service;
+#[cfg(feature = "supervisorctl")]
+pub mod supervisorctl;

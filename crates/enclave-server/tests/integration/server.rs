@@ -1,24 +1,15 @@
 // use seismic_enclave::auth::JwtSecret;
+use attestation_service::token::simple;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP};
 use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
-use seismic_enclave::crypto::Nonce;
-use seismic_enclave::get_unsecure_sample_schnorrkel_keypair;
-use seismic_enclave::get_unsecure_sample_secp256k1_pk;
 use seismic_enclave::keys::GetPurposeKeysRequest;
-// use seismic_enclave::request_types::tx_io::*;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave_server::attestation::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
 use seismic_enclave_server::server::{init_tracing, EnclaveServer};
-use attestation_service::token::simple;
 
-use anyhow::anyhow;
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
-use kbs_types::Tee;
 use serial_test::serial;
-use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::thread::sleep;
@@ -49,18 +40,16 @@ pub fn get_random_port() -> u16 {
 }
 
 async fn test_get_purpose_keys(client: &EnclaveClient) {
-    let res = client.get_purpose_keys(GetPurposeKeysRequest {epoch: 0}).await.unwrap();
+    client
+        .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+        .await
+        .unwrap();
 }
 
 async fn test_health_check(client: &EnclaveClient) {
     let response = client.health_check().await.unwrap();
     assert_eq!(response, "OK");
 }
-
-// async fn test_genesis_get_data(client: &EnclaveClient) {
-//     let response = client.get_genesis_data().await.unwrap();
-//     assert!(!response.evidence.is_empty());
-// }
 
 async fn test_attestation_get_evidence(client: &EnclaveClient) {
     let runtime_data = "nonce".as_bytes(); // Example runtime data
@@ -89,6 +78,11 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
 
     assert!(response.claims.is_some());
 }
+
+// async fn test_genesis_get_data(client: &EnclaveClient) {
+//     let response = client.get_genesis_data().await.unwrap();
+//     assert!(!response.evidence.is_empty());
+// }
 
 // async fn test_misconfigured_auth_secret(ip: IpAddr, port: u16) {
 //     let rand_auth_secret = JwtSecret::random();
