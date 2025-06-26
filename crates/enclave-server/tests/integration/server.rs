@@ -101,16 +101,7 @@ async fn test_attestation_get_evidence(client: &EnclaveClient) {
 
 async fn test_attestation_eval_evidence(client: &EnclaveClient) {
     // Mock a valid AttestationEvalEvidenceRequest
-    let eval_request = AttestationEvalEvidenceRequest {
-        evidence: vec![
-            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95,
-            100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
-        ], // Example evidence data
-        tee: Tee::Sample,
-        runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())), // Example runtime data
-        runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-        policy_ids: vec!["allow".to_string()],
-    };
+    let eval_request = seismic_enclave_server::utils::test_utils::pub_key_eval_request();
 
     let response = client
         .eval_attestation_evidence(eval_request)

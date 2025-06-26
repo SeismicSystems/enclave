@@ -1,6 +1,7 @@
 pub mod policy_fixture;
 
-#[cfg(test)]
+/// Utils for testing
+/// Not under a test flag so the integration tests can use them
 pub mod test_utils;
 
 /// tdx_evidence_helpers contains helpers for dealing with Vec<u8> evidence

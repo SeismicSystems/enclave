@@ -126,6 +126,7 @@ where
 
         // Convert bytes to Evidence struct
         // TODO: change AttestationEvalEvidenceRequest so this step is not needed?
+        // Note: these lines restrict evidence to be azure-tdx specific
         let evidence = tdx_attestation_bytes_to_evidence_struct(&request.evidence).unwrap();
         let evidence: attestation_service::TeeEvidence = serde_json::to_value(evidence).unwrap();
 
