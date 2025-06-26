@@ -98,6 +98,14 @@ impl MockEnclaveServer {
     fn complete_boot() {
         // No-op, keys are hardcoded for mock server
     }
+
+    fn prepare_encrypted_snapshot(_req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse {
+        unimplemented!("prepare_encrypted_snapshot not implemented for mock server")
+    }
+
+    fn restore_from_encrypted_snapshot(_req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse {
+        unimplemented!("restore_from_encrypted_snapshot not implemented for mock server")
+    }
 }
 
 impl Default for MockEnclaveServer {
@@ -145,6 +153,8 @@ impl_mock_async_server_trait!(
     async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse,
     async fn boot_genesis(&self) -> (),
     async fn complete_boot(&self) -> (),
+    async fn prepare_encrypted_snapshot(&self, req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse,
+    async fn restore_from_encrypted_snapshot(&self, req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse,
 );
 
 /// Mock enclave client for testing purposes.
@@ -183,6 +193,8 @@ impl_mock_sync_client_trait!(
     fn boot_share_root_key(&self, _req: ShareRootKeyRequest) -> Result<ShareRootKeyResponse,  ClientError>,
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
+    fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
+    fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
 #[derive(Debug, Clone, Default)]

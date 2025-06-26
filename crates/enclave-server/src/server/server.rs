@@ -198,6 +198,8 @@ impl_forwarding_async_server_trait!(
     async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse, log = "boot_share_root_key",
     async fn boot_genesis(&self) -> (), log = "boot_genesis",
     async fn complete_boot(&self) -> (), log = "complete_boot",
+    async fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
+    async fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
 pub fn init_tracing() {
