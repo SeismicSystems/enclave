@@ -1,5 +1,5 @@
-use seismic_enclave::coco_as::AttestationEvalEvidenceRequest;
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+use seismic_enclave::request_types::AttestationEvalEvidenceRequest;
 use std::fs::File;
 use std::io::{self, Read};
 use std::net::TcpListener;
@@ -66,7 +66,7 @@ pub fn get_random_port() -> u16 {
 /// Based on a saved sample attestation file
 /// attests to a public secp256k1 key from an AzTdxVtpm machine
 pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
-    use seismic_enclave::coco_as::{Data, HashAlgorithm};
+    use seismic_enclave::request_types::{Data, HashAlgorithm};
     let evidence = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();
     let req = AttestationEvalEvidenceRequest {
         evidence,
