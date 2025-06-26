@@ -303,6 +303,10 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     pub async fn run_engine_tests() {
+        if !is_sudo() {
+            panic!("run_engine_tests: skipped (requires sudo privileges)");
+        }
+
         let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
 
         let t1 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
@@ -391,6 +395,10 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_boot_share_root_key() {
+        if !is_sudo() {
+            panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
+        }
+
         let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
 
         let new_node_booter = Booter::mock();
@@ -418,6 +426,9 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
+        if !is_sudo() {
+            panic!("test_complete_boot: skipped (requires sudo privileges)");
+        }
         let enclave_engine: AttestationEngine<KeyManager> = default_unbooted_enclave_engine().await;
 
         let eval_context = pub_key_eval_request();
@@ -485,6 +496,9 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_boot_retrieve_root_key() -> Result<(), anyhow::Error> {
+        if !is_sudo() {
+            panic!("test_boot_retrieve_root_key: skipped (requires sudo privileges)");
+        }
         let enclave_engine: AttestationEngine<KeyManager> = default_unbooted_enclave_engine().await;
 
         // assert the booter root key begins uninitialized
