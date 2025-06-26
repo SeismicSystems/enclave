@@ -28,6 +28,7 @@ use std::path::Path;
 /// - Encryption fails due to an internal error in the encryption process.
 pub fn encrypt_snapshot(
     kp: &impl NetworkKeyProvider,
+    epoch: u64,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -43,7 +44,7 @@ pub fn encrypt_snapshot(
         );
     }
 
-    let snapshot_key = kp.get_snapshot_key();
+    let snapshot_key = kp.get_snapshot_key(epoch);
     encrypt_file(&input_path, &output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to encrypt snapshot file: {:?}", e))?;
 
@@ -74,6 +75,7 @@ pub fn encrypt_snapshot(
 /// - Decryption fails due to an incorrect or unavailable key, or an internal decryption error.
 pub fn decrypt_snapshot(
     kp: &impl NetworkKeyProvider,
+    epoch: u64,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -89,7 +91,7 @@ pub fn decrypt_snapshot(
         );
     }
 
-    let snapshot_key = kp.get_snapshot_key();
+    let snapshot_key = kp.get_snapshot_key(epoch);
     decrypt_file(&input_path, &output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to decrypt snapshot file: {:?}", e))?;
 
@@ -111,6 +113,7 @@ mod tests {
     #[test]
     fn test_encrypt_snapshot() -> Result<(), Error> {
         let kp = KeyManagerBuilder::build_mock().unwrap();
+        let epoch = 0;
 
         // Set up a temp dir
         let temp_dir = tempdir().unwrap();
@@ -128,6 +131,7 @@ mod tests {
         // Create the encrypted snapshot
         encrypt_snapshot(
             &kp,
+            epoch,
             temp_path.to_str().unwrap(),
             temp_path.to_str().unwrap(),
             SNAPSHOT_FILE,
@@ -140,6 +144,7 @@ mod tests {
         assert!(!Path::new(&snapshot_path).exists());
         decrypt_snapshot(
             &kp,
+            epoch,
             temp_path.to_str().unwrap(),
             temp_path.to_str().unwrap(),
             SNAPSHOT_FILE,

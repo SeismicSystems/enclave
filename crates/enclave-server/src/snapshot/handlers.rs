@@ -29,8 +29,10 @@ pub async fn prepare_encrypted_snapshot_handler(
     _request: PrepareEncryptedSnapshotRequest,
     kp: &impl NetworkKeyProvider,
 ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+    let epoch = 0; // no key rotation yet
     let res = super::prepare_encrypted_snapshot(
         kp,
+        epoch,
         RETH_DATA_DIR,
         DATA_DISK_DIR,
         SNAPSHOT_DIR,
@@ -66,8 +68,10 @@ pub async fn restore_from_encrypted_snapshot_handler(
     if !Path::new(&encrypted_snapshot_path).exists() {
         return Err(rpc_missing_snapshot_error());
     }
+    let epoch = 0; // no key rotation yet
     let res = super::restore_from_encrypted_snapshot(
         kp,
+        epoch,
         RETH_DATA_DIR,
         DATA_DISK_DIR,
         SNAPSHOT_DIR,
