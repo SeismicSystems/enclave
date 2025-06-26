@@ -7,6 +7,7 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 
 // Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_PK: &str =

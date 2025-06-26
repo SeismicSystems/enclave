@@ -1,13 +1,12 @@
 use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
 
 use seismic_enclave::rpc::EnclaveApiClient;
-use seismic_enclave::snapshot::{
+use seismic_enclave::request_types::{
    PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 };
 use seismic_enclave::{
    EnclaveClient, ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
-use seismic_enclave_server::snapshot::*;
 #[cfg(not(feature = "supervisorctl"))]
 use seismic_enclave_server::utils::service::reth_is_running;
 #[cfg(feature = "supervisorctl")]

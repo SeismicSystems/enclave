@@ -2,8 +2,8 @@
 use attestation_service::token::simple;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP};
-use seismic_enclave::coco_aa::AttestationGetEvidenceRequest;
-use seismic_enclave::keys::GetPurposeKeysRequest;
+use seismic_enclave::request_types::AttestationGetEvidenceRequest;
+use seismic_enclave::request_types::GetPurposeKeysRequest;
 use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave_server::attestation::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};

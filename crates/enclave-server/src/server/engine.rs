@@ -13,13 +13,7 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
 use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
-use seismic_enclave::boot::{
-    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
-};
-use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
-use seismic_enclave::coco_as::ASCoreTokenClaims;
-use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use seismic_enclave::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
+use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
@@ -405,7 +399,7 @@ mod tests {
         let new_node_booter = Booter::mock();
         let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
         assert_eq!(
-            seismic_enclave::coco_as::Data::Raw(new_node_booter.pk().serialize().to_vec()),
+            seismic_enclave::request_types::Data::Raw(new_node_booter.pk().serialize().to_vec()),
             eval_context.clone().runtime_data.unwrap(),
             "test misconfigured, attestation should be of the new booter's public key"
         );
