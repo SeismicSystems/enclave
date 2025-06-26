@@ -4,9 +4,10 @@ use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 };
 use seismic_enclave::{
-    EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
+    EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 use seismic_enclave_server::utils::test_utils::is_sudo;
+use seismic_enclave::rpc::SyncEnclaveApiClient;
 
 #[cfg(not(feature = "supervisorctl"))]
 use seismic_enclave_server::utils::service::reth_is_running;
@@ -71,7 +72,6 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let prepare_req = PrepareEncryptedSnapshotRequest {};
     let prepare_resp = enclave_client
         .prepare_encrypted_snapshot(prepare_req)
-        .await
         .unwrap();
     assert!(prepare_resp.success);
     assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
@@ -86,7 +86,6 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let restore_req = RestoreFromEncryptedSnapshotRequest {};
     let restore_resp = enclave_client
         .restore_from_encrypted_snapshot(restore_req)
-        .await
         .unwrap();
     assert!(restore_resp.success);
     assert!(Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists());
@@ -133,7 +132,6 @@ pub async fn run_restore() -> Result<(), anyhow::Error> {
     let restore_req = RestoreFromEncryptedSnapshotRequest {};
     let restore_resp = enclave_client
         .restore_from_encrypted_snapshot(restore_req)
-        .await
         .unwrap();
     assert!(
         restore_resp.success,
