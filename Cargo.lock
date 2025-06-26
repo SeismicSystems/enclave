@@ -5566,9 +5566,6 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "alloy",
- "alloy-primitives",
- "alloy-provider",
- "alloy-sol-types",
  "anyhow",
  "attestation-agent",
  "attestation-service",
