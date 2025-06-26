@@ -8,7 +8,7 @@ const OPERATOR_ADDR: Address = address!("0x5FbDB2315678afecb367f032d93F642f64180
 // Generate contract bindings inline with RPC support
 sol! {
     #[sol(rpc)]
-    interface IUpgradeOperator {
+    interface UpgradeOperator {
         function get_mrtd(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3) external view returns (bool);
     }
 }
@@ -28,19 +28,11 @@ pub async fn check_operator(
     let provider = ProviderBuilder::new().connect_http("http://localhost:8545".parse()?);
 
     // Instantiate the contract
-    let contract = UpgradeOperator::new(OPERATOR_ADDR, Arc::new(provider));
 
     // Call the `get_mrtd` function
-    let result: UpgradeOperator::get_mrtdReturn = contract
-        .get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .call()
-        .await
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to call get_mrtd on UpgradeOperator contract: {:?}",
-                e
-            )
-        })?;
+    let contract = UpgradeOperator::new(OPERATOR_ADDR, Arc::new(provider));
+    let builder = contract.get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3);
+    let is_valid = builder.call().await?;
 
     Ok(is_valid)
 }
