@@ -25,18 +25,10 @@ pub async fn check_operator(
     rtmr3: Bytes,
 ) -> Result<bool, anyhow::Error> {
     // Set up the provider to connect to the local node
-    let provider = ProviderBuilder::new().on_http("http://localhost:8545".parse()?);
-
-    // Specify the contract address
-    let contract_address: Address = OPERATOR_ADDR.parse().map_err(|e| {
-        anyhow::anyhow!(
-            "Unexpected Internal Error: Failed to parse UpgradeOperator contract address: {:?}",
-            e
-        )
-    })?;
+    let provider = ProviderBuilder::new().connect_http("http://localhost:8545".parse()?);
 
     // Instantiate the contract
-    let contract = UpgradeOperator::new(contract_address, Arc::new(provider));
+    let contract = UpgradeOperator::new(OPERATOR_ADDR, Arc::new(provider));
 
     // Call the `get_mrtd` function
     let result: UpgradeOperator::get_mrtdReturn = contract
