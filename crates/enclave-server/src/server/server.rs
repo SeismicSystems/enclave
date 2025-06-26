@@ -170,7 +170,7 @@ where
 }
 
 /// Derive implementation of the async [`EnclaveApiServer`] trait
-/// for [`EnclaveServer<K, T>`]
+/// for [`EnclaveServer<K>`]
 /// Each implimentation logs using debug! and delegates to `self.inner` engine
 macro_rules! impl_forwarding_async_server_trait {
     ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
@@ -198,8 +198,8 @@ impl_forwarding_async_server_trait!(
     async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse, log = "boot_share_root_key",
     async fn boot_genesis(&self) -> (), log = "boot_genesis",
     async fn complete_boot(&self) -> (), log = "complete_boot",
-    async fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
-    async fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
+    async fn prepare_encrypted_snapshot(&self, req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse, log = "prepare_encrypted_snapshot",
+    async fn restore_from_encrypted_snapshot(&self, req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse, log = "restore_from_encrypted_snapshot",
 );
 
 pub fn init_tracing() {

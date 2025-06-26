@@ -260,6 +260,13 @@ where
 
         Ok(())
     }
+
+    async fn prepare_encrypted_snapshot(&self, req: PrepareEncryptedSnapshotRequest) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+        unimplemented!("prepare_encrypted_snapshot not implemented")
+    }
+    async fn restore_from_encrypted_snapshot(&self, req: RestoreFromEncryptedSnapshotRequest) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        unimplemented!("restore_from_encrypted_snapshot not implemented")
+    }
 }
 
 #[allow(dead_code)]
