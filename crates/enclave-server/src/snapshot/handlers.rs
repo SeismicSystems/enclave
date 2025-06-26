@@ -2,7 +2,7 @@ use super::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use crate::snapshot::NetworkKeyProvider;
 use seismic_enclave::{
     rpc_missing_snapshot_error,
-    snapshot::{
+    request_types::{
         PrepareEncryptedSnapshotRequest, PrepareEncryptedSnapshotResponse,
         RestoreFromEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotResponse,
     },
