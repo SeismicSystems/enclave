@@ -1,7 +1,7 @@
 use seismic_enclave::get_unsecure_sample_secp256k1_pk;
+use seismic_enclave::request_types::AttestationEvalEvidenceRequest;
 use std::fs::{self, File};
 use std::io::Write;
-use seismic_enclave::request_types::AttestationEvalEvidenceRequest;
 use std::io::{self, Read};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

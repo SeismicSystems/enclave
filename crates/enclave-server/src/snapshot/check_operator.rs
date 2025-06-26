@@ -1,6 +1,10 @@
-use alloy::{primitives::{address, Address, Bytes}, providers::ProviderBuilder, sol};
-use std::sync::Arc;
+use alloy::{
+    primitives::{address, Address, Bytes},
+    providers::ProviderBuilder,
+    sol,
+};
 use anyhow::Result;
+use std::sync::Arc;
 
 // Contract address
 const OPERATOR_ADDR: Address = address!("0x5FbDB2315678afecb367f032d93F642f64180aa3");

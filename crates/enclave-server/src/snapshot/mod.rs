@@ -42,22 +42,22 @@ pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
 /// Returns an error if any step in the process (stopping Reth, compression, encryption,
 /// removing temporary data, or restarting Reth) fails.
 pub fn prepare_encrypted_snapshot(
-   kp: &impl NetworkKeyProvider,
-   epoch: u64,
-   reth_data_dir: &str,
-   data_disk_dir: &str,
-   snapshot_dir: &str,
-   snapshot_file: &str,
+    kp: &impl NetworkKeyProvider,
+    epoch: u64,
+    reth_data_dir: &str,
+    data_disk_dir: &str,
+    snapshot_dir: &str,
+    snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
-   fs::create_dir_all(snapshot_dir)
-       .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
-   stop_reth()?;
-   compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-   encrypt_snapshot(kp, epoch, snapshot_dir, data_disk_dir, snapshot_file)?;
-   fs::remove_dir_all(snapshot_dir)
-       .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
-   start_reth()?;
-   Ok(())
+    fs::create_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
+    stop_reth()?;
+    compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
+    encrypt_snapshot(kp, epoch, snapshot_dir, data_disk_dir, snapshot_file)?;
+    fs::remove_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
+    start_reth()?;
+    Ok(())
 }
 
 /// Restores the Reth database from an encrypted snapshot stored on a mounted data disk.
@@ -81,20 +81,20 @@ pub fn prepare_encrypted_snapshot(
 /// Returns an error if any step in the process (stopping Reth, decryption, decompression,
 /// removing temporary data, or restarting Reth) fails.
 pub fn restore_from_encrypted_snapshot(
-   kp: &impl NetworkKeyProvider,
-   epoch: u64,
-   reth_data_dir: &str,
-   data_disk_dir: &str,
-   snapshot_dir: &str,
-   snapshot_file: &str,
+    kp: &impl NetworkKeyProvider,
+    epoch: u64,
+    reth_data_dir: &str,
+    data_disk_dir: &str,
+    snapshot_dir: &str,
+    snapshot_file: &str,
 ) -> Result<(), anyhow::Error> {
-   fs::create_dir_all(snapshot_dir)
-       .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
-   stop_reth()?;
-   decrypt_snapshot(kp, epoch, data_disk_dir, snapshot_dir, snapshot_file)?;
-   decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-   fs::remove_dir_all(snapshot_dir)
-       .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
-   start_reth()?;
-   Ok(())
+    fs::create_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
+    stop_reth()?;
+    decrypt_snapshot(kp, epoch, data_disk_dir, snapshot_dir, snapshot_file)?;
+    decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
+    fs::remove_dir_all(snapshot_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
+    start_reth()?;
+    Ok(())
 }

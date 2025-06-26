@@ -1,4 +1,3 @@
-
 use std::process::{Command, Output};
 
 const SEISMIC_RETH_SERVICE: &str = "reth";
