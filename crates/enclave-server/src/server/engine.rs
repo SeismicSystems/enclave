@@ -4,12 +4,10 @@ use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use std::sync::Arc;
-use std::fs;
 
 use super::boot::Booter;
 use crate::attestation::seismic_aa_mock;
 use crate::attestation::SeismicAttestationAgent;
-use crate::key_manager;
 use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
