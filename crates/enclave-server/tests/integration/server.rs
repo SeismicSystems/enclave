@@ -1,5 +1,4 @@
 // use seismic_enclave::auth::JwtSecret;
-use attestation_service::token::simple;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP};
 use seismic_enclave::request_types::AttestationGetEvidenceRequest;
@@ -8,6 +7,7 @@ use seismic_enclave::rpc::EnclaveApiClient;
 use seismic_enclave_server::attestation::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
 use seismic_enclave_server::server::{init_tracing, EnclaveServer};
+use seismic_enclave_server::attestation::simple_att_serv_config;
 
 use serial_test::serial;
 use std::net::SocketAddr;
@@ -120,12 +120,7 @@ async fn test_server_requests() {
     let port = get_random_port(); // rand port for test parallelization
     let addr = SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, port));
     let kp = KeyManagerBuilder::build_mock().unwrap();
-
-    let token_broker_config = attestation_service::token::AttestationTokenConfig::Simple(
-        simple::Configuration::default(),
-    );
-    let mut att_serv_config: attestation_service::config::Config = Default::default();
-    att_serv_config.attestation_token_broker = token_broker_config;
+    let att_serv_config = simple_att_serv_config();
 
     let seismic_attestation_agent = SeismicAttestationAgent::new(None, att_serv_config).await;
     // let auth_secret = JwtSecret::random();

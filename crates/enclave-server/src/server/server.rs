@@ -1,6 +1,7 @@
 use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
+use crate::attestation::simple_token_broker_config;
 
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
@@ -16,6 +17,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
 
 /// The main server struct, with everything needed to run.
 /// Can be constructed with the [`EnclaveServerBuilder`]
@@ -108,7 +110,7 @@ where
             .ok_or_else(|| anyhow!("No key provider supplied to builder"))?;
         let token_broker_config = self
             .token_broker_config
-            .ok_or_else(|| anyhow!("No token broker config supplied to builder"))?;
+            .unwrap_or_else(|| simple_token_broker_config());
 
         // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
