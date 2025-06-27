@@ -117,7 +117,6 @@ anyhow = "1.0"
 auto_impl = "1"
 az-tdx-vtpm = "0.7.1"
 base64 = "0.22"
-bytes = "1.10"
 hex = "0.4.3"
 hkdf = "0.12"
 jsonrpsee = { version = "0.24", features = ["server", "client", "macros"] }
