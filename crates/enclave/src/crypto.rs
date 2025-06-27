@@ -292,7 +292,7 @@ pub fn encrypt_file(
     key: &Key<Aes256Gcm>,
 ) -> Result<(), anyhow::Error> {
     let plaintext =
-        fs::read(input_path).map_err(|e| anyhow::anyhow!("Failed to read input file: {:?}", e))?;
+        fs::read(input_path).map_err(|e| anyhow::anyhow!("Failed to read input file {}: {:?}", input_path, e))?;
 
     // Generate a random nonce
     let nonce = Nonce::new_rand();
@@ -302,7 +302,7 @@ pub fn encrypt_file(
 
     // Save nonce + ciphertext together
     let mut output_file = fs::File::create(output_path)
-        .map_err(|e| anyhow::anyhow!("Failed to create output file: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create output file {}: {:?}", output_path, e))?;
     output_file.write_all(&nonce.0)?; // Write nonce first
     output_file.write_all(&ciphertext)?; // Write encrypted content
 
@@ -327,7 +327,7 @@ pub fn decrypt_file(
     key: &Key<Aes256Gcm>,
 ) -> Result<(), anyhow::Error> {
     let mut file = fs::File::open(input_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open input file: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to open input file {}: {:?}", input_path, e))?;
     let mut file_data = Vec::new();
     file.read_to_end(&mut file_data)?;
 
@@ -344,6 +344,6 @@ pub fn decrypt_file(
     let decrypted_data = aes_decrypt(key, ciphertext, nonce_bytes)?;
 
     fs::write(output_path, decrypted_data)
-        .map_err(|e| anyhow::anyhow!("Failed to write output file: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to write output file {}: {:?}", output_path, e))?;
     Ok(())
 }
