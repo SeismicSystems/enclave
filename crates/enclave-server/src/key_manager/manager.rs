@@ -62,6 +62,14 @@ pub struct KeyManager {
     root_key: Mutex<Key>,
 }
 impl KeyManager {
+     /// Constructs a new `KeyManager` from a 32-byte root key.
+    pub fn new(root_key_bytes: [u8; 32]) -> Self {
+        let km = Self {
+            root_key: Mutex::new(Key(root_key_bytes.to_vec())),
+        };
+        km
+    }
+
     /// Derives a key for a specific `KeyPurpose`
     ///
     /// # Errors
@@ -90,14 +98,6 @@ impl KeyManager {
     }
 }
 impl NetworkKeyProvider for KeyManager {
-    /// Constructs a new `KeyManager` from a 32-byte root key.
-    fn new(root_key_bytes: [u8; 32]) -> Self {
-        let km = Self {
-            root_key: Mutex::new(Key(root_key_bytes.to_vec())),
-        };
-        km
-    }
-
     /// Sets the root key for the key manager, replacing any existing key material.
     fn set_root_key(&self, new_root_key: [u8; 32]) {
         let mut root_guard = self.root_key.lock().unwrap();

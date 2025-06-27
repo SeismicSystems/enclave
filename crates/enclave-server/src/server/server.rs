@@ -221,7 +221,6 @@ mod tests {
     use super::*;
     use crate::attestation::SeismicAttestationAgent;
     use crate::key_manager::KeyManager;
-    use crate::key_manager::NetworkKeyProvider;
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::{get_random_port, is_sudo};

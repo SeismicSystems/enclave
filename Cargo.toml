@@ -114,6 +114,7 @@ seismic-enclave-derive = { path = "crates/enclave/derive" }
 seismic-enclave = { path = "crates/enclave" }
 aes-gcm = "0.10"
 anyhow = "1.0"
+auto_impl = "1"
 az-tdx-vtpm = "0.7.1"
 base64 = "0.22"
 bytes = "1.10"

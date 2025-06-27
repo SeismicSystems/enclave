@@ -5569,6 +5569,7 @@ dependencies = [
  "anyhow",
  "attestation-agent",
  "attestation-service",
+ "auto_impl",
  "az-tdx-vtpm",
  "base64 0.22.1",
  "bytes",
