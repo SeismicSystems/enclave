@@ -26,6 +26,8 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 
+
+// TODO: make reth spin up like in reth integration tests so I don't have to run it manually
 #[tokio::test]
 pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     print_flush("Running test_snapshot_integration_handlers. Expected runtime is ~90 sec\n");
