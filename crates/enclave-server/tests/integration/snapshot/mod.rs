@@ -51,6 +51,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let enclave_client = EnclaveClientBuilder::new()
         .ip(enclave_addr.ip().to_string())
         .port(enclave_addr.port())
+        .timeout(Duration::from_secs(120)) // snapshot takes a while
         .build()
         .unwrap();
     let reth_rpc = "http://localhost:8545";
@@ -79,7 +80,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let prepare_resp = enclave_client
         .prepare_encrypted_snapshot(prepare_req)
         .unwrap();
-    assert!(prepare_resp.success);
+    assert!(prepare_resp.success, "prepare_encrypted_snapshot failed: {}", prepare_resp.error);
     assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
     assert!(reth_is_running());
 
