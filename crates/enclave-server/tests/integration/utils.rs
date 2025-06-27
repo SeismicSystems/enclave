@@ -74,6 +74,8 @@ pub async fn deploy_contract(
     Ok(())
 }
 
+/// Prints a string to standard output and immediately flushes the output buffer.
+/// Useful to see prints immediately during long-running Cargo tests.
 pub fn print_flush<S: AsRef<str>>(s: S) {
     let stdout = std::io::stdout();
     let mut handle = stdout.lock(); // lock ensures safe writing
