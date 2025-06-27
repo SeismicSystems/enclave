@@ -12,6 +12,7 @@ use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
+use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
@@ -261,29 +262,38 @@ where
         Ok(())
     }
 
-    async fn prepare_encrypted_snapshot(&self, req: PrepareEncryptedSnapshotRequest) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+    async fn prepare_encrypted_snapshot(
+        &self,
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
         let key_provider = self.key_provider()?;
         let epoch = 0; // no key rotation yet
 
-    use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
-    let res = crate::snapshot::prepare_encrypted_snapshot(
-        &key_provider,
-        epoch,
-        RETH_DATA_DIR,
-        DATA_DISK_DIR,
-        SNAPSHOT_DIR,
-        SNAPSHOT_FILE,
-    );
-    let resp = PrepareEncryptedSnapshotResponse {
-        success: res.is_ok(),
-        error: res.err().map(|e| e.to_string()).unwrap_or_default(),
-    };
-    Ok(resp)
+        // TODO: cleaner port
+        let res = crate::snapshot::prepare_encrypted_snapshot(
+            &key_provider,
+            epoch,
+            RETH_DATA_DIR,
+            DATA_DISK_DIR,
+            SNAPSHOT_DIR,
+            SNAPSHOT_FILE,
+        );
+        let resp = PrepareEncryptedSnapshotResponse {
+            success: res.is_ok(),
+            error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        };
+        Ok(resp)
     }
 
-    async fn restore_from_encrypted_snapshot(&self, req: RestoreFromEncryptedSnapshotRequest) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
-        let key_provider = self.key_provider()?;
-        unimplemented!("restore_from_encrypted_snapshot not implemented")
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        crate::snapshot::handlers::restore_from_encrypted_snapshot_handler(
+            req,
+            &self.key_provider.clone(),
+        )
+        .await
     }
 }
 
