@@ -56,7 +56,7 @@ reqwest.workspace = true
 
 
 [features]
-default = ["az-tdx-vtpm-attester"]
+default = ["az-tdx-vtpm-attester", "supervisorctl"] # remove supervisorctl before merging
 az-tdx-vtpm-attester = [
     "attestation-agent/az-tdx-vtpm-attester", 
     "attestation-service/az-tdx-vtpm-verifier",
