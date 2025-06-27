@@ -3,11 +3,11 @@ use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
 use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 };
+use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{
     EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT,
 };
 use seismic_enclave_server::utils::test_utils::is_sudo;
-use seismic_enclave::rpc::SyncEnclaveApiClient;
 
 #[cfg(not(feature = "supervisorctl"))]
 use seismic_enclave_server::utils::service::reth_is_running;
@@ -26,7 +26,6 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 
-
 // TODO: make reth spin up like in reth integration tests so I don't have to run it manually
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
@@ -40,6 +39,10 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     assert!(
         !Path::new(format!("{}/{}.enc", SNAPSHOT_DIR, SNAPSHOT_FILE).as_str()).exists(),
         "Test startup error: Encrypted snapshot already exists"
+    );
+    assert!(
+        Path::new(DATA_DISK_DIR).is_dir(),
+        "Test startup error: DATA_DISK_DIR missing or misconfigured. Expected to find a directory at {}", DATA_DISK_DIR
     );
     assert!(reth_is_running(), "Test startup error: Reth is not running");
     // set path to the contract's json file
@@ -80,7 +83,11 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let prepare_resp = enclave_client
         .prepare_encrypted_snapshot(prepare_req)
         .unwrap();
-    assert!(prepare_resp.success, "prepare_encrypted_snapshot failed: {}", prepare_resp.error);
+    assert!(
+        prepare_resp.success,
+        "prepare_encrypted_snapshot failed: {}",
+        prepare_resp.error
+    );
     assert!(Path::new(format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE).as_str()).exists());
     assert!(reth_is_running());
 
