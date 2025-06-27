@@ -3,6 +3,7 @@ use clap::Parser;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 use seismic_enclave_server::key_manager::KeyManager;
+use seismic_enclave_server::key_manager::NetworkKeyProvider;
 use seismic_enclave_server::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
 use std::net::IpAddr;
 use tracing::info;
