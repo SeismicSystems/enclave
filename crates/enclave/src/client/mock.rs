@@ -100,11 +100,11 @@ impl MockEnclaveServer {
     }
 
     fn prepare_encrypted_snapshot(_req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse {
-        unimplemented!("prepare_encrypted_snapshot not implemented for mock server")
+        PrepareEncryptedSnapshotResponse { success: true, error: "".to_string() }
     }
 
     fn restore_from_encrypted_snapshot(_req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse {
-        unimplemented!("restore_from_encrypted_snapshot not implemented for mock server")
+        RestoreFromEncryptedSnapshotResponse { success: true, error: "".to_string() }
     }
 }
 
