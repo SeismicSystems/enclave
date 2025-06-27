@@ -35,7 +35,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     assert!(is_sudo(), "Must be run as sudo");
     assert!(
         Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists(),
-        "Test startup error: MDBX misconfigured"
+        "Test startup error: Reth mbdx.dat missing or misconfigured. Expected to find it at {}/db/mdbx.dat", RETH_DATA_DIR
     );
     assert!(
         !Path::new(format!("{}/{}.enc", SNAPSHOT_DIR, SNAPSHOT_FILE).as_str()).exists(),
