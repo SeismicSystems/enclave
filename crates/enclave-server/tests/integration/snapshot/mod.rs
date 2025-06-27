@@ -70,6 +70,10 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 3: {:?}", e))?;
     sleep(Duration::from_secs(2));
 
+    // Boot genesis so we can interact with the enclaver-server
+    enclave_client.boot_genesis().unwrap();
+    enclave_client.complete_boot().unwrap();
+
     // Create encrypted snapshot
     let prepare_req = PrepareEncryptedSnapshotRequest {};
     let prepare_resp = enclave_client
