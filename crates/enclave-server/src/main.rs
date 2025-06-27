@@ -3,6 +3,7 @@ use clap::Parser;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::{ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT};
 use seismic_enclave_server::key_manager::KeyManager;
+use seismic_enclave_server::key_manager::NetworkKeyProvider;
 use seismic_enclave_server::server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
 use std::net::IpAddr;
 use tracing::info;
@@ -34,7 +35,9 @@ async fn main() {
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
     let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager>::builder()
         .with_ip(args.ip)
-        .with_port(args.port);
+        .with_port(args.port)
+        // TODO: load from env / set this in yocto builder
+        .with_key_provider(KeyManager::new([0u8; 32]));
 
     let server: EnclaveServer<KeyManager> = builder.build().await.unwrap();
     let handle = server.start().await.unwrap();
