@@ -36,7 +36,7 @@ pub async fn check_operator(
     // Call the `get_mrtd` function
     let contract = UpgradeOperator::new(OPERATOR_ADDR, Arc::new(provider));
     let builder = contract.get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3);
-    let is_valid = builder.call().await?;
+    let is_valid = builder.call().await.map_err(|e| anyhow::anyhow!("Call to get_mrtd failed: {:?}", e))?;
 
     Ok(is_valid)
 }
