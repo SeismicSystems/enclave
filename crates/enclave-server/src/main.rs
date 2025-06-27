@@ -34,7 +34,8 @@ async fn main() {
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
     let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager>::builder()
         .with_ip(args.ip)
-        .with_port(args.port);
+        .with_port(args.port)
+        .with_key_provider(KeyManager::new([0u8; 32]));
 
     let server: EnclaveServer<KeyManager> = builder.build().await.unwrap();
     let handle = server.start().await.unwrap();
