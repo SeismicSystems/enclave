@@ -36,6 +36,7 @@ async fn main() {
     let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager>::builder()
         .with_ip(args.ip)
         .with_port(args.port)
+        // TODO: load from env / set this in yocto builder
         .with_key_provider(KeyManager::new([0u8; 32]));
 
     let server: EnclaveServer<KeyManager> = builder.build().await.unwrap();
