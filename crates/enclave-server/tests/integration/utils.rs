@@ -52,7 +52,7 @@ pub async fn deploy_contract(
     let signer: PrivateKeySigner = sk.parse().unwrap();
     let wallet = EthereumWallet::from(signer);
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
-    let provider = ProviderBuilder::new().wallet(wallet).on_http(rpc_url);
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
     // Deploy contract
     // println!("Deploying contract...");
