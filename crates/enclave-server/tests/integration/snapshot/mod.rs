@@ -1,4 +1,4 @@
-use crate::utils::{deploy_contract, ANVIL_ALICE_PK};
+use crate::utils::{deploy_contract, ANVIL_ALICE_SK, ANVIL_BOB_SK, ANVIL_CHARLIE_SK};
 
 use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
@@ -28,15 +28,15 @@ use std::time::Duration;
 // TODO: make reth spin up like in reth integration tests so I don't have to run it manually
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
-    println!("here 1");
-    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    let mrtd = Bytes::from(vec![0x00; 48]);
-    let rtmr0 = Bytes::from(vec![0x00; 48]);
-    let rtmr3 = Bytes::from(vec![0x00; 48]);
-    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .await
-        .unwrap();
-    println!("here 2");
+    // println!("here 1");
+    // let rootfs_hash = Bytes::from(vec![0x00; 32]);
+    // let mrtd = Bytes::from(vec![0x00; 48]);
+    // let rtmr0 = Bytes::from(vec![0x00; 48]);
+    // let rtmr3 = Bytes::from(vec![0x00; 48]);
+    // let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
+    //     .await
+    //     .unwrap();
+    // println!("here 2");
 
     print_flush("Running test_snapshot_integration_handlers. Expected runtime is ~90 sec\n");
     // Check the starting conditions are as expected
@@ -69,16 +69,16 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let reth_rpc = "http://localhost:8545";
 
     // Deploy UpgradeOperator contract
-    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, reth_rpc)
+    deploy_contract(foundry_json_path, ANVIL_ALICE_SK, reth_rpc)
         .await
         .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator contract: {:?}", e))?;
     // deploy 2 more times to trigger the reth persistence threshhold
     // and have the first block save to disk
     // based on the assumption that reth is run with the  --dev.block-max-transactions 1 flag
-    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, reth_rpc)
+    deploy_contract(foundry_json_path, ANVIL_BOB_SK, reth_rpc)
         .await
         .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 2: {:?}", e))?;
-    deploy_contract(foundry_json_path, ANVIL_ALICE_PK, reth_rpc)
+    deploy_contract(foundry_json_path, ANVIL_CHARLIE_SK, reth_rpc)
         .await
         .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator contract 3: {:?}", e))?;
     sleep(Duration::from_secs(2));
