@@ -186,6 +186,8 @@ impl_sync_client_trait!(
     fn boot_share_root_key(&self, _req: ShareRootKeyRequest) -> Result<ShareRootKeyResponse,  ClientError>,
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
+    fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
+    fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
 #[cfg(test)]
@@ -217,6 +219,8 @@ pub mod tests {
 
         let client = EnclaveClient::mock(addr.ip().to_string(), addr.port())?;
         sync_test_health_check(&client);
+        sync_test_get_purpose_keys(&client);
+        sync_test_prepare_encrypted_snapshot(&client);
         Ok(())
     }
 
@@ -229,8 +233,8 @@ pub mod tests {
     }
 
     pub fn sync_test_health_check<C: SyncEnclaveApiClient>(client: &C) {
-        let resposne = client.health_check().unwrap();
-        assert_eq!(resposne, "OK");
+        let response = client.health_check().unwrap();
+        assert_eq!(response, "OK");
     }
 
     pub fn sync_test_get_purpose_keys<C: SyncEnclaveApiClient>(client: &C) {
@@ -238,5 +242,12 @@ pub mod tests {
             .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
             .unwrap();
         assert!(response.snapshot_key_bytes.len() > 0);
+    }
+
+    pub fn sync_test_prepare_encrypted_snapshot<C: SyncEnclaveApiClient>(client: &C) {
+        let response = client
+            .prepare_encrypted_snapshot(PrepareEncryptedSnapshotRequest {})
+            .unwrap();
+        assert!(response.success);
     }
 }

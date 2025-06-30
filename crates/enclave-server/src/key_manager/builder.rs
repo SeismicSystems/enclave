@@ -22,6 +22,11 @@ impl KeyManagerBuilder {
         Self {}
     }
 
+    pub fn build_from_root_key(root_key: [u8; 32]) -> KeyManager {
+        let km = KeyManager::new(root_key);
+        km
+    }
+
     /// Builds a [`KeyManager`] using cryptographically secure random bytes
     /// sourced from the operating system's RNG.
     ///

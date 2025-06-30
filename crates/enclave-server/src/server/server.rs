@@ -1,3 +1,4 @@
+use crate::attestation::simple_token_broker_config;
 use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
@@ -108,7 +109,7 @@ where
             .ok_or_else(|| anyhow!("No key provider supplied to builder"))?;
         let token_broker_config = self
             .token_broker_config
-            .ok_or_else(|| anyhow!("No token broker config supplied to builder"))?;
+            .unwrap_or_else(|| simple_token_broker_config());
 
         // Initialize AttestationEngine with the key provider
         let config_path = self.attestation_config_path.as_deref();
@@ -170,7 +171,7 @@ where
 }
 
 /// Derive implementation of the async [`EnclaveApiServer`] trait
-/// for [`EnclaveServer<K, T>`]
+/// for [`EnclaveServer<K>`]
 /// Each implimentation logs using debug! and delegates to `self.inner` engine
 macro_rules! impl_forwarding_async_server_trait {
     ($(async fn $method_name:ident(&self $(, $param:ident: $param_ty:ty)*)
@@ -198,6 +199,8 @@ impl_forwarding_async_server_trait!(
     async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse, log = "boot_share_root_key",
     async fn boot_genesis(&self) -> (), log = "boot_genesis",
     async fn complete_boot(&self) -> (), log = "complete_boot",
+    async fn prepare_encrypted_snapshot(&self, req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse, log = "prepare_encrypted_snapshot",
+    async fn restore_from_encrypted_snapshot(&self, req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse, log = "restore_from_encrypted_snapshot",
 );
 
 pub fn init_tracing() {
@@ -219,7 +222,6 @@ mod tests {
     use super::*;
     use crate::attestation::SeismicAttestationAgent;
     use crate::key_manager::KeyManager;
-    use crate::key_manager::NetworkKeyProvider;
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::{get_random_port, is_sudo};
@@ -236,8 +238,8 @@ mod tests {
     use std::time::Duration;
 
     async fn test_health_check(client: &EnclaveClient) {
-        let resposne = client.health_check().await.unwrap();
-        assert_eq!(resposne, "OK");
+        let response = client.health_check().await.unwrap();
+        assert_eq!(response, "OK");
     }
 
     async fn test_attestation_get_evidence(client: &EnclaveClient) {
