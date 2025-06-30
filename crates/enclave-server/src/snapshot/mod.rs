@@ -1,18 +1,17 @@
 mod check_operator;
 mod compress;
 mod file_encrypt;
-pub mod handlers;
-pub use check_operator::check_operator;
-use compress::{compress_datadir, decompress_datadir};
-use file_encrypt::{decrypt_snapshot, encrypt_snapshot}; // re-export for integration testing
 
 use crate::key_manager::NetworkKeyProvider;
+pub use check_operator::check_operator;
+use compress::{compress_datadir, decompress_datadir};
+use file_encrypt::{decrypt_snapshot, encrypt_snapshot};
+use std::fs;
+
 #[cfg(not(feature = "supervisorctl"))]
 use crate::utils::service::{start_reth, stop_reth};
 #[cfg(feature = "supervisorctl")]
 use crate::utils::supervisorctl::{start_reth, stop_reth};
-
-use std::fs;
 
 #[cfg(not(feature = "supervisorctl"))]
 pub const RETH_DATA_DIR: &str = "/persistent/reth"; // correct when running with yocto builds
