@@ -28,16 +28,6 @@ use std::time::Duration;
 // TODO: make reth spin up like in reth integration tests so I don't have to run it manually
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
-    // println!("here 1");
-    // let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    // let mrtd = Bytes::from(vec![0x00; 48]);
-    // let rtmr0 = Bytes::from(vec![0x00; 48]);
-    // let rtmr3 = Bytes::from(vec![0x00; 48]);
-    // let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-    //     .await
-    //     .unwrap();
-    // println!("here 2");
-
     print_flush("Running test_snapshot_integration_handlers. Expected runtime is ~90 sec\n");
     // Check the starting conditions are as expected
     assert!(is_sudo(), "Must be run as sudo");
@@ -54,6 +44,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         "Test startup error: DATA_DISK_DIR missing or misconfigured. Expected to find a directory at {}", DATA_DISK_DIR
     );
     assert!(reth_is_running(), "Test startup error: Reth is not running");
+
     // set path to the contract's json file
     // this file can be recreated `forge build`
     // assumes test is run from the root of the enclave-server crate
@@ -164,4 +155,3 @@ pub async fn run_restore() -> Result<(), anyhow::Error> {
     assert!(reth_is_running());
     Ok(())
 }
-

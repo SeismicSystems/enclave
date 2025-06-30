@@ -62,7 +62,7 @@ pub struct KeyManager {
     root_key: Mutex<Key>,
 }
 impl KeyManager {
-     /// Constructs a new `KeyManager` from a 32-byte root key.
+    /// Constructs a new `KeyManager` from a 32-byte root key.
     pub fn new(root_key_bytes: [u8; 32]) -> Self {
         let km = Self {
             root_key: Mutex::new(Key(root_key_bytes.to_vec())),

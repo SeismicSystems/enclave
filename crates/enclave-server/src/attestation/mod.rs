@@ -19,7 +19,5 @@ pub fn simple_att_serv_config() -> attestation_service::config::Config {
 }
 
 pub fn simple_token_broker_config() -> attestation_service::token::AttestationTokenConfig {
-    attestation_service::token::AttestationTokenConfig::Simple(
-        simple::Configuration::default(),
-    )
+    attestation_service::token::AttestationTokenConfig::Simple(simple::Configuration::default())
 }

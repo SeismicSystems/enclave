@@ -1,7 +1,7 @@
+use crate::attestation::simple_token_broker_config;
 use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::engine::AttestationEngine;
-use crate::attestation::simple_token_broker_config;
 
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::{BuildableServer, EnclaveApiServer};
@@ -17,7 +17,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
-
 
 /// The main server struct, with everything needed to run.
 /// Can be constructed with the [`EnclaveServerBuilder`]

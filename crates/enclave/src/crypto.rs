@@ -291,8 +291,8 @@ pub fn encrypt_file(
     output_path: &str,
     key: &Key<Aes256Gcm>,
 ) -> Result<(), anyhow::Error> {
-    let plaintext =
-        fs::read(input_path).map_err(|e| anyhow::anyhow!("Failed to read input file {}: {:?}", input_path, e))?;
+    let plaintext = fs::read(input_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read input file {}: {:?}", input_path, e))?;
 
     // Generate a random nonce
     let nonce = Nonce::new_rand();

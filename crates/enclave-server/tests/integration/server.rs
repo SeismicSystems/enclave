@@ -4,10 +4,10 @@ use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAU
 use seismic_enclave::request_types::AttestationGetEvidenceRequest;
 use seismic_enclave::request_types::GetPurposeKeysRequest;
 use seismic_enclave::rpc::EnclaveApiClient;
+use seismic_enclave_server::attestation::simple_att_serv_config;
 use seismic_enclave_server::attestation::SeismicAttestationAgent;
 use seismic_enclave_server::key_manager::{KeyManager, KeyManagerBuilder};
 use seismic_enclave_server::server::{init_tracing, EnclaveServer};
-use seismic_enclave_server::attestation::simple_att_serv_config;
 
 use serial_test::serial;
 use std::net::SocketAddr;

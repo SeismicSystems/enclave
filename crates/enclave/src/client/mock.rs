@@ -99,12 +99,22 @@ impl MockEnclaveServer {
         // No-op, keys are hardcoded for mock server
     }
 
-    fn prepare_encrypted_snapshot(_req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse {
-        PrepareEncryptedSnapshotResponse { success: true, error: "".to_string() }
+    fn prepare_encrypted_snapshot(
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> PrepareEncryptedSnapshotResponse {
+        PrepareEncryptedSnapshotResponse {
+            success: true,
+            error: "".to_string(),
+        }
     }
 
-    fn restore_from_encrypted_snapshot(_req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse {
-        RestoreFromEncryptedSnapshotResponse { success: true, error: "".to_string() }
+    fn restore_from_encrypted_snapshot(
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RestoreFromEncryptedSnapshotResponse {
+        RestoreFromEncryptedSnapshotResponse {
+            success: true,
+            error: "".to_string(),
+        }
     }
 }
 
