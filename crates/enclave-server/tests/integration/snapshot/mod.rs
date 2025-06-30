@@ -164,3 +164,4 @@ pub async fn run_restore() -> Result<(), anyhow::Error> {
     assert!(reth_is_running());
     Ok(())
 }
+
