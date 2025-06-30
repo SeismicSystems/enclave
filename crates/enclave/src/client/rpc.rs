@@ -85,4 +85,18 @@ pub trait EnclaveApi {
     /// Completes the genesis boot
     #[method(name = "boot.complete_boot")]
     async fn complete_boot(&self) -> RpcResult<()>;
+
+    /// Prepares an encrypted snapshot
+    #[method(name = "snapshot.prepare_encrypted_snapshot")]
+    async fn prepare_encrypted_snapshot(
+        &self,
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse>;
+
+    /// Restores from an encrypted snapshot
+    #[method(name = "snapshot.restore_from_encrypted_snapshot")]
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse>;
 }

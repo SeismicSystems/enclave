@@ -3,6 +3,7 @@ use attestation_service::HashAlgorithm;
 use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use std::path::Path;
 use std::sync::Arc;
 
 use super::boot::Booter;
@@ -12,9 +13,11 @@ use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
+use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
+use seismic_enclave::rpc_missing_snapshot_error;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
     rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_quote_error, rpc_conflict_error,
@@ -120,6 +123,7 @@ where
 
         // Convert bytes to Evidence struct
         // TODO: change AttestationEvalEvidenceRequest so this step is not needed?
+        // Note: these lines restrict evidence to be azure-tdx specific.
         let evidence = tdx_attestation_bytes_to_evidence_struct(&request.evidence).unwrap();
         let evidence: attestation_service::TeeEvidence = serde_json::to_value(evidence).unwrap();
 
@@ -258,6 +262,54 @@ where
         self.booter.mark_completed();
 
         Ok(())
+    }
+
+    async fn prepare_encrypted_snapshot(
+        &self,
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+        let key_provider = self.key_provider()?;
+        let epoch = 0; // no key rotation yet
+
+        let res = crate::snapshot::prepare_encrypted_snapshot(
+            &key_provider,
+            epoch,
+            RETH_DATA_DIR,
+            DATA_DISK_DIR,
+            SNAPSHOT_DIR,
+            SNAPSHOT_FILE,
+        );
+        let resp = PrepareEncryptedSnapshotResponse {
+            success: res.is_ok(),
+            error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        };
+        Ok(resp)
+    }
+
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        let key_provider = self.key_provider()?;
+        let epoch = 0; // no key rotation yet
+
+        let encrypted_snapshot_path = format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE);
+        if !Path::new(&encrypted_snapshot_path).exists() {
+            return Err(rpc_missing_snapshot_error());
+        }
+        let res = crate::snapshot::restore_from_encrypted_snapshot(
+            &key_provider,
+            epoch,
+            RETH_DATA_DIR,
+            DATA_DISK_DIR,
+            SNAPSHOT_DIR,
+            SNAPSHOT_FILE,
+        );
+        let resp = RestoreFromEncryptedSnapshotResponse {
+            success: res.is_ok(),
+            error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        };
+        Ok(resp)
     }
 }
 
