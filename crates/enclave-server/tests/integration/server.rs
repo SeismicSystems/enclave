@@ -79,11 +79,6 @@ async fn test_attestation_eval_evidence(client: &EnclaveClient) {
     assert!(response.claims.is_some());
 }
 
-// async fn test_genesis_get_data(client: &EnclaveClient) {
-//     let response = client.get_genesis_data().await.unwrap();
-//     assert!(!response.evidence.is_empty());
-// }
-
 // async fn test_misconfigured_auth_secret(ip: IpAddr, port: u16) {
 //     let rand_auth_secret = JwtSecret::random();
 //     let client = EnclaveClientBuilder::new()
@@ -152,6 +147,5 @@ async fn test_server_requests() {
     test_get_purpose_keys(&client).await;
     test_attestation_get_evidence(&client).await;
     test_attestation_eval_evidence(&client).await;
-    // test_genesis_get_data(&client).await;
     // test_misconfigured_auth_secret(addr.ip(), addr.port()).await;
 }

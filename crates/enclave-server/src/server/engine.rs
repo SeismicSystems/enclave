@@ -121,7 +121,7 @@ where
 
         // Convert bytes to Evidence struct
         // TODO: change AttestationEvalEvidenceRequest so this step is not needed?
-        // Note: these lines restrict evidence to be azure-tdx specific
+        // Note: these lines restrict evidence to be azure-tdx specific. TODO: fix?
         let evidence = tdx_attestation_bytes_to_evidence_struct(&request.evidence).unwrap();
         let evidence: attestation_service::TeeEvidence = serde_json::to_value(evidence).unwrap();
 
@@ -269,7 +269,7 @@ where
         let key_provider = self.key_provider()?;
         let epoch = 0; // no key rotation yet
 
-        // TODO: cleaner port
+        // TODO: cleaner port?
         let res = crate::snapshot::prepare_encrypted_snapshot(
             &key_provider,
             epoch,
@@ -289,6 +289,7 @@ where
         &self,
         req: RestoreFromEncryptedSnapshotRequest,
     ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        // TODO: cleaner port?
         crate::snapshot::handlers::restore_from_encrypted_snapshot_handler(
             req,
             &self.key_provider.clone(),
