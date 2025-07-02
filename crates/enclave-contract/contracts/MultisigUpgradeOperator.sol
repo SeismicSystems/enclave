@@ -16,7 +16,10 @@ contract MultisigUpgradeOperator {
     address public immutable signer3; // Charlie
     
     // The UpgradeOperator contract being controlled
-    UpgradeOperator public immutable upgradeOperator;
+    UpgradeOperator public upgradeOperator;
+    
+    // Factory address that can set the upgrade operator
+    address public immutable factory;
     
     // Nonce counter for proposal uniqueness
     uint256 public proposalNonce;
@@ -36,6 +39,9 @@ contract MultisigUpgradeOperator {
     // Event emitted when a proposal is executed
     event ProposalExecuted(bytes32 indexed proposalId);
     
+    // Event emitted when upgrade operator is set
+    event UpgradeOperatorSet(address indexed upgradeOperator);
+    
     constructor(address _upgradeOperator) {
         // Set the three signers based on ANVIL keys
         // These addresses correspond to the private keys defined in deployment.rs
@@ -44,7 +50,19 @@ contract MultisigUpgradeOperator {
         signer3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // Charlie (0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
         
         upgradeOperator = UpgradeOperator(_upgradeOperator);
+        factory = msg.sender;
         proposalNonce = 0;
+    }
+    
+    /**
+     * @dev Sets the upgrade operator address (only callable by factory)
+     * @param _upgradeOperator The address of the UpgradeOperator contract
+     */
+    function setUpgradeOperator(address _upgradeOperator) public {
+        require(msg.sender == factory, "Only factory can set upgrade operator");
+        require(_upgradeOperator != address(0), "Invalid upgrade operator address");
+        upgradeOperator = UpgradeOperator(_upgradeOperator);
+        emit UpgradeOperatorSet(_upgradeOperator);
     }
     
     /**

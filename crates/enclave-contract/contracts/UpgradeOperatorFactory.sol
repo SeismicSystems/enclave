@@ -117,6 +117,8 @@ contract UpgradeOperatorFactory {
         require(deployedMultisig == multisigAddress, "Multisig deployed at unexpected address");
         // 3. Deploy the UpgradeOperator with the multisig as owner
         upgradeOperatorAddress = deployUpgradeOperatorWithOwner(upgradeOperatorSalt, multisigAddress);
+        // 4. Set the actual upgrade operator address in the multisig
+        MultisigUpgradeOperator(multisigAddress).setUpgradeOperator(upgradeOperatorAddress);
         return (upgradeOperatorAddress, multisigAddress);
     }
     
