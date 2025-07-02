@@ -42,6 +42,34 @@ contract UpgradeOperatorFactory {
     }
     
     /**
+     * @dev Deploys a new UpgradeOperator contract with a specific owner using CREATE2
+     * @param salt The salt value used for CREATE2 deployment
+     * @param owner The address that will be the owner of the UpgradeOperator
+     * @return contractAddress The address of the deployed contract
+     */
+    function deployUpgradeOperatorWithOwner(bytes32 salt, address owner) public returns (address contractAddress) {
+        // Create the contract bytecode with constructor arguments
+        bytes memory bytecode = abi.encodePacked(
+            type(UpgradeOperator).creationCode,
+            abi.encode(owner)
+        );
+        
+        // Deploy using CREATE2
+        assembly {
+            contractAddress := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
+        }
+        
+        require(contractAddress != address(0), "Create2: Failed on deploy");
+        
+        // Track the deployed contract
+        deployedContracts[contractAddress] = true;
+        
+        emit ContractDeployed(contractAddress, salt, "UpgradeOperator");
+        
+        return contractAddress;
+    }
+    
+    /**
      * @dev Deploys a new MultisigUpgradeOperator contract using CREATE2
      * @param salt The salt value used for CREATE2 deployment
      * @param upgradeOperator The address of the UpgradeOperator to control
@@ -70,7 +98,9 @@ contract UpgradeOperatorFactory {
     }
     
     /**
-     * @dev Deploys both an UpgradeOperator and a MultisigUpgradeOperator that controls it
+     * @dev Deploys both a MultisigUpgradeOperator and an UpgradeOperator owned by the multisig
+     * The MultisigUpgradeOperator is deployed first (with a placeholder UpgradeOperator address),
+     * then the UpgradeOperator is deployed with the multisig as owner.
      * @param upgradeOperatorSalt The salt for the UpgradeOperator
      * @param multisigSalt The salt for the MultisigUpgradeOperator
      * @return upgradeOperatorAddress The address of the deployed UpgradeOperator
@@ -80,12 +110,13 @@ contract UpgradeOperatorFactory {
         bytes32 upgradeOperatorSalt,
         bytes32 multisigSalt
     ) public returns (address upgradeOperatorAddress, address multisigAddress) {
-        // First deploy the UpgradeOperator
-        upgradeOperatorAddress = deployUpgradeOperator(upgradeOperatorSalt);
-        
-        // Then deploy the MultisigUpgradeOperator that controls it
-        multisigAddress = deployMultisigUpgradeOperator(multisigSalt, upgradeOperatorAddress);
-        
+        // 1. Compute the predicted multisig address (with placeholder upgrade operator address)
+        multisigAddress = computeMultisigUpgradeOperatorAddress(multisigSalt, address(0));
+        // 2. Deploy the MultisigUpgradeOperator with placeholder address
+        address deployedMultisig = deployMultisigUpgradeOperator(multisigSalt, address(0));
+        require(deployedMultisig == multisigAddress, "Multisig deployed at unexpected address");
+        // 3. Deploy the UpgradeOperator with the multisig as owner
+        upgradeOperatorAddress = deployUpgradeOperatorWithOwner(upgradeOperatorSalt, multisigAddress);
         return (upgradeOperatorAddress, multisigAddress);
     }
     
@@ -96,6 +127,28 @@ contract UpgradeOperatorFactory {
      */
     function computeUpgradeOperatorAddress(bytes32 salt) public view returns (address) {
         bytes memory bytecode = type(UpgradeOperator).creationCode;
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                bytes1(0xff),
+                address(this),
+                salt,
+                keccak256(bytecode)
+            )
+        );
+        return address(uint160(uint256(hash)));
+    }
+    
+    /**
+     * @dev Computes the address where an UpgradeOperator contract with a specific owner will be deployed using CREATE2
+     * @param salt The salt value used for CREATE2 deployment
+     * @param owner The owner address
+     * @return The predicted contract address
+     */
+    function computeUpgradeOperatorAddressWithOwner(bytes32 salt, address owner) public view returns (address) {
+        bytes memory bytecode = abi.encodePacked(
+            type(UpgradeOperator).creationCode,
+            abi.encode(owner)
+        );
         bytes32 hash = keccak256(
             abi.encodePacked(
                 bytes1(0xff),

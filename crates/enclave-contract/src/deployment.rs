@@ -24,9 +24,11 @@ sol! {
     #[sol(rpc)]
     interface UpgradeOperatorFactory {
         function deployUpgradeOperator(bytes32 salt) external returns (address);
+        function deployUpgradeOperatorWithOwner(bytes32 salt, address owner) external returns (address);
         function deployMultisigUpgradeOperator(bytes32 salt, address upgradeOperator) external returns (address);
         function deployUpgradeOperatorWithMultisig(bytes32 upgradeOperatorSalt, bytes32 multisigSalt) external returns (address, address);
         function computeUpgradeOperatorAddress(bytes32 salt) external view returns (address);
+        function computeUpgradeOperatorAddressWithOwner(bytes32 salt, address owner) external view returns (address);
         function computeMultisigUpgradeOperatorAddress(bytes32 salt, address upgradeOperator) external view returns (address);
         function isDeployed(address contractAddress) external view returns (bool);
     }
@@ -229,43 +231,51 @@ pub async fn deploy_upgrade_operator_with_multisig(
     let factory_contract =
         UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
 
-    // Deploy both contracts using CREATE2
-    let deploy_tx = factory_contract.deployUpgradeOperatorWithMultisig(
-        upgrade_operator_salt.into(),
-        multisig_salt.into(),
-    );
-    let deploy_pending = deploy_tx
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to deploy via CREATE2: {:?}", e))?;
-
-    let _deploy_receipt = deploy_pending
-        .watch()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
-
-    // Compute the expected addresses
-    let expected_upgrade_operator_address = factory_contract
-        .computeUpgradeOperatorAddress(upgrade_operator_salt.into())
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to compute UpgradeOperator CREATE2 address: {:?}", e))?;
-
-    let expected_multisig_address = factory_contract
-        .computeMultisigUpgradeOperatorAddress(multisig_salt.into(), expected_upgrade_operator_address)
+    // Step 1: Compute the predicted multisig address (with placeholder upgrade operator address)
+    let predicted_multisig_address = factory_contract
+        .computeMultisigUpgradeOperatorAddress(multisig_salt.into(), alloy::primitives::Address::ZERO)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute MultisigUpgradeOperator CREATE2 address: {:?}", e))?;
 
+    // Deploy the MultisigUpgradeOperator with placeholder address
+    let deploy_multisig_tx = factory_contract.deployMultisigUpgradeOperator(multisig_salt.into(), alloy::primitives::Address::ZERO);
+    let deploy_multisig_pending = deploy_multisig_tx
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to deploy MultisigUpgradeOperator: {:?}", e))?;
+    let _deploy_multisig_receipt = deploy_multisig_pending
+        .watch()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get MultisigUpgradeOperator deployment receipt: {:?}", e))?;
+
+    // Deploy the UpgradeOperator with the multisig as owner
+    let deploy_upgrade_operator_tx = factory_contract.deployUpgradeOperatorWithOwner(upgrade_operator_salt.into(), predicted_multisig_address);
+    let deploy_upgrade_operator_pending = deploy_upgrade_operator_tx
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to deploy UpgradeOperator: {:?}", e))?;
+    let _deploy_upgrade_operator_receipt = deploy_upgrade_operator_pending
+        .watch()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get UpgradeOperator deployment receipt: {:?}", e))?;
+
+    // Compute the predicted upgrade operator address
+    let predicted_upgrade_operator_address = factory_contract
+        .computeUpgradeOperatorAddressWithOwner(upgrade_operator_salt.into(), predicted_multisig_address)
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to compute UpgradeOperator CREATE2 address: {:?}", e))?;
+
     // Verify the contracts were deployed at the expected addresses
     let is_upgrade_operator_deployed = factory_contract
-        .isDeployed(expected_upgrade_operator_address)
+        .isDeployed(predicted_upgrade_operator_address)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to check if UpgradeOperator is deployed: {:?}", e))?;
 
     let is_multisig_deployed = factory_contract
-        .isDeployed(expected_multisig_address)
+        .isDeployed(predicted_multisig_address)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to check if MultisigUpgradeOperator is deployed: {:?}", e))?;
@@ -284,14 +294,14 @@ pub async fn deploy_upgrade_operator_with_multisig(
 
     println!(
         "UpgradeOperator successfully deployed via CREATE2 at: {:?}",
-        expected_upgrade_operator_address
+        predicted_upgrade_operator_address
     );
     println!(
         "MultisigUpgradeOperator successfully deployed via CREATE2 at: {:?}",
-        expected_multisig_address
+        predicted_multisig_address
     );
 
-    Ok((expected_upgrade_operator_address, expected_multisig_address))
+    Ok((predicted_upgrade_operator_address, predicted_multisig_address))
 }
 
 /// Creates a proposal in the MultisigUpgradeOperator contract.
