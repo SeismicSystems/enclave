@@ -1,3 +1,5 @@
+//! Contract definitions and types
+
 use alloy::{
     primitives::{address, Address, Bytes},
     providers::ProviderBuilder,
@@ -22,7 +24,7 @@ sol! {
 /// This function makes a view call to the `UpgradeOperator` contract on a local node
 /// to invoke the `get_mrtd` function. The function evaluates whether the given configuration
 /// has been registered as approved on-chain.
-pub async fn check_operator(
+pub async fn provider_check_mrtd(
     rootfs_hash: Bytes,
     mrtd: Bytes,
     rtmr0: Bytes,
@@ -32,8 +34,6 @@ pub async fn check_operator(
     let provider = ProviderBuilder::new().connect_http("http://localhost:8545".parse()?);
 
     // Instantiate the contract
-
-    // Call the `get_mrtd` function
     let contract = UpgradeOperator::new(OPERATOR_ADDR, Arc::new(provider));
     let builder = contract.get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3);
     let is_valid = builder
