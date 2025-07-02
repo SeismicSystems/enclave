@@ -10,15 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 
-// Anvil's first secret key that they publically expose and fund for testing
-pub const ANVIL_ALICE_SK: &str =
-    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-
-pub const ANVIL_BOB_SK: &str = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
-
-pub const ANVIL_CHARLIE_SK: &str =
-    "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
-
 // Generate contract bindings for the factory
 sol! {
     #[sol(rpc)]
@@ -28,6 +19,15 @@ sol! {
         function isDeployed(address contractAddress) external view returns (bool);
     }
 }
+
+// Anvil's first secret key that they publically expose and fund for testing
+pub const ANVIL_ALICE_SK: &str =
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
+pub const ANVIL_BOB_SK: &str = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+
+pub const ANVIL_CHARLIE_SK: &str =
+    "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {
@@ -180,7 +180,7 @@ pub async fn deploy_via_factory_create2(
     let deploy_pending = deploy_tx.send().await
         .map_err(|e| anyhow::anyhow!("Failed to deploy via CREATE2: {:?}", e))?;
     
-    let deploy_receipt = deploy_pending.watch().await
+    let _deploy_receipt = deploy_pending.watch().await
         .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
     
     // Verify the contract was deployed at the expected address
@@ -194,15 +194,6 @@ pub async fn deploy_via_factory_create2(
     println!("Contract successfully deployed via CREATE2 at: {:?}", expected_address);
     
     Ok(expected_address)
-}
-
-/// Prints a string to standard output and immediately flushes the output buffer.
-/// Useful to see prints immediately during long-running Cargo tests.
-pub fn print_flush<S: AsRef<str>>(s: S) {
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock(); // lock ensures safe writing
-    write!(handle, "{}", s.as_ref()).unwrap();
-    handle.flush().unwrap();
 }
 
 /// Computes the CREATE2 address for a contract without deploying it.
@@ -231,3 +222,12 @@ pub async fn compute_create2_address(
     
     Ok(expected_address)
 }
+
+/// Prints a string to standard output and immediately flushes the output buffer.
+/// Useful to see prints immediately during long-running Cargo tests.
+pub fn print_flush<S: AsRef<str>>(s: S) {
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock(); // lock ensures safe writing
+    write!(handle, "{}", s.as_ref()).unwrap();
+    handle.flush().unwrap();
+} 

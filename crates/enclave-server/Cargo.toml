@@ -15,6 +15,8 @@ path = "src/lib.rs"
 
 [dependencies]
 seismic-enclave.workspace = true
+enclave-contract.workspace = true
+
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", default-features = false}
 aa_crypto = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", package = "crypto", default-features = false}
@@ -41,7 +43,6 @@ schnorrkel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
-alloy = "1.0"
 
 hex = {workspace = true, optional = true }
 scroll = { workspace = true, optional = true }
@@ -53,6 +54,7 @@ clap = { version = "4.5", features = ["derive"] }
 serial_test = "3.2.0"
 tempfile = "3.17.1"
 reqwest.workspace = true
+alloy.workspace = true
 
 
 [features]
