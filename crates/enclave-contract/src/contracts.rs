@@ -42,4 +42,4 @@ pub async fn provider_check_mrtd(
         .map_err(|e| anyhow::anyhow!("Call to get_mrtd failed: {:?}", e))?;
 
     Ok(is_valid)
-} 
+}

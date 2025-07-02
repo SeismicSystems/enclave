@@ -75,19 +75,24 @@ pub async fn deploy_factory(
         .with_deploy_code(bytecode)
         .with_gas_price(gas_price)
         .with_gas_limit(gas_limit);
-    
-    let pending_tx = provider.send_transaction(tx).await
+
+    let pending_tx = provider
+        .send_transaction(tx)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to deploy factory contract: {:?}", e))?;
-    
+
     // Wait for the transaction to be mined
-    let receipt = pending_tx.get_receipt().await
+    let receipt = pending_tx
+        .get_receipt()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to get transaction receipt: {:?}", e))?;
-    
-    let factory_address = receipt.contract_address
+
+    let factory_address = receipt
+        .contract_address
         .ok_or_else(|| anyhow::anyhow!("No contract address in receipt"))?;
-    
+
     println!("Factory deployed at: {:?}", factory_address);
-    
+
     Ok(factory_address)
 }
 
@@ -114,34 +119,50 @@ pub async fn deploy_via_factory_create2(
     let wallet = EthereumWallet::from(signer);
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
-    
+
     // Create factory contract instance
-    let factory_contract = UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
-    
+    let factory_contract =
+        UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
+
     // Compute the expected address first
-    let expected_address = factory_contract.computeAddress(salt.into()).call().await
+    let expected_address = factory_contract
+        .computeAddress(salt.into())
+        .call()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
-    
+
     println!("Expected CREATE2 address: {:?}", expected_address);
-    
+
     // Deploy using CREATE2
     let deploy_tx = factory_contract.deployUpgradeOperator(salt.into());
-    let deploy_pending = deploy_tx.send().await
+    let deploy_pending = deploy_tx
+        .send()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to deploy via CREATE2: {:?}", e))?;
-    
-    let _deploy_receipt = deploy_pending.watch().await
+
+    let _deploy_receipt = deploy_pending
+        .watch()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
-    
+
     // Verify the contract was deployed at the expected address
-    let is_deployed = factory_contract.isDeployed(expected_address).call().await
+    let is_deployed = factory_contract
+        .isDeployed(expected_address)
+        .call()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to check if contract is deployed: {:?}", e))?;
-    
+
     if !is_deployed {
-        return Err(anyhow::anyhow!("Contract was not deployed at expected address"));
+        return Err(anyhow::anyhow!(
+            "Contract was not deployed at expected address"
+        ));
     }
-    
-    println!("Contract successfully deployed via CREATE2 at: {:?}", expected_address);
-    
+
+    println!(
+        "Contract successfully deployed via CREATE2 at: {:?}",
+        expected_address
+    );
+
     Ok(expected_address)
 }
 
@@ -163,12 +184,16 @@ pub async fn compute_create2_address(
 ) -> Result<alloy::primitives::Address, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
-    
-    let factory_contract = UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider));
-    
-    let expected_address = factory_contract.computeAddress(salt.into()).call().await
+
+    let factory_contract =
+        UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider));
+
+    let expected_address = factory_contract
+        .computeAddress(salt.into())
+        .call()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
-    
+
     Ok(expected_address)
 }
 
@@ -198,11 +223,11 @@ pub async fn send_eth(
 
     // Get the sender's address
     let from_address = signer.address();
-    
+
     // Get current gas price and nonce
     let gas_price = provider.get_gas_price().await?;
     let nonce = provider.get_transaction_count(from_address).await?;
-    
+
     // Create transaction request
     let tx = TransactionRequest::default()
         .with_to(to_address)
@@ -210,16 +235,23 @@ pub async fn send_eth(
         .with_gas_price(gas_price)
         .with_nonce(nonce)
         .with_gas_limit(21_000u64); // Standard ETH transfer gas limit
-    
+
     // Send transaction
-    let pending_tx = provider.send_transaction(tx).await
+    let pending_tx = provider
+        .send_transaction(tx)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to send ETH: {:?}", e))?;
-    
+
     // Wait for the transaction to be mined
-    let _receipt = pending_tx.get_receipt().await
+    let _receipt = pending_tx
+        .get_receipt()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to get transaction receipt: {:?}", e))?;
-    
-    println!("ETH transfer completed: {} wei from {:?} to {:?}", amount_wei, from_address, to_address);
-    
+
+    println!(
+        "ETH transfer completed: {} wei from {:?} to {:?}",
+        amount_wei, from_address, to_address
+    );
+
     Ok(())
 }
