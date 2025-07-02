@@ -1,6 +1,6 @@
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
-    primitives::Bytes,
+    primitives::{Bytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -8,7 +8,6 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
 
 // Generate contract bindings for the factory
 sol! {
@@ -38,56 +37,6 @@ struct ContractArtifact {
 #[derive(Debug, Deserialize, Serialize)]
 struct BytecodeObject {
     object: String, // This corresponds to "bytecode": { "object": "0x..." }
-}
-
-/// Deploys a smart contract to an Ethereum-compatible blockchain.
-///
-/// # Arguments
-///
-/// * `foundry_json_path` - A string slice representing the path to the Foundry JSON artifact containing the contract's bytecode.
-/// * `sk` - A string slice representing the private key used to sign the deployment transaction.
-/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
-///
-/// # Returns
-///
-/// * `Result<(), anyhow::Error>` - Returns `Ok(())` if the contract deployment is successful, or an `anyhow::Error` if an error occurs.
-pub async fn deploy_contract(
-    foundry_json_path: &str,
-    sk: &str,
-    rpc: &str,
-) -> Result<(), anyhow::Error> {
-    // Read contract bytecode from Foundry JSON
-    // This can be created with `forge build` and the looking in the `out` directory.
-    let file_content = fs::read_to_string(foundry_json_path)
-        .map_err(|e| anyhow::anyhow!("Failed to read Foundry JSON file: {:?}", e))?;
-    let artifact: ContractArtifact = serde_json::from_str(&file_content)?;
-    let bytecode_str = artifact.bytecode.object;
-    let bytecode = Bytes::from(hex::decode(bytecode_str.trim_start_matches("0x"))?);
-
-    // Set up signer with the provided sk
-    let signer: PrivateKeySigner = sk.parse().unwrap();
-    let wallet = EthereumWallet::from(signer);
-    let rpc_url = reqwest::Url::parse(rpc).unwrap();
-    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
-
-    // Deploy contract
-    // println!("Deploying contract...");
-    let gas_price = provider.get_gas_price().await?;
-    let gas_limit = 5_000_000u64;
-    let tx = TransactionRequest::default()
-        .with_deploy_code(bytecode)
-        .with_gas_price(gas_price)
-        .with_gas_limit(gas_limit);
-    match provider.send_transaction(tx).await {
-        Ok(_pending_tx) => {
-            // let receipt = _pending_tx.watch().await?;
-            // println!("Transaction receipt: {:?}", receipt);
-            // io::stdout().flush().unwrap();
-        }
-        Err(err) => println!("Error during send_transaction: {:?}", err),
-    }
-
-    Ok(())
 }
 
 /// Deploys the factory contract and returns its address.
@@ -223,11 +172,54 @@ pub async fn compute_create2_address(
     Ok(expected_address)
 }
 
-/// Prints a string to standard output and immediately flushes the output buffer.
-/// Useful to see prints immediately during long-running Cargo tests.
-pub fn print_flush<S: AsRef<str>>(s: S) {
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock(); // lock ensures safe writing
-    write!(handle, "{}", s.as_ref()).unwrap();
-    handle.flush().unwrap();
-} 
+/// Sends ETH from one account to another to trigger transaction persistence.
+///
+/// # Arguments
+///
+/// * `from_sk` - The private key of the sender account.
+/// * `to_address` - The address of the recipient.
+/// * `amount_wei` - The amount to send in wei.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Returns success or an `anyhow::Error` if an error occurs.
+pub async fn send_eth(
+    from_sk: &str,
+    to_address: alloy::primitives::Address,
+    amount_wei: u128,
+    rpc: &str,
+) -> Result<(), anyhow::Error> {
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = from_sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer.clone());
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+    // Get the sender's address
+    let from_address = signer.address();
+    
+    // Get current gas price and nonce
+    let gas_price = provider.get_gas_price().await?;
+    let nonce = provider.get_transaction_count(from_address).await?;
+    
+    // Create transaction request
+    let tx = TransactionRequest::default()
+        .with_to(to_address)
+        .with_value(U256::from(amount_wei))
+        .with_gas_price(gas_price)
+        .with_nonce(nonce)
+        .with_gas_limit(21_000u64); // Standard ETH transfer gas limit
+    
+    // Send transaction
+    let pending_tx = provider.send_transaction(tx).await
+        .map_err(|e| anyhow::anyhow!("Failed to send ETH: {:?}", e))?;
+    
+    // Wait for the transaction to be mined
+    let _receipt = pending_tx.get_receipt().await
+        .map_err(|e| anyhow::anyhow!("Failed to get transaction receipt: {:?}", e))?;
+    
+    println!("ETH transfer completed: {} wei from {:?} to {:?}", amount_wei, from_address, to_address);
+    
+    Ok(())
+}

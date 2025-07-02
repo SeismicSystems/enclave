@@ -24,7 +24,7 @@ sol! {
 /// This function makes a view call to the `UpgradeOperator` contract on a local node
 /// to invoke the `get_mrtd` function. The function evaluates whether the given configuration
 /// has been registered as approved on-chain.
-pub async fn check_operator(
+pub async fn provider_check_mrtd(
     rootfs_hash: Bytes,
     mrtd: Bytes,
     rtmr0: Bytes,

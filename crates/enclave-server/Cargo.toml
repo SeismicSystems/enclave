@@ -15,7 +15,6 @@ path = "src/lib.rs"
 
 [dependencies]
 seismic-enclave.workspace = true
-enclave-contract.workspace = true
 
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", default-features = false}
@@ -51,6 +50,7 @@ serde = {workspace = true, optional = true }
 clap = { version = "4.5", features = ["derive"] }
 
 [dev-dependencies]
+enclave-contract.workspace = true
 serial_test = "3.2.0"
 tempfile = "3.17.1"
 reqwest.workspace = true
