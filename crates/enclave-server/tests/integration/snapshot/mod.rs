@@ -1,6 +1,6 @@
 use enclave_contract::{
-    deploy_factory, deploy_via_factory_create2, send_eth,
-    ANVIL_ALICE_SK, ANVIL_BOB_SK, provider_check_mrtd
+    deploy_factory, deploy_via_factory_create2, provider_check_mrtd, send_eth, ANVIL_ALICE_SK,
+    ANVIL_BOB_SK,
 };
 
 use seismic_enclave::request_types::{
@@ -18,9 +18,7 @@ use seismic_enclave_server::utils::service::reth_is_running;
 use seismic_enclave_server::utils::supervisorctl::reth_is_running;
 
 use alloy::primitives::Bytes;
-use seismic_enclave_server::snapshot::{
-   DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE,
-};
+use seismic_enclave_server::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -59,7 +57,8 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     assert!(reth_is_running(), "Test startup error: Reth is not running");
 
     // Set paths to the contract JSON files
-    let factory_json_path = "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
+    let factory_json_path =
+        "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
     let enclave_addr =
         SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT));
     let enclave_client = EnclaveClientBuilder::new()
@@ -80,29 +79,44 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // Deploy UpgradeOperator contract via CREATE2
     print_flush("Deploying UpgradeOperator via CREATE2...\n");
     let salt: [u8; 32] = [
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
-        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-        0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
+        0x1f, 0x20,
     ];
-    let operator_address = deploy_via_factory_create2(factory_address, ANVIL_ALICE_SK, reth_rpc, salt)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to deploy UpgradeOperator via CREATE2: {:?}", e))?;
-    print_flush(format!("UpgradeOperator deployed at: {:?}\n", operator_address));
+    let operator_address =
+        deploy_via_factory_create2(factory_address, ANVIL_ALICE_SK, reth_rpc, salt)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("failed to deploy UpgradeOperator via CREATE2: {:?}", e)
+            })?;
+    print_flush(format!(
+        "UpgradeOperator deployed at: {:?}\n",
+        operator_address
+    ));
 
     // Send ETH transactions to trigger the reth persistence threshold
     // and have the first block save to disk
     // based on the assumption that reth is run with the --dev.block-max-transactions 1 flag
     print_flush("Sending ETH transactions for persistence threshold...\n");
     // Send ETH from Alice to zero address (burning ETH)
-    send_eth(ANVIL_ALICE_SK, alloy::primitives::Address::ZERO, 1u128, reth_rpc)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
-    send_eth(ANVIL_BOB_SK, alloy::primitives::Address::ZERO, 1u128, reth_rpc)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
+    send_eth(
+        ANVIL_ALICE_SK,
+        alloy::primitives::Address::ZERO,
+        1u128,
+        reth_rpc,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
+    send_eth(
+        ANVIL_BOB_SK,
+        alloy::primitives::Address::ZERO,
+        1u128,
+        reth_rpc,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
     println!("Sent ETH. Starting to prepare snapshot and restore");
-    
+
     sleep(Duration::from_secs(2));
 
     // Boot genesis so we can interact with the enclaver-server
