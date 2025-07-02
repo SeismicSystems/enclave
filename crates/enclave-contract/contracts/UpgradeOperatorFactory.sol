@@ -18,27 +18,13 @@ contract UpgradeOperatorFactory {
     event ContractDeployed(address indexed contractAddress, bytes32 indexed salt, string contractType);
     
     /**
-     * @dev Deploys a new UpgradeOperator contract using CREATE2
+     * @dev Deploys a new UpgradeOperator contract using CREATE2 with msg.sender as owner
      * @param salt The salt value used for CREATE2 deployment
      * @return contractAddress The address of the deployed contract
      */
     function deployUpgradeOperator(bytes32 salt) public returns (address contractAddress) {
-        // Create the contract bytecode
-        bytes memory bytecode = type(UpgradeOperator).creationCode;
-        
-        // Deploy using CREATE2
-        assembly {
-            contractAddress := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
-        }
-        
-        require(contractAddress != address(0), "Create2: Failed on deploy");
-        
-        // Track the deployed contract
-        deployedContracts[contractAddress] = true;
-        
-        emit ContractDeployed(contractAddress, salt, "UpgradeOperator");
-        
-        return contractAddress;
+        // Deploy with msg.sender as the owner
+        return deployUpgradeOperatorWithOwner(salt, msg.sender);
     }
     
     /**
@@ -128,16 +114,8 @@ contract UpgradeOperatorFactory {
      * @return The predicted contract address
      */
     function computeUpgradeOperatorAddress(bytes32 salt) public view returns (address) {
-        bytes memory bytecode = type(UpgradeOperator).creationCode;
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                bytes1(0xff),
-                address(this),
-                salt,
-                keccak256(bytecode)
-            )
-        );
-        return address(uint160(uint256(hash)));
+        // Compute address with msg.sender as owner (for the deployUpgradeOperator function)
+        return computeUpgradeOperatorAddressWithOwner(salt, msg.sender);
     }
     
     /**

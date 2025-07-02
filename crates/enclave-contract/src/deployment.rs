@@ -151,6 +151,7 @@ pub async fn deploy_via_factory_create2(
 ) -> Result<alloy::primitives::Address, anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
+    let signer_address = signer.address();
     let wallet = EthereumWallet::from(signer);
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
@@ -159,9 +160,9 @@ pub async fn deploy_via_factory_create2(
     let factory_contract =
         UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
 
-    // Compute the expected address first
+    // Compute the expected address first (with msg.sender as owner)
     let expected_address = factory_contract
-        .computeUpgradeOperatorAddress(salt.into())
+        .computeUpgradeOperatorAddressWithOwner(salt.into(), signer_address)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
