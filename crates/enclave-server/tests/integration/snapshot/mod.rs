@@ -1,6 +1,6 @@
 use enclave_contract::{
-    deploy_factory, deploy_upgrade_operator_with_multisig, provider_check_mrtd, send_eth, ANVIL_ALICE_SK,
-    ANVIL_BOB_SK,
+    deploy_factory, deploy_upgrade_operator_with_multisig, provider_check_mrtd, send_eth,
+    ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 
 use seismic_enclave::request_types::{
@@ -93,12 +93,15 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e,
         0x3f, 0x40,
     ];
-    let (operator_address, _multisig_address) =
-        deploy_upgrade_operator_with_multisig(factory_address, ANVIL_ALICE_SK, reth_rpc, upgrade_operator_salt, multisig_salt)
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!("failed to deploy contracts via CREATE2: {:?}", e)
-            })?;
+    let (operator_address, _multisig_address) = deploy_upgrade_operator_with_multisig(
+        factory_address,
+        ANVIL_ALICE_SK,
+        reth_rpc,
+        upgrade_operator_salt,
+        multisig_salt,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to deploy contracts via CREATE2: {:?}", e))?;
     print_flush(format!(
         "UpgradeOperator deployed at: {:?}\n",
         operator_address
