@@ -14,8 +14,8 @@ contract UpgradeOperator {
     
     // Owner is responsible for initializing
     address owner;
-    constructor () {
-	owner = msg.sender;
+    constructor (address _owner) {
+	owner = _owner;
     }
 
     // Reference RTMR values
