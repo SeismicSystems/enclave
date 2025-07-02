@@ -56,9 +56,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     );
     assert!(reth_is_running(), "Test startup error: Reth is not running");
 
-    // Set paths to the contract JSON files
-    let factory_json_path =
-        "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
+    // Set up clients
     let enclave_addr =
         SocketAddr::from((ENCLAVE_DEFAULT_ENDPOINT_IP, ENCLAVE_DEFAULT_ENDPOINT_PORT));
     let enclave_client = EnclaveClientBuilder::new()
@@ -69,8 +67,15 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         .unwrap();
     let reth_rpc = "http://localhost:8545";
 
+    // Boot genesis so we can interact with the enclaver-server
+    enclave_client.boot_genesis().unwrap();
+    enclave_client.complete_boot().unwrap();
+
     // Deploy factory contract
     print_flush("Deploying factory contract...\n");
+    // Set paths to the contract JSON files
+    let factory_json_path =
+        "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
     let factory_address = deploy_factory(factory_json_path, ANVIL_ALICE_SK, reth_rpc)
         .await
         .map_err(|e| anyhow::anyhow!("failed to deploy factory: {:?}", e))?;
@@ -118,10 +123,6 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     println!("Sent ETH. Starting to prepare snapshot and restore");
 
     sleep(Duration::from_secs(2));
-
-    // Boot genesis so we can interact with the enclaver-server
-    enclave_client.boot_genesis().unwrap();
-    enclave_client.complete_boot().unwrap();
 
     // Create encrypted snapshot
     let prepare_req = PrepareEncryptedSnapshotRequest {};
