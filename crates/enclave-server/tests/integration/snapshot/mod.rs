@@ -1,6 +1,6 @@
 use enclave_contract::{
-    deploy_factory, deploy_via_factory_create2, provider_check_mrtd, send_eth, ANVIL_ALICE_SK,
-    ANVIL_BOB_SK,
+    deploy_factory, deploy_upgrade_operator_with_multisig, provider_check_mrtd, send_eth,
+    ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 
 use seismic_enclave::request_types::{
@@ -81,19 +81,27 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         .map_err(|e| anyhow::anyhow!("failed to deploy factory: {:?}", e))?;
     print_flush(format!("Factory deployed at: {:?}\n", factory_address));
 
-    // Deploy UpgradeOperator contract via CREATE2
-    print_flush("Deploying UpgradeOperator via CREATE2...\n");
-    let salt: [u8; 32] = [
+    // Deploy UpgradeOperator and MultisigUpgradeOperator contracts via CREATE2
+    print_flush("Deploying UpgradeOperator and MultisigUpgradeOperator via CREATE2...\n");
+    let upgrade_operator_salt: [u8; 32] = [
         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
         0x1f, 0x20,
     ];
-    let operator_address =
-        deploy_via_factory_create2(factory_address, ANVIL_ALICE_SK, reth_rpc, salt)
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!("failed to deploy UpgradeOperator via CREATE2: {:?}", e)
-            })?;
+    let multisig_salt: [u8; 32] = [
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e,
+        0x3f, 0x40,
+    ];
+    let (operator_address, _multisig_address) = deploy_upgrade_operator_with_multisig(
+        factory_address,
+        ANVIL_ALICE_SK,
+        reth_rpc,
+        upgrade_operator_salt,
+        multisig_salt,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to deploy contracts via CREATE2: {:?}", e))?;
     print_flush(format!(
         "UpgradeOperator deployed at: {:?}\n",
         operator_address
@@ -120,7 +128,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     )
     .await
     .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
-    println!("Sent ETH. Starting to prepare snapshot and restore");
+    print_flush("Sent ETH. Starting to prepare snapshot and restore");
 
     sleep(Duration::from_secs(2));
 

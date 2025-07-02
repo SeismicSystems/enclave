@@ -16,6 +16,7 @@ sol! {
     #[sol(rpc)]
     interface UpgradeOperator {
         function get_mrtd(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3) external view returns (bool);
+        function set_mrtd(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status) external;
     }
 }
 

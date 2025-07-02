@@ -9,13 +9,48 @@ use alloy::{
 use serde::{Deserialize, Serialize};
 use std::fs;
 
+/// Prints a string to standard output and immediately flushes the output buffer.
+/// Useful to see prints immediately during long-running Cargo tests.
+pub fn print_flush<S: AsRef<str>>(s: S) {
+    use std::io::Write;
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock(); // lock ensures safe writing
+    write!(handle, "{}", s.as_ref()).unwrap();
+    handle.flush().unwrap();
+}
+
 // Generate contract bindings for the factory
 sol! {
     #[sol(rpc)]
     interface UpgradeOperatorFactory {
         function deployUpgradeOperator(bytes32 salt) external returns (address);
-        function computeAddress(bytes32 salt) external view returns (address);
+        function deployUpgradeOperatorWithOwner(bytes32 salt, address owner) external returns (address);
+        function deployMultisigUpgradeOperator(bytes32 salt, address upgradeOperator) external returns (address);
+        function deployUpgradeOperatorWithMultisig(bytes32 upgradeOperatorSalt, bytes32 multisigSalt) external returns (address, address);
+        function computeUpgradeOperatorAddress(bytes32 salt) external view returns (address);
+        function computeUpgradeOperatorAddressWithOwner(bytes32 salt, address owner) external view returns (address);
+        function computeMultisigUpgradeOperatorAddress(bytes32 salt, address upgradeOperator) external view returns (address);
         function isDeployed(address contractAddress) external view returns (bool);
+    }
+}
+
+// Generate contract bindings for the multisig contract
+sol! {
+    #[sol(rpc)]
+    interface MultisigUpgradeOperator {
+        function createProposal(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status) external returns (bytes32);
+        function vote(bytes32 proposalId, bool approved) external;
+        function executeProposal(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status, uint256 nonce) external;
+        function getVoteCount(bytes32 proposalId) external view returns (uint256 approvalCount, uint256 totalVotes);
+        function canExecute(bytes32 proposalId) external view returns (bool);
+        function computeProposalId(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status, uint256 nonce) external pure returns (bytes32);
+        function proposalNonce() external view returns (uint256);
+        function signer1() external view returns (address);
+        function signer2() external view returns (address);
+        function signer3() external view returns (address);
+        function upgradeOperator() external view returns (address);
+        function setUpgradeOperator(address _upgradeOperator) external;
+        function factory() external view returns (address);
     }
 }
 
@@ -116,6 +151,7 @@ pub async fn deploy_via_factory_create2(
 ) -> Result<alloy::primitives::Address, anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
+    let signer_address = signer.address();
     let wallet = EthereumWallet::from(signer);
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
@@ -124,9 +160,9 @@ pub async fn deploy_via_factory_create2(
     let factory_contract =
         UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
 
-    // Compute the expected address first
+    // Compute the expected address first (with msg.sender as owner)
     let expected_address = factory_contract
-        .computeAddress(salt.into())
+        .computeUpgradeOperatorAddressWithOwner(salt.into(), signer_address)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
@@ -166,6 +202,420 @@ pub async fn deploy_via_factory_create2(
     Ok(expected_address)
 }
 
+/// Deploys both an UpgradeOperator and a MultisigUpgradeOperator that controls it.
+///
+/// # Arguments
+///
+/// * `factory_address` - The address of the existing factory contract.
+/// * `sk` - A string slice representing the private key used to sign the deployment transaction.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `upgrade_operator_salt` - A 32-byte salt value for UpgradeOperator CREATE2 deployment.
+/// * `multisig_salt` - A 32-byte salt value for MultisigUpgradeOperator CREATE2 deployment.
+///
+/// # Returns
+///
+/// * `Result<(alloy::primitives::Address, alloy::primitives::Address), anyhow::Error>` - Returns the deployed contract addresses if successful, or an `anyhow::Error` if an error occurs.
+pub async fn deploy_upgrade_operator_with_multisig(
+    factory_address: alloy::primitives::Address,
+    sk: &str,
+    rpc: &str,
+    upgrade_operator_salt: [u8; 32],
+    multisig_salt: [u8; 32],
+) -> Result<(alloy::primitives::Address, alloy::primitives::Address), anyhow::Error> {
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer);
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+    // Create factory contract instance
+    let factory_contract =
+        UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
+
+    // Deploy both contracts using the factory's combined function
+    let deploy_tx = factory_contract
+        .deployUpgradeOperatorWithMultisig(upgrade_operator_salt.into(), multisig_salt.into());
+    let deploy_pending = deploy_tx
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to deploy via CREATE2: {:?}", e))?;
+
+    let _deploy_receipt = deploy_pending
+        .watch()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
+
+    // Compute the predicted addresses
+    let predicted_multisig_address = factory_contract
+        .computeMultisigUpgradeOperatorAddress(
+            multisig_salt.into(),
+            alloy::primitives::Address::ZERO,
+        )
+        .call()
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to compute MultisigUpgradeOperator CREATE2 address: {:?}",
+                e
+            )
+        })?;
+
+    let predicted_upgrade_operator_address = factory_contract
+        .computeUpgradeOperatorAddressWithOwner(
+            upgrade_operator_salt.into(),
+            predicted_multisig_address,
+        )
+        .call()
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!("Failed to compute UpgradeOperator CREATE2 address: {:?}", e)
+        })?;
+
+    // Verify the contracts were deployed at the expected addresses
+    let is_upgrade_operator_deployed = factory_contract
+        .isDeployed(predicted_upgrade_operator_address)
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to check if UpgradeOperator is deployed: {:?}", e))?;
+
+    let is_multisig_deployed = factory_contract
+        .isDeployed(predicted_multisig_address)
+        .call()
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to check if MultisigUpgradeOperator is deployed: {:?}",
+                e
+            )
+        })?;
+
+    if !is_upgrade_operator_deployed {
+        return Err(anyhow::anyhow!(
+            "UpgradeOperator was not deployed at expected address"
+        ));
+    }
+
+    if !is_multisig_deployed {
+        return Err(anyhow::anyhow!(
+            "MultisigUpgradeOperator was not deployed at expected address"
+        ));
+    }
+
+    println!(
+        "UpgradeOperator successfully deployed via CREATE2 at: {:?}",
+        predicted_upgrade_operator_address
+    );
+    println!(
+        "MultisigUpgradeOperator successfully deployed via CREATE2 at: {:?}",
+        predicted_multisig_address
+    );
+
+    Ok((
+        predicted_upgrade_operator_address,
+        predicted_multisig_address,
+    ))
+}
+
+/// Creates a proposal in the MultisigUpgradeOperator contract.
+///
+/// # Arguments
+///
+/// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
+/// * `sk` - A string slice representing the private key used to sign the transaction.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `rootfs_hash` - The rootfs hash (32 bytes).
+/// * `mrtd` - The MRTD value (48 bytes).
+/// * `rtmr0` - The RTMR0 value (48 bytes).
+/// * `rtmr3` - The RTMR3 value (48 bytes).
+/// * `status` - The status to set.
+///
+/// # Returns
+///
+/// * `Result<([u8; 32], u64), anyhow::Error>` - Returns (proposal_id, nonce) if successful, or an `anyhow::Error` if an error occurs.
+pub async fn create_multisig_proposal(
+    multisig_address: alloy::primitives::Address,
+    sk: &str,
+    rpc: &str,
+    rootfs_hash: Bytes,
+    mrtd: Bytes,
+    rtmr0: Bytes,
+    rtmr3: Bytes,
+    status: bool,
+) -> Result<([u8; 32], u64), anyhow::Error> {
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer);
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+    // Create multisig contract instance
+    let multisig_contract =
+        MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider.clone()));
+
+    // Get current nonce before creating proposal (for debugging/logging if needed)
+    let _current_nonce = multisig_contract
+        .proposalNonce()
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get current nonce: {:?}", e))?;
+
+    // Create proposal
+    let create_tx = multisig_contract.createProposal(
+        rootfs_hash.clone(),
+        mrtd.clone(),
+        rtmr0.clone(),
+        rtmr3.clone(),
+        status,
+    );
+    let create_pending = create_tx
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create proposal: {:?}", e))?;
+
+    let _create_receipt = create_pending
+        .watch()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get proposal creation receipt: {:?}", e))?;
+
+    // Get the new nonce after proposal creation
+    let new_nonce = multisig_contract
+        .proposalNonce()
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get new nonce: {:?}", e))?;
+
+    // Compute the proposal ID using the new nonce
+    let proposal_id = multisig_contract
+        .computeProposalId(rootfs_hash, mrtd, rtmr0, rtmr3, status, new_nonce)
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to compute proposal ID: {:?}", e))?;
+
+    println!(
+        "Proposal created with ID: {:?}, nonce: {}",
+        proposal_id, new_nonce
+    );
+
+    Ok((proposal_id.into(), new_nonce.try_into().unwrap()))
+}
+
+/// Votes on a proposal in the MultisigUpgradeOperator contract.
+///
+/// # Arguments
+///
+/// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
+/// * `sk` - A string slice representing the private key used to sign the transaction.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `proposal_id` - The proposal ID to vote on.
+/// * `approved` - Whether to approve the proposal.
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Returns success or an `anyhow::Error` if an error occurs.
+pub async fn vote_on_multisig_proposal(
+    multisig_address: alloy::primitives::Address,
+    sk: &str,
+    rpc: &str,
+    proposal_id: [u8; 32],
+    approved: bool,
+) -> Result<(), anyhow::Error> {
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer);
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+    // Create multisig contract instance
+    let multisig_contract =
+        MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
+
+    // Vote on proposal
+    let vote_tx = multisig_contract.vote(proposal_id.into(), approved);
+    let vote_pending = vote_tx
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to vote on proposal: {:?}", e))?;
+
+    let _vote_receipt = vote_pending
+        .watch()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get vote receipt: {:?}", e))?;
+
+    println!("Voted {} on proposal: {:?}", approved, proposal_id);
+
+    Ok(())
+}
+
+/// Executes a proposal in the MultisigUpgradeOperator contract.
+///
+/// # Arguments
+///
+/// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
+/// * `sk` - A string slice representing the private key used to sign the transaction.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `rootfs_hash` - The rootfs hash (32 bytes).
+/// * `mrtd` - The MRTD value (48 bytes).
+/// * `rtmr0` - The RTMR0 value (48 bytes).
+/// * `rtmr3` - The RTMR3 value (48 bytes).
+/// * `status` - The status to set.
+/// * `nonce` - The nonce to use for the proposal execution.
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Returns success or an `anyhow::Error` if an error occurs.
+pub async fn execute_multisig_proposal(
+    multisig_address: alloy::primitives::Address,
+    sk: &str,
+    rpc: &str,
+    rootfs_hash: Bytes,
+    mrtd: Bytes,
+    rtmr0: Bytes,
+    rtmr3: Bytes,
+    status: bool,
+    nonce: u64,
+) -> Result<(), anyhow::Error> {
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer);
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+    // Create multisig contract instance
+    let multisig_contract =
+        MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
+
+    // Execute proposal
+    let execute_tx = multisig_contract.executeProposal(
+        rootfs_hash,
+        mrtd,
+        rtmr0,
+        rtmr3,
+        status,
+        U256::from(nonce),
+    );
+    let execute_pending = execute_tx
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to execute proposal: {:?}", e))?;
+
+    let _execute_receipt = execute_pending
+        .watch()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get execution receipt: {:?}", e))?;
+
+    println!("Proposal executed successfully");
+
+    Ok(())
+}
+
+/// Checks if a proposal can be executed in the MultisigUpgradeOperator contract.
+///
+/// # Arguments
+///
+/// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `proposal_id` - The proposal ID to check.
+///
+/// # Returns
+///
+/// * `Result<bool, anyhow::Error>` - Returns true if the proposal can be executed, or an `anyhow::Error` if an error occurs.
+pub async fn can_execute_multisig_proposal(
+    multisig_address: alloy::primitives::Address,
+    rpc: &str,
+    proposal_id: [u8; 32],
+) -> Result<bool, anyhow::Error> {
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+    // Create multisig contract instance
+    let multisig_contract =
+        MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
+
+    // Check if proposal can be executed
+    let can_execute = multisig_contract
+        .canExecute(proposal_id.into())
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to check if proposal can be executed: {:?}", e))?;
+
+    Ok(can_execute)
+}
+
+/// Gets the vote count for a proposal in the MultisigUpgradeOperator contract.
+///
+/// # Arguments
+///
+/// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `proposal_id` - The proposal ID to check.
+///
+/// # Returns
+///
+/// * `Result<(u64, u64), anyhow::Error>` - Returns (approval_count, total_votes) if successful, or an `anyhow::Error` if an error occurs.
+pub async fn get_multisig_vote_count(
+    multisig_address: alloy::primitives::Address,
+    rpc: &str,
+    proposal_id: [u8; 32],
+) -> Result<(u64, u64), anyhow::Error> {
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+    // Create multisig contract instance
+    let multisig_contract =
+        MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
+
+    // Get vote count
+    let result = multisig_contract
+        .getVoteCount(proposal_id.into())
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get vote count: {:?}", e))?;
+
+    Ok((
+        result.approvalCount.try_into().unwrap(),
+        result.totalVotes.try_into().unwrap(),
+    ))
+}
+
+/// Checks if an MRTD configuration is approved in the UpgradeOperator contract.
+///
+/// # Arguments
+///
+/// * `upgrade_operator_address` - The address of the UpgradeOperator contract.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `rootfs_hash` - The rootfs hash (32 bytes).
+/// * `mrtd` - The MRTD value (48 bytes).
+/// * `rtmr0` - The RTMR0 value (48 bytes).
+/// * `rtmr3` - The RTMR3 value (48 bytes).
+///
+/// # Returns
+///
+/// * `Result<bool, anyhow::Error>` - Returns true if the MRTD is approved, or an `anyhow::Error` if an error occurs.
+pub async fn check_mrtd_status(
+    upgrade_operator_address: alloy::primitives::Address,
+    rpc: &str,
+    rootfs_hash: Bytes,
+    mrtd: Bytes,
+    rtmr0: Bytes,
+    rtmr3: Bytes,
+) -> Result<bool, anyhow::Error> {
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+    // Create upgrade operator contract instance
+    let upgrade_operator_contract =
+        crate::UpgradeOperator::new(upgrade_operator_address, std::sync::Arc::new(provider));
+
+    // Check MRTD status
+    let status = upgrade_operator_contract
+        .get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3)
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to check MRTD status: {:?}", e))?;
+
+    Ok(status)
+}
+
 /// Computes the CREATE2 address for a contract without deploying it.
 ///
 /// # Arguments
@@ -189,7 +639,7 @@ pub async fn compute_create2_address(
         UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider));
 
     let expected_address = factory_contract
-        .computeAddress(salt.into())
+        .computeUpgradeOperatorAddress(salt.into())
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
