@@ -128,7 +128,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     )
     .await
     .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
-    print_flush!("Sent ETH. Starting to prepare snapshot and restore");
+    print_flush("Sent ETH. Starting to prepare snapshot and restore");
 
     sleep(Duration::from_secs(2));
 
