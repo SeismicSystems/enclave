@@ -1,4 +1,4 @@
-use crate::utils::{deploy_contract, ANVIL_ALICE_SK, ANVIL_BOB_SK, ANVIL_CHARLIE_SK};
+use crate::utils::{deploy_contract, deploy_contract_create2, ANVIL_ALICE_SK, ANVIL_BOB_SK, ANVIL_CHARLIE_SK};
 
 use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
@@ -154,5 +154,96 @@ pub async fn run_restore() -> Result<(), anyhow::Error> {
     );
     //  restore_from_encrypted_snapshot(RETH_DATA_DIR, DATA_DISK_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE)?;
     assert!(reth_is_running());
+    Ok(())
+}
+
+
+/// craete2 test 
+/// 
+/// Test that CREATE2 deployment produces consistent addresses
+/// This test verifies that deploying the same contract with the same salt
+/// always results in the same contract address
+#[tokio::test(flavor = "multi_thread")]
+pub async fn test_create2_consistent_addresses() -> Result<(), anyhow::Error> {
+    print_flush("Running test_create2_consistent_addresses. Expected runtime is ~30 sec\n");
+    
+    // Check the starting conditions are as expected
+    assert!(reth_is_running(), "Test startup error: Reth is not running");
+
+    // Set path to the factory contract's json file
+    // This file can be recreated with `forge build`
+    let factory_json_path = "tests/integration/snapshot/UpgradeOperatorFactory.json";
+    let reth_rpc = "http://localhost:8545";
+    
+    // Use a fixed salt for predictable testing
+    let salt: [u8; 32] = [
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+        0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
+    ];
+    
+    print_flush("Deploying first contract via CREATE2...\n");
+    
+    // Deploy first contract using CREATE2
+    let address1 = deploy_contract_create2(factory_json_path, ANVIL_ALICE_SK, reth_rpc, salt)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to deploy first contract via CREATE2: {:?}", e))?;
+    
+    print_flush(format!("First contract deployed at: {:?}\n", address1));
+    
+    // Wait a bit for the transaction to be processed
+    sleep(Duration::from_secs(2));
+    
+    print_flush("Deploying second contract via CREATE2 with same salt...\n");
+    
+    // Deploy second contract using CREATE2 with the same salt
+    let address2 = deploy_contract_create2(factory_json_path, ANVIL_BOB_SK, reth_rpc, salt)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to deploy second contract via CREATE2: {:?}", e))?;
+    
+    print_flush(format!("Second contract deployed at: {:?}\n", address2));
+    
+    // Wait a bit for the transaction to be processed
+    sleep(Duration::from_secs(2));
+    
+    print_flush("Deploying third contract via CREATE2 with same salt...\n");
+    
+    // Deploy third contract using CREATE2 with the same salt
+    let address3 = deploy_contract_create2(factory_json_path, ANVIL_CHARLIE_SK, reth_rpc, salt)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to deploy third contract via CREATE2: {:?}", e))?;
+    
+    print_flush(format!("Third contract deployed at: {:?}\n", address3));
+    
+    // Verify all addresses are the same (CREATE2 should produce consistent addresses)
+    assert_eq!(address1, address2, "CREATE2 addresses should be consistent");
+    assert_eq!(address2, address3, "CREATE2 addresses should be consistent");
+    assert_eq!(address1, address3, "CREATE2 addresses should be consistent");
+    
+    print_flush("✅ All CREATE2 deployments produced the same address!\n");
+    
+    // Test with a different salt to ensure different addresses
+    let different_salt: [u8; 32] = [
+        0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8,
+        0xf7, 0xf6, 0xf5, 0xf4, 0xf3, 0xf2, 0xf1, 0xf0,
+        0xef, 0xee, 0xed, 0xec, 0xeb, 0xea, 0xe9, 0xe8,
+        0xe7, 0xe6, 0xe5, 0xe4, 0xe3, 0xe2, 0xe1, 0xe0,
+    ];
+    
+    print_flush("Deploying contract with different salt...\n");
+    
+    let different_address = deploy_contract_create2(factory_json_path, ANVIL_ALICE_SK, reth_rpc, different_salt)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to deploy contract with different salt: {:?}", e))?;
+    
+    print_flush(format!("Contract with different salt deployed at: {:?}\n", different_address));
+    
+    // Verify the different salt produces a different address
+    assert_ne!(address1, different_address, "Different salts should produce different addresses");
+    
+    print_flush("✅ Different salt produced different address!\n");
+    print_flush("CREATE2 consistency test passed!\n");
+    
     Ok(())
 }

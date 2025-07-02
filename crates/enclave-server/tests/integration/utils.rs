@@ -4,6 +4,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
+    sol,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -17,6 +18,16 @@ pub const ANVIL_BOB_SK: &str = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a
 
 pub const ANVIL_CHARLIE_SK: &str =
     "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
+
+// Generate contract bindings for the factory
+sol! {
+    #[sol(rpc)]
+    interface UpgradeOperatorFactory {
+        function deployUpgradeOperator(bytes32 salt) external returns (address);
+        function computeAddress(bytes32 salt) external view returns (address);
+        function isDeployed(address contractAddress) external view returns (bool);
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {
@@ -77,6 +88,87 @@ pub async fn deploy_contract(
     }
 
     Ok(())
+}
+
+/// Deploys a smart contract using CREATE2 through a factory contract.
+///
+/// # Arguments
+///
+/// * `factory_json_path` - A string slice representing the path to the Foundry JSON artifact containing the factory contract's bytecode.
+/// * `sk` - A string slice representing the private key used to sign the deployment transaction.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `salt` - A 32-byte salt value for CREATE2 deployment.
+///
+/// # Returns
+///
+/// * `Result<alloy::primitives::Address, anyhow::Error>` - Returns the deployed contract address if successful, or an `anyhow::Error` if an error occurs.
+pub async fn deploy_contract_create2(
+    factory_json_path: &str,
+    sk: &str,
+    rpc: &str,
+    salt: [u8; 32],
+) -> Result<alloy::primitives::Address, anyhow::Error> {
+    // Read factory contract bytecode from Foundry JSON
+    let file_content = fs::read_to_string(factory_json_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read Foundry JSON file: {:?}", e))?;
+    let artifact: ContractArtifact = serde_json::from_str(&file_content)?;
+    let bytecode_str = artifact.bytecode.object;
+    let bytecode = Bytes::from(hex::decode(bytecode_str.trim_start_matches("0x"))?);
+
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer);
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+    // Deploy factory contract first
+    let gas_price = provider.get_gas_price().await?;
+    let gas_limit = 5_000_000u64;
+    let tx = TransactionRequest::default()
+        .with_deploy_code(bytecode)
+        .with_gas_price(gas_price)
+        .with_gas_limit(gas_limit);
+    
+    let pending_tx = provider.send_transaction(tx).await
+        .map_err(|e| anyhow::anyhow!("Failed to deploy factory contract: {:?}", e))?;
+    
+    // Wait for the transaction to be mined
+    let receipt = pending_tx.get_receipt().await
+        .map_err(|e| anyhow::anyhow!("Failed to get transaction receipt: {:?}", e))?;
+    
+    let factory_address = receipt.contract_address
+        .ok_or_else(|| anyhow::anyhow!("No contract address in receipt"))?;
+    
+    println!("Factory deployed at: {:?}", factory_address);
+    
+    // Now deploy the UpgradeOperator contract using CREATE2
+    let factory_contract = UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
+    
+    // Compute the expected address first
+    let expected_address = factory_contract.computeAddress(salt.into()).call().await
+        .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
+    
+    println!("Expected CREATE2 address: {:?}", expected_address);
+    
+    // Deploy using CREATE2
+    let deploy_tx = factory_contract.deployUpgradeOperator(salt.into());
+    let deploy_pending = deploy_tx.send().await
+        .map_err(|e| anyhow::anyhow!("Failed to deploy via CREATE2: {:?}", e))?;
+    
+    let deploy_receipt = deploy_pending.watch().await
+        .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
+    
+    // Verify the contract was deployed at the expected address
+    let is_deployed = factory_contract.isDeployed(expected_address).call().await
+        .map_err(|e| anyhow::anyhow!("Failed to check if contract is deployed: {:?}", e))?;
+    
+    if !is_deployed {
+        return Err(anyhow::anyhow!("Contract was not deployed at expected address"));
+    }
+    
+    println!("Contract successfully deployed via CREATE2 at: {:?}", expected_address);
+    
+    Ok(expected_address)
 }
 
 /// Prints a string to standard output and immediately flushes the output buffer.
