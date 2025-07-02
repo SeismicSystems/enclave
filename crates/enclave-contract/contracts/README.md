@@ -1,17 +1,3 @@
-# Creating the Contract ABI
-From the root of the enclave repo:
-```
-sforge inspect crates/enclave-server/src/snapshot/contracts/UpgradeOperator.sol:UpgradeOperator abi > crates/enclave-server/src/snapshot/contracts/UpgradeOperatorAbi.json
-```
-
-# Creating the Contract Json / Bytecode
-Create a forge project and build the contract:
-```
-forge build
-```
-
-The resulting `out` directory contains the `UpgradeOperator.json` file, which contains the contract's bytecode and ABI.
-
 # Building Contracts for Testing
 Run the `build.sh` script to build the contracts without setting up a forge project. Contract jsons are copied to `crates/enclave-server/tests/integration/snapshot`
 
