@@ -35,3 +35,11 @@ address = keccak256(0xff ++ factory_address ++ salt ++ keccak256(contract_byteco
 ```
 
 This ensures that the same contract deployed with the same salt will always have the same address, regardless of who deploys it or when.
+
+**Factors that DO affect the CREATE2 address:**
+1. **Factory address** - The address of the contract that calls CREATE2
+2. **Salt** - The 32-byte salt value you provide
+3. **Contract bytecode** - The creation code of the contract being deployed
+
+**Factors that DON'T affect the CREATE2 address:**
+1. **msg.sender** - The address calling the factory doesn't matter

@@ -90,23 +90,21 @@ pub async fn deploy_contract(
     Ok(())
 }
 
-/// Deploys a smart contract using CREATE2 through a factory contract.
+/// Deploys the factory contract and returns its address.
 ///
 /// # Arguments
 ///
 /// * `factory_json_path` - A string slice representing the path to the Foundry JSON artifact containing the factory contract's bytecode.
 /// * `sk` - A string slice representing the private key used to sign the deployment transaction.
 /// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
-/// * `salt` - A 32-byte salt value for CREATE2 deployment.
 ///
 /// # Returns
 ///
-/// * `Result<alloy::primitives::Address, anyhow::Error>` - Returns the deployed contract address if successful, or an `anyhow::Error` if an error occurs.
-pub async fn deploy_contract_create2(
+/// * `Result<alloy::primitives::Address, anyhow::Error>` - Returns the factory address if successful, or an `anyhow::Error` if an error occurs.
+pub async fn deploy_factory(
     factory_json_path: &str,
     sk: &str,
     rpc: &str,
-    salt: [u8; 32],
 ) -> Result<alloy::primitives::Address, anyhow::Error> {
     // Read factory contract bytecode from Foundry JSON
     let file_content = fs::read_to_string(factory_json_path)
@@ -121,7 +119,7 @@ pub async fn deploy_contract_create2(
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
-    // Deploy factory contract first
+    // Deploy factory contract
     let gas_price = provider.get_gas_price().await?;
     let gas_limit = 5_000_000u64;
     let tx = TransactionRequest::default()
@@ -141,7 +139,34 @@ pub async fn deploy_contract_create2(
     
     println!("Factory deployed at: {:?}", factory_address);
     
-    // Now deploy the UpgradeOperator contract using CREATE2
+    Ok(factory_address)
+}
+
+/// Deploys a contract using CREATE2 through an existing factory contract.
+///
+/// # Arguments
+///
+/// * `factory_address` - The address of the existing factory contract.
+/// * `sk` - A string slice representing the private key used to sign the deployment transaction.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `salt` - A 32-byte salt value for CREATE2 deployment.
+///
+/// # Returns
+///
+/// * `Result<alloy::primitives::Address, anyhow::Error>` - Returns the deployed contract address if successful, or an `anyhow::Error` if an error occurs.
+pub async fn deploy_via_factory_create2(
+    factory_address: alloy::primitives::Address,
+    sk: &str,
+    rpc: &str,
+    salt: [u8; 32],
+) -> Result<alloy::primitives::Address, anyhow::Error> {
+    // Set up signer with the provided sk
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let wallet = EthereumWallet::from(signer);
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+    
+    // Create factory contract instance
     let factory_contract = UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
     
     // Compute the expected address first
@@ -178,4 +203,31 @@ pub fn print_flush<S: AsRef<str>>(s: S) {
     let mut handle = stdout.lock(); // lock ensures safe writing
     write!(handle, "{}", s.as_ref()).unwrap();
     handle.flush().unwrap();
+}
+
+/// Computes the CREATE2 address for a contract without deploying it.
+///
+/// # Arguments
+///
+/// * `factory_address` - The address of the factory contract.
+/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
+/// * `salt` - A 32-byte salt value for CREATE2 deployment.
+///
+/// # Returns
+///
+/// * `Result<alloy::primitives::Address, anyhow::Error>` - Returns the computed CREATE2 address if successful, or an `anyhow::Error` if an error occurs.
+pub async fn compute_create2_address(
+    factory_address: alloy::primitives::Address,
+    rpc: &str,
+    salt: [u8; 32],
+) -> Result<alloy::primitives::Address, anyhow::Error> {
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+    
+    let factory_contract = UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider));
+    
+    let expected_address = factory_contract.computeAddress(salt.into()).call().await
+        .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
+    
+    Ok(expected_address)
 }
