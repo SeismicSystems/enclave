@@ -2262,6 +2262,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "enclave-contract"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5574,6 +5587,7 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "crypto",
+ "enclave-contract",
  "hex",
  "hkdf",
  "jsonrpsee",

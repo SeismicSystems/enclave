@@ -1,9 +1,7 @@
-mod check_operator;
 mod compress;
 mod file_encrypt;
 
 use crate::key_manager::NetworkKeyProvider;
-pub use check_operator::check_operator;
 use compress::{compress_datadir, decompress_datadir};
 use file_encrypt::{decrypt_snapshot, encrypt_snapshot};
 use std::fs;

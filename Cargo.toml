@@ -4,6 +4,7 @@ members = [
     "crates/enclave",
     "crates/enclave/derive",
     "crates/enclave-server",
+    "crates/enclave-contract",
 ]
 
 [workspace.lints]
@@ -112,6 +113,9 @@ readme = "README.md"
 [workspace.dependencies]
 seismic-enclave-derive = { path = "crates/enclave/derive" }
 seismic-enclave = { path = "crates/enclave" }
+enclave-contract = { path = "crates/enclave-contract" }
+
+alloy = "1.0"
 aes-gcm = "0.10"
 anyhow = "1.0"
 auto_impl = "1"
