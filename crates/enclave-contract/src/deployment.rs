@@ -54,8 +54,6 @@ sol! {
     }
 }
 
-
-
 // Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_SK: &str =
     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -234,10 +232,8 @@ pub async fn deploy_upgrade_operator_with_multisig(
         UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider.clone()));
 
     // Deploy both contracts using the factory's combined function
-    let deploy_tx = factory_contract.deployUpgradeOperatorWithMultisig(
-        upgrade_operator_salt.into(),
-        multisig_salt.into(),
-    );
+    let deploy_tx = factory_contract
+        .deployUpgradeOperatorWithMultisig(upgrade_operator_salt.into(), multisig_salt.into());
     let deploy_pending = deploy_tx
         .send()
         .await
@@ -250,16 +246,29 @@ pub async fn deploy_upgrade_operator_with_multisig(
 
     // Compute the predicted addresses
     let predicted_multisig_address = factory_contract
-        .computeMultisigUpgradeOperatorAddress(multisig_salt.into(), alloy::primitives::Address::ZERO)
+        .computeMultisigUpgradeOperatorAddress(
+            multisig_salt.into(),
+            alloy::primitives::Address::ZERO,
+        )
         .call()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to compute MultisigUpgradeOperator CREATE2 address: {:?}", e))?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to compute MultisigUpgradeOperator CREATE2 address: {:?}",
+                e
+            )
+        })?;
 
     let predicted_upgrade_operator_address = factory_contract
-        .computeUpgradeOperatorAddressWithOwner(upgrade_operator_salt.into(), predicted_multisig_address)
+        .computeUpgradeOperatorAddressWithOwner(
+            upgrade_operator_salt.into(),
+            predicted_multisig_address,
+        )
         .call()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to compute UpgradeOperator CREATE2 address: {:?}", e))?;
+        .map_err(|e| {
+            anyhow::anyhow!("Failed to compute UpgradeOperator CREATE2 address: {:?}", e)
+        })?;
 
     // Verify the contracts were deployed at the expected addresses
     let is_upgrade_operator_deployed = factory_contract
@@ -272,7 +281,12 @@ pub async fn deploy_upgrade_operator_with_multisig(
         .isDeployed(predicted_multisig_address)
         .call()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to check if MultisigUpgradeOperator is deployed: {:?}", e))?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to check if MultisigUpgradeOperator is deployed: {:?}",
+                e
+            )
+        })?;
 
     if !is_upgrade_operator_deployed {
         return Err(anyhow::anyhow!(
@@ -295,7 +309,10 @@ pub async fn deploy_upgrade_operator_with_multisig(
         predicted_multisig_address
     );
 
-    Ok((predicted_upgrade_operator_address, predicted_multisig_address))
+    Ok((
+        predicted_upgrade_operator_address,
+        predicted_multisig_address,
+    ))
 }
 
 /// Creates a proposal in the MultisigUpgradeOperator contract.
@@ -342,7 +359,13 @@ pub async fn create_multisig_proposal(
         .map_err(|e| anyhow::anyhow!("Failed to get current nonce: {:?}", e))?;
 
     // Create proposal
-    let create_tx = multisig_contract.createProposal(rootfs_hash.clone(), mrtd.clone(), rtmr0.clone(), rtmr3.clone(), status);
+    let create_tx = multisig_contract.createProposal(
+        rootfs_hash.clone(),
+        mrtd.clone(),
+        rtmr0.clone(),
+        rtmr3.clone(),
+        status,
+    );
     let create_pending = create_tx
         .send()
         .await
@@ -367,7 +390,10 @@ pub async fn create_multisig_proposal(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute proposal ID: {:?}", e))?;
 
-    println!("Proposal created with ID: {:?}, nonce: {}", proposal_id, new_nonce);
+    println!(
+        "Proposal created with ID: {:?}, nonce: {}",
+        proposal_id, new_nonce
+    );
 
     Ok((proposal_id.into(), new_nonce.try_into().unwrap()))
 }
@@ -458,7 +484,14 @@ pub async fn execute_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Execute proposal
-    let execute_tx = multisig_contract.executeProposal(rootfs_hash, mrtd, rtmr0, rtmr3, status, U256::from(nonce));
+    let execute_tx = multisig_contract.executeProposal(
+        rootfs_hash,
+        mrtd,
+        rtmr0,
+        rtmr3,
+        status,
+        U256::from(nonce),
+    );
     let execute_pending = execute_tx
         .send()
         .await
@@ -537,7 +570,10 @@ pub async fn get_multisig_vote_count(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get vote count: {:?}", e))?;
 
-    Ok((result.approvalCount.try_into().unwrap(), result.totalVotes.try_into().unwrap()))
+    Ok((
+        result.approvalCount.try_into().unwrap(),
+        result.totalVotes.try_into().unwrap(),
+    ))
 }
 
 /// Checks if an MRTD configuration is approved in the UpgradeOperator contract.
