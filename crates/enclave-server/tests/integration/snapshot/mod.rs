@@ -67,9 +67,15 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         .unwrap();
     let reth_rpc = "http://localhost:8545";
 
+<<<<<<< HEAD
     // Boot genesis so we can interact with the enclaver-server
     enclave_client.boot_genesis().unwrap();
     enclave_client.complete_boot().unwrap();
+=======
+     // Boot genesis so we can interact with the enclaver-server
+     enclave_client.boot_genesis().unwrap();
+     enclave_client.complete_boot().unwrap();
+>>>>>>> a375061b7912a838651e49685d87f5c97a54b9bb
 
     // Deploy factory contract
     print_flush("Deploying factory contract...\n");
