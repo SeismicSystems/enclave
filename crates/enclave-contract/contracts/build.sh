@@ -9,9 +9,10 @@ echo "Building contracts..."
 
 # Build the contracts
 # uses seismic sforge instead of forge
-if sforge build | grep -q "Nothing to compile"; then
+# Specify contracts directory and output location
+if sforge build --contracts . --out "$(pwd)/out" | grep -q "Nothing to compile"; then
     echo "Nothing to compile. Something probably went wrong."
 else
     echo "✅ Contracts built successfully!"
-    echo "JSON files are available in: out/"
+    echo "JSON files are available in: ./out/"
 fi 
