@@ -468,7 +468,6 @@ mod tests {
             key_plaintext == [0u8; 32],
             "root key does not match expected mock value"
         );
-        assert!(false);
     }
 
     #[serial(attestation_agent)]
