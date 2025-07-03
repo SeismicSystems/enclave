@@ -26,7 +26,10 @@ pub async fn boot_enclave(ip: IpAddr, port: u16) -> Result<(), BootError> {
         .build()
         .unwrap();
 
-    if let Ok(_) = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await {
+    if let Ok(_) = client
+        .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+        .await
+    {
         tracing::warn!("Enclave already booted. Skipping genesis boot.");
         return Ok(());
     };
@@ -41,7 +44,10 @@ pub async fn boot_enclave(ip: IpAddr, port: u16) -> Result<(), BootError> {
         return Err(BootError::CompleteFailed(e.to_string()));
     };
 
-    if let Err(e) = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await {
+    if let Err(e) = client
+        .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
+        .await
+    {
         tracing::error!("getPurposeKeys failed. Error:\n{}", e);
         return Err(BootError::GetPurposeKeysFailed(e.to_string()));
     };
