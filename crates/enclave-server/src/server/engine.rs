@@ -214,11 +214,8 @@ where
         // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
 
         // Verify new enclave's attestation
-        let thingy: AttestationEvalEvidenceResponse =
+        let _: AttestationEvalEvidenceResponse =
             self.eval_attestation_evidence(req.clone().into()).await?;
-
-        let claims = thingy.claims.unwrap();
-        println!("claims: {:?}", claims);
 
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
