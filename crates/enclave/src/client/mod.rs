@@ -9,6 +9,6 @@ pub mod client;
 pub mod mock;
 pub mod rpc;
 
-pub use booter::{boot_enclave, BootError};
+pub use booter::{boot_enclave_async, boot_enclave_sync, BootError};
 pub use client::*;
 pub use mock::*;
