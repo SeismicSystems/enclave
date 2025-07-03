@@ -171,6 +171,49 @@ impl Booter {
         *guard = Some(rng_bytes);
         Ok(())
     }
+
+
+    pub fn check_upgrade_contract(&self, tcb_status: &str) -> Result<bool, anyhow::Error> {
+        // Parse the tcb_status JSON string to access specific fields
+        let tcb_status_map: serde_json::Map<String, serde_json::Value> = 
+            serde_json::from_str(&tcb_status)
+            .map_err(|e| anyhow::anyhow!(
+                "Failed to parse tcb_status JSON: {e}"
+            ))?;
+
+        let pcr4 = tcb_status_map
+            .get("aztdxvtpm.tpm.pcr04")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse tcb_status JSON field: pcr04"
+            ))?;
+        
+        let mr_td = tcb_status_map
+            .get("aztdxvtpm.quote.body.mr_td")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse tcb_status JSON field: mrtd"
+            ))?;
+        
+        let mr_seam = tcb_status_map
+            .get("aztdxvtpm.quote.body.mr_seam")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse tcb_status JSON field: mr_seam"
+            ))?;
+
+        println!("pcr4: {:?}", pcr4);
+        println!("mr_td: {:?}", mr_td);
+        println!("mr_seam: {:?}", mr_seam);
+
+        // TODO: Call the contract
+
+        todo!("check_upgrade_contract not finished")
+
+    }
 }
 
 #[cfg(test)]

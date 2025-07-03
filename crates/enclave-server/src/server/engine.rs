@@ -5,6 +5,7 @@ use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
 use std::path::Path;
 use std::sync::Arc;
+use serde_json;
 
 use super::boot::Booter;
 use crate::attestation::seismic_aa_mock;
@@ -211,12 +212,22 @@ where
         &self,
         req: ShareRootKeyRequest,
     ) -> RpcResult<ShareRootKeyResponse> {
-        // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
-
-        // Verify new enclave's attestation
-        let _: AttestationEvalEvidenceResponse =
+        // Verify new enclave's attestation is a valid attestation
+        let eval_response: AttestationEvalEvidenceResponse =
             self.eval_attestation_evidence(req.clone().into()).await?;
-
+        
+        // Check the tcb_status against the upgrade contract
+        let claims = eval_response.claims.unwrap();
+        let tcb_status = claims.tcb_status;
+        let valid_upgrade = self.booter.check_upgrade_contract(&tcb_status).map_err(
+            |e| rpc_internal_server_error(e)
+        )?;
+        if !valid_upgrade {
+            return Err(rpc_bad_evidence_error(anyhow::anyhow!( // TODO: bad evidence vs bad quote?
+                "Attestation TCB is not approved in the upgrade contract"  
+            )));
+        }
+        
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
         let existing_km_root_key = key_provider.get_root_key();
@@ -468,6 +479,7 @@ mod tests {
             key_plaintext == [0u8; 32],
             "root key does not match expected mock value"
         );
+        todo!("intentionally failing test so I can debug");
     }
 
     #[serial(attestation_agent)]
