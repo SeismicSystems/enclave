@@ -21,7 +21,7 @@ pub fn print_flush<S: AsRef<str>>(s: S) {
     handle.flush().unwrap();
 }
 
-// Anvil's first secret key that they publically expose and fund for testing
+/// Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_SK: &str =
     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
@@ -29,6 +29,12 @@ pub const ANVIL_BOB_SK: &str = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a
 
 pub const ANVIL_CHARLIE_SK: &str =
     "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
+
+/// The address of the UpgradeOperator contract
+/// This is the address that the factory will deploy the UpgradeOperator to
+/// See the create2_test.rs test to see how this is computed
+/// TODO: Figure out how Seismic intends to make this constant consistent long-term
+pub const UPGRADE_OPERATOR_ADDRESS: &str = "0xb380dadc0214fb7092eb1ef4689b98716392ade1";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {

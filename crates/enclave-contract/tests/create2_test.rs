@@ -1,6 +1,7 @@
 use enclave_contract::{deploy_factory, deploy_via_factory_create2, print_flush, ANVIL_ALICE_SK};
 use std::thread::sleep;
 use std::time::Duration;
+use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 
 /// Test that CREATE2 deployment produces consistent addresses
 /// This test verifies that deploying the same contract with the same salt
@@ -52,6 +53,10 @@ pub async fn test_create2_consistent_addresses() -> Result<(), anyhow::Error> {
         second_deploy_res.is_err(),
         "Second create2 deploy should fail because you deploy to the same address"
     );
+
+    // check that the UPGRADE_OPERATOR_ADDRESS const matches the expected address
+    let expected_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
+    assert_eq!(address1, expected_address);
 
     Ok(())
 }
