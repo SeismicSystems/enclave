@@ -7,13 +7,16 @@ use crate::request_types::keys::GetPurposeKeysRequest;
 use crate::rpc::EnclaveApiClient;
 
 /// Errors that can occur when booting the enclave
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum BootError {
     /// Error when the genesis boot fails
+    #[error("Genesis boot failed: {0}")]
     GenesisFailed(String),
     /// Error when the complete boot fails
+    #[error("Complete boot failed: {0}")]
     CompleteFailed(String),
     /// Error when getting the purpose keys fails
+    #[error("Get purpose keys failed: {0}")]
     GetPurposeKeysFailed(String),
 }
 
@@ -35,12 +38,12 @@ pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> 
     };
 
     if let Err(e) = client.boot_genesis().await {
-        tracing::error!("Genesis boot failed. Error:\n{}", e);
+        tracing::error!("{}", e);
         return Err(BootError::GenesisFailed(e.to_string()));
     };
 
     if let Err(e) = client.complete_boot().await {
-        tracing::error!("Complete boot failed. Error:\n{}", e);
+        tracing::error!("{}", e);
         return Err(BootError::CompleteFailed(e.to_string()));
     };
 
@@ -48,7 +51,7 @@ pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> 
         .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
         .await
     {
-        tracing::error!("getPurposeKeys failed. Error:\n{}", e);
+        tracing::error!("{}", e);
         return Err(BootError::GetPurposeKeysFailed(e.to_string()));
     };
 

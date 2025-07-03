@@ -19,6 +19,7 @@ path = "src/lib.rs"
 seismic-enclave-derive.workspace = true
 aes-gcm.workspace = true
 anyhow.workspace = true
+thiserror.workspace = true
 hkdf.workspace = true
 jsonrpsee.workspace = true
 kbs-types.workspace = true
