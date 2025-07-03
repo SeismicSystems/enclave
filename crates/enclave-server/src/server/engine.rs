@@ -214,10 +214,8 @@ where
         // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
 
         // Verify new enclave's attestation
-        let thingy: AttestationEvalEvidenceResponse = self.eval_attestation_evidence(req.clone().into()).await?;
-
-        let claims = thingy.claims.unwrap();
-        println!("claims: {:?}", claims);
+        let _: AttestationEvalEvidenceResponse =
+            self.eval_attestation_evidence(req.clone().into()).await?;
 
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
@@ -470,7 +468,6 @@ mod tests {
             key_plaintext == [0u8; 32],
             "root key does not match expected mock value"
         );
-        assert!(false);
     }
 
     #[serial(attestation_agent)]

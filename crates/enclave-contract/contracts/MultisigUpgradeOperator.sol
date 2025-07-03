@@ -30,8 +30,8 @@ contract MultisigUpgradeOperator {
     // Mapping to track proposal execution status
     mapping(bytes32 => bool) public executed;
     
-    // Event emitted when a proposal is created
-    event ProposalCreated(bytes32 indexed proposalId, uint256 nonce, bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status);
+    // Event emitted when a proposal is created (version 1)
+    event ProposalCreatedV1(bytes32 indexed proposalId, uint256 nonce, bytes mrtd, bytes mrseam, bytes pcr4, bool status);
     
     // Event emitted when a vote is cast
     event VoteCast(bytes32 indexed proposalId, address indexed voter, bool approved);
@@ -66,33 +66,30 @@ contract MultisigUpgradeOperator {
     }
     
     /**
-     * @dev Creates a proposal to set MRTD in the UpgradeOperator
-     * @param rootfs_hash The rootfs hash (32 bytes)
+     * @dev Creates a proposal to set defining attributes (version 1) in the UpgradeOperator
      * @param mrtd The MRTD value (48 bytes)
-     * @param rtmr0 The RTMR0 value (48 bytes)
-     * @param rtmr3 The RTMR3 value (48 bytes)
+     * @param mrseam The MRSEAM value (48 bytes)
+     * @param pcr4 The PCR4 value (48 bytes)
      * @param status The status to set
      * @return proposalId The unique identifier for this proposal
      */
-    function createProposal(
-        bytes memory rootfs_hash,
+    function createProposalV1(
         bytes memory mrtd,
-        bytes memory rtmr0,
-        bytes memory rtmr3,
+        bytes memory mrseam,
+        bytes memory pcr4,
         bool status
     ) public returns (bytes32 proposalId) {
-        require(rootfs_hash.length == 32, "Invalid rootfs_hash length");
         require(mrtd.length == 48, "Invalid mrtd length");
-        require(rtmr0.length == 48, "Invalid rtmr0 length");
-        require(rtmr3.length == 48, "Invalid rtmr3 length");
+        require(mrseam.length == 48, "Invalid mrseam length");
+        require(pcr4.length == 48, "Invalid pcr4 length");
         
         // Increment nonce and use it in proposal ID calculation
         proposalNonce++;
-        proposalId = keccak256(abi.encodePacked(rootfs_hash, mrtd, rtmr0, rtmr3, status, proposalNonce));
+        proposalId = computeProposalIdV1(mrtd, mrseam, pcr4, status, proposalNonce);
         
         require(!executed[proposalId], "Proposal already executed");
         
-        emit ProposalCreated(proposalId, proposalNonce, rootfs_hash, mrtd, rtmr0, rtmr3, status);
+        emit ProposalCreatedV1(proposalId, proposalNonce, mrtd, mrseam, pcr4, status);
         
         return proposalId;
     }
@@ -113,23 +110,21 @@ contract MultisigUpgradeOperator {
     }
     
     /**
-     * @dev Executes a proposal if it has enough votes
-     * @param rootfs_hash The rootfs hash (32 bytes)
+     * @dev Executes a proposal if it has enough votes (version 1)
      * @param mrtd The MRTD value (48 bytes)
-     * @param rtmr0 The RTMR0 value (48 bytes)
-     * @param rtmr3 The RTMR3 value (48 bytes)
+     * @param mrseam The MRSEAM value (48 bytes)
+     * @param pcr4 The PCR4 value (48 bytes)
      * @param status The status to set
      * @param nonce The nonce used when creating the proposal
      */
-    function executeProposal(
-        bytes memory rootfs_hash,
+    function executeProposalV1(
         bytes memory mrtd,
-        bytes memory rtmr0,
-        bytes memory rtmr3,
+        bytes memory mrseam,
+        bytes memory pcr4,
         bool status,
         uint256 nonce
     ) public {
-        bytes32 proposalId = keccak256(abi.encodePacked(rootfs_hash, mrtd, rtmr0, rtmr3, status, nonce));
+        bytes32 proposalId = computeProposalIdV1(mrtd, mrseam, pcr4, status, nonce);
         
         require(!executed[proposalId], "Proposal already executed");
         
@@ -142,8 +137,8 @@ contract MultisigUpgradeOperator {
         
         executed[proposalId] = true;
         
-        // Execute the actual set_mrtd call on the UpgradeOperator
-        upgradeOperator.set_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3, status);
+        // Execute the actual set_id_status_v1 call on the UpgradeOperator
+        upgradeOperator.set_id_status_v1(mrtd, mrseam, pcr4, status);
         
         emit ProposalExecuted(proposalId);
     }
@@ -188,23 +183,26 @@ contract MultisigUpgradeOperator {
     }
     
     /**
-     * @dev Computes the proposal ID for given parameters and nonce
-     * @param rootfs_hash The rootfs hash (32 bytes)
+     * @dev Computes the proposal ID for given parameters and nonce (version 1)
+     * Uses the UpgradeOperator's computeIdV1 method for the base ID calculation
      * @param mrtd The MRTD value (48 bytes)
-     * @param rtmr0 The RTMR0 value (48 bytes)
-     * @param rtmr3 The RTMR3 value (48 bytes)
+     * @param mrseam The MRSEAM value (48 bytes)
+     * @param pcr4 The PCR4 value (48 bytes)
      * @param status The status to set
      * @param nonce The nonce to use
      * @return The computed proposal ID
      */
-    function computeProposalId(
-        bytes memory rootfs_hash,
+    function computeProposalIdV1(
         bytes memory mrtd,
-        bytes memory rtmr0,
-        bytes memory rtmr3,
+        bytes memory mrseam,
+        bytes memory pcr4,
         bool status,
         uint256 nonce
-    ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(rootfs_hash, mrtd, rtmr0, rtmr3, status, nonce));
+    ) public view returns (bytes32) {
+        // Create the DefiningAttributesV1 struct and use the UpgradeOperator's computeIdV1 method
+        UpgradeOperator.DefiningAttributesV1 memory attrs = UpgradeOperator.DefiningAttributesV1(mrtd, mrseam, pcr4);
+        bytes32 baseId = upgradeOperator.computeIdV1(attrs);
+        // Combine with status and nonce for proposal uniqueness
+        return keccak256(abi.encodePacked(baseId, status, nonce));
     }
 } 

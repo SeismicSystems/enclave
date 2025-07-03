@@ -4,48 +4,67 @@ pragma solidity ^0.8.13;
 /*
  The Upgrade Operator is responsible for defining the 
  configuration to upgrade.
-
- This is encapsulated in the "rtmr3" reference implementation.
- It's a function of:
-     base_image:
-     docker compose string of app
 */
 contract UpgradeOperator {
     
-    // Owner is responsible for initializing
-    address owner;
-    constructor (address _owner) {
-	owner = _owner;
+    struct DefiningAttributesV1 {
+        bytes mrtd;
+        bytes mrseam;
+        bytes pcr4;
     }
 
-    // Reference RTMR values
-    mapping ( bytes32 => bool ) public rtmrs;
-
-    event SetMRTD(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status);
-    function set_mrtd(bytes memory rootfs_hash,
-		      bytes memory mrtd,
-		      bytes memory rtmr0,
-		      bytes memory rtmr3,
-		      bool status) public
-    {
-	require(msg.sender == owner);
-	require(rootfs_hash.length == 32);
-	require(mrtd.length == 48);
-	require(rtmr0.length == 48);
-	require(rtmr3.length == 48);
-	rtmrs[keccak256(abi.encodePacked(rootfs_hash,mrtd,rtmr0,rtmr3))] = status;
-	emit SetMRTD(rootfs_hash, mrtd, rtmr0, rtmr3, status);
+    struct DefiningAttributesV2 {
+        bytes mrtd;
+        bytes mrseam;
+        bytes pcr4;
+        bytes pcr7;
     }
-    
-    function get_mrtd(bytes memory rootfs_hash,
-		      bytes memory mrtd,
-		      bytes memory rtmr0,
-		      bytes memory rtmr3) public view returns(bool)
-    {
-	require(rootfs_hash.length == 32);
-	require(mrtd.length == 48);
-	require(rtmr0.length == 48);
-	require(rtmr3.length == 48);
-	return rtmrs[keccak256(abi.encodePacked(rootfs_hash,mrtd,rtmr0,rtmr3))];
+
+    address public owner;
+    mapping(bytes32 => bool) public attributes;
+
+    event SetDefiningAttributesV1(bytes mrtd, bytes mrseam, bytes pcr4, bool status);
+    event SetDefiningAttributesV2(bytes mrtd, bytes mrseam, bytes pcr4, bytes pcr7, bool status);
+
+    constructor(address _owner) {
+        owner = _owner;
+    }
+
+    /**
+     * @dev Sets the status for a set of defining attributes (version 1)
+     */
+    function set_id_status_v1(bytes memory mrtd, bytes memory mrseam, bytes memory pcr4, bool status) public {
+        require(msg.sender == owner);
+        require(mrtd.length == 48 && mrseam.length == 48 && pcr4.length == 48);
+
+        DefiningAttributesV1 memory attrs = DefiningAttributesV1(mrtd, mrseam, pcr4);
+        bytes32 id = computeIdV1(attrs);
+        attributes[id] = status;
+        emit SetDefiningAttributesV1(mrtd, mrseam, pcr4, status);
+    }
+
+    /**
+     * @dev Gets the status of a set of defining attributes (version 1)
+     */
+    function get_id_status_v1(bytes memory mrtd, bytes memory mrseam, bytes memory pcr4) public view returns (bool) {
+        require(mrtd.length == 48 && mrseam.length == 48 && pcr4.length == 48);
+
+        DefiningAttributesV1 memory attrs = DefiningAttributesV1(mrtd, mrseam, pcr4);
+        bytes32 id = computeIdV1(attrs);
+        return attributes[id];
+    }
+
+    /**
+     * @dev Computes the ID for a set of defining attributes (version 1)
+     */
+    function computeIdV1(DefiningAttributesV1 memory attrs) public pure returns (bytes32) {
+        return keccak256(abi.encode(attrs));
+    }
+
+    /**
+     * @dev Computes the ID for a set of defining attributes (version 2)
+     */
+    function computeIdV2(DefiningAttributesV2 memory attrs) public pure returns (bytes32) {
+        return keccak256(abi.encode(attrs));
     }
 }

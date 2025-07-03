@@ -1,8 +1,8 @@
-use alloy::primitives::Bytes;
 use enclave_contract::{
-    can_execute_multisig_proposal, check_mrtd_status, create_multisig_proposal, deploy_factory,
-    deploy_upgrade_operator_with_multisig, execute_multisig_proposal, get_multisig_vote_count,
-    print_flush, vote_on_multisig_proposal, ANVIL_ALICE_SK, ANVIL_BOB_SK,
+    can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal,
+    deploy_factory, deploy_upgrade_operator_with_multisig, execute_multisig_proposal,
+    get_multisig_vote_count, print_flush, vote_on_multisig_proposal, ProposalParamsV1,
+    ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 use std::thread::sleep;
 use std::time::Duration;
@@ -66,28 +66,17 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     // Wait a bit for the transaction to be processed
     sleep(Duration::from_secs(2));
 
-    // Test data for MRTD
-    let rootfs_hash = Bytes::from(vec![0xaa; 32]);
-    let mrtd = Bytes::from(vec![0xbb; 48]);
-    let rtmr0 = Bytes::from(vec![0xcc; 48]);
-    let rtmr3 = Bytes::from(vec![0xdd; 48]);
+    // Test data for proposal
+    let params = ProposalParamsV1::test_params();
     let status = true;
 
     print_flush("Creating multisig proposal...\n");
 
     // Create a proposal to set MRTD
-    let (proposal_id, nonce) = create_multisig_proposal(
-        multisig_address,
-        ANVIL_ALICE_SK,
-        reth_rpc,
-        rootfs_hash.clone(),
-        mrtd.clone(),
-        rtmr0.clone(),
-        rtmr3.clone(),
-        status,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to create proposal: {:?}", e))?;
+    let (proposal_id, nonce) =
+        create_multisig_proposal(multisig_address, ANVIL_ALICE_SK, reth_rpc, &params, status)
+            .await
+            .map_err(|e| anyhow::anyhow!("multisig workflow failed to create proposal: {:?}", e))?;
 
     print_flush(format!(
         "Proposal created with ID: {:?}, nonce: {}\n",
@@ -198,20 +187,20 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     print_flush(format!("Can execute proposal after Bob: {}\n", can_execute));
     assert!(can_execute, "Proposal should be executable with 2 votes");
 
-    // Check initial MRTD status (should be false)
-    let initial_mrtd_status = check_mrtd_status(
-        upgrade_operator_address,
-        reth_rpc,
-        rootfs_hash.clone(),
-        mrtd.clone(),
-        rtmr0.clone(),
-        rtmr3.clone(),
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check initial MRTD status: {:?}", e))?;
+    // Check initial proposal status (should be false)
+    let initial_proposal_status =
+        check_proposal_status_v1(upgrade_operator_address, reth_rpc, &params)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to check initial proposal status: {:?}", e))?;
 
-    print_flush(format!("Initial MRTD status: {}\n", initial_mrtd_status));
-    assert!(!initial_mrtd_status, "Initial MRTD status should be false");
+    print_flush(format!(
+        "Initial proposal status: {}\n",
+        initial_proposal_status
+    ));
+    assert!(
+        !initial_proposal_status,
+        "Initial proposal status should be false"
+    );
 
     print_flush("Executing proposal...\n");
 
@@ -220,10 +209,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
         multisig_address,
         ANVIL_ALICE_SK,
         reth_rpc,
-        rootfs_hash.clone(),
-        mrtd.clone(),
-        rtmr0.clone(),
-        rtmr3.clone(),
+        &params,
         status,
         nonce,
     )
@@ -233,22 +219,22 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     // Wait a bit for the transaction to be processed
     sleep(Duration::from_secs(2));
 
-    print_flush("Checking final MRTD status...\n");
+    print_flush("Checking final proposal status...\n");
 
-    // Check final MRTD status (should be true)
-    let final_mrtd_status = check_mrtd_status(
-        upgrade_operator_address,
-        reth_rpc,
-        rootfs_hash.clone(),
-        mrtd.clone(),
-        rtmr0.clone(),
-        rtmr3.clone(),
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check final MRTD status: {:?}", e))?;
+    // Check final proposal status (should be true)
+    let final_proposal_status =
+        check_proposal_status_v1(upgrade_operator_address, reth_rpc, &params)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to check final proposal status: {:?}", e))?;
 
-    print_flush(format!("Final MRTD status: {}\n", final_mrtd_status));
-    assert!(final_mrtd_status, "Final MRTD status should be true");
+    print_flush(format!(
+        "Final proposal status: {}\n",
+        final_proposal_status
+    ));
+    assert!(
+        final_proposal_status,
+        "Final proposal status should be true"
+    );
 
     // Test that the proposal cannot be executed again
     let can_execute_again = can_execute_multisig_proposal(multisig_address, reth_rpc, proposal_id)
