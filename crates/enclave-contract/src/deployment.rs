@@ -4,10 +4,12 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
-    sol,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
+
+// Import contract interfaces from contract_interface module
+use crate::contract_interface::{UpgradeOperator, UpgradeOperatorFactory, MultisigUpgradeOperator};
 
 /// Prints a string to standard output and immediately flushes the output buffer.
 /// Useful to see prints immediately during long-running Cargo tests.
@@ -19,40 +21,33 @@ pub fn print_flush<S: AsRef<str>>(s: S) {
     handle.flush().unwrap();
 }
 
-// Generate contract bindings for the factory
-sol! {
-    #[sol(rpc)]
-    interface UpgradeOperatorFactory {
-        function deployUpgradeOperator(bytes32 salt) external returns (address);
-        function deployUpgradeOperatorWithOwner(bytes32 salt, address owner) external returns (address);
-        function deployMultisigUpgradeOperator(bytes32 salt, address upgradeOperator) external returns (address);
-        function deployUpgradeOperatorWithMultisig(bytes32 upgradeOperatorSalt, bytes32 multisigSalt) external returns (address, address);
-        function computeUpgradeOperatorAddress(bytes32 salt) external view returns (address);
-        function computeUpgradeOperatorAddressWithOwner(bytes32 salt, address owner) external view returns (address);
-        function computeMultisigUpgradeOperatorAddress(bytes32 salt, address upgradeOperator) external view returns (address);
-        function isDeployed(address contractAddress) external view returns (bool);
+/// Represents the proposal parameters for upgrade validation
+/// This struct makes it easy to change the parameters in the future
+/// To change parameters, just modify this struct and update the contract interfaces
+#[derive(Debug, Clone)]
+pub struct ProposalParams {
+    pub mrtd: Bytes,      // 48 bytes
+    pub mrseam: Bytes,    // 48 bytes
+    pub pcr4: Bytes,      // 48 bytes
+}
+
+impl ProposalParams {
+    /// Creates a new ProposalParams instance
+    pub fn new(mrtd: Bytes, mrseam: Bytes, pcr4: Bytes) -> Self {
+        Self { mrtd, mrseam, pcr4 }
+    }
+    
+    /// Creates test proposal parameters with default values
+    pub fn test_params() -> Self {
+        Self {
+            mrtd: Bytes::from(vec![0xbb; 48]),
+            mrseam: Bytes::from(vec![0xcc; 48]),
+            pcr4: Bytes::from(vec![0xdd; 48]),
+        }
     }
 }
 
-// Generate contract bindings for the multisig contract
-sol! {
-    #[sol(rpc)]
-    interface MultisigUpgradeOperator {
-        function createProposal(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status) external returns (bytes32);
-        function vote(bytes32 proposalId, bool approved) external;
-        function executeProposal(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status, uint256 nonce) external;
-        function getVoteCount(bytes32 proposalId) external view returns (uint256 approvalCount, uint256 totalVotes);
-        function canExecute(bytes32 proposalId) external view returns (bool);
-        function computeProposalId(bytes rootfs_hash, bytes mrtd, bytes rtmr0, bytes rtmr3, bool status, uint256 nonce) external pure returns (bytes32);
-        function proposalNonce() external view returns (uint256);
-        function signer1() external view returns (address);
-        function signer2() external view returns (address);
-        function signer3() external view returns (address);
-        function upgradeOperator() external view returns (address);
-        function setUpgradeOperator(address _upgradeOperator) external;
-        function factory() external view returns (address);
-    }
-}
+
 
 // Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_SK: &str =
@@ -323,10 +318,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
 /// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
 /// * `sk` - A string slice representing the private key used to sign the transaction.
 /// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
-/// * `rootfs_hash` - The rootfs hash (32 bytes).
-/// * `mrtd` - The MRTD value (48 bytes).
-/// * `rtmr0` - The RTMR0 value (48 bytes).
-/// * `rtmr3` - The RTMR3 value (48 bytes).
+/// * `params` - The proposal parameters for the proposal.
 /// * `status` - The status to set.
 ///
 /// # Returns
@@ -336,10 +328,7 @@ pub async fn create_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    rootfs_hash: Bytes,
-    mrtd: Bytes,
-    rtmr0: Bytes,
-    rtmr3: Bytes,
+    params: &ProposalParams,
     status: bool,
 ) -> Result<([u8; 32], u64), anyhow::Error> {
     // Set up signer with the provided sk
@@ -360,11 +349,10 @@ pub async fn create_multisig_proposal(
         .map_err(|e| anyhow::anyhow!("Failed to get current nonce: {:?}", e))?;
 
     // Create proposal
-    let create_tx = multisig_contract.createProposal(
-        rootfs_hash.clone(),
-        mrtd.clone(),
-        rtmr0.clone(),
-        rtmr3.clone(),
+    let create_tx = multisig_contract.createProposalV1(
+        params.mrtd.clone(),
+        params.mrseam.clone(),
+        params.pcr4.clone(),
         status,
     );
     let create_pending = create_tx
@@ -386,7 +374,7 @@ pub async fn create_multisig_proposal(
 
     // Compute the proposal ID using the new nonce
     let proposal_id = multisig_contract
-        .computeProposalId(rootfs_hash, mrtd, rtmr0, rtmr3, status, new_nonce)
+        .computeProposalIdV1(params.mrtd.clone(), params.mrseam.clone(), params.pcr4.clone(), status, new_nonce)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute proposal ID: {:?}", e))?;
@@ -453,10 +441,7 @@ pub async fn vote_on_multisig_proposal(
 /// * `multisig_address` - The address of the MultisigUpgradeOperator contract.
 /// * `sk` - A string slice representing the private key used to sign the transaction.
 /// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
-/// * `rootfs_hash` - The rootfs hash (32 bytes).
-/// * `mrtd` - The MRTD value (48 bytes).
-/// * `rtmr0` - The RTMR0 value (48 bytes).
-/// * `rtmr3` - The RTMR3 value (48 bytes).
+/// * `params` - The proposal parameters for the proposal.
 /// * `status` - The status to set.
 /// * `nonce` - The nonce to use for the proposal execution.
 ///
@@ -467,10 +452,7 @@ pub async fn execute_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    rootfs_hash: Bytes,
-    mrtd: Bytes,
-    rtmr0: Bytes,
-    rtmr3: Bytes,
+    params: &ProposalParams,
     status: bool,
     nonce: u64,
 ) -> Result<(), anyhow::Error> {
@@ -485,11 +467,10 @@ pub async fn execute_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Execute proposal
-    let execute_tx = multisig_contract.executeProposal(
-        rootfs_hash,
-        mrtd,
-        rtmr0,
-        rtmr3,
+    let execute_tx = multisig_contract.executeProposalV1(
+        params.mrtd.clone(),
+        params.mrseam.clone(),
+        params.pcr4.clone(),
         status,
         U256::from(nonce),
     );
@@ -577,41 +558,35 @@ pub async fn get_multisig_vote_count(
     ))
 }
 
-/// Checks if an MRTD configuration is approved in the UpgradeOperator contract.
+/// Checks if a proposal configuration is approved in the UpgradeOperator contract.
 ///
 /// # Arguments
 ///
 /// * `upgrade_operator_address` - The address of the UpgradeOperator contract.
 /// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
-/// * `rootfs_hash` - The rootfs hash (32 bytes).
-/// * `mrtd` - The MRTD value (48 bytes).
-/// * `rtmr0` - The RTMR0 value (48 bytes).
-/// * `rtmr3` - The RTMR3 value (48 bytes).
+/// * `params` - The proposal parameters to check.
 ///
 /// # Returns
 ///
-/// * `Result<bool, anyhow::Error>` - Returns true if the MRTD is approved, or an `anyhow::Error` if an error occurs.
-pub async fn check_mrtd_status(
+/// * `Result<bool, anyhow::Error>` - Returns true if the proposal is approved, or an `anyhow::Error` if an error occurs.
+pub async fn check_proposal_status(
     upgrade_operator_address: alloy::primitives::Address,
     rpc: &str,
-    rootfs_hash: Bytes,
-    mrtd: Bytes,
-    rtmr0: Bytes,
-    rtmr3: Bytes,
+    params: &ProposalParams,
 ) -> Result<bool, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
 
     // Create upgrade operator contract instance
     let upgrade_operator_contract =
-        crate::UpgradeOperator::new(upgrade_operator_address, std::sync::Arc::new(provider));
+        UpgradeOperator::new(upgrade_operator_address, std::sync::Arc::new(provider));
 
-    // Check MRTD status
+    // Check proposal status
     let status = upgrade_operator_contract
-        .get_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3)
+        .get_id_status_v1(params.mrtd.clone(), params.mrseam.clone(), params.pcr4.clone())
         .call()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to check MRTD status: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to check proposal status: {:?}", e))?;
 
     Ok(status)
 }
