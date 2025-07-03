@@ -1,6 +1,6 @@
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{Bytes},
+    primitives::Bytes,
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 
 // Import contract interfaces from contract_interface module
-use crate::contract_interface::{UpgradeOperatorFactory};
+use crate::contract_interface::UpgradeOperatorFactory;
 
 /// Prints a string to standard output and immediately flushes the output buffer.
 /// Useful to see prints immediately during long-running Cargo tests.
@@ -20,7 +20,6 @@ pub fn print_flush<S: AsRef<str>>(s: S) {
     write!(handle, "{}", s.as_ref()).unwrap();
     handle.flush().unwrap();
 }
-
 
 // Anvil's first secret key that they publically expose and fund for testing
 pub const ANVIL_ALICE_SK: &str =
@@ -283,4 +282,3 @@ pub async fn deploy_upgrade_operator_with_multisig(
         predicted_multisig_address,
     ))
 }
-

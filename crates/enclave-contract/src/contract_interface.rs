@@ -1,14 +1,13 @@
 //! Contract interface definitions and types
 
 use alloy::{
-    sol,
-    primitives::{Bytes, U256},
     network::{EthereumWallet, TransactionBuilder},
+    primitives::{Bytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
+    sol,
 };
-
 
 // Generate contract bindings for the factory
 sol! {
@@ -56,15 +55,14 @@ sol! {
     }
 }
 
-
 /// Represents the proposal parameters for upgrade validation
 /// This struct makes it easy to change the parameters in the future
 /// To change parameters, just modify this struct and update the contract interfaces
 #[derive(Debug, Clone)]
 pub struct ProposalParamsV1 {
-    pub mrtd: Bytes,      // 48 bytes
-    pub mrseam: Bytes,    // 48 bytes
-    pub pcr4: Bytes,      // 48 bytes
+    pub mrtd: Bytes,   // 48 bytes
+    pub mrseam: Bytes, // 48 bytes
+    pub pcr4: Bytes,   // 48 bytes
 }
 
 impl ProposalParamsV1 {
@@ -72,7 +70,7 @@ impl ProposalParamsV1 {
     pub fn new(mrtd: Bytes, mrseam: Bytes, pcr4: Bytes) -> Self {
         Self { mrtd, mrseam, pcr4 }
     }
-    
+
     /// Creates test proposal parameters with default values
     pub fn test_params() -> Self {
         Self {
@@ -146,7 +144,13 @@ pub async fn create_multisig_proposal(
 
     // Compute the proposal ID using the new nonce
     let proposal_id = multisig_contract
-        .computeProposalIdV1(params.mrtd.clone(), params.mrseam.clone(), params.pcr4.clone(), status, new_nonce)
+        .computeProposalIdV1(
+            params.mrtd.clone(),
+            params.mrseam.clone(),
+            params.pcr4.clone(),
+            status,
+            new_nonce,
+        )
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to compute proposal ID: {:?}", e))?;
@@ -355,7 +359,11 @@ pub async fn check_proposal_status_v1(
 
     // Check proposal status
     let status = upgrade_operator_contract
-        .get_id_status_v1(params.mrtd.clone(), params.mrseam.clone(), params.pcr4.clone())
+        .get_id_status_v1(
+            params.mrtd.clone(),
+            params.mrseam.clone(),
+            params.pcr4.clone(),
+        )
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to check proposal status: {:?}", e))?;

@@ -1,7 +1,8 @@
 use enclave_contract::{
-    can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal, deploy_factory,
-    deploy_upgrade_operator_with_multisig, execute_multisig_proposal, get_multisig_vote_count,
-    print_flush, vote_on_multisig_proposal, ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
+    can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal,
+    deploy_factory, deploy_upgrade_operator_with_multisig, execute_multisig_proposal,
+    get_multisig_vote_count, print_flush, vote_on_multisig_proposal, ProposalParamsV1,
+    ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 use std::thread::sleep;
 use std::time::Duration;
@@ -72,15 +73,10 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     print_flush("Creating multisig proposal...\n");
 
     // Create a proposal to set MRTD
-    let (proposal_id, nonce) = create_multisig_proposal(
-        multisig_address,
-        ANVIL_ALICE_SK,
-        reth_rpc,
-        &params,
-        status,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("multisig workflow failed to create proposal: {:?}", e))?;
+    let (proposal_id, nonce) =
+        create_multisig_proposal(multisig_address, ANVIL_ALICE_SK, reth_rpc, &params, status)
+            .await
+            .map_err(|e| anyhow::anyhow!("multisig workflow failed to create proposal: {:?}", e))?;
 
     print_flush(format!(
         "Proposal created with ID: {:?}, nonce: {}\n",
@@ -192,16 +188,19 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     assert!(can_execute, "Proposal should be executable with 2 votes");
 
     // Check initial proposal status (should be false)
-    let initial_proposal_status = check_proposal_status_v1(
-        upgrade_operator_address,
-        reth_rpc,
-        &params,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check initial proposal status: {:?}", e))?;
+    let initial_proposal_status =
+        check_proposal_status_v1(upgrade_operator_address, reth_rpc, &params)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to check initial proposal status: {:?}", e))?;
 
-    print_flush(format!("Initial proposal status: {}\n", initial_proposal_status));
-    assert!(!initial_proposal_status, "Initial proposal status should be false");
+    print_flush(format!(
+        "Initial proposal status: {}\n",
+        initial_proposal_status
+    ));
+    assert!(
+        !initial_proposal_status,
+        "Initial proposal status should be false"
+    );
 
     print_flush("Executing proposal...\n");
 
@@ -223,16 +222,19 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     print_flush("Checking final proposal status...\n");
 
     // Check final proposal status (should be true)
-    let final_proposal_status = check_proposal_status_v1(
-        upgrade_operator_address,
-        reth_rpc,
-        &params,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check final proposal status: {:?}", e))?;
+    let final_proposal_status =
+        check_proposal_status_v1(upgrade_operator_address, reth_rpc, &params)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to check final proposal status: {:?}", e))?;
 
-    print_flush(format!("Final proposal status: {}\n", final_proposal_status));
-    assert!(final_proposal_status, "Final proposal status should be true");
+    print_flush(format!(
+        "Final proposal status: {}\n",
+        final_proposal_status
+    ));
+    assert!(
+        final_proposal_status,
+        "Final proposal status should be true"
+    );
 
     // Test that the proposal cannot be executed again
     let can_execute_again = can_execute_multisig_proposal(multisig_address, reth_rpc, proposal_id)

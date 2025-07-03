@@ -1,6 +1,6 @@
 use enclave_contract::{
-    deploy_factory, deploy_upgrade_operator_with_multisig, check_proposal_status_v1, send_eth,
-    ANVIL_ALICE_SK, ANVIL_BOB_SK, ProposalParamsV1,
+    check_proposal_status_v1, deploy_factory, deploy_upgrade_operator_with_multisig, send_eth,
+    ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 
 use seismic_enclave::request_types::{
@@ -110,13 +110,9 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // Create test proposal parameters using the new structure
     let test_params = ProposalParamsV1::test_params();
 
-    let _result = check_proposal_status_v1(
-        operator_address,
-        reth_rpc,
-        &test_params,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check proposal status: {:?}", e))?;
+    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to check proposal status: {:?}", e))?;
 
     // Send ETH transactions to trigger the reth persistence threshold
     // and have the first block save to disk
@@ -176,17 +172,13 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     print_flush("Finished restoring. Checking operator contract...");
     print_flush(format!("Sleeping for {} seconds... \n", sleep_sec));
     sleep(Duration::from_secs(sleep_sec)); // wait to avoid a connection refused error
-    
+
     // Create test proposal parameters using the new structure
     let test_params = ProposalParamsV1::test_params();
 
-    let _result = check_proposal_status_v1(
-        operator_address,
-        reth_rpc,
-        &test_params,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to check proposal status: {:?}", e))?;
+    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to check proposal status: {:?}", e))?;
 
     Ok(())
 }
