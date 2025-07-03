@@ -18,7 +18,7 @@ pub enum BootError {
 }
 
 /// Command to boot the enclave's key manager
-pub async fn boot_enclave(ip: IpAddr, port: u16) -> Result<(), BootError> {
+pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> {
     let client = EnclaveClientBuilder::new()
         .ip(ip.to_string())
         .port(port)
@@ -52,5 +52,12 @@ pub async fn boot_enclave(ip: IpAddr, port: u16) -> Result<(), BootError> {
         return Err(BootError::GetPurposeKeysFailed(e.to_string()));
     };
 
+    Ok(())
+}
+
+/// Boot the enclave's key manager synchronously
+pub fn boot_enclave_sync(ip: IpAddr, port: u16) -> Result<(), BootError> {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(boot_enclave_async(ip, port))?;
     Ok(())
 }
