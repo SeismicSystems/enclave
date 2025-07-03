@@ -2,10 +2,9 @@
 use std::net::IpAddr;
 use std::time::Duration;
 
-use seismic_enclave::client::EnclaveClientBuilder;
-use seismic_enclave::request_types::keys::GetPurposeKeysRequest;
-use seismic_enclave::rpc::EnclaveApiClient;
-
+use crate::client::EnclaveClientBuilder;
+use crate::request_types::keys::GetPurposeKeysRequest;
+use crate::rpc::EnclaveApiClient;
 
 /// Errors that can occur when booting the enclave
 #[derive(Debug)]

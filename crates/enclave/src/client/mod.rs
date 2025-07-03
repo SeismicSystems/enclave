@@ -7,6 +7,7 @@
 pub mod client;
 pub mod mock;
 pub mod rpc;
+pub mod booter;
 
 pub use client::*;
 pub use mock::*;
