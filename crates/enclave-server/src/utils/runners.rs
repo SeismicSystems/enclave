@@ -5,8 +5,8 @@
 
 use crate::attestation::seismic_aa_mock;
 use crate::attestation::SeismicAttestationAgent;
-use crate::utils::test_utils::read_vector_txt;
 use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
+use crate::utils::test_utils::read_vector_txt;
 use attestation_agent::AttestationAPIs;
 
 use anyhow::Ok;
