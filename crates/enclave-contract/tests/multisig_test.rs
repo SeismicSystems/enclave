@@ -1,7 +1,7 @@
 use enclave_contract::{
-    can_execute_multisig_proposal, check_proposal_status, create_multisig_proposal, deploy_factory,
+    can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal, deploy_factory,
     deploy_upgrade_operator_with_multisig, execute_multisig_proposal, get_multisig_vote_count,
-    print_flush, vote_on_multisig_proposal, ProposalParams, ANVIL_ALICE_SK, ANVIL_BOB_SK,
+    print_flush, vote_on_multisig_proposal, ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 use std::thread::sleep;
 use std::time::Duration;
@@ -66,7 +66,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     sleep(Duration::from_secs(2));
 
     // Test data for proposal
-    let params = ProposalParams::test_params();
+    let params = ProposalParamsV1::test_params();
     let status = true;
 
     print_flush("Creating multisig proposal...\n");
@@ -192,7 +192,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     assert!(can_execute, "Proposal should be executable with 2 votes");
 
     // Check initial proposal status (should be false)
-    let initial_proposal_status = check_proposal_status(
+    let initial_proposal_status = check_proposal_status_v1(
         upgrade_operator_address,
         reth_rpc,
         &params,
@@ -223,7 +223,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     print_flush("Checking final proposal status...\n");
 
     // Check final proposal status (should be true)
-    let final_proposal_status = check_proposal_status(
+    let final_proposal_status = check_proposal_status_v1(
         upgrade_operator_address,
         reth_rpc,
         &params,

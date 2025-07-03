@@ -1,6 +1,6 @@
 use enclave_contract::{
-    deploy_factory, deploy_upgrade_operator_with_multisig, provider_check_mrtd, send_eth,
-    ANVIL_ALICE_SK, ANVIL_BOB_SK,
+    deploy_factory, deploy_upgrade_operator_with_multisig, check_proposal_status_v1, send_eth,
+    ANVIL_ALICE_SK, ANVIL_BOB_SK, ProposalParamsV1,
 };
 
 use seismic_enclave::request_types::{
@@ -17,7 +17,6 @@ use seismic_enclave_server::utils::service::reth_is_running;
 #[cfg(feature = "supervisorctl")]
 use seismic_enclave_server::utils::supervisorctl::reth_is_running;
 
-use alloy::primitives::Bytes;
 use seismic_enclave_server::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use std::fs;
 use std::net::SocketAddr;
@@ -107,6 +106,18 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         operator_address
     ));
 
+    // Double check that we can currently ready the contract
+    // Create test proposal parameters using the new structure
+    let test_params = ProposalParamsV1::test_params();
+
+    let _result = check_proposal_status_v1(
+        operator_address,
+        reth_rpc,
+        &test_params,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to check proposal status: {:?}", e))?;
+
     // Send ETH transactions to trigger the reth persistence threshold
     // and have the first block save to disk
     // based on the assumption that reth is run with the --dev.block-max-transactions 1 flag
@@ -128,7 +139,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     )
     .await
     .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
-    print_flush("Sent ETH. Starting to prepare snapshot and restore");
+    print_flush("Sent ETH. Starting to prepare snapshot and restore\n");
 
     sleep(Duration::from_secs(2));
 
@@ -165,14 +176,17 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     print_flush("Finished restoring. Checking operator contract...");
     print_flush(format!("Sleeping for {} seconds... \n", sleep_sec));
     sleep(Duration::from_secs(sleep_sec)); // wait to avoid a connection refused error
-    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-    let mrtd = Bytes::from(vec![0x00; 48]);
-    let rtmr0 = Bytes::from(vec![0x00; 48]);
-    let rtmr3 = Bytes::from(vec![0x00; 48]);
+    
+    // Create test proposal parameters using the new structure
+    let test_params = ProposalParamsV1::test_params();
 
-    let _result = provider_check_mrtd(rootfs_hash, mrtd, rtmr0, rtmr3)
-        .await
-        .unwrap();
+    let _result = check_proposal_status_v1(
+        operator_address,
+        reth_rpc,
+        &test_params,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to check proposal status: {:?}", e))?;
 
     Ok(())
 }
