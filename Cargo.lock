@@ -4297,6 +4297,7 @@ dependencies = [
  "aes-gcm",
  "anyhow",
  "base64 0.22.1",
+ "hex",
  "hkdf",
  "jsonrpsee",
  "kbs-types",
