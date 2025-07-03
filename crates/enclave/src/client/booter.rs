@@ -7,13 +7,16 @@ use crate::request_types::keys::GetPurposeKeysRequest;
 use crate::rpc::EnclaveApiClient;
 
 /// Errors that can occur when booting the enclave
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum BootError {
     /// Error when the genesis boot fails
+    #[error("Genesis boot failed: {0}")]
     GenesisFailed(String),
     /// Error when the complete boot fails
+    #[error("Complete boot failed: {0}")]
     CompleteFailed(String),
     /// Error when getting the purpose keys fails
+    #[error("Get purpose keys failed: {0}")]
     GetPurposeKeysFailed(String),
 }
 
