@@ -7,7 +7,8 @@
 pub mod client;
 pub mod mock;
 pub mod rpc;
-pub mod booter;
+pub (crate) mod booter;
 
 pub use client::*;
 pub use mock::*;
+pub use booter::{boot_enclave, BootError};
