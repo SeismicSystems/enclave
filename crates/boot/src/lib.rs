@@ -3,6 +3,7 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use seismic_enclave::client::EnclaveClientBuilder;
+use seismic_enclave::request_types::keys::GetPurposeKeysRequest;
 use seismic_enclave::rpc::EnclaveApiClient;
 
 
@@ -13,6 +14,8 @@ pub enum BootError {
     GenesisFailed(String),
     /// Error when the complete boot fails
     CompleteFailed(String),
+    /// Error when getting the purpose keys fails
+    GetPurposeKeysFailed(String),
 }
 
 /// Command to boot the enclave's key manager
@@ -24,7 +27,25 @@ pub async fn boot_enclave(ip: IpAddr, port: u16) -> Result<(), BootError> {
         .build()
         .unwrap();
 
-    client.boot_genesis().await.map_err(|e| BootError::GenesisFailed(e.to_string()))?;
-    client.complete_boot().await.map_err(|e| BootError::CompleteFailed(e.to_string()))?;
+    if let Ok(_) = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await {
+        tracing::warn!("Enclave already booted. Skipping genesis boot.");
+        return Ok(());
+    };
+
+    if let Err(e) = client.boot_genesis().await {
+        tracing::error!("Genesis boot failed. Error:\n{}", e);
+        return Err(BootError::GenesisFailed(e.to_string()));
+    };
+
+    if let Err(e) = client.complete_boot().await {
+        tracing::error!("Complete boot failed. Error:\n{}", e);
+        return Err(BootError::CompleteFailed(e.to_string()));
+    };
+
+    if let Err(e) = client.get_purpose_keys(GetPurposeKeysRequest { epoch: 0 }).await {
+        tracing::error!("getPurposeKeys failed. Error:\n{}", e);
+        return Err(BootError::GetPurposeKeysFailed(e.to_string()));
+    };
+
     Ok(())
 }

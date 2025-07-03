@@ -11,6 +11,7 @@ readme.workspace = true
 [dependencies]
 seismic-enclave = { path = "../enclave" }
 tokio.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true
