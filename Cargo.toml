@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/enclave",
     "crates/enclave/derive",
-    "crates/enclave-server",
+    "crates/enclave-server", "crates/boot",
 ]
 
 [workspace.lints]
