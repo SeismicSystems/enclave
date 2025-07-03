@@ -38,12 +38,12 @@ pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> 
     };
 
     if let Err(e) = client.boot_genesis().await {
-        tracing::error!("Genesis boot failed. Error:\n{}", e);
+        tracing::error!("{}", e);
         return Err(BootError::GenesisFailed(e.to_string()));
     };
 
     if let Err(e) = client.complete_boot().await {
-        tracing::error!("Complete boot failed. Error:\n{}", e);
+        tracing::error!("{}", e);
         return Err(BootError::CompleteFailed(e.to_string()));
     };
 
@@ -51,7 +51,7 @@ pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> 
         .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
         .await
     {
-        tracing::error!("getPurposeKeys failed. Error:\n{}", e);
+        tracing::error!("{}", e);
         return Err(BootError::GetPurposeKeysFailed(e.to_string()));
     };
 
