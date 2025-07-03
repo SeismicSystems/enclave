@@ -19,6 +19,10 @@ package policy
 default allow = false
 "#;
 
+
+// TODO: eval if we need 7 and 11. and/or anything else. 
+// See https://confidentialcontainers.org/blog/2024/03/01/building-trust-into-os-images-for-confidential-containers/
+// This article is written by Magnus Kulke, a CoCo maintainer who works at Microsoft
 pub const YOCTO_POLICY: &str = r#"
 package policy
 
