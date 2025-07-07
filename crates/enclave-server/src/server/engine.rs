@@ -21,7 +21,7 @@ use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::rpc_missing_snapshot_error;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
-    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_quote_error, rpc_conflict_error,
+    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error,
     rpc_internal_server_error,
 };
 
@@ -97,7 +97,7 @@ where
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_quote_error(anyhow::anyhow!(
+                return Err(rpc_internal_server_error(anyhow::anyhow!(
                     "Issue in getting the evidence"
                 )));
             }
@@ -226,7 +226,6 @@ where
             .map_err(|e| rpc_internal_server_error(e))?;
         if !valid_upgrade {
             return Err(rpc_bad_evidence_error(anyhow::anyhow!(
-                // TODO: bad evidence vs bad quote?
                 "Attestation TCB is not approved in the upgrade contract"
             )));
         }
