@@ -221,7 +221,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
         .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
 
     // Compute the predicted addresses
-    let predictedmultisig_address = factory_contract
+    let predicted_multisig_address = factory_contract
         .computeMultisigUpgradeOperatorAddress(
             multisig_salt.into(),
             alloy::primitives::Address::ZERO,
@@ -238,7 +238,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
     let predicted_upgrade_operator_address = factory_contract
         .computeUpgradeOperatorAddressWithOwner(
             upgrade_operator_salt.into(),
-            predictedmultisig_address,
+            predicted_multisig_address,
         )
         .call()
         .await
@@ -254,7 +254,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
         .map_err(|e| anyhow::anyhow!("Failed to check if UpgradeOperator is deployed: {:?}", e))?;
 
     let is_multisig_deployed = factory_contract
-        .isDeployed(predictedmultisig_address)
+        .isDeployed(predicted_multisig_address)
         .call()
         .await
         .map_err(|e| {
@@ -282,12 +282,12 @@ pub async fn deploy_upgrade_operator_with_multisig(
     );
     println!(
         "MultisigUpgradeOperator successfully deployed via CREATE2 at: {:?}",
-        predictedmultisig_address
+        predicted_multisig_address
     );
 
     Ok((
         predicted_upgrade_operator_address,
-        predictedmultisig_address,
+        predicted_multisig_address,
     ))
 }
 

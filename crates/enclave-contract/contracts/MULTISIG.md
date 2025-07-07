@@ -1,5 +1,3 @@
-# TODO: This README is out of date
-
 # MultisigUpgradeOperator Contract
 
 This contract implements a 2-of-3 multisig control mechanism for the UpgradeOperator contract. It requires two out of three authorized signers to approve any MRTD (Measured Root of Trust for Dynamic Launch) changes.
