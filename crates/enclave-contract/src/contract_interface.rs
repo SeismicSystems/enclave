@@ -366,7 +366,7 @@ pub async fn check_proposal_status_v1(
         )
         .call()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to check proposal status: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("check_proposal_status_v1 failed: {:?}", e))?;
 
     Ok(status)
 }

@@ -232,9 +232,9 @@ impl Booter {
 
         // Create ProposalParamsV1 struct
         let params = enclave_contract::ProposalParamsV1::new(
-            alloy::primitives::Bytes::from(pcr4_bytes),
-            alloy::primitives::Bytes::from(mr_seam_bytes),
             alloy::primitives::Bytes::from(mr_td_bytes),
+            alloy::primitives::Bytes::from(mr_seam_bytes),
+            alloy::primitives::Bytes::from(pcr4_bytes),
         );
 
         // Get contract address and RPC URL from environment variables
