@@ -1,9 +1,12 @@
 use enclave_contract::{
     can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal,
-    deploy_factory, deploy_upgrade_operator_with_multisig, execute_multisig_proposal,
+    execute_multisig_proposal,
     get_multisig_vote_count, print_flush, vote_on_multisig_proposal, ProposalParamsV1,
     ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
+use enclave_contract::upgrades_canonical_deploy;
+use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
+use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -15,53 +18,10 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     // Set path to the factory contract's json file
     let factory_json_path = "contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
     let reth_rpc = "http://localhost:8545";
+    let multisig_address = UPGRADE_MULTISIG_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
+    let upgrade_operator_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
 
-    // Use fixed salts for predictable testing
-    let upgrade_operator_salt: [u8; 32] = [
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
-        0x1f, 0x20,
-    ];
-
-    let multisig_salt: [u8; 32] = [
-        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
-        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e,
-        0x3f, 0x40,
-    ];
-
-    print_flush("Deploying factory contract...\n");
-
-    // Deploy the factory contract first
-    let factory_address = deploy_factory(factory_json_path, ANVIL_ALICE_SK, reth_rpc)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to deploy factory: {:?}", e))?;
-
-    print_flush(format!("Factory deployed at: {:?}\n", factory_address));
-
-    // Wait a bit for the transaction to be processed
-    sleep(Duration::from_secs(2));
-
-    print_flush("Deploying UpgradeOperator and MultisigUpgradeOperator via CREATE2...\n");
-
-    // Deploy both contracts using CREATE2 through the factory
-    let (upgrade_operator_address, multisig_address) = deploy_upgrade_operator_with_multisig(
-        factory_address,
-        ANVIL_ALICE_SK,
-        reth_rpc,
-        upgrade_operator_salt,
-        multisig_salt,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to deploy contracts via CREATE2: {:?}", e))?;
-
-    print_flush(format!(
-        "UpgradeOperator deployed at: {:?}\n",
-        upgrade_operator_address
-    ));
-    print_flush(format!(
-        "MultisigUpgradeOperator deployed at: {:?}\n",
-        multisig_address
-    ));
+    upgrades_canonical_deploy(factory_json_path, reth_rpc).await.unwrap();
 
     // Wait a bit for the transaction to be processed
     sleep(Duration::from_secs(2));

@@ -34,7 +34,9 @@ pub const ANVIL_CHARLIE_SK: &str =
 /// This is the address that the factory will deploy the UpgradeOperator to
 /// See the create2_test.rs test to see how this is computed
 /// TODO: Figure out how Seismic intends to make this constant consistent long-term
-pub const UPGRADE_OPERATOR_ADDRESS: &str = "0xb380dadc0214fb7092eb1ef4689b98716392ade1";
+pub const UPGRADE_OPERATOR_ADDRESS: &str = "0x32682e5afac75fa21a1da9e189f9a9733562fa1f";
+
+pub const UPGRADE_MULTISIG_ADDRESS: &str = "0x128d1fa74d487825b4f9215fed580f059a7b8c28";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {
@@ -287,4 +289,88 @@ pub async fn deploy_upgrade_operator_with_multisig(
         predicted_upgrade_operator_address,
         predicted_multisig_address,
     ))
+}
+
+
+/// Canonical deployment that ensures the upgrade operator contracts are deployed to the correct address.
+/// This function uses the known salt that will result in deployment to UPGRADE_OPERATOR_ADDRESS.
+/// It also deploys a MultisigUpgradeOperator that controls the UpgradeOperator.
+/// 
+/// To have things deployed to the expected address, the factory contract must be deployed consistently.
+/// We assume that the factory contract is deployed with the ALICE private key with nonce 0.
+///
+/// # Arguments
+///
+/// * `factory_json_path` - A string slice representing the path to the Foundry JSON artifact containing the factory contract's bytecode.
+/// * `rpc` - A string slice representing the RPC URL of the node.
+///
+pub async fn upgrades_canonical_deploy(
+    factory_json_path: &str,
+    rpc: &str,
+) -> Result<alloy::primitives::Address, anyhow::Error> {
+    print_flush("Starting canonical deployment...\n");
+    
+    // Use ALICE private key for canonical deployment
+    let sk = ANVIL_ALICE_SK;
+    
+    // Check that Alice's nonce is 0 (required for canonical deployment)
+    let signer: PrivateKeySigner = sk.parse().unwrap();
+    let alice_address = signer.address();
+    let rpc_url = reqwest::Url::parse(rpc).unwrap();
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+    let nonce = provider.get_transaction_count(alice_address).await
+        .map_err(|e| anyhow::anyhow!("failed to get Alice's nonce: {:?}", e))?;
+    println!("upgrades_canonical_deploy, Alice's nonce is {:?}", nonce);
+    if nonce != 0 {
+        return Err(anyhow::anyhow!(
+            "Alice's nonce must be 0 for canonical deployment, but it is {}",
+            nonce
+        ));
+    }
+    
+    
+    // Deploy factory contract first
+    let factory_address = deploy_factory(factory_json_path, sk, rpc)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to deploy factory: {:?}", e))?;
+    
+    // Use the canonical salt that will deploy to UPGRADE_OPERATOR_ADDRESS
+    // This salt is derived from the create2_test.rs test
+    let upgrade_operator_salt: [u8; 32] = [
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
+        0x1f, 0x20,
+    ];
+    
+    // Use a different salt for the multisig (from the original test)
+    let multisig_salt: [u8; 32] = [
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e,
+        0x3f, 0x40,
+    ];
+    
+    // Deploy both upgrade operator and multisig
+    let (operator_address, _multisig_address) = deploy_upgrade_operator_with_multisig(
+        factory_address,
+        sk,
+        rpc,
+        upgrade_operator_salt,
+        multisig_salt,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to deploy upgrade operator and multisig: {:?}", e))?;
+    
+    // Verify the upgrade operator is deployed to the correct address
+    let expected_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>()
+        .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_OPERATOR_ADDRESS: {:?}", e)).unwrap();
+    
+    if operator_address != expected_address {
+        return Err(anyhow::anyhow!(
+            "In upgrades_canonical_deploy, deployed address {:?} does not match expected canonical address {:?}",
+            operator_address,
+            expected_address
+        ));
+    }
+
+    Ok(operator_address)
 }
