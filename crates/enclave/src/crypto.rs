@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_aes_encrypt_decrypt() {
-        let aes_key_hex = "74fe123c5f693ae3de1598c9aeea4541e6b65be903ed8c3c625c63123b7c6113";
+        let aes_key_hex = "8d152c6c0f357cc49b7482a322afd9f7571478c12ca42ac2001e902f0e6f6af0";
         let aes_key_bytes = hex::decode(aes_key_hex).expect("Invalid hex string");
         let aes_key = Key::<Aes256Gcm>::from_slice(&aes_key_bytes);
 
@@ -377,6 +377,34 @@ mod tests {
         let encrypted_hex = "80c65f7fe3018bcb1309836334a2dd8c28d999f6b958019da187e0daa3";
         let encrypted_vec = hex::decode(encrypted_hex).expect("Invalid hex string");
         println!("Encrypted: {:?}", encrypted_vec);
+        println!("Encrypted hex: {:?}", hex::encode(encrypted));
+        // println!("Encrypted: {:?}", encrypted);
+    }
+
+    #[test]
+    fn test_aes_encrypt_decrypt_moonhatch() {
+        let aes_key_hex = "8d152c6c0f357cc49b7482a322afd9f7571478c12ca42ac2001e902f0e6f6af0";
+        let aes_key_bytes = hex::decode(aes_key_hex).expect("Invalid hex string");
+        let aes_key = Key::<Aes256Gcm>::from_slice(&aes_key_bytes);
+
+        let nonce_hex = "7da3a99bf0f90d56551d99ea";
+        let nonce_vec = hex::decode(nonce_hex).expect("Invalid hex string");
+        let nonce_bytes: [u8; AESGCM_NONCE_SIZE] = nonce_vec.try_into().expect("Invalid nonce");
+        let nonce = Nonce::from(nonce_bytes);
+        // println!("Nonce: {:?}", nonce);
+
+        let plaintext_hex = "7db5bd52000000000000000000000000000000000000000000000000000000000000dbb9";
+        let plaintext_vec = hex::decode(plaintext_hex).expect("Invalid hex string");
+        // let plaintext = Bytes::from(plaintext_vec);
+
+        let encrypted = aes_encrypt(&aes_key, plaintext_vec.as_slice(), nonce.clone()).unwrap();
+        let decrypted = aes_decrypt(&aes_key, &encrypted, nonce).unwrap();
+
+        assert_eq!(&plaintext_vec, &decrypted);
+
+        // let encrypted_hex = "80c65f7fe3018bcb1309836334a2dd8c28d999f6b958019da187e0daa3";
+        // let encrypted_vec = hex::decode(encrypted_hex).expect("Invalid hex string");
+        // println!("Encrypted: {:?}", encrypted_vec);
         println!("Encrypted hex: {:?}", hex::encode(encrypted));
         // println!("Encrypted: {:?}", encrypted);
     }
