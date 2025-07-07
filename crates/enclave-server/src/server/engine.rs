@@ -219,9 +219,8 @@ where
         // Check the tcb_status against the upgrade contract
         let claims = eval_response.claims.unwrap();
         let tcb_status = claims.tcb_status;
-        let valid_upgrade = self.booter.check_upgrade_contract(&tcb_status).map_err(
-            |e| rpc_internal_server_error(e)
-        )?;
+        let valid_upgrade = self.booter.check_upgrade_contract(&tcb_status).await
+            .map_err(|e| rpc_internal_server_error(e))?;
         if !valid_upgrade {
             return Err(rpc_bad_evidence_error(anyhow::anyhow!( // TODO: bad evidence vs bad quote?
                 "Attestation TCB is not approved in the upgrade contract"  
