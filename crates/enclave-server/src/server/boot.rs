@@ -250,8 +250,7 @@ impl Booter {
         let status =
             enclave_contract::check_proposal_status_v1(upgrade_operator_address, &rpc_url, &params)
                 .await
-                .map_err(|e| anyhow::anyhow!("Booter failed to check proposal status: {e}"))
-                .unwrap();
+                .map_err(|e| anyhow::anyhow!("Booter failed to check proposal status: {e}"))?;
 
         Ok(status)
     }
