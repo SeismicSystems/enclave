@@ -21,8 +21,7 @@ use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::rpc_missing_snapshot_error;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
-    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error,
-    rpc_internal_server_error,
+    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error, rpc_internal_server_error,
 };
 
 /// The main execution engine for secure enclave logic
