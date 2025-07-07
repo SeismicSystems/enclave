@@ -451,38 +451,6 @@ mod tests {
 
     #[serial(attestation_agent)]
     #[tokio::test]
-    async fn test_boot_share_root_key() {
-        if !is_sudo() {
-            panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
-        }
-
-        let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
-
-        let new_node_booter = Booter::mock();
-        let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
-        assert_eq!(
-            seismic_enclave::request_types::Data::Raw(new_node_booter.pk().serialize().to_vec()),
-            eval_context.clone().runtime_data.unwrap(),
-            "test misconfigured, attestation should be of the new booter's public key"
-        );
-        let resp = enclave_engine
-            .boot_share_root_key(ShareRootKeyRequest {
-                evidence: eval_context.evidence,
-                tee: eval_context.tee,
-                retriever_pk: new_node_booter.pk(),
-            })
-            .await
-            .unwrap();
-        let key_plaintext = new_node_booter.process_share_response(resp).unwrap(); // erroring due to mismatch
-        assert!(
-            key_plaintext == [0u8; 32],
-            "root key does not match expected mock value"
-        );
-        todo!("intentionally failing test so I can debug");
-    }
-
-    #[serial(attestation_agent)]
-    #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
         if !is_sudo() {
             panic!("test_complete_boot: skipped (requires sudo privileges)");

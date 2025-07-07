@@ -18,7 +18,7 @@ async fn test_boot_share_root_key() {
     if !is_sudo() {
         panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
     }
-    // assert!(reth_is_running(), "Test startup error: Reth is not running");
+    assert!(reth_is_running(), "Test startup error: Reth is not running");
 
     // Deploy upgrade operator contracts
     let factory_json_path = "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
@@ -47,5 +47,4 @@ async fn test_boot_share_root_key() {
         key_plaintext == [0u8; 32],
         "root key does not match expected mock value"
     );
-    todo!("intentionally failing test so I can debug");
 }

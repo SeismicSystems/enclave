@@ -176,7 +176,6 @@ impl Booter {
     }
 
     pub async fn check_upgrade_contract(&self, tcb_status: &str) -> Result<bool, anyhow::Error> {
-        println!("test params: {:?}", enclave_contract::ProposalParamsV1::test_params());
         // Parse the tcb_status JSON string to access specific fields
         let tcb_status_map: serde_json::Map<String, serde_json::Value> = 
             serde_json::from_str(&tcb_status)
@@ -217,9 +216,6 @@ impl Booter {
             .map_err(|e| anyhow::anyhow!("Failed to decode mr_seam hex: {e}"))?;
 
         // Ensure the bytes are the correct length as required by the contract
-        println!("pcr4_bytes length: {:?}", pcr4_bytes.len());
-        println!("mr_td_bytes length: {:?}", mr_td_bytes.len());
-        println!("mr_seam_bytes length: {:?}", mr_seam_bytes.len());
         if pcr4_bytes.len() != 32 {
             return Err(anyhow::anyhow!("pcr4 must be exactly 32 bytes, got {}", pcr4_bytes.len()));
         }
@@ -241,7 +237,6 @@ impl Booter {
         let upgrade_operator_address = enclave_contract::UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
         let rpc_url = "http://localhost:8545".to_string();
 
-        println!("real params: {:?}", params);
         // Check the proposal status against the onchain contract
         let status = enclave_contract::check_proposal_status_v1(
             upgrade_operator_address,
