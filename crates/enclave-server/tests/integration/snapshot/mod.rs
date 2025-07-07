@@ -110,8 +110,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // Create test proposal parameters using the new structure
     let test_params = ProposalParamsV1::test_params();
 
-    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params)
-        .await?;
+    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params).await?;
 
     // Send ETH transactions to trigger the reth persistence threshold
     // and have the first block save to disk
@@ -175,8 +174,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     // Create test proposal parameters using the new structure
     let test_params = ProposalParamsV1::test_params();
 
-    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params)
-        .await?;
+    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params).await?;
 
     Ok(())
 }

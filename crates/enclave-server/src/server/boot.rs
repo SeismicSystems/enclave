@@ -1,7 +1,10 @@
 //! This module contains logic for allowing an operator
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
+use alloy;
 use anyhow::anyhow;
+use enclave_contract;
+use hex;
 use kbs_types::Tee;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
@@ -13,9 +16,6 @@ use seismic_enclave::{crypto::Nonce, ecdh_decrypt, ecdh_encrypt};
 use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};
 use std::sync::Mutex;
 use tracing::info;
-use hex;
-use enclave_contract;
-use alloy;
 
 pub struct Booter {
     // pk and sk are the Booter's keys used to derive encryption keys for communication with other nodes
@@ -177,11 +177,9 @@ impl Booter {
 
     pub async fn check_upgrade_contract(&self, tcb_status: &str) -> Result<bool, anyhow::Error> {
         // Parse the tcb_status JSON string to access specific fields
-        let tcb_status_map: serde_json::Map<String, serde_json::Value> = 
+        let tcb_status_map: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(&tcb_status)
-            .map_err(|e| anyhow::anyhow!(
-                "Failed to parse tcb_status JSON: {e}"
-            ))?;
+                .map_err(|e| anyhow::anyhow!("Failed to parse tcb_status JSON: {e}"))?;
 
         let pcr4_hex = tcb_status_map
             .get("aztdxvtpm.tpm.pcr04")
@@ -190,7 +188,7 @@ impl Booter {
             .ok_or(anyhow::anyhow!(
                 "Failed to parse tcb_status JSON field: pcr04"
             ))?;
-        
+
         let mr_td_hex = tcb_status_map
             .get("aztdxvtpm.quote.body.mr_td")
             .and_then(|v| v.as_str())
@@ -198,7 +196,7 @@ impl Booter {
             .ok_or(anyhow::anyhow!(
                 "Failed to parse tcb_status JSON field: mrtd"
             ))?;
-        
+
         let mr_seam_hex = tcb_status_map
             .get("aztdxvtpm.quote.body.mr_seam")
             .and_then(|v| v.as_str())
@@ -217,13 +215,22 @@ impl Booter {
 
         // Ensure the bytes are the correct length as required by the contract
         if pcr4_bytes.len() != 32 {
-            return Err(anyhow::anyhow!("pcr4 must be exactly 32 bytes, got {}", pcr4_bytes.len()));
+            return Err(anyhow::anyhow!(
+                "pcr4 must be exactly 32 bytes, got {}",
+                pcr4_bytes.len()
+            ));
         }
         if mr_td_bytes.len() != 48 {
-            return Err(anyhow::anyhow!("mr_td must be exactly 48 bytes, got {}", mr_td_bytes.len()));
+            return Err(anyhow::anyhow!(
+                "mr_td must be exactly 48 bytes, got {}",
+                mr_td_bytes.len()
+            ));
         }
         if mr_seam_bytes.len() != 48 {
-            return Err(anyhow::anyhow!("mr_seam must be exactly 48 bytes, got {}", mr_seam_bytes.len()));
+            return Err(anyhow::anyhow!(
+                "mr_seam must be exactly 48 bytes, got {}",
+                mr_seam_bytes.len()
+            ));
         }
 
         // Create ProposalParamsV1 struct
@@ -234,18 +241,17 @@ impl Booter {
         );
 
         // Get contract address and RPC URL from environment variables
-        let upgrade_operator_address = enclave_contract::UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
+        let upgrade_operator_address = enclave_contract::UPGRADE_OPERATOR_ADDRESS
+            .parse::<alloy::primitives::Address>()
+            .unwrap();
         let rpc_url = "http://localhost:8545".to_string();
 
         // Check the proposal status against the onchain contract
-        let status = enclave_contract::check_proposal_status_v1(
-            upgrade_operator_address,
-            &rpc_url,
-            &params,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Booter failed to check proposal status: {e}"))
-        .unwrap();
+        let status =
+            enclave_contract::check_proposal_status_v1(upgrade_operator_address, &rpc_url, &params)
+                .await
+                .map_err(|e| anyhow::anyhow!("Booter failed to check proposal status: {e}"))
+                .unwrap();
 
         Ok(status)
     }

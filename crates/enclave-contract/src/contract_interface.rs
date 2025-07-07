@@ -2,7 +2,7 @@
 
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{Bytes, U256, bytes},
+    primitives::{bytes, Bytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -126,10 +126,12 @@ pub async fn create_multisig_proposal(
         params.pcr4.clone(),
         status,
     );
-    let create_pending = create_tx
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("create_multisig_proposal create proposal tx failed: {:?}", e))?;
+    let create_pending = create_tx.send().await.map_err(|e| {
+        anyhow::anyhow!(
+            "create_multisig_proposal create proposal tx failed: {:?}",
+            e
+        )
+    })?;
 
     let _create_receipt = create_pending
         .watch()

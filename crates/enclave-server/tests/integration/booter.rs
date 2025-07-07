@@ -21,9 +21,12 @@ async fn test_boot_share_root_key() {
     assert!(reth_is_running(), "Test startup error: Reth is not running");
 
     // Deploy upgrade operator contracts
-    let factory_json_path = "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
+    let factory_json_path =
+        "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
     let reth_rpc = "http://localhost:8545";
-    upgrades_canonical_deploy(factory_json_path, reth_rpc).await.unwrap();
+    upgrades_canonical_deploy(factory_json_path, reth_rpc)
+        .await
+        .unwrap();
 
     // Test the booter with the canonical deployment
     let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;

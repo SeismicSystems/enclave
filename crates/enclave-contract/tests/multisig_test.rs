@@ -1,12 +1,11 @@
-use enclave_contract::{
-    can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal,
-    execute_multisig_proposal,
-    get_multisig_vote_count, print_flush, vote_on_multisig_proposal, ProposalParamsV1,
-    ANVIL_ALICE_SK, ANVIL_BOB_SK,
-};
 use enclave_contract::upgrades_canonical_deploy;
 use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
 use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
+use enclave_contract::{
+    can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal,
+    execute_multisig_proposal, get_multisig_vote_count, print_flush, vote_on_multisig_proposal,
+    ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
+};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -18,10 +17,16 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     // Set path to the factory contract's json file
     let factory_json_path = "contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
     let reth_rpc = "http://localhost:8545";
-    let multisig_address = UPGRADE_MULTISIG_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
-    let upgrade_operator_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>().unwrap();
+    let multisig_address = UPGRADE_MULTISIG_ADDRESS
+        .parse::<alloy::primitives::Address>()
+        .unwrap();
+    let upgrade_operator_address = UPGRADE_OPERATOR_ADDRESS
+        .parse::<alloy::primitives::Address>()
+        .unwrap();
 
-    upgrades_canonical_deploy(factory_json_path, reth_rpc).await.unwrap();
+    upgrades_canonical_deploy(factory_json_path, reth_rpc)
+        .await
+        .unwrap();
 
     // Wait a bit for the transaction to be processed
     sleep(Duration::from_secs(2));
