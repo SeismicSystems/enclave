@@ -2,7 +2,7 @@
 
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{Bytes, U256},
+    primitives::{Bytes, U256, bytes},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -60,9 +60,9 @@ sol! {
 /// To change parameters, just modify this struct and update the contract interfaces
 #[derive(Debug, Clone)]
 pub struct ProposalParamsV1 {
-    pub mrtd: Bytes,   // 32 bytes
+    pub mrtd: Bytes,   // 48 bytes
     pub mrseam: Bytes, // 48 bytes
-    pub pcr4: Bytes,   // 48 bytes
+    pub pcr4: Bytes,   // 32 bytes
 }
 
 impl ProposalParamsV1 {
@@ -71,12 +71,13 @@ impl ProposalParamsV1 {
         Self { mrtd, mrseam, pcr4 }
     }
 
-    /// Creates test proposal parameters with default values
+    /// Creates test proposal parameters
+    /// Based off the devbox values
     pub fn test_params() -> Self {
         Self {
-            mrtd: Bytes::from(vec![0xbb; 48]),
-            mrseam: Bytes::from(vec![0xcc; 48]),
-            pcr4: Bytes::from(vec![0xdd; 32]),
+            mrtd: bytes!("cbd40696f617d42254fc7037469cbcf1414fe173678798cfa1070b7d40e26fa8175b99d0cd245994278f980dec73146a"),
+            mrseam: bytes!("9790d89a10210ec6968a773cee2ca05b5aa97309f36727a968527be4606fc19e6f73acce350946c9d46a9bf7a63f8430"),
+            pcr4: bytes!("6f2f7d9a42b35a2f8f9d7bf366ca3e369a45d004f3ac49b0a93785fe817c82b5"),
         }
     }
 }
