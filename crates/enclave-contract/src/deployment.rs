@@ -34,9 +34,9 @@ pub const ANVIL_CHARLIE_SK: &str =
 /// This is the address that the factory will deploy the UpgradeOperator to
 /// See the create2_test.rs test to see how this is computed
 /// TODO: Figure out how Seismic intends to make this constant consistent long-term
-pub const UPGRADE_OPERATOR_ADDRESS: &str = "0x99119845b1e6848bad5c63cd79b7db4cf1d3965a";
+pub const UPGRADE_OPERATOR_ADDRESS: &str = "0x029d00ccf77d4ec933e6cb72cbd0c6a9444a5ccd";
 
-pub const UPGRADE_MULTISIG_ADDRESS: &str = "0x361c8cbe4e897cbf07bc3c224bd72f7eac7a42cb";
+pub const UPGRADE_MULTISIG_ADDRESS: &str = "0xd8f0112918c33722c051a07defabda6009d3970b";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {
@@ -221,7 +221,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
         .map_err(|e| anyhow::anyhow!("Failed to get CREATE2 deployment receipt: {:?}", e))?;
 
     // Compute the predicted addresses
-    let predicted_multisig_address = factory_contract
+    let predictedmultisig_address = factory_contract
         .computeMultisigUpgradeOperatorAddress(
             multisig_salt.into(),
             alloy::primitives::Address::ZERO,
@@ -238,7 +238,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
     let predicted_upgrade_operator_address = factory_contract
         .computeUpgradeOperatorAddressWithOwner(
             upgrade_operator_salt.into(),
-            predicted_multisig_address,
+            predictedmultisig_address,
         )
         .call()
         .await
@@ -254,7 +254,7 @@ pub async fn deploy_upgrade_operator_with_multisig(
         .map_err(|e| anyhow::anyhow!("Failed to check if UpgradeOperator is deployed: {:?}", e))?;
 
     let is_multisig_deployed = factory_contract
-        .isDeployed(predicted_multisig_address)
+        .isDeployed(predictedmultisig_address)
         .call()
         .await
         .map_err(|e| {
@@ -282,12 +282,12 @@ pub async fn deploy_upgrade_operator_with_multisig(
     );
     println!(
         "MultisigUpgradeOperator successfully deployed via CREATE2 at: {:?}",
-        predicted_multisig_address
+        predictedmultisig_address
     );
 
     Ok((
         predicted_upgrade_operator_address,
-        predicted_multisig_address,
+        predictedmultisig_address,
     ))
 }
 
@@ -319,11 +319,11 @@ pub async fn upgrades_canonical_deploy(
     // If both addresses have code, contracts are deployed
     let expected_operator_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>()
         .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_OPERATOR_ADDRESS: {:?}", e))?;
-    let expected_multisig_address = UPGRADE_MULTISIG_ADDRESS.parse::<alloy::primitives::Address>()
+    let expectedmultisig_address = UPGRADE_MULTISIG_ADDRESS.parse::<alloy::primitives::Address>()
         .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_MULTISIG_ADDRESS: {:?}", e))?;
     let operator_code = provider.get_code_at(expected_operator_address).await
         .map_err(|e| anyhow::anyhow!("failed to get operator contract code: {:?}", e))?;
-    let multisig_code = provider.get_code_at(expected_multisig_address).await
+    let multisig_code = provider.get_code_at(expectedmultisig_address).await
         .map_err(|e| anyhow::anyhow!("failed to get multisig contract code: {:?}", e))?;
     if !operator_code.is_empty() && !multisig_code.is_empty() {
         return Ok(expected_operator_address);
@@ -361,7 +361,7 @@ pub async fn upgrades_canonical_deploy(
     ];
     
     // Deploy both upgrade operator and multisig
-    let (operator_address, _multisig_address) = deploy_upgrade_operator_with_multisig(
+    let (operator_address, multisig_address) = deploy_upgrade_operator_with_multisig(
         factory_address,
         sk,
         rpc,
@@ -372,14 +372,24 @@ pub async fn upgrades_canonical_deploy(
     .map_err(|e| anyhow::anyhow!("failed to deploy upgrade operator and multisig: {:?}", e))?;
     
     // Verify the upgrade operator is deployed to the correct address
-    let expected_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>()
+    let expected_operator_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>()
         .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_OPERATOR_ADDRESS: {:?}", e)).unwrap();
     
-    if operator_address != expected_address {
+    if operator_address != expected_operator_address {
         return Err(anyhow::anyhow!(
             "In upgrades_canonical_deploy, deployed address {:?} does not match expected canonical address {:?}",
             operator_address,
-            expected_address
+            expected_operator_address
+        ));
+    }
+
+    let expectedmultisig_address = UPGRADE_MULTISIG_ADDRESS.parse::<alloy::primitives::Address>()
+        .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_MULTISIG_ADDRESS: {:?}", e)).unwrap();
+    if multisig_address != expectedmultisig_address {
+        return Err(anyhow::anyhow!(
+            "In upgrades_canonical_deploy, deployed address {:?} does not match expected canonical address {:?}",
+            multisig_address,
+            expectedmultisig_address
         ));
     }
 

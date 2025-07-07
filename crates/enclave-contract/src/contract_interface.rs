@@ -60,7 +60,7 @@ sol! {
 /// To change parameters, just modify this struct and update the contract interfaces
 #[derive(Debug, Clone)]
 pub struct ProposalParamsV1 {
-    pub mrtd: Bytes,   // 48 bytes
+    pub mrtd: Bytes,   // 32 bytes
     pub mrseam: Bytes, // 48 bytes
     pub pcr4: Bytes,   // 48 bytes
 }
@@ -74,9 +74,9 @@ impl ProposalParamsV1 {
     /// Creates test proposal parameters with default values
     pub fn test_params() -> Self {
         Self {
-            mrtd: Bytes::from(vec![0xbb; 48]),
+            mrtd: Bytes::from(vec![0xbb; 32]),
             mrseam: Bytes::from(vec![0xcc; 48]),
-            pcr4: Bytes::from(vec![0xdd; 32]),
+            pcr4: Bytes::from(vec![0xdd; 48]),
         }
     }
 }
