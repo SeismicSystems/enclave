@@ -74,9 +74,9 @@ impl ProposalParamsV1 {
     /// Creates test proposal parameters with default values
     pub fn test_params() -> Self {
         Self {
-            mrtd: Bytes::from(vec![0xbb; 32]),
+            mrtd: Bytes::from(vec![0xbb; 48]),
             mrseam: Bytes::from(vec![0xcc; 48]),
-            pcr4: Bytes::from(vec![0xdd; 48]),
+            pcr4: Bytes::from(vec![0xdd; 32]),
         }
     }
 }

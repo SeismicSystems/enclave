@@ -220,11 +220,11 @@ impl Booter {
         println!("pcr4_bytes length: {:?}", pcr4_bytes.len());
         println!("mr_td_bytes length: {:?}", mr_td_bytes.len());
         println!("mr_seam_bytes length: {:?}", mr_seam_bytes.len());
-        if pcr4_bytes.len() != 48 {
-            return Err(anyhow::anyhow!("pcr4 must be exactly 48 bytes, got {}", pcr4_bytes.len()));
+        if pcr4_bytes.len() != 32 {
+            return Err(anyhow::anyhow!("pcr4 must be exactly 32 bytes, got {}", pcr4_bytes.len()));
         }
-        if mr_td_bytes.len() != 32 {
-            return Err(anyhow::anyhow!("mr_td must be exactly 32 bytes, got {}", mr_td_bytes.len()));
+        if mr_td_bytes.len() != 48 {
+            return Err(anyhow::anyhow!("mr_td must be exactly 48 bytes, got {}", mr_td_bytes.len()));
         }
         if mr_seam_bytes.len() != 48 {
             return Err(anyhow::anyhow!("mr_seam must be exactly 48 bytes, got {}", mr_seam_bytes.len()));

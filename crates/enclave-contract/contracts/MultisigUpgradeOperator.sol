@@ -79,9 +79,9 @@ contract MultisigUpgradeOperator {
         bytes memory pcr4,
         bool status
     ) public returns (bytes32 proposalId) {
-        require(mrtd.length == 32, "Invalid mrtd length");
+        require(mrtd.length == 48, "Invalid mrtd length");
         require(mrseam.length == 48, "Invalid mrseam length");
-        require(pcr4.length == 48, "Invalid pcr4 length");
+        require(pcr4.length == 32, "Invalid pcr4 length");
         
         // Increment nonce and use it in proposal ID calculation
         proposalNonce++;

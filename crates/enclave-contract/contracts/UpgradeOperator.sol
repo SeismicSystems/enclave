@@ -35,7 +35,9 @@ contract UpgradeOperator {
      */
     function set_id_status_v1(bytes memory mrtd, bytes memory mrseam, bytes memory pcr4, bool status) public {
         require(msg.sender == owner);
-        require(mrtd.length == 32 && mrseam.length == 48 && pcr4.length == 48);
+        require(mrtd.length == 48, "Invalid mrtd length");
+        require(mrseam.length == 48, "Invalid mrseam length");
+        require(pcr4.length == 32, "Invalid pcr4 length");
 
         DefiningAttributesV1 memory attrs = DefiningAttributesV1(mrtd, mrseam, pcr4);
         bytes32 id = computeIdV1(attrs);
@@ -47,8 +49,10 @@ contract UpgradeOperator {
      * @dev Gets the status of a set of defining attributes (version 1)
      */
     function get_id_status_v1(bytes memory mrtd, bytes memory mrseam, bytes memory pcr4) public view returns (bool) {
-        require(mrtd.length == 32 && mrseam.length == 48 && pcr4.length == 48);
-
+        require(mrtd.length == 48, "Invalid mrtd length");
+        require(mrseam.length == 48, "Invalid mrseam length");
+        require(pcr4.length == 32, "Invalid pcr4 length");
+        
         DefiningAttributesV1 memory attrs = DefiningAttributesV1(mrtd, mrseam, pcr4);
         bytes32 id = computeIdV1(attrs);
         return attributes[id];
