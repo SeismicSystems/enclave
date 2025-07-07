@@ -308,16 +308,28 @@ pub async fn upgrades_canonical_deploy(
     factory_json_path: &str,
     rpc: &str,
 ) -> Result<alloy::primitives::Address, anyhow::Error> {
-    print_flush("Starting canonical deployment...\n");
-    
     // Use ALICE private key for canonical deployment
     let sk = ANVIL_ALICE_SK;
-    
-    // Check that Alice's nonce is 0 (required for canonical deployment)
     let signer: PrivateKeySigner = sk.parse().unwrap();
     let alice_address = signer.address();
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
+    
+    // Check if contracts are already deployed at expected addresses by checking if they have code
+    // If both addresses have code, contracts are deployed
+    let expected_operator_address = UPGRADE_OPERATOR_ADDRESS.parse::<alloy::primitives::Address>()
+        .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_OPERATOR_ADDRESS: {:?}", e))?;
+    let expected_multisig_address = UPGRADE_MULTISIG_ADDRESS.parse::<alloy::primitives::Address>()
+        .map_err(|e| anyhow::anyhow!("failed to parse UPGRADE_MULTISIG_ADDRESS: {:?}", e))?;
+    let operator_code = provider.get_code_at(expected_operator_address).await
+        .map_err(|e| anyhow::anyhow!("failed to get operator contract code: {:?}", e))?;
+    let multisig_code = provider.get_code_at(expected_multisig_address).await
+        .map_err(|e| anyhow::anyhow!("failed to get multisig contract code: {:?}", e))?;
+    if !operator_code.is_empty() && !multisig_code.is_empty() {
+        return Ok(expected_operator_address);
+    }
+
+    // Check that Alice's nonce is 0 (required for canonical deployment)
     let nonce = provider.get_transaction_count(alice_address).await
         .map_err(|e| anyhow::anyhow!("failed to get Alice's nonce: {:?}", e))?;
     println!("upgrades_canonical_deploy, Alice's nonce is {:?}", nonce);
@@ -327,8 +339,7 @@ pub async fn upgrades_canonical_deploy(
             nonce
         ));
     }
-    
-    
+
     // Deploy factory contract first
     let factory_address = deploy_factory(factory_json_path, sk, rpc)
         .await
