@@ -34,9 +34,9 @@ pub const ANVIL_CHARLIE_SK: &str =
 /// This is the address that the factory will deploy the UpgradeOperator to
 /// See the create2_test.rs test to see how this is computed
 /// TODO: Figure out how Seismic intends to make this constant consistent long-term
-pub const UPGRADE_OPERATOR_ADDRESS: &str = "0x32682e5afac75fa21a1da9e189f9a9733562fa1f";
+pub const UPGRADE_OPERATOR_ADDRESS: &str = "0x99119845b1e6848bad5c63cd79b7db4cf1d3965a";
 
-pub const UPGRADE_MULTISIG_ADDRESS: &str = "0x128d1fa74d487825b4f9215fed580f059a7b8c28";
+pub const UPGRADE_MULTISIG_ADDRESS: &str = "0x361c8cbe4e897cbf07bc3c224bd72f7eac7a42cb";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {

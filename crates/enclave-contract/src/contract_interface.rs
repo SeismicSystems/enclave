@@ -76,7 +76,7 @@ impl ProposalParamsV1 {
         Self {
             mrtd: Bytes::from(vec![0xbb; 48]),
             mrseam: Bytes::from(vec![0xcc; 48]),
-            pcr4: Bytes::from(vec![0xdd; 48]),
+            pcr4: Bytes::from(vec![0xdd; 32]),
         }
     }
 }
@@ -128,7 +128,7 @@ pub async fn create_multisig_proposal(
     let create_pending = create_tx
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create proposal: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("create_multisig_proposal create proposal tx failed: {:?}", e))?;
 
     let _create_receipt = create_pending
         .watch()

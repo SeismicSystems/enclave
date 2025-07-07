@@ -1,5 +1,5 @@
 # Building Contracts for Testing
-Run the `build.sh` script to build the contracts without setting up a forge project. Contract jsons are copied to `crates/enclave-server/tests/integration/snapshot`
+Run the `build.sh` script to build the contracts.
 
 # Contract Overview
 
