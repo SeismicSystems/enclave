@@ -10,12 +10,7 @@ use seismic_enclave_derive::derive_sync_client_trait;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 
-use crate::boot::{
-    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
-};
-use crate::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
-use crate::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use crate::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
+use crate::request_types::*;
 
 /// A trait for building a server.
 pub trait BuildableServer {

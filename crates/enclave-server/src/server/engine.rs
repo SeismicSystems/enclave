@@ -13,13 +13,7 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
 use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
-use seismic_enclave::boot::{
-    RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
-};
-use seismic_enclave::coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse};
-use seismic_enclave::coco_as::ASCoreTokenClaims;
-use seismic_enclave::coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse};
-use seismic_enclave::keys::{GetPurposeKeysRequest, GetPurposeKeysResponse};
+use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
@@ -303,6 +297,10 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     pub async fn run_engine_tests() {
+        if !is_sudo() {
+            panic!("run_engine_tests: skipped (requires sudo privileges)");
+        }
+
         let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
 
         let t1 = test_attestation_evidence_handler_valid_request_sample(&enclave_engine);
@@ -391,12 +389,16 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_boot_share_root_key() {
+        if !is_sudo() {
+            panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
+        }
+
         let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
 
         let new_node_booter = Booter::mock();
         let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
         assert_eq!(
-            seismic_enclave::coco_as::Data::Raw(new_node_booter.pk().serialize().to_vec()),
+            seismic_enclave::request_types::Data::Raw(new_node_booter.pk().serialize().to_vec()),
             eval_context.clone().runtime_data.unwrap(),
             "test misconfigured, attestation should be of the new booter's public key"
         );
@@ -418,6 +420,9 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
+        if !is_sudo() {
+            panic!("test_complete_boot: skipped (requires sudo privileges)");
+        }
         let enclave_engine: AttestationEngine<KeyManager> = default_unbooted_enclave_engine().await;
 
         let eval_context = pub_key_eval_request();
@@ -485,6 +490,9 @@ mod tests {
     #[serial(attestation_agent)]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_boot_retrieve_root_key() -> Result<(), anyhow::Error> {
+        if !is_sudo() {
+            panic!("test_boot_retrieve_root_key: skipped (requires sudo privileges)");
+        }
         let enclave_engine: AttestationEngine<KeyManager> = default_unbooted_enclave_engine().await;
 
         // assert the booter root key begins uninitialized

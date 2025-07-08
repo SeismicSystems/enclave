@@ -7,7 +7,7 @@ use rand::rngs::OsRng;
 use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
-use seismic_enclave::request_types::boot::*;
+use seismic_enclave::request_types::{ShareRootKeyRequest, ShareRootKeyResponse};
 use seismic_enclave::rpc::SyncEnclaveApiClient;
 use seismic_enclave::{crypto::Nonce, ecdh_decrypt, ecdh_encrypt};
 use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp256k1_sk};

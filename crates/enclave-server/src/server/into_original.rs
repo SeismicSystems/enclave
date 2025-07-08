@@ -7,8 +7,8 @@
 
 use attestation_service::Data;
 use attestation_service::HashAlgorithm;
-use seismic_enclave::request_types::coco_as::Data as ApiData;
-use seismic_enclave::request_types::coco_as::HashAlgorithm as ApiHashAlgorithm;
+use seismic_enclave::request_types::Data as ApiData;
+use seismic_enclave::request_types::HashAlgorithm as ApiHashAlgorithm;
 
 pub trait IntoOriginalData {
     fn into_original(self) -> Data;

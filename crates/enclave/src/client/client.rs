@@ -14,14 +14,7 @@ use std::{
 use tokio::runtime::{Handle, Runtime};
 
 use super::rpc::{EnclaveApiClient, SyncEnclaveApiClient, SyncEnclaveApiClientBuilder};
-use crate::{
-    boot::{
-        RetrieveRootKeyRequest, RetrieveRootKeyResponse, ShareRootKeyRequest, ShareRootKeyResponse,
-    },
-    coco_aa::{AttestationGetEvidenceRequest, AttestationGetEvidenceResponse},
-    coco_as::{AttestationEvalEvidenceRequest, AttestationEvalEvidenceResponse},
-    keys::{GetPurposeKeysRequest, GetPurposeKeysResponse},
-};
+use crate::request_types::*;
 
 pub const ENCLAVE_DEFAULT_ENDPOINT_IP: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
