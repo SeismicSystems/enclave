@@ -9,6 +9,6 @@ pub mod client;
 pub mod mock;
 pub mod rpc;
 
-pub use booter::boot_genesis_streamlined;
+pub use booter::{boot_genesis_streamlined_async, boot_genesis_streamlined_sync};
 pub use client::*;
 pub use mock::*;
