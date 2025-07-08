@@ -3,8 +3,8 @@
 mod boot;
 mod coco_aa;
 mod coco_as;
-mod keys;
 mod health;
+mod keys;
 mod snapshot;
 
 pub use boot::*;

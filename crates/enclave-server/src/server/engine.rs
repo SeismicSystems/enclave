@@ -64,7 +64,10 @@ where
 {
     async fn health_check(&self) -> RpcResult<HealthCheckResponse> {
         let boot_complete = self.booter.is_compelted();
-        Ok(HealthCheckResponse { status_ok: true, boot_complete })
+        Ok(HealthCheckResponse {
+            status_ok: true,
+            boot_complete,
+        })
     }
 
     async fn get_purpose_keys(

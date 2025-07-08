@@ -41,7 +41,10 @@ impl MockEnclaveServer {
     /// Mock implementation of the health check method.
     pub fn health_check() -> HealthCheckResponse {
         let boot_complete = true; // Mock enclave server starts booted as it uses hardcoded keys
-        HealthCheckResponse { status_ok: true, boot_complete }
+        HealthCheckResponse {
+            status_ok: true,
+            boot_complete,
+        }
     }
 
     /// Mock implementation of the get_public_key method.
