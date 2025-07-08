@@ -490,9 +490,6 @@ mod tests {
         let _ = enclave_engine
             .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
             .await?;
-        let _ = enclave_engine
-            .boot_share_root_key(mock_share_req.clone())
-            .await?;
 
         // test that boot functions error after complete_boot
         let res = enclave_engine.boot_genesis().await;

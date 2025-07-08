@@ -11,7 +11,6 @@ use az_tdx_vtpm::{imds, report};
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Serialize, Deserialize)]
 pub struct Evidence {
     pub tpm_quote: TpmQuote,
@@ -20,7 +19,9 @@ pub struct Evidence {
 }
 
 /// parses an attestation, serialized as bytes, to the [`Evidence`] strruct
-pub fn tdx_attestation_bytes_to_evidence_struct(attestation_bytes: &[u8]) -> anyhow::Result<Evidence> {
+pub fn tdx_attestation_bytes_to_evidence_struct(
+    attestation_bytes: &[u8],
+) -> anyhow::Result<Evidence> {
     let evidence = serde_json::from_slice::<Evidence>(attestation_bytes)
         .map_err(|_| anyhow::anyhow!("Failed to deserialize Azure vTPM TDX evidence"))?;
     Ok(evidence)
@@ -49,8 +50,6 @@ pub(crate) fn get_tdx_quote() -> Result<Quote> {
 
     parse_tdx_quote(td_quote.as_slice())
 }
-
-
 
 macro_rules! parse_claim {
     ($map_name: ident, $key_name: literal, $field: ident) => {
