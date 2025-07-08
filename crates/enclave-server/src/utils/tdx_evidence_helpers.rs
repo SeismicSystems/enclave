@@ -22,7 +22,7 @@ pub struct Evidence {
 /// parses an attestation, serialized as bytes, to the [`Evidence`] strruct
 pub fn tdx_attestation_bytes_to_evidence_struct(attestation_bytes: &[u8]) -> anyhow::Result<Evidence> {
     let evidence = serde_json::from_slice::<Evidence>(attestation_bytes)
-        .map_err(|e| anyhow::anyhow!("Failed to deserialize Azure vTPM TDX evidence"))?;
+        .map_err(|_| anyhow::anyhow!("Failed to deserialize Azure vTPM TDX evidence"))?;
     Ok(evidence)
 }
 
