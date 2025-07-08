@@ -69,7 +69,7 @@ contract MultisigUpgradeOperator {
      * @dev Creates a proposal to set defining attributes (version 1) in the UpgradeOperator
      * @param mrtd The MRTD value (48 bytes)
      * @param mrseam The MRSEAM value (48 bytes)
-     * @param pcr4 The PCR4 value (48 bytes)
+     * @param pcr4 The PCR4 value (32 bytes)
      * @param status The status to set
      * @return proposalId The unique identifier for this proposal
      */
@@ -81,7 +81,7 @@ contract MultisigUpgradeOperator {
     ) public returns (bytes32 proposalId) {
         require(mrtd.length == 48, "Invalid mrtd length");
         require(mrseam.length == 48, "Invalid mrseam length");
-        require(pcr4.length == 48, "Invalid pcr4 length");
+        require(pcr4.length == 32, "Invalid pcr4 length");
         
         // Increment nonce and use it in proposal ID calculation
         proposalNonce++;
@@ -113,7 +113,7 @@ contract MultisigUpgradeOperator {
      * @dev Executes a proposal if it has enough votes (version 1)
      * @param mrtd The MRTD value (48 bytes)
      * @param mrseam The MRSEAM value (48 bytes)
-     * @param pcr4 The PCR4 value (48 bytes)
+     * @param pcr4 The PCR4 value (32 bytes)
      * @param status The status to set
      * @param nonce The nonce used when creating the proposal
      */
@@ -187,7 +187,7 @@ contract MultisigUpgradeOperator {
      * Uses the UpgradeOperator's computeIdV1 method for the base ID calculation
      * @param mrtd The MRTD value (48 bytes)
      * @param mrseam The MRSEAM value (48 bytes)
-     * @param pcr4 The PCR4 value (48 bytes)
+     * @param pcr4 The PCR4 value (32 bytes)
      * @param status The status to set
      * @param nonce The nonce to use
      * @return The computed proposal ID
