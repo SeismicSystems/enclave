@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_aes_encrypt_decrypt_moonhatch() {
-        let aes_key_hex = "8d152c6c0f357cc49b7482a322afd9f7571478c12ca42ac2001e902f0e6f6af0";
+        let aes_key_hex = "75d15507bdc16249a227ab39ee84f2f492d94b843c7818a57dc6dc4eac253f43";
         let aes_key_bytes = hex::decode(aes_key_hex).expect("Invalid hex string");
         let aes_key = Key::<Aes256Gcm>::from_slice(&aes_key_bytes);
 
@@ -393,7 +393,7 @@ mod tests {
         let nonce = Nonce::from(nonce_bytes);
         // println!("Nonce: {:?}", nonce);
 
-        let plaintext_hex = "7db5bd52000000000000000000000000000000000000000000000000000000000000dbb9";
+        let plaintext_hex = "7db5bd520000000000000000000000000000000000000000000000000000000000000039";
         let plaintext_vec = hex::decode(plaintext_hex).expect("Invalid hex string");
         // let plaintext = Bytes::from(plaintext_vec);
 
