@@ -191,7 +191,7 @@ macro_rules! impl_forwarding_async_server_trait {
     };
 }
 impl_forwarding_async_server_trait!(
-    async fn health_check(&self) -> String,
+    async fn health_check(&self) -> HealthCheckResponse,
     async fn get_purpose_keys(&self, req: GetPurposeKeysRequest) -> GetPurposeKeysResponse, log = "getPurposeKeys",
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse, log = "getAttestationEvidence",
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse, log = "evalAttestationEvidence",
@@ -225,6 +225,7 @@ mod tests {
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::{get_random_port, is_sudo};
+    use seismic_enclave::client::boot_genesis_streamlined_async;
     use seismic_enclave::client::rpc::BuildableServer;
     use seismic_enclave::client::{
         EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP,
@@ -239,7 +240,7 @@ mod tests {
 
     async fn test_health_check(client: &EnclaveClient) {
         let response = client.health_check().await.unwrap();
-        assert_eq!(response, "OK");
+        assert!(response.status_ok, "Status OK");
     }
 
     async fn test_attestation_get_evidence(client: &EnclaveClient) {
@@ -317,8 +318,7 @@ mod tests {
             .build()
             .unwrap();
 
-        client.boot_genesis().await.unwrap();
-        client.complete_boot().await.unwrap();
+        boot_genesis_streamlined_async(&client).await.unwrap();
 
         test_health_check(&client).await;
         test_attestation_get_evidence(&client).await;

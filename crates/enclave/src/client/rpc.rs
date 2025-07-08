@@ -41,7 +41,7 @@ pub trait SyncEnclaveApiClientBuilder: Clone + Debug + Send + Sync + Unpin {
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
-    async fn health_check(&self) -> RpcResult<String>;
+    async fn health_check(&self) -> RpcResult<HealthCheckResponse>;
 
     /// Get the secp256k1 public key
     #[method(name = "getPurposeKeys")]

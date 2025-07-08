@@ -178,7 +178,7 @@ macro_rules! impl_sync_client_trait {
     };
 }
 impl_sync_client_trait!(
-    fn health_check(&self) -> Result<String, ClientError>,
+    fn health_check(&self) -> Result<HealthCheckResponse, ClientError>,
     fn get_purpose_keys(&self, _req: GetPurposeKeysRequest) -> Result<GetPurposeKeysResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
@@ -234,7 +234,7 @@ pub mod tests {
 
     pub fn sync_test_health_check<C: SyncEnclaveApiClient>(client: &C) {
         let response = client.health_check().unwrap();
-        assert_eq!(response, "OK");
+        assert!(response.status_ok, "Status OK");
     }
 
     pub fn sync_test_get_purpose_keys<C: SyncEnclaveApiClient>(client: &C) {
