@@ -75,9 +75,11 @@ impl PolicyFixture {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY),
         );
 
+        // for share_root, we allow all,
+        // and then the key fields are checked against an on-chain contract
         policy_map.insert(
             "share_root".to_string(),
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY), // FUTURE WORK: update this
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY),
         );
 
         Self { policy_map }
