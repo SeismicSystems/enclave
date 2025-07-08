@@ -5561,7 +5561,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "strum 0.26.3",
+ "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
