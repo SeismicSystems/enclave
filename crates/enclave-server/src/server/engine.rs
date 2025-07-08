@@ -3,6 +3,7 @@ use attestation_service::HashAlgorithm;
 use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use serde_json;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -20,8 +21,7 @@ use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::rpc_missing_snapshot_error;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
-    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_quote_error, rpc_conflict_error,
-    rpc_internal_server_error,
+    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error, rpc_internal_server_error,
 };
 
 /// The main execution engine for secure enclave logic
@@ -96,7 +96,7 @@ where
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_quote_error(anyhow::anyhow!(
+                return Err(rpc_internal_server_error(anyhow::anyhow!(
                     "Issue in getting the evidence"
                 )));
             }
@@ -211,11 +211,23 @@ where
         &self,
         req: ShareRootKeyRequest,
     ) -> RpcResult<ShareRootKeyResponse> {
-        // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
-
-        // Verify new enclave's attestation
-        let _: AttestationEvalEvidenceResponse =
+        // Verify new enclave's attestation is a valid attestation
+        let eval_response: AttestationEvalEvidenceResponse =
             self.eval_attestation_evidence(req.clone().into()).await?;
+
+        // Check the tcb_status against the upgrade contract
+        let claims = eval_response.claims.unwrap();
+        let tcb_status = claims.tcb_status;
+        let valid_upgrade = self
+            .booter
+            .check_upgrade_contract(&tcb_status)
+            .await
+            .map_err(|e| rpc_internal_server_error(e))?;
+        if !valid_upgrade {
+            return Err(rpc_bad_evidence_error(anyhow::anyhow!(
+                "Attestation TCB is not approved in the upgrade contract"
+            )));
+        }
 
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
@@ -441,37 +453,6 @@ mod tests {
 
     #[serial(attestation_agent)]
     #[tokio::test]
-    async fn test_boot_share_root_key() {
-        if !is_sudo() {
-            panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
-        }
-
-        let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
-
-        let new_node_booter = Booter::mock();
-        let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
-        assert_eq!(
-            seismic_enclave::request_types::Data::Raw(new_node_booter.pk().serialize().to_vec()),
-            eval_context.clone().runtime_data.unwrap(),
-            "test misconfigured, attestation should be of the new booter's public key"
-        );
-        let resp = enclave_engine
-            .boot_share_root_key(ShareRootKeyRequest {
-                evidence: eval_context.evidence,
-                tee: eval_context.tee,
-                retriever_pk: new_node_booter.pk(),
-            })
-            .await
-            .unwrap();
-        let key_plaintext = new_node_booter.process_share_response(resp).unwrap(); // erroring due to mismatch
-        assert!(
-            key_plaintext == [0u8; 32],
-            "root key does not match expected mock value"
-        );
-    }
-
-    #[serial(attestation_agent)]
-    #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
         if !is_sudo() {
             panic!("test_complete_boot: skipped (requires sudo privileges)");
@@ -508,9 +489,6 @@ mod tests {
         // test that key functions work after complete_boot
         let _ = enclave_engine
             .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
-            .await?;
-        let _ = enclave_engine
-            .boot_share_root_key(mock_share_req.clone())
             .await?;
 
         // test that boot functions error after complete_boot

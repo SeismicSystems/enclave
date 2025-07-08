@@ -5,7 +5,6 @@
 
 use crate::attestation::seismic_aa_mock;
 use crate::attestation::SeismicAttestationAgent;
-use crate::utils::tdx_evidence_helpers::get_tdx_evidence_claims;
 use crate::utils::test_utils::read_vector_txt;
 use attestation_agent::AttestationAPIs;
 
@@ -50,17 +49,6 @@ fn see_as_token() -> Result<(), anyhow::Error> {
 async fn see_default_config() {
     let config = Config::default();
     println!("{:?}", config);
-}
-
-#[test]
-#[ignore]
-fn see_yocto_tdx_evidence() -> Result<(), anyhow::Error> {
-    let path = "../../examples/yocto_20241025193121.txt"; // Note this file has moved
-    let tdx_evidence: Vec<u8> = read_vector_txt(path.to_string())?;
-
-    get_tdx_evidence_claims(tdx_evidence)?;
-
-    Ok(())
 }
 
 //#[tokio::test]
@@ -117,6 +105,17 @@ mod attester_tests {
     #[ignore]
     fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
         let path = "./src/coco_as/examples/yocto_20241025193121.txt"; // Note this file has moved
+        let tdx_evidence: Vec<u8> = read_vector_txt(path.to_string())?;
+
+        get_tdx_evidence_claims(tdx_evidence)?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn see_yocto_tdx_evidence() -> Result<(), anyhow::Error> {
+        let path = "../../examples/yocto_20241025193121.txt"; // Note this file has moved
         let tdx_evidence: Vec<u8> = read_vector_txt(path.to_string())?;
 
         get_tdx_evidence_claims(tdx_evidence)?;

@@ -15,6 +15,8 @@ path = "src/lib.rs"
 
 [dependencies]
 seismic-enclave.workspace = true
+enclave-contract.workspace = true
+alloy.workspace = true
 
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="4fbeded", default-features = false}
@@ -43,7 +45,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
 
-hex = {workspace = true, optional = true }
+hex = {workspace = true}
 scroll = { workspace = true, optional = true }
 serde = {workspace = true, optional = true }
 
@@ -64,7 +66,6 @@ az-tdx-vtpm-attester = [
     "attestation-service/az-tdx-vtpm-verifier",
     "attestation-service/az-snp-vtpm-verifier",
     "az-tdx-vtpm",
-    "hex",
     "scroll",
     "serde",
 ]

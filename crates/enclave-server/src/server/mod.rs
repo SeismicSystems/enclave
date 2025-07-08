@@ -1,7 +1,7 @@
-mod boot;
-mod engine;
+pub mod boot;
+pub mod engine;
 mod into_original;
-mod server;
+pub mod server;
 
 // re-exports
 pub use server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
