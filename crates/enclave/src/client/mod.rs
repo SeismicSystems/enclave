@@ -4,7 +4,7 @@
 //! operations, e.g. encryption and decryption operations. The main structures and
 //! traits define the API and implementation for the TEE client.
 #![allow(async_fn_in_trait)]
-pub(crate) mod booter;
+mod booter;
 pub mod client;
 pub mod mock;
 pub mod rpc;

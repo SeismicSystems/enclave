@@ -1,4 +1,5 @@
 // use seismic_enclave::auth::JwtSecret;
+use seismic_enclave::boot_genesis_streamlined;
 use seismic_enclave::client::rpc::BuildableServer;
 use seismic_enclave::client::{EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP};
 use seismic_enclave::request_types::AttestationGetEvidenceRequest;
@@ -140,8 +141,7 @@ async fn test_server_requests() {
         .build()
         .unwrap();
 
-    client.boot_genesis().await.unwrap();
-    client.complete_boot().await.unwrap();
+    boot_genesis_streamlined(&client).await.unwrap();
 
     test_health_check(&client).await;
     test_get_purpose_keys(&client).await;

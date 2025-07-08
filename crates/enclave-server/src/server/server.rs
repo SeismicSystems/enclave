@@ -225,6 +225,7 @@ mod tests {
     use crate::server::{init_tracing, EnclaveServer};
     use crate::utils::test_utils::pub_key_eval_request;
     use crate::utils::test_utils::{get_random_port, is_sudo};
+    use seismic_enclave::client::boot_genesis_streamlined;
     use seismic_enclave::client::rpc::BuildableServer;
     use seismic_enclave::client::{
         EnclaveClient, EnclaveClientBuilder, ENCLAVE_DEFAULT_ENDPOINT_IP,
@@ -317,8 +318,7 @@ mod tests {
             .build()
             .unwrap();
 
-        client.boot_genesis().await.unwrap();
-        client.complete_boot().await.unwrap();
+        boot_genesis_streamlined(&client).await.unwrap();
 
         test_health_check(&client).await;
         test_attestation_get_evidence(&client).await;
