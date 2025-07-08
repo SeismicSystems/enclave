@@ -11,19 +11,19 @@ use az_tdx_vtpm::{imds, report};
 use scroll::Pread;
 use serde::{Deserialize, Serialize};
 
+
+#[derive(Serialize, Deserialize)]
+pub struct Evidence {
+    pub tpm_quote: TpmQuote,
+    pub hcl_report: Vec<u8>,
+    pub td_quote: Vec<u8>,
+}
+
+/// parses an attestation, serialized as bytes, to the [`Evidence`] strruct
 pub fn tdx_attestation_bytes_to_evidence_struct(attestation_bytes: &[u8]) -> Result<Evidence> {
     let evidence = serde_json::from_slice::<Evidence>(attestation_bytes)
         .context("Failed to deserialize Azure vTPM TDX evidence")?;
     Ok(evidence)
-}
-
-pub(crate) fn get_tdx_quote() -> Result<Quote> {
-    let td_report = report::get_report().map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
-
-    let td_quote =
-        imds::get_td_quote(&td_report).map_err(|e| anyhow!("Failed to get TD quote: {}", e))?;
-
-    parse_tdx_quote(td_quote.as_slice())
 }
 
 /// Takes in tdx_evidence as a vec<u8>, as it is returned by coco libs,
@@ -41,6 +41,17 @@ pub fn get_tdx_evidence_claims(tdx_evidence: Vec<u8>) -> Result<(), anyhow::Erro
     Ok(())
 }
 
+pub(crate) fn get_tdx_quote() -> Result<Quote> {
+    let td_report = report::get_report().map_err(|e| anyhow!("Failed to get TD report: {}", e))?;
+
+    let td_quote =
+        imds::get_td_quote(&td_report).map_err(|e| anyhow!("Failed to get TD quote: {}", e))?;
+
+    parse_tdx_quote(td_quote.as_slice())
+}
+
+
+
 macro_rules! parse_claim {
     ($map_name: ident, $key_name: literal, $field: ident) => {
         $map_name.insert($key_name.to_string(), serde_json::Value::Object($field))
@@ -51,13 +62,6 @@ macro_rules! parse_claim {
             serde_json::Value::String(hex::encode($field)),
         )
     };
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Evidence {
-    pub tpm_quote: TpmQuote,
-    pub hcl_report: Vec<u8>,
-    pub td_quote: Vec<u8>,
 }
 
 pub fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
