@@ -1,4 +1,4 @@
-//! Boot the enclave's key manager
+//! Convenience functions for booting the enclave in a streamlined way
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ pub enum BootError {
 }
 
 /// Command to boot the enclave's key manager
-pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> {
+pub async fn boot_genesis_streamlined_async(ip: IpAddr, port: u16) -> Result<(), BootError> {
     let client = EnclaveClientBuilder::new()
         .ip(ip.to_string())
         .port(port)
@@ -59,8 +59,8 @@ pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> 
 }
 
 /// Boot the enclave's key manager synchronously
-pub fn boot_enclave_sync(ip: IpAddr, port: u16) -> Result<(), BootError> {
+pub fn boot_genesis_streamlined_sync(ip: IpAddr, port: u16) -> Result<(), BootError> {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(boot_enclave_async(ip, port))?;
+    rt.block_on(boot_genesis_streamlined_async(ip, port))?;
     Ok(())
 }
