@@ -191,7 +191,7 @@ macro_rules! impl_forwarding_async_server_trait {
     };
 }
 impl_forwarding_async_server_trait!(
-    async fn health_check(&self) -> String,
+    async fn health_check(&self) -> HealthCheckResponse,
     async fn get_purpose_keys(&self, req: GetPurposeKeysRequest) -> GetPurposeKeysResponse, log = "getPurposeKeys",
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse, log = "getAttestationEvidence",
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse, log = "evalAttestationEvidence",
@@ -239,7 +239,7 @@ mod tests {
 
     async fn test_health_check(client: &EnclaveClient) {
         let response = client.health_check().await.unwrap();
-        assert_eq!(response, "OK");
+        assert!(response.status_ok, "Status OK");
     }
 
     async fn test_attestation_get_evidence(client: &EnclaveClient) {

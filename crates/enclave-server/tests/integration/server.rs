@@ -48,7 +48,7 @@ async fn test_get_purpose_keys(client: &EnclaveClient) {
 
 async fn test_health_check(client: &EnclaveClient) {
     let response = client.health_check().await.unwrap();
-    assert_eq!(response, "OK");
+    assert!(response.status_ok, "Status OK");
 }
 
 async fn test_attestation_get_evidence(client: &EnclaveClient) {

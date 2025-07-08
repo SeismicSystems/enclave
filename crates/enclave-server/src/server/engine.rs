@@ -62,8 +62,9 @@ impl<K> EnclaveApiServer for AttestationEngine<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {
-    async fn health_check(&self) -> RpcResult<String> {
-        Ok("OK".into())
+    async fn health_check(&self) -> RpcResult<HealthCheckResponse> {
+        let boot_complete = self.booter.is_compelted();
+        Ok(HealthCheckResponse { status_ok: true, boot_complete })
     }
 
     async fn get_purpose_keys(

@@ -39,8 +39,9 @@ impl MockEnclaveServer {
     }
 
     /// Mock implementation of the health check method.
-    pub fn health_check() -> String {
-        "OK".to_string()
+    pub fn health_check() -> HealthCheckResponse {
+        let boot_complete = true; // Mock enclave server starts booted as it uses hardcoded keys
+        HealthCheckResponse { status_ok: true, boot_complete }
     }
 
     /// Mock implementation of the get_public_key method.
@@ -155,7 +156,7 @@ macro_rules! impl_mock_async_server_trait {
     };
 }
 impl_mock_async_server_trait!(
-    async fn health_check(&self) -> String,
+    async fn health_check(&self) -> HealthCheckResponse,
     async fn get_purpose_keys(&self, req: GetPurposeKeysRequest) -> GetPurposeKeysResponse,
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse,
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse,
@@ -195,7 +196,7 @@ macro_rules! impl_mock_sync_client_trait {
     };
 }
 impl_mock_sync_client_trait!(
-    fn health_check(&self) -> Result<String, ClientError>,
+    fn health_check(&self) -> Result<HealthCheckResponse, ClientError>,
     fn get_purpose_keys(&self, _req: GetPurposeKeysRequest) -> Result<GetPurposeKeysResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
@@ -251,6 +252,6 @@ mod tests {
 
     async fn async_test_health_check(client: &EnclaveClient) {
         let response = client.deref().health_check().await.unwrap();
-        assert_eq!(response, "OK");
+        assert!(response.status_ok, "Status OK");
     }
 }
