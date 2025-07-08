@@ -3,6 +3,7 @@ use enclave_contract::{
     ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 
+use seismic_enclave::boot_genesis_streamlined_sync;
 use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 };
@@ -67,8 +68,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let reth_rpc = "http://localhost:8545";
 
     // Boot genesis so we can interact with the enclaver-server
-    enclave_client.boot_genesis().unwrap();
-    enclave_client.complete_boot().unwrap();
+    boot_genesis_streamlined_sync(&enclave_client).unwrap();
 
     // Deploy factory contract
     print_flush("Deploying factory contract...\n");
