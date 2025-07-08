@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use crate::client::EnclaveClientBuilder;
-use crate::request_types::keys::GetPurposeKeysRequest;
+use crate::request_types::GetPurposeKeysRequest;
 use crate::rpc::EnclaveApiClient;
 
 /// Errors that can occur when booting the enclave
