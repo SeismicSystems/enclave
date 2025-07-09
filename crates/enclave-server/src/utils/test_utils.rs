@@ -70,7 +70,9 @@ pub fn get_random_port() -> u16 {
 /// attests to a public secp256k1 key from an AzTdxVtpm machine
 pub fn pub_key_eval_request() -> AttestationEvalEvidenceRequest {
     use seismic_enclave::request_types::{Data, HashAlgorithm};
-    let evidence = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();
+    let evidence_bytes = read_vector_txt("../../examples/az_tdx_key_att.txt".to_string()).unwrap();
+    let evidence_str = String::from_utf8(evidence_bytes).unwrap();
+    let evidence = serde_json::from_str(&evidence_str).unwrap();
     let req = AttestationEvalEvidenceRequest {
         evidence,
         tee: kbs_types::Tee::AzTdxVtpm,

@@ -32,7 +32,7 @@ pub struct RetrieveRootKeyResponse {}
 /// - runtime_data_hash_algorithm: HashAlgorithm::Sha256,
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShareRootKeyRequest {
-    pub evidence: Vec<u8>,
+    pub evidence: serde_json::Value,
     pub tee: Tee,
     pub retriever_pk: secp256k1::PublicKey,
 }
