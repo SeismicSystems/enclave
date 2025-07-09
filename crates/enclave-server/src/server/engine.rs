@@ -15,7 +15,6 @@ use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
 use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
-use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::rpc_missing_snapshot_error;
@@ -125,15 +124,9 @@ where
                 None => attestation_service::HashAlgorithm::Sha256,
             };
 
-        // Convert bytes to Evidence struct
-        // TODO: change AttestationEvalEvidenceRequest so this step is not needed?
-        // Note: these lines restrict evidence to be azure-tdx specific.
-        let evidence = tdx_attestation_bytes_to_evidence_struct(&request.evidence).unwrap();
-        let evidence: attestation_service::TeeEvidence = serde_json::to_value(evidence).unwrap();
-
         // Evaluate attestation evidence (no lock needed for evaluation)
         let verification_request = VerificationRequest {
-            evidence: evidence,
+            evidence: request.evidence,
             tee: request.tee,
             runtime_data,
             runtime_data_hash_algorithm,
@@ -181,28 +174,31 @@ where
                 "Key provider already initialized"
             )));
         }
-
         let tee = self.attestation_agent.get_tee_type();
         let retriver_pk_bytes = self.booter.pk().serialize();
-        let attestation: Vec<u8> = self
+
+        // make an attestation
+        let attestation_bytes: Vec<u8> = self
             .attestation_agent
             .get_evidence(&retriver_pk_bytes)
             .await
             .map_err(|e| rpc_internal_server_error(e))?;
+        let attestation_string = String::from_utf8(attestation_bytes).unwrap();
+        let attestation: serde_json::Value = serde_json::from_str(&attestation_string).unwrap();
 
+        // Call the booter to retrieve the root key
+        // will be stored in the booter if successful
         let client_builder = EnclaveClient::builder();
         let client = client_builder
             .ip(req.addr.ip().to_string())
             .port(req.addr.port())
             .build()
             .unwrap();
-
-        // Call the booter to retrieve the root key
-        // will be stored in the booter if successful
         self.booter
             .retrieve_root_key(tee, &attestation, &client)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
+        // respond to node operator
         let resp = RetrieveRootKeyResponse {};
 
         Ok(resp)
