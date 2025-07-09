@@ -536,7 +536,7 @@ mod tests {
         let _ = sleep(Duration::from_secs(2)).await;
 
         // run the request
-        // Note: this is run against the mock, 
+        // Note: this is run against the mock,
         // so bugs in boot_retrieve_root_key may slip through
         // TODO: write an integration test with more realistic behavior
         let _ = enclave_engine
