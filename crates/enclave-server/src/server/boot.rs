@@ -93,7 +93,7 @@ impl Booter {
     pub fn retrieve_root_key(
         &self,
         tee: Tee,
-        attestation: &Vec<u8>,
+        attestation: &serde_json::Value,
         client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
         let req = ShareRootKeyRequest {
@@ -267,7 +267,7 @@ mod tests {
         let booter = Booter::new();
         let client = MockEnclaveClient::default();
         let tee = kbs_types::Tee::AzTdxVtpm;
-        let res = booter.retrieve_root_key(tee, &Vec::new(), &client);
+        let res = booter.retrieve_root_key(tee, &serde_json::Value::Null, &client);
         assert!(res.is_ok(), "failed to retrieve root key: {:?}", res);
         assert!(booter.get_root_key().is_some(), "root key not set");
         assert!(
