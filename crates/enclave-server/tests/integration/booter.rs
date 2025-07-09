@@ -6,10 +6,14 @@ use seismic_enclave_server::key_manager::KeyManager;
 use seismic_enclave_server::server::boot::Booter;
 use seismic_enclave_server::server::engine::engine_mock_booted;
 use seismic_enclave_server::server::engine::AttestationEngine;
-use seismic_enclave_server::utils::supervisorctl::reth_is_running;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use seismic_enclave_server::utils::test_utils::pub_key_eval_request;
 use serial_test::serial;
+
+#[cfg(not(feature = "supervisorctl"))]
+use seismic_enclave_server::utils::service::reth_is_running;
+#[cfg(feature = "supervisorctl")]
+use seismic_enclave_server::utils::supervisorctl::reth_is_running;
 
 #[serial(attestation_agent)]
 #[tokio::test]
