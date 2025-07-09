@@ -134,247 +134,127 @@ pub struct ASCustomizedClaims {
     pub runtime_data: Value,
 }
 
-// impl Serialize for AttestationEvalEvidenceRequest {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let mut state = serializer.serialize_struct("AttestationEvalEvidenceRequest", 5)?; // Adjust the number of fields
-//         state.serialize_field("evidence", &self.evidence)?;
-//         state.serialize_field("tee", &self.tee)?;
-
-//         match &self.runtime_data {
-//             Some(Data::Raw(bytes)) => state.serialize_field("runtime_data", bytes)?,
-//             Some(Data::Structured(value)) => state.serialize_field("runtime_data", value)?,
-//             None => state.serialize_field("runtime_data", &Option::<()>::None)?,
-//         };
-
-//         let runtime_data_hash_algorithm = self
-//             .runtime_data_hash_algorithm
-//             .as_ref()
-//             .map(ToString::to_string);
-//         state.serialize_field("runtime_data_hash_algorithm", &runtime_data_hash_algorithm)?;
-
-//         state.serialize_field("policy_ids", &self.policy_ids)?;
-
-//         state.end()
-//     }
-// }
-
-// impl<'de> Deserialize<'de> for AttestationEvalEvidenceRequest {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         #[derive(Deserialize)]
-//         #[serde(field_identifier, rename_all = "snake_case")]
-//         enum Field {
-//             Evidence,
-//             Tee,
-//             RuntimeData,
-//             RuntimeDataHashAlgorithm,
-//             PolicyIds, // New field for deserialization
-//         }
-
-//         struct AttestationEvalEvidenceRequestVisitor;
-
-//         impl<'de> Visitor<'de> for AttestationEvalEvidenceRequestVisitor {
-//             type Value = AttestationEvalEvidenceRequest;
-
-//             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-//                 formatter.write_str("struct AttestationEvalEvidenceRequest")
-//             }
-
-//             fn visit_map<V>(self, mut map: V) -> Result<AttestationEvalEvidenceRequest, V::Error>
-//             where
-//                 V: MapAccess<'de>,
-//             {
-//                 let mut evidence = None;
-//                 let mut tee = None;
-//                 let mut runtime_data = None;
-//                 let mut runtime_data_hash_algorithm = None;
-//                 let mut policy_ids = None; // For policy_ids
-
-//                 while let Some(key) = map.next_key()? {
-//                     match key {
-//                         Field::Evidence => {
-//                             evidence = Some(map.next_value()?);
-//                         }
-//                         Field::Tee => {
-//                             tee = Some(map.next_value()?);
-//                         }
-//                         Field::RuntimeData => {
-//                             // Deserialize runtime_data only once
-//                             let value: Option<serde_json::Value> = map.next_value()?;
-
-//                             // Check for None
-//                             if let Some(value) = value {
-//                                 // Check if it's a byte array (Vec<u8>)
-//                                 if let Ok(bytes) = serde_json::from_value::<Vec<u8>>(value.clone())
-//                                 {
-//                                     runtime_data = Some(Data::Raw(bytes));
-//                                 } else {
-//                                     // If not Vec<u8>, treat it as structured data (Value)
-//                                     runtime_data = Some(Data::Structured(value));
-//                                 }
-//                             } else {
-//                                 // If it was None (null in JSON), set runtime_data to None
-//                                 runtime_data = None;
-//                             }
-//                         }
-//                         Field::RuntimeDataHashAlgorithm => {
-//                             let alg_str: Option<String> = map.next_value()?;
-//                             if alg_str.is_some() {
-//                                 runtime_data_hash_algorithm =
-//                                     alg_str.and_then(|alg| HashAlgorithm::from_str(&alg).ok());
-//                             }
-//                         }
-//                         Field::PolicyIds => {
-//                             // Deserialize policy_ids
-//                             policy_ids = Some(map.next_value()?);
-//                         }
-//                     }
-//                 }
-
-//                 let evidence = evidence.ok_or_else(|| de::Error::missing_field("evidence"))?;
-//                 let tee = tee.ok_or_else(|| de::Error::missing_field("tee"))?;
-//                 let policy_ids =
-//                     policy_ids.ok_or_else(|| de::Error::missing_field("policy_ids"))?;
-
-//                 Ok(AttestationEvalEvidenceRequest {
-//                     evidence,
-//                     tee,
-//                     runtime_data,
-//                     runtime_data_hash_algorithm,
-//                     policy_ids,
-//                 })
-//             }
-//         }
-
-//         const FIELDS: &[&str] = &[
-//             "evidence",
-//             "tee",
-//             "runtime_data",
-//             "runtime_data_hash_algorithm",
-//             "policy_ids",
-//         ];
-//         deserializer.deserialize_struct(
-//             "AttestationEvalEvidenceRequest",
-//             FIELDS,
-//             AttestationEvalEvidenceRequestVisitor,
-//         )
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json;
 
-    // #[test]
-    // fn test_serialize_some_data() {
-    //     let original_request = AttestationEvalEvidenceRequest {
-    //         evidence: vec![
-    //             123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
-    //             95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
-    //         ],
-    //         tee: Tee::Sample,
-    //         runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
-    //         runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
-    //         policy_ids: vec!["allow".to_string()],
-    //     };
+    #[test]
+    fn test_serialize_some_data() {
+        let evidence_bytes = vec![
+            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95,
+            100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+        ];
+        let evidence_str = String::from_utf8(evidence_bytes).unwrap();
+        let evidence: serde_json::Value = serde_json::from_str(&evidence_str).unwrap();
 
-    //     // Serialize the request to a JSON string
-    //     let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
+        let original_request = AttestationEvalEvidenceRequest {
+            evidence,
+            tee: Tee::Sample,
+            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
+            runtime_data_hash_algorithm: Some(HashAlgorithm::Sha256),
+            policy_ids: vec!["allow".to_string()],
+        };
 
-    //     // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
-    //     let deserialized: AttestationEvalEvidenceRequest =
-    //         serde_json::from_str(&serialized).expect("Failed to deserialize");
+        // Serialize the request to a JSON string
+        let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
 
-    //     // Check that the deserialized object is equal to the original
-    //     assert_eq!(original_request.evidence, deserialized.evidence);
-    //     assert_eq!(original_request.tee, deserialized.tee);
-    //     match (
-    //         &original_request.runtime_data.unwrap(),
-    //         &deserialized.runtime_data.unwrap(),
-    //     ) {
-    //         (Data::Raw(bytes1), Data::Raw(bytes2)) => assert_eq!(bytes1, bytes2),
-    //         (Data::Structured(value1), Data::Structured(value2)) => assert_eq!(value1, value2),
-    //         _ => panic!("Mismatched runtime data types"),
-    //     }
-    //     assert_eq!(
-    //         original_request
-    //             .runtime_data_hash_algorithm
-    //             .unwrap()
-    //             .to_string(),
-    //         deserialized
-    //             .runtime_data_hash_algorithm
-    //             .unwrap()
-    //             .to_string()
-    //     );
-    //     assert_eq!(original_request.policy_ids, deserialized.policy_ids);
-    // }
+        // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
+        let deserialized: AttestationEvalEvidenceRequest =
+            serde_json::from_str(&serialized).expect("Failed to deserialize");
 
-    // #[test]
-    // fn test_serialize_none_hash_algorithm() {
-    //     let original_request = AttestationEvalEvidenceRequest {
-    //         evidence: vec![
-    //             123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
-    //             95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
-    //         ],
-    //         tee: Tee::Sample,
-    //         runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
-    //         runtime_data_hash_algorithm: None,
-    //         policy_ids: vec!["allow".to_string()],
-    //     };
+        // Check that the deserialized object is equal to the original
+        assert_eq!(original_request.evidence, deserialized.evidence);
+        assert_eq!(original_request.tee, deserialized.tee);
+        match (
+            &original_request.runtime_data.unwrap(),
+            &deserialized.runtime_data.unwrap(),
+        ) {
+            (Data::Raw(bytes1), Data::Raw(bytes2)) => assert_eq!(bytes1, bytes2),
+            (Data::Structured(value1), Data::Structured(value2)) => assert_eq!(value1, value2),
+            _ => panic!("Mismatched runtime data types"),
+        }
+        assert_eq!(
+            original_request
+                .runtime_data_hash_algorithm
+                .unwrap()
+                .to_string(),
+            deserialized
+                .runtime_data_hash_algorithm
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(original_request.policy_ids, deserialized.policy_ids);
+    }
 
-    //     // Serialize the request to a JSON string
-    //     let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
+    #[test]
+    fn test_serialize_none_hash_algorithm() {
+        let evidence_bytes = vec![
+            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95,
+            100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+        ];
+        let evidence_str = String::from_utf8(evidence_bytes).unwrap();
+        let evidence: serde_json::Value = serde_json::from_str(&evidence_str).unwrap();
 
-    //     // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
-    //     let deserialized: AttestationEvalEvidenceRequest =
-    //         serde_json::from_str(&serialized).expect("Failed to deserialize");
+        let original_request = AttestationEvalEvidenceRequest {
+            evidence,
+            tee: Tee::Sample,
+            runtime_data: Some(Data::Raw("nonce".as_bytes().to_vec())),
+            runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow".to_string()],
+        };
 
-    //     // Check that the deserialized object is equal to the original
-    //     assert_eq!(original_request.evidence, deserialized.evidence);
-    //     assert_eq!(original_request.tee, deserialized.tee);
-    //     match (
-    //         &original_request.runtime_data.unwrap(),
-    //         &deserialized.runtime_data.unwrap(),
-    //     ) {
-    //         (Data::Raw(bytes1), Data::Raw(bytes2)) => assert_eq!(bytes1, bytes2),
-    //         (Data::Structured(value1), Data::Structured(value2)) => assert_eq!(value1, value2),
-    //         _ => panic!("Mismatched runtime data types"),
-    //     }
-    //     assert!(deserialized.runtime_data_hash_algorithm.is_none());
-    //     assert_eq!(original_request.policy_ids, deserialized.policy_ids);
-    // }
+        // Serialize the request to a JSON string
+        let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
 
-    // #[test]
-    // fn test_serialize_none_data() {
-    //     let original_request = AttestationEvalEvidenceRequest {
-    //         evidence: vec![
-    //             123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116,
-    //             95, 100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
-    //         ],
-    //         tee: Tee::Sample,
-    //         runtime_data: None,
-    //         runtime_data_hash_algorithm: None,
-    //         policy_ids: vec!["allow".to_string()],
-    //     };
+        // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
+        let deserialized: AttestationEvalEvidenceRequest =
+            serde_json::from_str(&serialized).expect("Failed to deserialize");
 
-    //     // Serialize the request to a JSON string
-    //     let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
+        // Check that the deserialized object is equal to the original
+        assert_eq!(original_request.evidence, deserialized.evidence);
+        assert_eq!(original_request.tee, deserialized.tee);
+        match (
+            &original_request.runtime_data.unwrap(),
+            &deserialized.runtime_data.unwrap(),
+        ) {
+            (Data::Raw(bytes1), Data::Raw(bytes2)) => assert_eq!(bytes1, bytes2),
+            (Data::Structured(value1), Data::Structured(value2)) => assert_eq!(value1, value2),
+            _ => panic!("Mismatched runtime data types"),
+        }
+        assert!(deserialized.runtime_data_hash_algorithm.is_none());
+        assert_eq!(original_request.policy_ids, deserialized.policy_ids);
+    }
 
-    //     // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
-    //     let deserialized: AttestationEvalEvidenceRequest =
-    //         serde_json::from_str(&serialized).expect("Failed to deserialize");
+    #[test]
+    fn test_serialize_none_data() {
+        let evidence_bytes = vec![
+            123, 34, 115, 118, 110, 34, 58, 34, 49, 34, 44, 34, 114, 101, 112, 111, 114, 116, 95,
+            100, 97, 116, 97, 34, 58, 34, 98, 109, 57, 117, 89, 50, 85, 61, 34, 125,
+        ];
+        let evidence_str = String::from_utf8(evidence_bytes).unwrap();
+        let evidence: serde_json::Value = serde_json::from_str(&evidence_str).unwrap();
 
-    //     // Check that the deserialized object is equal to the original
-    //     assert_eq!(original_request.evidence, deserialized.evidence);
-    //     assert_eq!(original_request.tee, deserialized.tee);
-    //     assert!(deserialized.runtime_data.is_none());
-    //     assert!(deserialized.runtime_data_hash_algorithm.is_none());
-    //     assert_eq!(original_request.policy_ids, deserialized.policy_ids);
-    // }
+        let original_request = AttestationEvalEvidenceRequest {
+            evidence,
+            tee: Tee::Sample,
+            runtime_data: None,
+            runtime_data_hash_algorithm: None,
+            policy_ids: vec!["allow".to_string()],
+        };
+
+        // Serialize the request to a JSON string
+        let serialized = serde_json::to_string(&original_request).expect("Failed to serialize");
+
+        // Deserialize the JSON string back to a `AttestationEvalEvidenceRequest`
+        let deserialized: AttestationEvalEvidenceRequest =
+            serde_json::from_str(&serialized).expect("Failed to deserialize");
+
+        // Check that the deserialized object is equal to the original
+        assert_eq!(original_request.evidence, deserialized.evidence);
+        assert_eq!(original_request.tee, deserialized.tee);
+        assert!(deserialized.runtime_data.is_none());
+        assert!(deserialized.runtime_data_hash_algorithm.is_none());
+        assert_eq!(original_request.policy_ids, deserialized.policy_ids);
+    }
 }
