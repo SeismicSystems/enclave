@@ -34,7 +34,7 @@ contract UpgradeOperator {
      * @dev Sets the status for a set of defining attributes (version 1)
      */
     function set_id_status_v1(bytes memory mrtd, bytes memory mrseam, bytes memory pcr4, bool status) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner, "Only owner can set status");
         require(mrtd.length == 48, "Invalid mrtd length");
         require(mrseam.length == 48, "Invalid mrseam length");
         require(pcr4.length == 32, "Invalid pcr4 length");
