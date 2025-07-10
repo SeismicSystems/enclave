@@ -2,11 +2,21 @@ use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
 use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 use enclave_contract::{
     can_execute_multisig_proposal, check_proposal_status_v1, create_multisig_proposal,
-    execute_multisig_proposal, get_multisig_vote_count, print_flush, vote_on_multisig_proposal,
+    execute_multisig_proposal, get_multisig_vote_count, vote_on_multisig_proposal,
     ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
 };
 use std::thread::sleep;
 use std::time::Duration;
+
+/// Prints a string to standard output and immediately flushes the output buffer.
+/// Useful to see prints immediately during long-running Cargo tests.
+pub fn print_flush<S: AsRef<str>>(s: S) {
+    use std::io::Write;
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock(); // lock ensures safe writing
+    write!(handle, "{}", s.as_ref()).unwrap();
+    handle.flush().unwrap();
+}
 
 /// Test the complete multisig workflow for controlling UpgradeOperator
 /// This test verifies that the multisig contract can properly control the UpgradeOperator
