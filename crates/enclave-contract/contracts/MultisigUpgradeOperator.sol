@@ -11,12 +11,12 @@ import "./UpgradeOperator.sol";
 contract MultisigUpgradeOperator {
     
     // The three signers (ANVIL keys)
-    address public constant signer1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address public constant signer2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-    address public constant signer3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
+    address public constant signer1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // Alice (0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
+    address public constant signer2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // Bob (0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d)
+    address public constant signer3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // Charlie (0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
     
     // The UpgradeOperator contract being controlled
-    UpgradeOperator public upgradeOperator;
+    UpgradeOperator constant public upgradeOperator = UpgradeOperator(0x1000000000000000000000000000000000000001); // Set in seismic-reth genesis
     
     // Nonce counter for proposal uniqueness
     uint256 public proposalNonce;
@@ -38,21 +38,6 @@ contract MultisigUpgradeOperator {
     
     // Event emitted when upgrade operator is set
     event UpgradeOperatorSet(address indexed upgradeOperator);
-    
-    constructor(address _upgradeOperator) {
-        upgradeOperator = UpgradeOperator(_upgradeOperator);
-        proposalNonce = 0;
-    }
-    
-    /**
-     * @dev Sets the upgrade operator address (only callable by factory)
-     * @param _upgradeOperator The address of the UpgradeOperator contract
-     */
-    function setUpgradeOperator(address _upgradeOperator) public {
-        require(_upgradeOperator != address(0), "Invalid upgrade operator address");
-        upgradeOperator = UpgradeOperator(_upgradeOperator);
-        emit UpgradeOperatorSet(_upgradeOperator);
-    }
     
     /**
      * @dev Creates a proposal to set defining attributes (version 1) in the UpgradeOperator
@@ -187,7 +172,7 @@ contract MultisigUpgradeOperator {
         bytes memory pcr4,
         bool status,
         uint256 nonce
-    ) public view returns (bytes32) {
+    ) public pure returns (bytes32) {
         // Create the DefiningAttributesV1 struct and use the UpgradeOperator's computeIdV1 method
         UpgradeOperator.DefiningAttributesV1 memory attrs = UpgradeOperator.DefiningAttributesV1(mrtd, mrseam, pcr4);
         
