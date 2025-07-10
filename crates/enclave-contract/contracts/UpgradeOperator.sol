@@ -20,21 +20,17 @@ contract UpgradeOperator {
         bytes pcr7;
     }
 
-    address public owner;
+    address constant public owner = 0x1000000000000000000000000000000000000002; // Set in seismic-reth genesis
     mapping(bytes32 => bool) public attributes;
 
     event SetDefiningAttributesV1(bytes mrtd, bytes mrseam, bytes pcr4, bool status);
     event SetDefiningAttributesV2(bytes mrtd, bytes mrseam, bytes pcr4, bytes pcr7, bool status);
 
-    constructor(address _owner) {
-        owner = _owner;
-    }
-
     /**
      * @dev Sets the status for a set of defining attributes (version 1)
      */
     function set_id_status_v1(bytes memory mrtd, bytes memory mrseam, bytes memory pcr4, bool status) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner, "Only owner can set status");
         require(mrtd.length == 48, "Invalid mrtd length");
         require(mrseam.length == 48, "Invalid mrseam length");
         require(pcr4.length == 32, "Invalid pcr4 length");

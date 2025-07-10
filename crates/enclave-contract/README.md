@@ -1,6 +1,6 @@
 # Enclave Contract
 
-This crate provides smart contracts relevant to enclave functionality and utilities for deploying and interacting with them.
+This crate provides smart contracts relevant to enclave functionality and utilities for interacting with them.
 
 ## Overview
 
@@ -8,8 +8,6 @@ The `enclave-contract` crate centralizes all contract-related functionality for 
 
 - The **UpgradeOperator** contract, which manages defining attributes (MRTD, MRSEAM, PCR4) for upgrade validation
 - The **MultisigUpgradeOperator** contract, which provides 2-of-3 voting control over the UpgradeOperator
-- The **UpgradeOperatorFactory** contract for CREATE2 deployment of both contracts
-- Contract deployment utilities (CREATE2 via factory for consistent contract addresses)
 - Contract interaction functions for proposal creation, voting, and execution
 - Testing utilities for contract operations
 
@@ -18,14 +16,6 @@ The `enclave-contract` crate centralizes all contract-related functionality for 
 ### Smart Contracts
 - **UpgradeOperator** - Manages defining attributes (MRTD, MRSEAM, PCR4) for upgrade validation with owner-based access control
 - **MultisigUpgradeOperator** - 2-of-3 multisig contract that controls UpgradeOperator through voting mechanism
-- **UpgradeOperatorFactory** - Factory contract for CREATE2 deployment of both UpgradeOperator and MultisigUpgradeOperator instances
-
-### Contract Deployment
-- `deploy_factory()` - Deploy factory contracts for CREATE2 operations
-- `deploy_via_factory_create2()` - Deploy UpgradeOperator using CREATE2 through a factory
-- `deploy_upgrade_operator_with_multisig()` - Deploy both UpgradeOperator and MultisigUpgradeOperator with proper ownership setup
-- `upgrades_canonical_deploy()` - Deploy the canonical upgrade contracts using predefined addresses
-- `send_eth()` - Send ETH transactions (useful for testing)
 
 ### Contract Interaction
 - `create_multisig_proposal()` - Create a proposal in the MultisigUpgradeOperator
@@ -44,35 +34,17 @@ The `enclave-contract` crate centralizes all contract-related functionality for 
 
 ## Usage
 
-### CREATE2 Deployment of UpgradeOperator and MultisigUpgradeOperator
-```rust
-use enclave_contract::{deploy_factory, deploy_upgrade_operator_with_multisig, ANVIL_ALICE_SK};
-
-// Deploy the factory first
-let factory_address = deploy_factory(
-    "contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json",
-    ANVIL_ALICE_SK,
-    "http://localhost:8545"
-).await?;
-
-// Deploy both contracts using CREATE2
-let upgrade_operator_salt = [0x01; 32];
-let multisig_salt = [0x02; 32];
-let (operator_address, multisig_address) = deploy_upgrade_operator_with_multisig(
-    factory_address,
-    ANVIL_ALICE_SK,
-    "http://localhost:8545",
-    upgrade_operator_salt,
-    multisig_salt
-).await?;
-```
-
 ### Multisig Proposal Workflow
 ```rust
 use enclave_contract::{
     create_multisig_proposal, vote_on_multisig_proposal, execute_multisig_proposal,
-    ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK
+    ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK, UPGRADE_MULTISIG_ADDRESS
 };
+
+// Parse the multisig address
+let multisig_address = UPGRADE_MULTISIG_ADDRESS
+    .parse::<alloy::primitives::Address>()
+    .unwrap();
 
 // Create proposal parameters
 let params = ProposalParamsV1::test_params();
@@ -117,7 +89,12 @@ execute_multisig_proposal(
 
 ### Checking Proposal Status
 ```rust
-use enclave_contract::{check_proposal_status_v1, ProposalParamsV1};
+use enclave_contract::{check_proposal_status_v1, ProposalParamsV1, UPGRADE_OPERATOR_ADDRESS};
+
+// Parse the upgrade operator address
+let upgrade_operator_address = UPGRADE_OPERATOR_ADDRESS
+    .parse::<alloy::primitives::Address>()
+    .unwrap();
 
 // Check if defining attributes are approved
 let params = ProposalParamsV1::test_params();
@@ -125,6 +102,31 @@ let is_approved = check_proposal_status_v1(
     upgrade_operator_address,
     "http://localhost:8545",
     &params
+).await?;
+```
+
+### Vote Counting and Execution Checks
+```rust
+use enclave_contract::{
+    get_multisig_vote_count, can_execute_multisig_proposal, UPGRADE_MULTISIG_ADDRESS
+};
+
+let multisig_address = UPGRADE_MULTISIG_ADDRESS
+    .parse::<alloy::primitives::Address>()
+    .unwrap();
+
+// Get current vote count for a proposal
+let (approval_count, total_votes) = get_multisig_vote_count(
+    multisig_address,
+    "http://localhost:8545",
+    proposal_id
+).await?;
+
+// Check if proposal can be executed
+let can_execute = can_execute_multisig_proposal(
+    multisig_address,
+    "http://localhost:8545",
+    proposal_id
 ).await?;
 ```
 
@@ -140,7 +142,6 @@ cd crates/enclave-contract
 This will:
 1. Build the contracts using `sforge`
 2. Generate JSON artifacts in `contracts/out/`
-3. Copy the generated JSON files to `tests/integration/` for testing
 
 ## Testing
 
@@ -151,7 +152,6 @@ cargo test -p enclave-contract
 ```
 
 The tests verify:
-- CREATE2 deployment consistency
 - Complete multisig workflow (proposal creation, voting, execution)
 - Contract interactions and state changes
 - 2-of-3 voting mechanism functionality
@@ -162,14 +162,28 @@ The tests verify:
 - Manages defining attributes (MRTD: 48 bytes, MRSEAM: 48 bytes, PCR4: 32 bytes)
 - Owner-based access control for setting attribute status
 - Computes unique IDs for attribute combinations using keccak256
+- Deployed at genesis by seismic-reth at address `0x1000000000000000000000000000000000000001`
 
 ### MultisigUpgradeOperator
 - 2-of-3 voting mechanism using Anvil test keys (Alice, Bob, Charlie)
 - Controls UpgradeOperator through proposal and execution workflow
 - Uses nonce-based proposal IDs for uniqueness
 - Requires 2 approvals to execute proposals
+- Deployed at genesis by seismic-reth at address `0x1000000000000000000000000000000000000002`
 
-### UpgradeOperatorFactory
-- CREATE2 deployment for predictable contract addresses
-- Supports deployment of both individual contracts and paired deployments
-- Tracks deployed contracts for verification
+## Contract Addresses
+
+The contracts are deployed at genesis by seismic-reth at predefined addresses:
+
+- **UpgradeOperator**: `0x1000000000000000000000000000000000000001`
+- **MultisigUpgradeOperator**: `0x1000000000000000000000000000000000000002`
+
+## Test Keys
+
+The crate provides Anvil test keys for local development:
+
+- **Alice**: `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`
+- **Bob**: `0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d`
+- **Charlie**: `0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a`
+
+These keys correspond to the three signers in the MultisigUpgradeOperator contract.

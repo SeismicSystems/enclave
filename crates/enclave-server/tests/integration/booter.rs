@@ -1,4 +1,3 @@
-use enclave_contract::upgrades_canonical_deploy;
 use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::AttestationEvalEvidenceRequest;
 use seismic_enclave::ShareRootKeyRequest;
@@ -15,6 +14,8 @@ use seismic_enclave_server::utils::service::reth_is_running;
 #[cfg(feature = "supervisorctl")]
 use seismic_enclave_server::utils::supervisorctl::reth_is_running;
 
+// This test expects that the booter's attestation is already allowed by the upgrade operator
+// This can be set up by running the test_multisig_upgrade_operator_workflow test in the enclave-contract crate
 #[serial(attestation_agent)]
 #[tokio::test]
 async fn test_boot_share_root_key() {
@@ -23,14 +24,6 @@ async fn test_boot_share_root_key() {
         panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
     }
     assert!(reth_is_running(), "Test startup error: Reth is not running");
-
-    // Deploy upgrade operator contracts
-    let factory_json_path =
-        "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
-    let reth_rpc = "http://localhost:8545";
-    upgrades_canonical_deploy(factory_json_path, reth_rpc)
-        .await
-        .unwrap();
 
     // Test the booter with the canonical deployment
     let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
