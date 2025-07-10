@@ -14,6 +14,8 @@ use seismic_enclave_server::utils::service::reth_is_running;
 #[cfg(feature = "supervisorctl")]
 use seismic_enclave_server::utils::supervisorctl::reth_is_running;
 
+// This test expects that the booter's attestation is already allowed by the upgrade operator
+// This can be set up by running the test_multisig_upgrade_operator_workflow test in the enclave-contract crate
 #[serial(attestation_agent)]
 #[tokio::test]
 async fn test_boot_share_root_key() {
