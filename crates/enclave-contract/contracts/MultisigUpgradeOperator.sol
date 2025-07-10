@@ -11,9 +11,9 @@ import "./UpgradeOperator.sol";
 contract MultisigUpgradeOperator {
     
     // The three signers (ANVIL keys)
-    address public immutable signer1; // Alice
-    address public immutable signer2; // Bob  
-    address public immutable signer3; // Charlie
+    address public constant signer1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    address public constant signer2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
+    address public constant signer3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
     
     // The UpgradeOperator contract being controlled
     UpgradeOperator public upgradeOperator;
@@ -43,12 +43,6 @@ contract MultisigUpgradeOperator {
     event UpgradeOperatorSet(address indexed upgradeOperator);
     
     constructor(address _upgradeOperator) {
-        // Set the three signers based on ANVIL keys
-        // These addresses correspond to the private keys defined in deployment.rs
-        signer1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // Alice (0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
-        signer2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // Bob (0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d)
-        signer3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // Charlie (0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
-        
         upgradeOperator = UpgradeOperator(_upgradeOperator);
         factory = msg.sender;
         proposalNonce = 0;
@@ -86,7 +80,8 @@ contract MultisigUpgradeOperator {
         // Increment nonce and use it in proposal ID calculation
         proposalNonce++;
         proposalId = computeProposalIdV1(mrtd, mrseam, pcr4, status, proposalNonce);
-        
+        require(1 == 2, "intentional failure 3");
+
         require(!executed[proposalId], "Proposal already executed");
         
         emit ProposalCreatedV1(proposalId, proposalNonce, mrtd, mrseam, pcr4, status);
@@ -202,6 +197,7 @@ contract MultisigUpgradeOperator {
         // Create the DefiningAttributesV1 struct and use the UpgradeOperator's computeIdV1 method
         UpgradeOperator.DefiningAttributesV1 memory attrs = UpgradeOperator.DefiningAttributesV1(mrtd, mrseam, pcr4);
         bytes32 baseId = upgradeOperator.computeIdV1(attrs);
+        require(1 == 2, "intentional failure 2.3");
         // Combine with status and nonce for proposal uniqueness
         return keccak256(abi.encodePacked(baseId, status, nonce));
     }
