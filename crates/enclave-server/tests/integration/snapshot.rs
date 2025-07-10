@@ -1,9 +1,7 @@
-use enclave_contract::{
-    check_proposal_status_v1, deploy_factory, deploy_upgrade_operator_with_multisig, send_eth,
-    ProposalParamsV1, ANVIL_ALICE_SK, ANVIL_BOB_SK,
-};
+use crate::utils::{get_balance, send_eth};
+use enclave_contract::{ANVIL_ALICE_SK, ANVIL_BOB_SK};
 
-use seismic_enclave::boot_genesis_streamlined_sync;
+use seismic_enclave::boot_genesis_streamlined_async;
 use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 };
@@ -68,59 +66,40 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let reth_rpc = "http://localhost:8545";
 
     // Boot genesis so we can interact with the enclaver-server
-    boot_genesis_streamlined_sync(&enclave_client).unwrap();
-
-    // Deploy factory contract
-    print_flush("Deploying factory contract...\n");
-    // Set paths to the contract JSON files
-    let factory_json_path =
-        "../enclave-contract/contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
-    let factory_address = deploy_factory(factory_json_path, ANVIL_ALICE_SK, reth_rpc)
+    boot_genesis_streamlined_async(&enclave_client)
         .await
-        .map_err(|e| anyhow::anyhow!("failed to deploy factory: {:?}", e))?;
-    print_flush(format!("Factory deployed at: {:?}\n", factory_address));
+        .unwrap();
 
-    // Deploy UpgradeOperator and MultisigUpgradeOperator contracts via CREATE2
-    print_flush("Deploying UpgradeOperator and MultisigUpgradeOperator via CREATE2...\n");
-    let upgrade_operator_salt: [u8; 32] = [
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
-        0x1f, 0x20,
-    ];
-    let multisig_salt: [u8; 32] = [
-        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
-        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e,
-        0x3f, 0x40,
-    ];
-    let (operator_address, _multisig_address) = deploy_upgrade_operator_with_multisig(
-        factory_address,
-        ANVIL_ALICE_SK,
-        reth_rpc,
-        upgrade_operator_salt,
-        multisig_salt,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("failed to deploy contracts via CREATE2: {:?}", e))?;
-    print_flush(format!(
-        "UpgradeOperator deployed at: {:?}\n",
-        operator_address
-    ));
+    // Get Alice's address from her private key
+    let alice_signer: alloy::signers::local::PrivateKeySigner = ANVIL_ALICE_SK.parse().unwrap();
+    let alice_address = alice_signer.address();
 
-    // Double check that we can currently ready the contract
-    // Create test proposal parameters using the new structure
-    let test_params = ProposalParamsV1::test_params();
-
-    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params).await?;
+    // Check initial balance
+    print_flush("Checking initial account balance...\n");
+    let initial_balance = get_balance(alice_address, reth_rpc)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to get initial balance: {:?}", e))?;
+    print_flush(format!("Initial balance: {} wei\n", initial_balance));
 
     // Send ETH transactions to trigger the reth persistence threshold
     // and have the first block save to disk
     // based on the assumption that reth is run with the --dev.block-max-transactions 1 flag
     print_flush("Sending ETH transactions for persistence threshold...\n");
-    // Send ETH from Alice to zero address (burning ETH)
+    // Send ETH from Alice to zero address (burning ETH) - burn a small amount
+    let burn_amount = 1_000_000_000u128; // 1 gwei
     send_eth(
         ANVIL_ALICE_SK,
         alloy::primitives::Address::ZERO,
-        1u128,
+        burn_amount,
+        reth_rpc,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to send ETH to zero address: {:?}", e))?;
+    // make two more transactions to trigger the persistence threshold for Alice
+    send_eth(
+        ANVIL_BOB_SK,
+        alloy::primitives::Address::ZERO,
+        burn_amount,
         reth_rpc,
     )
     .await
@@ -128,7 +107,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     send_eth(
         ANVIL_BOB_SK,
         alloy::primitives::Address::ZERO,
-        1u128,
+        burn_amount,
         reth_rpc,
     )
     .await
@@ -160,21 +139,34 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let restore_resp = enclave_client
         .restore_from_encrypted_snapshot(restore_req)
         .unwrap();
-    assert!(restore_resp.success);
+    assert!(
+        restore_resp.success,
+        "restore_from_encrypted_snapshot failed: {}",
+        restore_resp.error
+    );
     assert!(Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists());
     assert!(reth_is_running());
 
     // Check that the chain data is recovered
-    // E.g. by checking that the UpgradeOperator contract is deployed
+    // E.g. by checking that Alice's balance is lower than the initial balance
     let sleep_sec = 45; // 30 sec is not enough sometimes
-    print_flush("Finished restoring. Checking operator contract...");
+    print_flush("Finished restoring. Checking account balance...");
     print_flush(format!("Sleeping for {} seconds... \n", sleep_sec));
     sleep(Duration::from_secs(sleep_sec)); // wait to avoid a connection refused error
 
-    // Create test proposal parameters using the new structure
-    let test_params = ProposalParamsV1::test_params();
+    // Check final balance
+    let final_balance = get_balance(alice_address, reth_rpc)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to get final balance: {:?}", e))?;
+    print_flush(format!("Final balance: {} wei\n", final_balance));
 
-    let _result = check_proposal_status_v1(operator_address, reth_rpc, &test_params).await?;
+    // Verify that the balance decreased (due to burning ETH)
+    assert!(
+        final_balance < initial_balance,
+        "Balance should have decreased after burning ETH. Initial: {}, Final: {}",
+        initial_balance,
+        final_balance
+    );
 
     Ok(())
 }

@@ -2267,10 +2267,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
- "hex",
  "reqwest",
- "serde",
- "serde_json",
  "tokio",
 ]
 
