@@ -1,4 +1,3 @@
-use enclave_contract::upgrades_canonical_deploy;
 use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
 use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 use enclave_contract::{
@@ -15,17 +14,12 @@ use std::time::Duration;
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Error> {
     // Set path to the factory contract's json file
-    let factory_json_path = "contracts/out/UpgradeOperatorFactory.sol/UpgradeOperatorFactory.json";
     let reth_rpc = "http://localhost:8545";
     let multisig_address = UPGRADE_MULTISIG_ADDRESS
         .parse::<alloy::primitives::Address>()
         .unwrap();
     let upgrade_operator_address = UPGRADE_OPERATOR_ADDRESS
         .parse::<alloy::primitives::Address>()
-        .unwrap();
-
-    upgrades_canonical_deploy(factory_json_path, reth_rpc)
-        .await
         .unwrap();
 
     // Wait a bit for the transaction to be processed

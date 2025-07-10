@@ -31,12 +31,13 @@ pub const ANVIL_CHARLIE_SK: &str =
     "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
 
 /// The address of the UpgradeOperator contract
-/// This is the address that the factory will deploy the UpgradeOperator to
-/// See the create2_test.rs test to see how this is computed
-/// TODO: Figure out how Seismic intends to make this constant consistent long-term
-pub const UPGRADE_OPERATOR_ADDRESS: &str = "0xd2ab2406c371e7f1be3b73f52806cf64867beab2";
+/// seismic-reth deploys this code at genesis
+pub const UPGRADE_OPERATOR_ADDRESS: &str = "0x1000000000000000000000000000000000000001";
 
-pub const UPGRADE_MULTISIG_ADDRESS: &str = "0xb1205162ee1414866300d9e9cdc5a8b65b0c1f33";
+/// The address of the MultisigUpgradeOperator contract
+/// which can control state transitions of the UpgradeOperator
+/// seismic-reth deploys this code at genesis
+pub const UPGRADE_MULTISIG_ADDRESS: &str = "0x1000000000000000000000000000000000000002";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContractArtifact {
