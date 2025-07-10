@@ -18,9 +18,6 @@ contract MultisigUpgradeOperator {
     // The UpgradeOperator contract being controlled
     UpgradeOperator public upgradeOperator;
     
-    // Factory address that can set the upgrade operator
-    address public immutable factory;
-    
     // Nonce counter for proposal uniqueness
     uint256 public proposalNonce;
     
@@ -44,7 +41,6 @@ contract MultisigUpgradeOperator {
     
     constructor(address _upgradeOperator) {
         upgradeOperator = UpgradeOperator(_upgradeOperator);
-        factory = msg.sender;
         proposalNonce = 0;
     }
     
@@ -53,7 +49,6 @@ contract MultisigUpgradeOperator {
      * @param _upgradeOperator The address of the UpgradeOperator contract
      */
     function setUpgradeOperator(address _upgradeOperator) public {
-        require(msg.sender == factory, "Only factory can set upgrade operator");
         require(_upgradeOperator != address(0), "Invalid upgrade operator address");
         upgradeOperator = UpgradeOperator(_upgradeOperator);
         emit UpgradeOperatorSet(_upgradeOperator);
@@ -80,7 +75,6 @@ contract MultisigUpgradeOperator {
         // Increment nonce and use it in proposal ID calculation
         proposalNonce++;
         proposalId = computeProposalIdV1(mrtd, mrseam, pcr4, status, proposalNonce);
-        require(1 == 2, "intentional failure 3");
 
         require(!executed[proposalId], "Proposal already executed");
         
@@ -196,8 +190,14 @@ contract MultisigUpgradeOperator {
     ) public view returns (bytes32) {
         // Create the DefiningAttributesV1 struct and use the UpgradeOperator's computeIdV1 method
         UpgradeOperator.DefiningAttributesV1 memory attrs = UpgradeOperator.DefiningAttributesV1(mrtd, mrseam, pcr4);
-        bytes32 baseId = upgradeOperator.computeIdV1(attrs);
-        require(1 == 2, "intentional failure 2.3");
+        
+        bytes32 baseId;
+        try upgradeOperator.computeIdV1(attrs) returns (bytes32 result) {
+            baseId = result;
+        } catch {
+            revert("upgradeOperator.computeIdV1 failed");
+        }
+
         // Combine with status and nonce for proposal uniqueness
         return keccak256(abi.encodePacked(baseId, status, nonce));
     }
