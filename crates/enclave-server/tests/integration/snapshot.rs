@@ -1,7 +1,7 @@
 use crate::utils::{get_balance, send_eth};
 use enclave_contract::{ANVIL_ALICE_SK, ANVIL_BOB_SK};
 
-use seismic_enclave::boot_genesis_streamlined_sync;
+use seismic_enclave::boot_genesis_streamlined_async;
 use seismic_enclave::request_types::{
     PrepareEncryptedSnapshotRequest, RestoreFromEncryptedSnapshotRequest,
 };
@@ -35,7 +35,7 @@ pub fn print_flush<S: AsRef<str>>(s: S) {
 
 // This test assumes the enclave-server and reth are both running
 // with the relevant service manager
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread")] 
 pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     print_flush("Running test_snapshot_integration_handlers. Expected runtime is ~90 sec\n");
     // Check the starting conditions are as expected
@@ -66,7 +66,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let reth_rpc = "http://localhost:8545";
 
     // Boot genesis so we can interact with the enclaver-server
-    boot_genesis_streamlined_sync(&enclave_client).unwrap();
+    boot_genesis_streamlined_async(&enclave_client).await.unwrap();
 
     // Get Alice's address from her private key
     let alice_signer: alloy::signers::local::PrivateKeySigner = ANVIL_ALICE_SK.parse().unwrap();
@@ -137,7 +137,7 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
     let restore_resp = enclave_client
         .restore_from_encrypted_snapshot(restore_req)
         .unwrap();
-    assert!(restore_resp.success);
+    assert!(restore_resp.success, "restore_from_encrypted_snapshot failed: {}", restore_resp.error);
     assert!(Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists());
     assert!(reth_is_running());
 
