@@ -95,22 +95,30 @@ jobs:
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      # Checkout seismic-reth into subdir
       - name: Checkout seismic-reth
         uses: actions/checkout@v4
         with:
           repository: SeismicSystems/seismic-reth
-          path: seismic-reth
-      - name: build seismic-reth
-        run: |
-          cd seismic-reth
-          cargo build --bin seismic-reth
-          echo "Built binaries:"
-          find target/debug -maxdepth 1 -type f -executable
+          path: ../seismic-reth
 
-      # - uses: actions/checkout@v4
-      #   with:
-      #     shared-key: "integration-tests-cache"
-      # - name: Make test script executable
-      #   run: chmod +x scripts/run_integration_tests.sh
-      # - name: Run integration tests
-      #   run: ./scripts/run_integration_tests.sh
+      # Build seismic-reth using manifest path
+      - name: Build seismic-reth
+        run: |
+          cargo build --bin seismic-reth --manifest-path ../seismic-reth/Cargo.toml
+          echo "Built binaries:"
+          find ../seismic-reth/target/debug -maxdepth 1 -type f -executable
+
+      # Checkout the current repo (enclave)
+      - name: Checkout enclave repo
+        uses: actions/checkout@v4
+
+      # Make integration test script executable
+      - name: Make test script executable
+        run: chmod +x scripts/run_integration_tests.sh
+
+      # Run the integration tests
+      - name: Run integration tests
+        run: ./scripts/run_integration_tests.sh
+
