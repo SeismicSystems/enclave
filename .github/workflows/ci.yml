@@ -109,6 +109,12 @@ jobs:
         with:
           shared-key: "build-cache"
           cache-on-failure: true
+          cache-directories: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
 
       # Download the built enclave binaries
       - name: Download enclave binaries
@@ -123,6 +129,8 @@ jobs:
         with:
           repository: SeismicSystems/seismic-reth
           path: seismic-reth
+          clean: false
+          fetch-depth: 0
 
       # Build seismic-reth using manifest path
       - name: Build seismic-reth
@@ -141,6 +149,9 @@ jobs:
       # Checkout the current repo (enclave)
       - name: Checkout enclave repo
         uses: actions/checkout@v4
+        with:
+          clean: false
+          fetch-depth: 0
 
       # Make integration test script executable
       - name: Make test script executable
