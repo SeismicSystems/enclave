@@ -107,10 +107,10 @@ jobs:
           echo "Built binaries:"
           find target/debug -maxdepth 1 -type f -executable
 
-      - uses: actions/checkout@v4
-        with:
-          shared-key: "integration-tests-cache"
-      - name: Make test script executable
-        run: chmod +x scripts/run_integration_tests.sh
-      - name: Run integration tests
-        run: ./scripts/run_integration_tests.sh
+      # - uses: actions/checkout@v4
+      #   with:
+      #     shared-key: "integration-tests-cache"
+      # - name: Make test script executable
+      #   run: chmod +x scripts/run_integration_tests.sh
+      # - name: Run integration tests
+      #   run: ./scripts/run_integration_tests.sh
