@@ -37,6 +37,15 @@ jobs:
           cache-on-failure: true
       - name: cargo build without flags
         run: cargo build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: enclave-binaries
+          path: |
+            target/debug/seismic-enclave*
+            target/debug/seismic-enclave-server*
+            target/debug/enclave-contract*
+          retention-days: 1
 
   # warnings:
   #   runs-on: self-hosted
@@ -101,6 +110,13 @@ jobs:
           shared-key: "build-cache"
           cache-on-failure: true
 
+      # Download the built enclave binaries
+      - name: Download enclave binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: enclave-binaries
+          path: target/debug/
+
       # Checkout seismic-reth into subdir
       - name: Checkout seismic-reth
         uses: actions/checkout@v4
@@ -114,6 +130,13 @@ jobs:
           cargo build --bin seismic-reth --manifest-path seismic-reth/Cargo.toml
           echo "Built binaries:"
           find seismic-reth/target/debug -maxdepth 1 -type f -executable
+
+      # Print full path of seismic-reth binary
+      - name: Print seismic-reth binary path
+        run: |
+          echo "Full path of seismic-reth binary:"
+          find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
+          echo "Current working directory: $PWD"
 
       # Checkout the current repo (enclave)
       - name: Checkout enclave repo
