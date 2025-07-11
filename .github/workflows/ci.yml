@@ -93,9 +93,21 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Checkout seismic-reth
+        uses: actions/checkout@v4
+        with:
+          repository: SeismicSystems/seismic-reth
+          path: seismic-reth
+      - name: build seismic-reth
+        run: |
+          cd seismic-reth
+          cargo build --bin seismic-reth
+          echo "Built binaries:"
+          find target/debug -maxdepth 1 -type f -executable
+
+      - uses: actions/checkout@v4
         with:
           shared-key: "integration-tests-cache"
       - name: Make test script executable
