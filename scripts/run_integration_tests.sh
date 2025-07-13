@@ -28,24 +28,6 @@ echo "📦 Installing dependencies..."
 sudo apt-get update
 sudo apt-get install -y supervisor tar lz4 curl
 
-# Build contracts
-echo "🔨 Building smart contracts..."
-cd crates/enclave-contract/contracts
-chmod +x build.sh
-./build.sh
-cd ../../..
-
-# Setup test directories
-echo "📁 Setting up test directories..."
-sudo mkdir -p /home/azureuser/.reth/db
-sudo mkdir -p /mnt/datadisk
-sudo mkdir -p /tmp/snapshot
-# Create a dummy mdbx.dat file for tests
-sudo touch /home/azureuser/.reth/db/mdbx.dat
-sudo chown -R azureuser:azureuser /home/azureuser/.reth
-sudo chown -R azureuser:azureuser /mnt/datadisk
-sudo chown -R azureuser:azureuser /tmp/snapshot
-
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
 sudo supervisorctl start all || true
