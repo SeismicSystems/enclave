@@ -178,5 +178,5 @@ jobs:
 
       # Run the integration tests
       - name: Run integration tests
-        run: ./scripts/run_integration_tests.sh
+        run: sudo ./scripts/run_integration_tests.sh
 
