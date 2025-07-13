@@ -146,15 +146,9 @@ jobs:
       - name: Build seismic-reth
         run: |
           cargo build --bin seismic-reth --manifest-path seismic-reth/Cargo.toml
-          echo "Built binaries:"
-          find seismic-reth/target/debug -maxdepth 1 -type f -executable
-
-      # Print full path of seismic-reth binary
-      - name: Print seismic-reth binary path
-        run: |
+          echo "Current working directory: $PWD"
           echo "Full path of seismic-reth binary:"
           find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
-          echo "Current working directory: $PWD"
 
       # # Checkout the current repo (enclave)
       # - name: Checkout enclave repo
@@ -172,6 +166,8 @@ jobs:
         run: |
           echo "=== Checking if seismic-reth binary exists ==="
           ls -la /home/azureuser/actions-runner/_work/enclave/enclave/seismic-reth/target/debug/seismic-reth || echo "Binary not found"
+          echo "=== Checking if seismic-enclave-server binary exists ==="
+          ls -la /home/azureuser/actions-runner/_work/enclave/enclave/target/debug/seismic-enclave-server || echo "seismic-enclave-server binary not found"
           echo "=== Current working directory ==="
           pwd
           echo "=== Supervisor config ==="
