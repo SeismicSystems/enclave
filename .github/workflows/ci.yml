@@ -127,12 +127,11 @@ jobs:
       - name: Make enclave binaries executable
         run: |
           echo "current directory: $PWD"
+          ls -la target/debug/seismic-*
           chmod +x target/debug/seismic-enclave*
           chmod +x target/debug/seismic-enclave-server*
-          chmod +x target/debug/enclave-contract*
           echo "Made enclave binaries executable:"
           ls -la target/debug/seismic-*
-          ls -la target/debug/enclave-contract*
 
       # Checkout seismic-reth into subdir
       - name: Checkout seismic-reth
