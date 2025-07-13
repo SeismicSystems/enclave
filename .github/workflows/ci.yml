@@ -175,7 +175,7 @@ jobs:
           echo "=== Current working directory ==="
           pwd
           echo "=== Supervisor config ==="
-          sudo cat /etc/supervisor/conf.d/supervisord.conf || echo "No supervisor config found"
+          sudo cat /etc/supervisor/conf.d/devnet.conf || echo "No supervisor config found"
           echo "=== Checking supervisor status ==="
           sudo supervisorctl status || echo "Supervisor not running"
 
