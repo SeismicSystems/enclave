@@ -143,13 +143,13 @@ jobs:
           clean: false
           fetch-depth: 0
 
-      # Build seismic-reth using manifest path
-      - name: Build seismic-reth
-        run: |
-          cargo build --bin seismic-reth --manifest-path seismic-reth/Cargo.toml
-          echo "Current working directory: $PWD"
-          echo "Full path of seismic-reth binary:"
-          find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
+      # # Build seismic-reth using manifest path
+      # - name: Build seismic-reth
+      #   run: |
+      #     cargo build --bin seismic-reth --manifest-path seismic-reth/Cargo.toml
+      #     echo "Current working directory: $PWD"
+      #     echo "Full path of seismic-reth binary:"
+      #     find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
 
       # # Checkout the current repo (enclave)
       # - name: Checkout enclave repo
