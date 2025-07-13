@@ -156,12 +156,12 @@ jobs:
           find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
           echo "Current working directory: $PWD"
 
-      # Checkout the current repo (enclave)
-      - name: Checkout enclave repo
-        uses: actions/checkout@v4
-        with:
-          clean: false
-          fetch-depth: 0
+      # # Checkout the current repo (enclave)
+      # - name: Checkout enclave repo
+      #   uses: actions/checkout@v4
+      #   with:
+      #     clean: false
+      #     fetch-depth: 0
 
       # Make integration test script executable
       - name: Make test script executable
