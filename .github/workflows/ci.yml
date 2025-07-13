@@ -126,6 +126,7 @@ jobs:
       # Make enclave binaries executable
       - name: Make enclave binaries executable
         run: |
+          echo "current directory: $PWD"
           chmod +x target/debug/seismic-enclave*
           chmod +x target/debug/seismic-enclave-server*
           chmod +x target/debug/enclave-contract*
