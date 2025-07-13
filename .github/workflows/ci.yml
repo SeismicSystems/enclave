@@ -123,6 +123,16 @@ jobs:
           name: enclave-binaries
           path: target/debug/
 
+      # Make enclave binaries executable
+      - name: Make enclave binaries executable
+        run: |
+          chmod +x target/debug/seismic-enclave*
+          chmod +x target/debug/seismic-enclave-server*
+          chmod +x target/debug/enclave-contract*
+          echo "Made enclave binaries executable:"
+          ls -la target/debug/seismic-*
+          ls -la target/debug/enclave-contract*
+
       # Checkout seismic-reth into subdir
       - name: Checkout seismic-reth
         uses: actions/checkout@v4
