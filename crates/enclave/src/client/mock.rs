@@ -39,8 +39,12 @@ impl MockEnclaveServer {
     }
 
     /// Mock implementation of the health check method.
-    pub fn health_check() -> String {
-        "OK".to_string()
+    pub fn health_check() -> HealthCheckResponse {
+        let boot_complete = true; // Mock enclave server starts booted as it uses hardcoded keys
+        HealthCheckResponse {
+            status_ok: true,
+            boot_complete,
+        }
     }
 
     /// Mock implementation of the get_public_key method.
@@ -98,6 +102,24 @@ impl MockEnclaveServer {
     fn complete_boot() {
         // No-op, keys are hardcoded for mock server
     }
+
+    fn prepare_encrypted_snapshot(
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> PrepareEncryptedSnapshotResponse {
+        PrepareEncryptedSnapshotResponse {
+            success: true,
+            error: "".to_string(),
+        }
+    }
+
+    fn restore_from_encrypted_snapshot(
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RestoreFromEncryptedSnapshotResponse {
+        RestoreFromEncryptedSnapshotResponse {
+            success: true,
+            error: "".to_string(),
+        }
+    }
 }
 
 impl Default for MockEnclaveServer {
@@ -137,7 +159,7 @@ macro_rules! impl_mock_async_server_trait {
     };
 }
 impl_mock_async_server_trait!(
-    async fn health_check(&self) -> String,
+    async fn health_check(&self) -> HealthCheckResponse,
     async fn get_purpose_keys(&self, req: GetPurposeKeysRequest) -> GetPurposeKeysResponse,
     async fn get_attestation_evidence(&self, req: AttestationGetEvidenceRequest) -> AttestationGetEvidenceResponse,
     async fn eval_attestation_evidence(&self, req: AttestationEvalEvidenceRequest) -> AttestationEvalEvidenceResponse,
@@ -145,6 +167,8 @@ impl_mock_async_server_trait!(
     async fn boot_share_root_key(&self, req: ShareRootKeyRequest) -> ShareRootKeyResponse,
     async fn boot_genesis(&self) -> (),
     async fn complete_boot(&self) -> (),
+    async fn prepare_encrypted_snapshot(&self, req: PrepareEncryptedSnapshotRequest) -> PrepareEncryptedSnapshotResponse,
+    async fn restore_from_encrypted_snapshot(&self, req: RestoreFromEncryptedSnapshotRequest) -> RestoreFromEncryptedSnapshotResponse,
 );
 
 /// Mock enclave client for testing purposes.
@@ -175,7 +199,7 @@ macro_rules! impl_mock_sync_client_trait {
     };
 }
 impl_mock_sync_client_trait!(
-    fn health_check(&self) -> Result<String, ClientError>,
+    fn health_check(&self) -> Result<HealthCheckResponse, ClientError>,
     fn get_purpose_keys(&self, _req: GetPurposeKeysRequest) -> Result<GetPurposeKeysResponse, ClientError>,
     fn get_attestation_evidence(&self, _req: AttestationGetEvidenceRequest) -> Result<AttestationGetEvidenceResponse, ClientError>,
     fn eval_attestation_evidence(&self, _req: AttestationEvalEvidenceRequest) -> Result<AttestationEvalEvidenceResponse, ClientError>,
@@ -183,6 +207,8 @@ impl_mock_sync_client_trait!(
     fn boot_share_root_key(&self, _req: ShareRootKeyRequest) -> Result<ShareRootKeyResponse,  ClientError>,
     fn boot_genesis(&self) -> Result<(),  ClientError>,
     fn complete_boot(&self) -> Result<(),  ClientError>,
+    fn prepare_encrypted_snapshot(&self, _req: PrepareEncryptedSnapshotRequest) -> Result<PrepareEncryptedSnapshotResponse, ClientError>,
+    fn restore_from_encrypted_snapshot(&self, _req: RestoreFromEncryptedSnapshotRequest) -> Result<RestoreFromEncryptedSnapshotResponse, ClientError>,
 );
 
 #[derive(Debug, Clone, Default)]
@@ -228,7 +254,7 @@ mod tests {
     }
 
     async fn async_test_health_check(client: &EnclaveClient) {
-        let resposne = client.deref().health_check().await.unwrap();
-        assert_eq!(resposne, "OK");
+        let response = client.deref().health_check().await.unwrap();
+        assert!(response.status_ok, "Status OK");
     }
 }

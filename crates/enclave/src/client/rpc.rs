@@ -41,7 +41,7 @@ pub trait SyncEnclaveApiClientBuilder: Clone + Debug + Send + Sync + Unpin {
 pub trait EnclaveApi {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
-    async fn health_check(&self) -> RpcResult<String>;
+    async fn health_check(&self) -> RpcResult<HealthCheckResponse>;
 
     /// Get the secp256k1 public key
     #[method(name = "getPurposeKeys")]
@@ -85,4 +85,18 @@ pub trait EnclaveApi {
     /// Completes the genesis boot
     #[method(name = "boot.complete_boot")]
     async fn complete_boot(&self) -> RpcResult<()>;
+
+    /// Prepares an encrypted snapshot
+    #[method(name = "snapshot.prepare_encrypted_snapshot")]
+    async fn prepare_encrypted_snapshot(
+        &self,
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse>;
+
+    /// Restores from an encrypted snapshot
+    #[method(name = "snapshot.restore_from_encrypted_snapshot")]
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse>;
 }

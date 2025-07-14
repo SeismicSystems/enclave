@@ -5,6 +5,7 @@
 
 use crate::attestation::seismic_aa_mock;
 use crate::attestation::SeismicAttestationAgent;
+use crate::utils::test_utils::read_vector_txt;
 use attestation_agent::AttestationAPIs;
 
 use anyhow::Ok;
@@ -50,20 +51,6 @@ async fn see_default_config() {
     println!("{:?}", config);
 }
 
-//#[tokio::test]
-//#[ignore]
-//async fn get_mrtd() {
-//    use alloy_primitives::Bytes;
-//    let rootfs_hash = Bytes::from(vec![0x00; 32]);
-//    let mrtd = Bytes::from(vec![0x00; 48]);
-//    let rtmr0 = Bytes::from(vec![0x00; 48]);
-//    let rtmr3 = Bytes::from(vec![0x00; 48]);
-//
-//    let _result = check_operator(rootfs_hash, mrtd, rtmr0, rtmr3)
-//        .await
-//        .unwrap();
-//}
-
 //#[tokio::test(flavor = "multi_thread")]
 //async fn run_client_ping() {
 //    use seismic_enclave::rpc::SyncEnclaveApiClient;
@@ -96,18 +83,22 @@ mod attester_tests {
         print_active_feature();
         println!("{:?}", saa.get_tee_type());
         println!("{:?}", tdx_evidence);
+        println!("runtime_data: {:?}", runtime_data);
+        println!("claims: {:?}", get_tdx_evidence_claims(tdx_evidence)?);
         assert!(false); // so I can see the print statement
         Ok(())
     }
 
     #[test]
     #[ignore]
-    fn run_get_tdx_evidence_claims() -> Result<(), anyhow::Error> {
-        let path = "./src/coco_as/examples/yocto_20241025193121.txt"; // Note this file has moved
+    fn see_yocto_tdx_evidence() -> Result<(), anyhow::Error> {
+        let path = "../../examples/yocto_20241025193121.txt"; // Note this file has moved
         let tdx_evidence: Vec<u8> = read_vector_txt(path.to_string())?;
 
-        get_tdx_evidence_claims(tdx_evidence)?;
+        let claims = get_tdx_evidence_claims(tdx_evidence)?;
+        println!("{:?}", claims);
 
+        assert!(false); // so I can see the print statement
         Ok(())
     }
 }

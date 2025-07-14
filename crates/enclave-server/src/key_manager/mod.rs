@@ -5,15 +5,13 @@ mod manager;
 pub use builder::KeyManagerBuilder;
 pub use manager::KeyManager;
 
+use auto_impl::auto_impl;
+
 /// Trait for providing access to derived keys used in networking and other runtime logic.
 ///
 /// Used to abstract over how keys are retrieved (e.g., real or mocked key managers).
+#[auto_impl(&, Arc)]
 pub trait NetworkKeyProvider: Sync {
-    /// Constructs a new instance of the key manager.
-    /// Randomly initializes a root key,
-    /// which determines the derived purpose keys
-    fn new(root_key_bytes: [u8; 32]) -> Self;
-
     /// Sets the root key for the key manager, replacing any existing key material.
     /// This update should propogate so that all derived keys are recalculated
     /// based on the newly provided root key.

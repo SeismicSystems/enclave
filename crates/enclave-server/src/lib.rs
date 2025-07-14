@@ -4,6 +4,7 @@
 pub mod attestation;
 pub mod key_manager;
 pub mod server;
+pub mod snapshot;
 pub mod utils;
 
 use clap as _; // used by main.rs

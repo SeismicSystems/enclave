@@ -3,6 +3,8 @@ use attestation_service::HashAlgorithm;
 use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
+use serde_json;
+use std::path::Path;
 use std::sync::Arc;
 
 use super::boot::Booter;
@@ -12,13 +14,13 @@ use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
 use crate::server::into_original::IntoOriginalHashAlgorithm;
-use crate::utils::tdx_evidence_helpers::tdx_attestation_bytes_to_evidence_struct;
+use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
+use seismic_enclave::rpc_missing_snapshot_error;
 use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
-    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_bad_quote_error, rpc_conflict_error,
-    rpc_internal_server_error,
+    rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error, rpc_internal_server_error,
 };
 
 /// The main execution engine for secure enclave logic
@@ -59,8 +61,12 @@ impl<K> EnclaveApiServer for AttestationEngine<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {
-    async fn health_check(&self) -> RpcResult<String> {
-        Ok("OK".into())
+    async fn health_check(&self) -> RpcResult<HealthCheckResponse> {
+        let boot_complete = self.booter.is_compelted();
+        Ok(HealthCheckResponse {
+            status_ok: true,
+            boot_complete,
+        })
     }
 
     async fn get_purpose_keys(
@@ -93,7 +99,7 @@ where
             Ok(evidence) => evidence,
             Err(e) => {
                 error!("Failed to get attestation evidence: {}", e);
-                return Err(rpc_bad_quote_error(anyhow::anyhow!(
+                return Err(rpc_internal_server_error(anyhow::anyhow!(
                     "Issue in getting the evidence"
                 )));
             }
@@ -118,14 +124,9 @@ where
                 None => attestation_service::HashAlgorithm::Sha256,
             };
 
-        // Convert bytes to Evidence struct
-        // TODO: change AttestationEvalEvidenceRequest so this step is not needed?
-        let evidence = tdx_attestation_bytes_to_evidence_struct(&request.evidence).unwrap();
-        let evidence: attestation_service::TeeEvidence = serde_json::to_value(evidence).unwrap();
-
         // Evaluate attestation evidence (no lock needed for evaluation)
         let verification_request = VerificationRequest {
-            evidence: evidence,
+            evidence: request.evidence,
             tee: request.tee,
             runtime_data,
             runtime_data_hash_algorithm,
@@ -173,28 +174,31 @@ where
                 "Key provider already initialized"
             )));
         }
-
         let tee = self.attestation_agent.get_tee_type();
         let retriver_pk_bytes = self.booter.pk().serialize();
-        let attestation: Vec<u8> = self
+
+        // make an attestation
+        let attestation_bytes: Vec<u8> = self
             .attestation_agent
             .get_evidence(&retriver_pk_bytes)
             .await
             .map_err(|e| rpc_internal_server_error(e))?;
+        let attestation_string = String::from_utf8(attestation_bytes).unwrap();
+        let attestation: serde_json::Value = serde_json::from_str(&attestation_string).unwrap();
 
+        // Call the booter to retrieve the root key
+        // will be stored in the booter if successful
         let client_builder = EnclaveClient::builder();
         let client = client_builder
             .ip(req.addr.ip().to_string())
             .port(req.addr.port())
             .build()
             .unwrap();
-
-        // Call the booter to retrieve the root key
-        // will be stored in the booter if successful
         self.booter
             .retrieve_root_key(tee, &attestation, &client)
             .map_err(|e| rpc_bad_argument_error(anyhow::anyhow!(e)))?;
 
+        // respond to node operator
         let resp = RetrieveRootKeyResponse {};
 
         Ok(resp)
@@ -207,10 +211,23 @@ where
         &self,
         req: ShareRootKeyRequest,
     ) -> RpcResult<ShareRootKeyResponse> {
-        // FUTURE WORK: make sure the "share_root" policy is up to date with on-chain votes
+        // Verify new enclave's attestation is a valid attestation
+        let eval_response: AttestationEvalEvidenceResponse =
+            self.eval_attestation_evidence(req.clone().into()).await?;
 
-        // Verify new enclave's attestation
-        let _ = self.eval_attestation_evidence(req.clone().into()).await?;
+        // Check the tcb_status against the upgrade contract
+        let claims = eval_response.claims.unwrap();
+        let tcb_status = claims.tcb_status;
+        let valid_upgrade = self
+            .booter
+            .check_upgrade_contract(&tcb_status)
+            .await
+            .map_err(|e| rpc_internal_server_error(e))?;
+        if !valid_upgrade {
+            return Err(rpc_bad_evidence_error(anyhow::anyhow!(
+                "Attestation TCB is not approved in the upgrade contract"
+            )));
+        }
 
         // Encrypt the existing root key
         let key_provider = self.key_provider()?;
@@ -258,6 +275,54 @@ where
         self.booter.mark_completed();
 
         Ok(())
+    }
+
+    async fn prepare_encrypted_snapshot(
+        &self,
+        _req: PrepareEncryptedSnapshotRequest,
+    ) -> RpcResult<PrepareEncryptedSnapshotResponse> {
+        let key_provider = self.key_provider()?;
+        let epoch = 0; // no key rotation yet
+
+        let res = crate::snapshot::prepare_encrypted_snapshot(
+            &key_provider,
+            epoch,
+            RETH_DATA_DIR,
+            DATA_DISK_DIR,
+            SNAPSHOT_DIR,
+            SNAPSHOT_FILE,
+        );
+        let resp = PrepareEncryptedSnapshotResponse {
+            success: res.is_ok(),
+            error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        };
+        Ok(resp)
+    }
+
+    async fn restore_from_encrypted_snapshot(
+        &self,
+        _req: RestoreFromEncryptedSnapshotRequest,
+    ) -> RpcResult<RestoreFromEncryptedSnapshotResponse> {
+        let key_provider = self.key_provider()?;
+        let epoch = 0; // no key rotation yet
+
+        let encrypted_snapshot_path = format!("{}/{}.enc", DATA_DISK_DIR, SNAPSHOT_FILE);
+        if !Path::new(&encrypted_snapshot_path).exists() {
+            return Err(rpc_missing_snapshot_error());
+        }
+        let res = crate::snapshot::restore_from_encrypted_snapshot(
+            &key_provider,
+            epoch,
+            RETH_DATA_DIR,
+            DATA_DISK_DIR,
+            SNAPSHOT_DIR,
+            SNAPSHOT_FILE,
+        );
+        let resp = RestoreFromEncryptedSnapshotResponse {
+            success: res.is_ok(),
+            error: res.err().map(|e| e.to_string()).unwrap_or_default(),
+        };
+        Ok(resp)
     }
 }
 
@@ -388,37 +453,6 @@ mod tests {
 
     #[serial(attestation_agent)]
     #[tokio::test]
-    async fn test_boot_share_root_key() {
-        if !is_sudo() {
-            panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
-        }
-
-        let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
-
-        let new_node_booter = Booter::mock();
-        let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
-        assert_eq!(
-            seismic_enclave::request_types::Data::Raw(new_node_booter.pk().serialize().to_vec()),
-            eval_context.clone().runtime_data.unwrap(),
-            "test misconfigured, attestation should be of the new booter's public key"
-        );
-        let resp = enclave_engine
-            .boot_share_root_key(ShareRootKeyRequest {
-                evidence: eval_context.evidence,
-                tee: eval_context.tee,
-                retriever_pk: new_node_booter.pk(),
-            })
-            .await
-            .unwrap();
-        let key_plaintext = new_node_booter.process_share_response(resp).unwrap(); // erroring due to mismatch
-        assert!(
-            key_plaintext == [0u8; 32],
-            "root key does not match expected mock value"
-        );
-    }
-
-    #[serial(attestation_agent)]
-    #[tokio::test]
     async fn test_complete_boot() -> Result<(), anyhow::Error> {
         if !is_sudo() {
             panic!("test_complete_boot: skipped (requires sudo privileges)");
@@ -455,9 +489,6 @@ mod tests {
         // test that key functions work after complete_boot
         let _ = enclave_engine
             .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
-            .await?;
-        let _ = enclave_engine
-            .boot_share_root_key(mock_share_req.clone())
             .await?;
 
         // test that boot functions error after complete_boot
@@ -505,6 +536,9 @@ mod tests {
         let _ = sleep(Duration::from_secs(2)).await;
 
         // run the request
+        // Note: this is run against the mock,
+        // so bugs in boot_retrieve_root_key may slip through
+        // TODO: write an integration test with more realistic behavior
         let _ = enclave_engine
             .boot_retrieve_root_key(RetrieveRootKeyRequest {
                 addr,
