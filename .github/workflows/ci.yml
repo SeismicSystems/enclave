@@ -187,7 +187,9 @@ jobs:
       - name: Run integration tests
         run: |
           echo "=== Running integration tests ==="
-          source $HOME/.cargo/env
+          echo "Rust version: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
+          echo "starting integration tests"
           sudo ./scripts/run_integration_tests.sh
           echo "=== Integration tests completed ==="
 
