@@ -20,8 +20,8 @@ cleanup() {
     sudo supervisorctl stop all || true
 }
 
-# Set up trap to cleanup on exit
-trap cleanup EXIT
+# # Set up trap to cleanup on exit
+# trap cleanup EXIT
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
