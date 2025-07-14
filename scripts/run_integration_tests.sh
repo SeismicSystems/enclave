@@ -12,6 +12,10 @@
 export RUST_BACKTRACE=1
 export RUST_LOG=info
 
+# Show Rust toolchain info for debugging
+echo "📋 Rust version: $(rustc --version 2>/dev/null || echo 'rustc not found')"
+echo "📋 Cargo version: $(cargo --version 2>/dev/null || echo 'cargo not found')"
+
 echo "🚀 Starting integration tests..."
 
 # Function to cleanup processes
