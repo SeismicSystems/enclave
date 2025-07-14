@@ -105,6 +105,8 @@ jobs:
     needs: build
     steps:
       - uses: dtolnay/rust-toolchain@stable
+      - name: Set default toolchain
+        run: rustup default stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-cache"
