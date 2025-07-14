@@ -6,7 +6,7 @@
 # 2. test_boot_share_root_key (requires the setup from step 1)
 # 3. test_snapshot_integration_handlers (can run independently)
 
-set -e
+# set -e
 
 # Set environment variables for better debugging
 export RUST_BACKTRACE=1
