@@ -57,10 +57,33 @@ echo "✅ test_multisig_upgrade_operator_workflow passed"
 
 # Test 2: Run boot share root key test
 echo "🧪 Running test_boot_share_root_key..."
+echo "📁 Current directory: $(pwd)"
 cd ../enclave-server
+echo "📁 Changed to directory: $(pwd)"
 # Build tests and get binary paths
+echo "🔨 Building tests..."
+echo "🔍 Checking if Cargo.toml exists:"
+ls -la Cargo.toml 2>/dev/null || echo "❌ Cargo.toml not found in $(pwd)"
+
+echo "🔍 Running cargo test --no-run with verbose output..."
+set -x  # Enable command tracing
 OUTPUT=$(cargo test --no-run 2>&1)
+BUILD_EXIT_CODE=$?
+set +x  # Disable command tracing
+
+echo "📋 Build exit code: $BUILD_EXIT_CODE"
+echo "📋 Build output:"
 echo "$OUTPUT"
+
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
+    echo "❌ Cargo build failed with exit code $BUILD_EXIT_CODE"
+    echo "🔍 Checking for common issues:"
+    echo "  - Rust toolchain: $(rustc --version 2>/dev/null || echo 'rustc not found')"
+    echo "  - Cargo version: $(cargo --version 2>/dev/null || echo 'cargo not found')"
+    echo "  - Target directory exists: $(ls -la target/ 2>/dev/null || echo 'target/ not found')"
+    exit 1
+fi
+
 mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*integration-[a-z0-9]*')
 if [ ${#binaries[@]} -eq 0 ]; then
     echo "❌ Could not find enclave-server integration test binaries"
@@ -68,8 +91,11 @@ if [ ${#binaries[@]} -eq 0 ]; then
 fi
 echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
+echo "🚀 Executing: sudo ${binaries[0]} test_boot_share_root_key"
 if ! sudo "${binaries[0]}" test_boot_share_root_key; then
-    echo "❌ test_boot_share_root_key failed"
+    echo "❌ test_boot_share_root_key failed with exit code $?"
+    echo "🔍 Last 20 lines of system log:"
+    sudo journalctl -n 20 --no-pager 2>/dev/null || echo "Could not access journalctl"
     exit 1
 fi
 echo "✅ test_boot_share_root_key passed"
