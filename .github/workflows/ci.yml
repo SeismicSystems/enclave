@@ -105,13 +105,6 @@ jobs:
     needs: build
     steps:
       - uses: dtolnay/rust-toolchain@stable
-      - name: Setup Rust environment
-        run: |
-          echo "Setting up Rust environment..."
-          rustup default stable
-          source $HOME/.cargo/env
-          echo "Rust version: $(rustc --version)"
-          echo "Cargo version: $(cargo --version)"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-cache"
@@ -185,11 +178,5 @@ jobs:
 
       # Run the integration tests
       - name: Run integration tests
-        run: |
-          echo "=== Running integration tests ==="
-          echo "Rust version: $(rustc --version)"
-          echo "Cargo version: $(cargo --version)"
-          echo "starting integration tests"
-          ./scripts/run_integration_tests.sh
-          echo "=== Integration tests completed ==="
+        run: ./scripts/run_integration_tests.sh
 
