@@ -23,11 +23,6 @@ cleanup() {
 # Set up trap to cleanup on exit
 trap cleanup EXIT
 
-# Install dependencies if not already installed
-echo "📦 Installing dependencies..."
-sudo apt-get update
-sudo apt-get install -y supervisor tar lz4 curl
-
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
 sudo supervisorctl start all || true
@@ -47,9 +42,9 @@ cd crates/enclave-contract
 # Build tests and get binary paths
 OUTPUT=$(cargo test --no-run 2>&1)
 echo "$OUTPUT"
-mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*enclave_contract-[a-z0-9]*')
+mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*multisig_test-[a-z0-9]*')
 if [ ${#binaries[@]} -eq 0 ]; then
-    echo "❌ Could not find enclave-contract test binaries"
+    echo "❌ Could not find multisig_test binaries"
     exit 1
 fi
 echo "Found binaries: ${binaries[*]}"
@@ -66,14 +61,14 @@ cd ../enclave-server
 # Build tests and get binary paths
 OUTPUT=$(cargo test --no-run 2>&1)
 echo "$OUTPUT"
-mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave_server-[a-z0-9]*')
+mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*integration-[a-z0-9]*')
 if [ ${#binaries[@]} -eq 0 ]; then
-    echo "❌ Could not find seismic-enclave-server test binaries"
+    echo "❌ Could not find enclave-server integration test binaries"
     exit 1
 fi
 echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
-if ! "${binaries[0]}" test_boot_share_root_key; then
+if ! sudo "${binaries[0]}" test_boot_share_root_key; then
     echo "❌ test_boot_share_root_key failed"
     exit 1
 fi
@@ -81,7 +76,7 @@ echo "✅ test_boot_share_root_key passed"
 
 # Test 3: Run snapshot integration handlers test
 echo "🧪 Running test_snapshot_integration_handlers..."
-if ! "${binaries[0]}" test_snapshot_integration_handlers; then
+if ! sudo "${binaries[0]}" test_snapshot_integration_handlers; then
     echo "❌ test_snapshot_integration_handlers failed"
     exit 1
 fi
