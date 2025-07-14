@@ -1,7 +1,10 @@
 //! This module contains logic for allowing an operator
 //! to configure the enclave server, e.g. to set the IP address of existing nodes
 
+use alloy;
 use anyhow::anyhow;
+use enclave_contract;
+use hex;
 use kbs_types::Tee;
 use rand::rngs::OsRng;
 use rand::TryRngCore;
@@ -90,7 +93,7 @@ impl Booter {
     pub fn retrieve_root_key(
         &self,
         tee: Tee,
-        attestation: &Vec<u8>,
+        attestation: &serde_json::Value,
         client: &dyn SyncEnclaveApiClient,
     ) -> Result<(), anyhow::Error> {
         let req = ShareRootKeyRequest {
@@ -171,6 +174,86 @@ impl Booter {
         *guard = Some(rng_bytes);
         Ok(())
     }
+
+    pub async fn check_upgrade_contract(&self, tcb_status: &str) -> Result<bool, anyhow::Error> {
+        // Parse the tcb_status JSON string to access specific fields
+        let tcb_status_map: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&tcb_status)
+                .map_err(|e| anyhow::anyhow!("Failed to parse tcb_status JSON: {e}"))?;
+
+        let pcr4_hex = tcb_status_map
+            .get("aztdxvtpm.tpm.pcr04")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse tcb_status JSON field: pcr04"
+            ))?;
+
+        let mr_td_hex = tcb_status_map
+            .get("aztdxvtpm.quote.body.mr_td")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse tcb_status JSON field: mrtd"
+            ))?;
+
+        let mr_seam_hex = tcb_status_map
+            .get("aztdxvtpm.quote.body.mr_seam")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse tcb_status JSON field: mr_seam"
+            ))?;
+
+        // Convert hex strings to bytes
+        let pcr4_bytes = hex::decode(pcr4_hex.strip_prefix("0x").unwrap_or(&pcr4_hex))
+            .map_err(|e| anyhow::anyhow!("Failed to decode pcr4 hex: {e}"))?;
+        let mr_td_bytes = hex::decode(mr_td_hex.strip_prefix("0x").unwrap_or(&mr_td_hex))
+            .map_err(|e| anyhow::anyhow!("Failed to decode mr_td hex: {e}"))?;
+        let mr_seam_bytes = hex::decode(mr_seam_hex.strip_prefix("0x").unwrap_or(&mr_seam_hex))
+            .map_err(|e| anyhow::anyhow!("Failed to decode mr_seam hex: {e}"))?;
+
+        // Ensure the bytes are the correct length as required by the contract
+        if pcr4_bytes.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "pcr4 must be exactly 32 bytes, got {}",
+                pcr4_bytes.len()
+            ));
+        }
+        if mr_td_bytes.len() != 48 {
+            return Err(anyhow::anyhow!(
+                "mr_td must be exactly 48 bytes, got {}",
+                mr_td_bytes.len()
+            ));
+        }
+        if mr_seam_bytes.len() != 48 {
+            return Err(anyhow::anyhow!(
+                "mr_seam must be exactly 48 bytes, got {}",
+                mr_seam_bytes.len()
+            ));
+        }
+
+        // Create ProposalParamsV1 struct
+        let params = enclave_contract::ProposalParamsV1::new(
+            alloy::primitives::Bytes::from(mr_td_bytes),
+            alloy::primitives::Bytes::from(mr_seam_bytes),
+            alloy::primitives::Bytes::from(pcr4_bytes),
+        );
+
+        // Get contract address and RPC URL from environment variables
+        let upgrade_operator_address = enclave_contract::UPGRADE_OPERATOR_ADDRESS
+            .parse::<alloy::primitives::Address>()
+            .unwrap();
+        let rpc_url = "http://localhost:8545".to_string();
+
+        // Check the proposal status against the onchain contract
+        let status =
+            enclave_contract::check_proposal_status_v1(upgrade_operator_address, &rpc_url, &params)
+                .await
+                .map_err(|e| anyhow::anyhow!("Booter failed to check proposal status: {e}"))?;
+
+        Ok(status)
+    }
 }
 
 #[cfg(test)]
@@ -184,7 +267,7 @@ mod tests {
         let booter = Booter::new();
         let client = MockEnclaveClient::default();
         let tee = kbs_types::Tee::AzTdxVtpm;
-        let res = booter.retrieve_root_key(tee, &Vec::new(), &client);
+        let res = booter.retrieve_root_key(tee, &serde_json::Value::Null, &client);
         assert!(res.is_ok(), "failed to retrieve root key: {:?}", res);
         assert!(booter.get_root_key().is_some(), "root key not set");
         assert!(

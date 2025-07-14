@@ -1,66 +1,20 @@
-//! Boot the enclave's key manager
-use std::net::IpAddr;
-use std::time::Duration;
-
-use crate::client::EnclaveClientBuilder;
-use crate::request_types::GetPurposeKeysRequest;
+//! Convenience functions for booting the enclave in a streamlined way
 use crate::rpc::EnclaveApiClient;
-
-/// Errors that can occur when booting the enclave
-#[derive(Debug, thiserror::Error)]
-pub enum BootError {
-    /// Error when the genesis boot fails
-    #[error("Genesis boot failed: {0}")]
-    GenesisFailed(String),
-    /// Error when the complete boot fails
-    #[error("Complete boot failed: {0}")]
-    CompleteFailed(String),
-    /// Error when getting the purpose keys fails
-    #[error("Get purpose keys failed: {0}")]
-    GetPurposeKeysFailed(String),
-}
+use crate::EnclaveClient;
 
 /// Command to boot the enclave's key manager
-pub async fn boot_enclave_async(ip: IpAddr, port: u16) -> Result<(), BootError> {
-    let client = EnclaveClientBuilder::new()
-        .ip(ip.to_string())
-        .port(port)
-        .timeout(Duration::from_secs(5))
-        .build()
-        .unwrap();
-
-    if let Ok(_) = client
-        .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
-        .await
-    {
-        tracing::warn!("Enclave already booted. Skipping genesis boot.");
+pub async fn boot_genesis_streamlined_async(client: &EnclaveClient) -> Result<(), anyhow::Error> {
+    let health_check = client.health_check().await?;
+    if health_check.boot_complete {
+        tracing::warn!("Enclave already booted. Skipping genesis boot");
         return Ok(());
-    };
-
-    if let Err(e) = client.boot_genesis().await {
-        tracing::error!("{}", e);
-        return Err(BootError::GenesisFailed(e.to_string()));
-    };
-
-    if let Err(e) = client.complete_boot().await {
-        tracing::error!("{}", e);
-        return Err(BootError::CompleteFailed(e.to_string()));
-    };
-
-    if let Err(e) = client
-        .get_purpose_keys(GetPurposeKeysRequest { epoch: 0 })
-        .await
-    {
-        tracing::error!("{}", e);
-        return Err(BootError::GetPurposeKeysFailed(e.to_string()));
-    };
-
+    }
+    client.boot_genesis().await?;
+    client.complete_boot().await?;
     Ok(())
 }
 
-/// Boot the enclave's key manager synchronously
-pub fn boot_enclave_sync(ip: IpAddr, port: u16) -> Result<(), BootError> {
+pub fn boot_genesis_streamlined_sync(client: &EnclaveClient) -> Result<(), anyhow::Error> {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(boot_enclave_async(ip, port))?;
-    Ok(())
+    rt.block_on(boot_genesis_streamlined_async(client))
 }

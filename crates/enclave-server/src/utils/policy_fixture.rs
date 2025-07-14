@@ -19,6 +19,10 @@ package policy
 default allow = false
 "#;
 
+// TODO: eval if we need 7 and 11. and/or anything else.
+// See https://confidentialcontainers.org/blog/2024/03/01/building-trust-into-os-images-for-confidential-containers/
+// This article is written by Magnus Kulke, a CoCo maintainer who works at Microsoft
+// You do not check rtmr because azure does not load the kernel until after they would be set
 pub const YOCTO_POLICY: &str = r#"
 package policy
 
@@ -71,9 +75,11 @@ impl PolicyFixture {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(YOCTO_POLICY),
         );
 
+        // for share_root, we allow all,
+        // and then the key fields are checked against an on-chain contract
         policy_map.insert(
             "share_root".to_string(),
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY), // FUTURE WORK: update this
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ALLOW_POLICY),
         );
 
         Self { policy_map }
