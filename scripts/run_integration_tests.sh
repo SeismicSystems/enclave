@@ -46,7 +46,7 @@ cleanup() {
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
-sudo supervisorctl start all || true
+sudo supervisorctl start reth || true
 sleep 10
 
 # Check if reth is running
@@ -112,6 +112,7 @@ if [ ${#binaries[@]} -eq 0 ]; then
 fi
 echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
+sleep 2
 echo "🚀 Executing: sudo ${binaries[0]} test_boot_share_root_key"
 if ! sudo "${binaries[0]}" test_boot_share_root_key; then
     echo "❌ test_boot_share_root_key failed with exit code $?"
@@ -123,6 +124,8 @@ echo "✅ test_boot_share_root_key passed"
 
 # Test 3: Run snapshot integration handlers test
 echo "🧪 Running test_snapshot_integration_handlers..."
+sudo supervisorctl start enclave-server 
+sleep 2
 if ! sudo "${binaries[0]}" test_snapshot_integration_handlers; then
     echo "❌ test_snapshot_integration_handlers failed"
     exit 1
