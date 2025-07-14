@@ -14,8 +14,7 @@ The `run_integration_tests.sh` script runs three integration tests in the correc
 
 The integration tests require:
 
-- **Anvil** - Local Ethereum development environment
-- **Supervisor** - Process management for the reth service
+- **Supervisor** - Process management for the reth and enclave-server services
 - **Rust toolchain** - For building and running the tests
 - **Sudo privileges** - For managing services and directories
 
@@ -24,26 +23,24 @@ The integration tests require:
 ### test_multisig_upgrade_operator_workflow
 - **Location**: `crates/enclave-contract/tests/multisig_test.rs`
 - **Purpose**: Tests the complete multisig workflow for controlling the UpgradeOperator contract
-- **Dependencies**: Anvil blockchain running on localhost:8545
-- **Setup**: Builds smart contracts using sforge
+- **Dependencies**: Reth service running via supervisor
 
 ### test_boot_share_root_key
 - **Location**: `crates/enclave-server/tests/integration/booter.rs`
 - **Purpose**: Tests the boot process for sharing root keys between enclave instances
 - **Dependencies**: 
-  - Anvil blockchain running on localhost:8545
   - Reth service running via supervisor
+  - Enclave-server service NOT running
   - Upgrade operator setup from test_multisig_upgrade_operator_workflow
-- **Setup**: Requires sudo privileges
+  - sudo privileges
 
 ### test_snapshot_integration_handlers
 - **Location**: `crates/enclave-server/tests/integration/snapshot.rs`
 - **Purpose**: Tests encrypted snapshot creation and restoration functionality
 - **Dependencies**:
-  - Anvil blockchain running on localhost:8545
   - Reth service running via supervisor
   - Enclave server running on default endpoint
-- **Setup**: Requires sudo privileges and specific directory structure
+  - sudo priviliges
 
 ## Directory Structure
 
@@ -58,7 +55,12 @@ The tests expect the following directory structure:
 ## Running the Tests
 
 ### In CI
-The integration tests are automatically run in the CI pipeline via the `integration_tests` job in `.github/workflows/ci.yml`.
+The integration tests are automatically run in the CI pipeline via the `integration_tests` job in `.github/workflows/ci.yml`. The CI workflow:
+
+1. Downloads pre-built enclave binaries from artifacts
+2. Builds seismic-reth binary
+3. Sets up Rust environment and PATH
+4. Runs the integration test script
 
 ### Locally
 To run the integration tests locally:
@@ -70,36 +72,3 @@ chmod +x scripts/run_integration_tests.sh
 # Run the tests
 ./scripts/run_integration_tests.sh
 ```
-
-### Individual Tests
-To run individual tests:
-
-```bash
-# Run multisig test
-cd crates/enclave-contract
-cargo test test_multisig_upgrade_operator_workflow -- --nocapture
-
-# Run boot test (requires multisig test to run first)
-cd ../enclave-server
-cargo test test_boot_share_root_key -- --nocapture
-
-# Run snapshot test
-cargo test test_snapshot_integration_handlers -- --nocapture
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Anvil not starting**: Check if port 8545 is available
-2. **Reth service not running**: Check supervisor configuration
-3. **Permission denied**: Ensure script is run with sudo privileges
-4. **Directory not found**: Ensure required directories exist and have correct permissions
-
-### Debugging
-
-The script sets the following environment variables for debugging:
-- `RUST_BACKTRACE=1` - Enables full backtraces
-- `RUST_LOG=info` - Enables info-level logging
-
-Check the logs in `anvil.log` and `enclave-server.log` for additional debugging information. 
