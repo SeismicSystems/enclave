@@ -12,9 +12,26 @@
 export RUST_BACKTRACE=1
 export RUST_LOG=info
 
-# Show Rust toolchain info for debugging
+# Setup Rust environment and show toolchain info for debugging
+echo "🔧 Setting up Rust environment..."
+if [ -f "$HOME/.cargo/env" ]; then
+    echo "📋 Sourcing $HOME/.cargo/env..."
+    source "$HOME/.cargo/env"
+elif [ -f "/home/azureuser/.cargo/env" ]; then
+    echo "📋 Sourcing /home/azureuser/.cargo/env..."
+    source "/home/azureuser/.cargo/env"
+fi
+
+# Add common Rust paths to PATH if not already there
+if ! command -v rustc >/dev/null 2>&1; then
+    echo "📋 Adding Rust paths to PATH..."
+    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/home/azureuser/.cargo/bin:$PATH"
+fi
+
 echo "📋 Rust version: $(rustc --version 2>/dev/null || echo 'rustc not found')"
 echo "📋 Cargo version: $(cargo --version 2>/dev/null || echo 'cargo not found')"
+echo "📋 PATH: $PATH"
 
 echo "🚀 Starting integration tests..."
 

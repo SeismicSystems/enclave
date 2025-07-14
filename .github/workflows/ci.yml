@@ -105,8 +105,13 @@ jobs:
     needs: build
     steps:
       - uses: dtolnay/rust-toolchain@stable
-      - name: Set default toolchain
-        run: rustup default stable
+      - name: Setup Rust environment
+        run: |
+          echo "Setting up Rust environment..."
+          rustup default stable
+          source $HOME/.cargo/env
+          echo "Rust version: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-cache"
