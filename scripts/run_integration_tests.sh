@@ -12,27 +12,6 @@
 export RUST_BACKTRACE=1
 export RUST_LOG=info
 
-# Setup Rust environment and show toolchain info for debugging
-echo "🔧 Setting up Rust environment..."
-if [ -f "$HOME/.cargo/env" ]; then
-    echo "📋 Sourcing $HOME/.cargo/env..."
-    source "$HOME/.cargo/env"
-elif [ -f "/home/azureuser/.cargo/env" ]; then
-    echo "📋 Sourcing /home/azureuser/.cargo/env..."
-    source "/home/azureuser/.cargo/env"
-fi
-
-# Add common Rust paths to PATH if not already there
-if ! command -v rustc >/dev/null 2>&1; then
-    echo "📋 Adding Rust paths to PATH..."
-    export PATH="$HOME/.cargo/bin:$PATH"
-    export PATH="/home/azureuser/.cargo/bin:$PATH"
-fi
-
-echo "📋 Rust version: $(rustc --version 2>/dev/null || echo 'rustc not found')"
-echo "📋 Cargo version: $(cargo --version 2>/dev/null || echo 'cargo not found')"
-echo "📋 PATH: $PATH"
-
 echo "🚀 Starting integration tests..."
 
 # Function to cleanup processes
@@ -42,7 +21,7 @@ cleanup() {
 }
 
 # # Set up trap to cleanup on exit
-# trap cleanup EXIT
+trap cleanup EXIT
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
@@ -78,33 +57,12 @@ echo "✅ test_multisig_upgrade_operator_workflow passed"
 
 # Test 2: Run boot share root key test
 echo "🧪 Running test_boot_share_root_key..."
-echo "📁 Current directory: $(pwd)"
 cd ../enclave-server
-echo "📁 Changed to directory: $(pwd)"
-# Build tests and get binary paths
-echo "🔨 Building tests..."
-echo "🔍 Checking if Cargo.toml exists:"
 ls -la Cargo.toml 2>/dev/null || echo "❌ Cargo.toml not found in $(pwd)"
 
-echo "🔍 Running cargo test --no-run with verbose output..."
-set -x  # Enable command tracing
+# Build tests and get binary paths
 OUTPUT=$(cargo test --no-run 2>&1)
-BUILD_EXIT_CODE=$?
-set +x  # Disable command tracing
-
-echo "📋 Build exit code: $BUILD_EXIT_CODE"
-echo "📋 Build output:"
 echo "$OUTPUT"
-
-if [ $BUILD_EXIT_CODE -ne 0 ]; then
-    echo "❌ Cargo build failed with exit code $BUILD_EXIT_CODE"
-    echo "🔍 Checking for common issues:"
-    echo "  - Rust toolchain: $(rustc --version 2>/dev/null || echo 'rustc not found')"
-    echo "  - Cargo version: $(cargo --version 2>/dev/null || echo 'cargo not found')"
-    echo "  - Target directory exists: $(ls -la target/ 2>/dev/null || echo 'target/ not found')"
-    exit 1
-fi
-
 mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*integration-[a-z0-9]*')
 if [ ${#binaries[@]} -eq 0 ]; then
     echo "❌ Could not find enclave-server integration test binaries"
