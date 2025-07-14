@@ -139,7 +139,6 @@ jobs:
         with:
           repository: SeismicSystems/seismic-reth
           path: seismic-reth
-          ref: upgrade-genesis-contract
           clean: false
           fetch-depth: 0
 
