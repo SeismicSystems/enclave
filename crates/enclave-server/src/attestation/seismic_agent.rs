@@ -1,6 +1,6 @@
 use anyhow::Result;
 use jsonrpsee::core::async_trait;
-use kbs_types::{Tee};
+use kbs_types::Tee;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 

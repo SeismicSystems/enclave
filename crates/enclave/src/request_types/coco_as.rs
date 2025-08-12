@@ -1,4 +1,4 @@
-use kbs_types::{Tee, HashAlgorithm};
+use kbs_types::{HashAlgorithm, Tee};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

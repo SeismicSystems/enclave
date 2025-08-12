@@ -1,7 +1,7 @@
 use attestation_agent::AttestationAPIs;
-use kbs_types::HashAlgorithm;
 use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
+use kbs_types::HashAlgorithm;
 use log::error;
 use serde_json;
 use std::path::Path;
@@ -117,11 +117,10 @@ where
         // Convert the request's runtime data hash algorithm to the original enum
         let runtime_data: Option<attestation_service::RuntimeData> =
             request.runtime_data.map(|data| data.into_original());
-        let runtime_data_hash_algorithm: HashAlgorithm =
-            match request.runtime_data_hash_algorithm {
-                Some(alg) => alg,
-                None => HashAlgorithm::Sha256,
-            };
+        let runtime_data_hash_algorithm: HashAlgorithm = match request.runtime_data_hash_algorithm {
+            Some(alg) => alg,
+            None => HashAlgorithm::Sha256,
+        };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
         let verification_request = VerificationRequest {
