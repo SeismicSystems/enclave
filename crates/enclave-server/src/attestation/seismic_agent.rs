@@ -71,7 +71,7 @@ impl SeismicAttestationAgent {
         self.verifier.register_reference_value(message).await
     }
 
-    pub async fn query_reference_values(&self) -> Result<HashMap<String, Vec<String>>> {
+    pub async fn query_reference_values(&self) -> Result<HashMap<String, serde_json::Value>> {
         self.verifier.query_reference_values().await
     }
 

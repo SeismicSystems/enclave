@@ -122,7 +122,7 @@ aa_crypto = { git = "https://github.com/confidential-containers/guest-components
 attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="b526a2e", default-features = false}
 az-tdx-vtpm = "=0.7.1"
 az-cvm-vtpm = "=0.7.1"
-kbs-types = { "git" = "https://github.com/virtee/kbs-types.git", rev = "e3cc706" } # versioned with commit to match what trustee repo uses
+kbs-types = { "git" = "https://github.com/virtee/kbs-types.git", rev = "e3cc706" }
 
 # Other deps
 alloy = "1.0"
@@ -158,3 +158,4 @@ zeroize = "1.8.1"
 az-cvm-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
 az-tdx-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
 az-snp-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
+kbs-types = { "git" = "https://github.com/virtee/kbs-types.git", rev = "e3cc706" } # versioned with commit to match what trustee repo uses
