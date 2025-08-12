@@ -6,6 +6,7 @@ use std::io::{self, Read};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use kbs_types::HashAlgorithm;
 
 /// Checks if the current user has root (sudo) privileges.
 ///
