@@ -1,10 +1,9 @@
 use anyhow::Result;
 use jsonrpsee::core::async_trait;
-use kbs_types::{Tee, TeePubKey};
+use kbs_types::{Tee};
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 
-use kbs_types::HashAlgorithm;
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use attestation_agent::InitDataResult;
