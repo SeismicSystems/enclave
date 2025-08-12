@@ -117,6 +117,7 @@ enclave-contract = { path = "crates/enclave-contract" }
 
 # coco deps
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating
+# also note the patches at the bottom
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="eb0d89751800a435659f97d6f55cdb822223dc86", default-features = false}
 attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="b526a2ee0e2e5c33d2f49b6215a6eaf1be93f1fd", default-features = false}
 az-tdx-vtpm = "=0.7.1"
