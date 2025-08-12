@@ -1132,9 +1132,8 @@ dependencies = [
 
 [[package]]
 name = "az-cvm-vtpm"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b3d0900c6757c9674b05b0479236458297026e25fb505186dc8d7735091a21c"
+version = "0.7.1"
+source = "git+https://github.com/kinvolk/azure-cvm-tooling?rev=2bef60b88db7554935177ec63dd169190a39eab7#2bef60b88db7554935177ec63dd169190a39eab7"
 dependencies = [
  "bincode",
  "jsonwebkey",
@@ -1143,18 +1142,17 @@ dependencies = [
  "serde",
  "serde-big-array",
  "serde_json",
- "sev 6.2.1",
+ "sev 4.0.0",
  "sha2",
  "thiserror 2.0.14",
  "tss-esapi",
- "zerocopy 0.8.26",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
 name = "az-snp-vtpm"
 version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c16506502dc64f7111f7241ca400f3ee0f54e69dfd1f4be5cef29b96332f22e"
+source = "git+https://github.com/kinvolk/azure-cvm-tooling?rev=2bef60b88db7554935177ec63dd169190a39eab7#2bef60b88db7554935177ec63dd169190a39eab7"
 dependencies = [
  "az-cvm-vtpm",
  "bincode",
@@ -1169,8 +1167,7 @@ dependencies = [
 [[package]]
 name = "az-tdx-vtpm"
 version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80875afa68553e2035bc45836d00101ab80c94ec386de66f2fb14af480514711"
+source = "git+https://github.com/kinvolk/azure-cvm-tooling?rev=2bef60b88db7554935177ec63dd169190a39eab7#2bef60b88db7554935177ec63dd169190a39eab7"
 dependencies = [
  "az-cvm-vtpm",
  "base64-url",
@@ -5746,6 +5743,8 @@ dependencies = [
  "iocuddle",
  "lazy_static",
  "libc",
+ "openssl",
+ "rdrand",
  "serde",
  "serde-big-array",
  "serde_bytes",
