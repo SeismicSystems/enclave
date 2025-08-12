@@ -18,11 +18,11 @@ seismic-enclave.workspace = true
 enclave-contract.workspace = true
 alloy.workspace = true
 
-# attestation-service depends on attestation-agent, ensure versions are compatible when updating
-attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="591d0bb", default-features = false}
-aa_crypto = { git = "https://github.com/confidential-containers/guest-components", rev="591d0bb", package = "crypto", default-features = false}
-attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="b526a2e", default-features = false}
+attestation-agent.workspace = true
+attestation-service.workspace = true
+aa_crypto.workspace = true
 az-tdx-vtpm = {workspace = true, optional = true}
+kbs-types.workspace = true
 
 aes-gcm.workspace = true
 auto_impl.workspace = true
@@ -31,7 +31,6 @@ anyhow.workspace = true
 base64.workspace = true
 hkdf.workspace = true
 jsonrpsee.workspace = true
-kbs-types.workspace = true
 libc.workspace = true
 log.workspace = true
 secp256k1.workspace = true
