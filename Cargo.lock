@@ -5502,7 +5502,6 @@ dependencies = [
  "az-tdx-vtpm",
  "base64 0.22.1",
  "clap",
- "crypto",
  "enclave-contract",
  "hex",
  "hkdf",

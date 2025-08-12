@@ -20,7 +20,6 @@ alloy.workspace = true
 
 attestation-agent.workspace = true
 attestation-service.workspace = true
-aa_crypto.workspace = true
 az-tdx-vtpm = {workspace = true, optional = true}
 kbs-types.workspace = true
 
