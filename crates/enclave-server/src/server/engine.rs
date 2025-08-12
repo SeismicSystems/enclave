@@ -1,5 +1,5 @@
 use attestation_agent::AttestationAPIs;
-use attestation_service::HashAlgorithm;
+use kbs_types::HashAlgorithm;
 use attestation_service::VerificationRequest;
 use jsonrpsee::core::{async_trait, RpcResult};
 use log::error;
@@ -13,7 +13,6 @@ use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
-use crate::server::into_original::IntoOriginalHashAlgorithm;
 use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
@@ -118,10 +117,10 @@ where
         // Convert the request's runtime data hash algorithm to the original enum
         let runtime_data: Option<attestation_service::Data> =
             request.runtime_data.map(|data| data.into_original());
-        let runtime_data_hash_algorithm: attestation_service::HashAlgorithm =
+        let runtime_data_hash_algorithm: HashAlgorithm =
             match request.runtime_data_hash_algorithm {
-                Some(alg) => alg.into_original(),
-                None => attestation_service::HashAlgorithm::Sha256,
+                Some(alg) => algs,
+                None => HashAlgorithm::Sha256,
             };
 
         // Evaluate attestation evidence (no lock needed for evaluation)
@@ -131,7 +130,6 @@ where
             runtime_data,
             runtime_data_hash_algorithm,
             init_data: None,
-            init_data_hash_algorithm: HashAlgorithm::Sha256,
         };
         let eval_result = self
             .attestation_agent

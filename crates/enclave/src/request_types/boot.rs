@@ -1,8 +1,8 @@
-use kbs_types::Tee;
+use kbs_types::{Tee, HashAlgorithm};
 use std::net::SocketAddr;
 
 use crate::crypto::Nonce;
-use crate::request_types::{AttestationEvalEvidenceRequest, Data, HashAlgorithm};
+use crate::request_types::{AttestationEvalEvidenceRequest, Data};
 use serde::{Deserialize, Serialize};
 
 /// CompleteBoot endpoint is used to signal all boot steps are complete

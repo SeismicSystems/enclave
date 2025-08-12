@@ -4,7 +4,7 @@ use kbs_types::{Tee, TeePubKey};
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 
-use aa_crypto::HashAlgorithm;
+use kbs_types::HashAlgorithm;
 use attestation_agent::AttestationAPIs;
 use attestation_agent::AttestationAgent;
 use attestation_agent::InitDataResult;
@@ -105,19 +105,6 @@ impl AttestationAPIs for SeismicAttestationAgent {
         let _lock = self.quote_mutex.lock().await;
         self.attestation_agent
             .get_additional_evidence(runtime_data)
-            .await
-    }
-
-    /// Get the composite evidence (primary and additional) with concurrency protection
-    async fn get_composite_evidence(
-        &self,
-        tee_pubkey: TeePubKey,
-        nonce: String,
-        hash_algorithm: HashAlgorithm,
-    ) -> Result<Vec<u8>> {
-        let _lock = self.quote_mutex.lock().await;
-        self.attestation_agent
-            .get_composite_evidence(tee_pubkey, nonce, hash_algorithm)
             .await
     }
 

@@ -6,9 +6,7 @@
 //! which can break external projects like Reth
 
 use attestation_service::Data;
-use attestation_service::HashAlgorithm;
 use seismic_enclave::request_types::Data as ApiData;
-use seismic_enclave::request_types::HashAlgorithm as ApiHashAlgorithm;
 
 pub trait IntoOriginalData {
     fn into_original(self) -> Data;
@@ -19,20 +17,6 @@ impl IntoOriginalData for ApiData {
         match self {
             ApiData::Raw(bytes) => Data::Raw(bytes),
             ApiData::Structured(value) => Data::Structured(value),
-        }
-    }
-}
-
-pub trait IntoOriginalHashAlgorithm {
-    fn into_original(self) -> HashAlgorithm;
-}
-
-impl IntoOriginalHashAlgorithm for ApiHashAlgorithm {
-    fn into_original(self) -> HashAlgorithm {
-        match self {
-            ApiHashAlgorithm::Sha256 => HashAlgorithm::Sha256,
-            ApiHashAlgorithm::Sha384 => HashAlgorithm::Sha384,
-            ApiHashAlgorithm::Sha512 => HashAlgorithm::Sha512,
         }
     }
 }
