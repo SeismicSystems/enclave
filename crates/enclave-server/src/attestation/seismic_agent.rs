@@ -141,3 +141,4 @@ impl AttestationAPIs for SeismicAttestationAgent {
         self.attestation_agent.get_tee_type()
     }
 }
+
