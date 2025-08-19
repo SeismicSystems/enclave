@@ -1,4 +1,4 @@
-use crate::utils::policy_fixture::install_all_policies;
+use seismic_enclave_server::utils::policy_fixture::install_all_policies;
 
 #[tokio::main]
 async fn main() {
