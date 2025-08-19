@@ -136,7 +136,7 @@ where
     }
 
     /// Simplified constructor if you want to skip the builder
-    pub async fn new(
+    pub (crate) async fn new(
         addr: impl Into<SocketAddr>,
         key_provider: K,
         token_broker: SeismicAttestationAgent,

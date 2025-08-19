@@ -34,7 +34,7 @@ impl<K> AttestationEngine<K>
 where
     K: NetworkKeyProvider + Send,
 {
-    pub fn new(key_provider: K, attestation_agent: SeismicAttestationAgent) -> Self {
+    pub (crate) fn new(key_provider: K, attestation_agent: SeismicAttestationAgent) -> Self {
         Self {
             key_provider: Arc::new(key_provider),
             attestation_agent: Arc::new(attestation_agent),
