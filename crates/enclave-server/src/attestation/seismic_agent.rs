@@ -12,7 +12,7 @@ use attestation_service::VerificationRequest;
 
 /// a centralized struct for making and verifying attestations
 /// includes a mutex because the inner attestation agent is not thread safe
-pub  (crate) struct SeismicAttestationAgent {
+pub(crate) struct SeismicAttestationAgent {
     quote_mutex: Mutex<()>,
     attestation_agent: AttestationAgent,
     verifier: AttestationService,

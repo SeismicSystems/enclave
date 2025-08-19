@@ -21,7 +21,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 /// The main server struct, with everything needed to run.
 /// Can be constructed with the [`EnclaveServerBuilder`]
 /// and started with the inherited [`start_rpc_server`] method
-pub  (crate) struct EnclaveServer<K>
+pub(crate) struct EnclaveServer<K>
 where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {

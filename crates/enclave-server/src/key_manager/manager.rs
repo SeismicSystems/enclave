@@ -33,7 +33,7 @@ impl AsRef<[u8]> for Key {
 
 /// Enum representing the intended usage ("purpose") of a derived key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
-pub  (crate) enum KeyPurpose {
+pub(crate) enum KeyPurpose {
     Snapshot,
     RngPrecompile,
     TxIo,
@@ -58,7 +58,7 @@ impl KeyPurpose {
 ///
 /// Keys are derived using HKDF-SHA256 with domain separation.
 /// This struct supports retrieving keys. See KeyPurpose for the intended usages
-pub  (crate) struct KeyManager {
+pub(crate) struct KeyManager {
     root_key: Mutex<Key>,
 }
 impl KeyManager {

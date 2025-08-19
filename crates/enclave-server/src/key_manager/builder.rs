@@ -9,7 +9,7 @@ use rand::TryRngCore;
 ///
 /// Provides methods to create either a secure, randomly initialized key manager
 /// or a deterministic mock version for testing purposes.
-pub (crate) struct KeyManagerBuilder {}
+pub(crate) struct KeyManagerBuilder {}
 
 impl Default for KeyManagerBuilder {
     fn default() -> Self {

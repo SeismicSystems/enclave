@@ -17,7 +17,7 @@ use seismic_enclave::{get_unsecure_sample_secp256k1_pk, get_unsecure_sample_secp
 use std::sync::Mutex;
 use tracing::info;
 
-pub  (crate) struct Booter {
+pub(crate) struct Booter {
     // pk and sk are the Booter's keys used to derive encryption keys for communication with other nodes
     pk: secp256k1::PublicKey,
     sk: secp256k1::SecretKey,
