@@ -2,7 +2,7 @@
 //! Useful for testing the attestation verifier
 
 use anyhow::Result;
-use attestation_service::token::AttestationTokenBroker;
+use attestation_service::token::SimpleAttestationTokenBroker;
 use attestation_service::AttestationService;
 use base64::Engine;
 use std::collections::HashMap;
