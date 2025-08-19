@@ -37,7 +37,7 @@ allow if {
 }
 "#;
 
-pub struct PolicyFixture {
+pub (crate)  struct PolicyFixture {
     pub policy_map: HashMap<String, String>,
 }
 
