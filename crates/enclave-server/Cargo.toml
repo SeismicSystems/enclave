@@ -75,6 +75,7 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 attestation-service = { workspace = true }
 base64 = { workspace = true }
 anyhow = { workspace = true }
+seismic-enclave-server = { path = "." }
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
