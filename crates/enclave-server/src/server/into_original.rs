@@ -5,34 +5,18 @@
 //! seismic-enclave builds the entire attestation service dependency,
 //! which can break external projects like Reth
 
-use attestation_service::Data;
-use attestation_service::HashAlgorithm;
+use attestation_service::RuntimeData;
 use seismic_enclave::request_types::Data as ApiData;
-use seismic_enclave::request_types::HashAlgorithm as ApiHashAlgorithm;
 
 pub trait IntoOriginalData {
-    fn into_original(self) -> Data;
+    fn into_original(self) -> RuntimeData;
 }
 
 impl IntoOriginalData for ApiData {
-    fn into_original(self) -> Data {
+    fn into_original(self) -> RuntimeData {
         match self {
-            ApiData::Raw(bytes) => Data::Raw(bytes),
-            ApiData::Structured(value) => Data::Structured(value),
-        }
-    }
-}
-
-pub trait IntoOriginalHashAlgorithm {
-    fn into_original(self) -> HashAlgorithm;
-}
-
-impl IntoOriginalHashAlgorithm for ApiHashAlgorithm {
-    fn into_original(self) -> HashAlgorithm {
-        match self {
-            ApiHashAlgorithm::Sha256 => HashAlgorithm::Sha256,
-            ApiHashAlgorithm::Sha384 => HashAlgorithm::Sha384,
-            ApiHashAlgorithm::Sha512 => HashAlgorithm::Sha512,
+            ApiData::Raw(bytes) => RuntimeData::Raw(bytes),
+            ApiData::Structured(value) => RuntimeData::Structured(value),
         }
     }
 }

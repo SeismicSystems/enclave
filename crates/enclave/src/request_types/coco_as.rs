@@ -1,24 +1,10 @@
-use kbs_types::Tee;
+use kbs_types::{HashAlgorithm, Tee};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use strum::{AsRefStr, Display, EnumString};
 
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-
-/// Hash algorithms used to calculate runtime/init data binding
-#[derive(Debug, Display, EnumString, AsRefStr, Clone, Serialize, Deserialize)]
-pub enum HashAlgorithm {
-    #[strum(ascii_case_insensitive)]
-    Sha256,
-
-    #[strum(ascii_case_insensitive)]
-    Sha384,
-
-    #[strum(ascii_case_insensitive)]
-    Sha512,
-}
 
 /// Runtime/Init Data used to check the binding relationship with report data
 /// in Evidence
