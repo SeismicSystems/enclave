@@ -58,7 +58,7 @@ impl KeyPurpose {
 ///
 /// Keys are derived using HKDF-SHA256 with domain separation.
 /// This struct supports retrieving keys. See KeyPurpose for the intended usages
-pub(crate) struct KeyManager {
+pub struct KeyManager {
     root_key: Mutex<Key>,
 }
 impl KeyManager {
