@@ -2,8 +2,9 @@
 //! Useful for testing the attestation verifier
 
 use anyhow::Result;
-use attestation_service::token::simple::SimpleAttestationTokenBroker;
-use attestation_service::token::AttestationTokenBroker;
+use attestation_service::config::Config;
+use attestation_service::token::simple::{Configuration, SimpleAttestationTokenBroker};
+use attestation_service::token::{AttestationTokenBroker, AttestationTokenConfig};
 use attestation_service::AttestationService;
 use base64::Engine;
 use std::collections::HashMap;
@@ -126,7 +127,10 @@ impl PolicyFixture {
 
 /// Install all of the policies we've defined
 pub async fn install_all_policies() -> anyhow::Result<()> {
-    let as_config = attestation_service::config::Config::default();
+    let as_config = Config {
+        attestation_token_broker: AttestationTokenConfig::Simple(Configuration::default()),
+        ..Default::default()
+    };
     let mut verifier = AttestationService::new(as_config).await.unwrap();
     let fixture = PolicyFixture::all_policies();
     fixture
