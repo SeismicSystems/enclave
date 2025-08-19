@@ -14,7 +14,7 @@ name = "seismic_enclave_server"
 path = "src/lib.rs"
 
 [[bin]]
-name = "seismic_enclave_server"
+name = "seismic-enclave-server"
 path = "src/main.rs"
 
 [[bin]]
