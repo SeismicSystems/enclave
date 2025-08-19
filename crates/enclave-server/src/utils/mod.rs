@@ -1,5 +1,3 @@
-pub mod policy_fixture;
-
 /// Utils for testing
 /// Not under a test flag so the integration tests can use them
 pub mod test_utils;

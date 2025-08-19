@@ -2,18 +2,19 @@
 //! Useful for testing the attestation verifier
 
 use anyhow::Result;
-use attestation_service::token::SimpleAttestationTokenBroker;
+use attestation_service::token::simple::SimpleAttestationTokenBroker;
+use attestation_service::token::AttestationTokenBroker;
 use attestation_service::AttestationService;
 use base64::Engine;
 use std::collections::HashMap;
 
-pub const ALLOW_POLICY: &str = r#"
+pub(crate) const ALLOW_POLICY: &str = r#"
 package policy
 
 default allow = true
 "#;
 
-pub const DENY_POLICY: &str = r#"
+pub(crate) const DENY_POLICY: &str = r#"
 package policy
 
 default allow = false
@@ -23,7 +24,7 @@ default allow = false
 // See https://confidentialcontainers.org/blog/2024/03/01/building-trust-into-os-images-for-confidential-containers/
 // This article is written by Magnus Kulke, a CoCo maintainer who works at Microsoft
 // You do not check rtmr because azure does not load the kernel until after they would be set
-pub const YOCTO_POLICY: &str = r#"
+pub(crate) const YOCTO_POLICY: &str = r#"
 package policy
 
 import rego.v1
@@ -50,14 +51,14 @@ impl Default for PolicyFixture {
 impl PolicyFixture {
     /// Creates a blank PolicyFixture
     /// Policies can then be added with `with_policy`
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let policy_map = HashMap::new();
         Self { policy_map }
     }
 
     /// Creates a PolicyFixture with several policies useful for testing
     /// Not used in production, as we currently have no use case for blanket allow/deny policies
-    pub fn all_policies() -> Self {
+    pub(crate) fn all_policies() -> Self {
         let mut policy_map = HashMap::new();
 
         policy_map.insert(
@@ -86,13 +87,14 @@ impl PolicyFixture {
     }
 
     /// Add a custom policy to the fixture
-    pub fn with_policy(mut self, id: &str, content: &str) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn with_policy(mut self, id: &str, content: &str) -> Self {
         self.policy_map.insert(id.to_string(), content.to_string());
         self
     }
 
     /// Configure the verifier with all policies in this fixture
-    pub async fn configure_verifier<T>(&self, verifier: &mut AttestationService) -> Result<()>
+    pub(crate) async fn configure_verifier<T>(&self, verifier: &mut AttestationService) -> Result<()>
     where
         T: AttestationTokenBroker + Send + Sync + 'static,
     {
@@ -105,24 +107,31 @@ impl PolicyFixture {
     }
 
     /// Get the content of a specific policy
-    pub fn get_policy_content(&self, policy_id: &str) -> Option<&String> {
+    #[allow(dead_code)]
+    pub(crate) fn get_policy_content(&self, policy_id: &str) -> Option<&String> {
         self.policy_map.get(policy_id)
     }
 
     /// Get all policy IDs
-    pub fn get_policy_ids(&self) -> Vec<String> {
+    #[allow(dead_code)]
+    pub(crate) fn get_policy_ids(&self) -> Vec<String> {
         self.policy_map.keys().cloned().collect()
     }
 
-    pub fn encode_policy(&self, policy: &str) -> String {
+    #[allow(dead_code)]
+    pub(crate) fn encode_policy(&self, policy: &str) -> String {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy)
     }
 }
 
-
+/// Install all of the policies we've defined
 pub async fn install_all_policies() -> anyhow::Result<()> {
     let as_config = attestation_service::config::Config::default();
     let mut verifier = AttestationService::new(as_config).await.unwrap();
     let fixture = PolicyFixture::all_policies();
-    fixture.configure_verifier::<SimpleAttestationTokenBroker>(&mut verifier).await.unwrap();
+    fixture
+        .configure_verifier::<SimpleAttestationTokenBroker>(&mut verifier)
+        .await
+        .unwrap();
+    Ok(())
 }

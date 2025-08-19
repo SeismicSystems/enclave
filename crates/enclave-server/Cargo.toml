@@ -71,6 +71,7 @@ supervisorctl = []
 
 [build-dependencies]
 enclave-policies.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
