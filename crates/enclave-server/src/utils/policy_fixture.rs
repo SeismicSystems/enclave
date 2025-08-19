@@ -57,7 +57,7 @@ impl PolicyFixture {
 
     /// Creates a PolicyFixture with several policies useful for testing
     /// Not used in production, as we currently have no use case for blanket allow/deny policies
-    pub fn testing_mock() -> Self {
+    pub fn all_policies() -> Self {
         let mut policy_map = HashMap::new();
 
         policy_map.insert(
@@ -116,5 +116,20 @@ impl PolicyFixture {
 
     pub fn encode_policy(&self, policy: &str) -> String {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(policy)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use attestation_service::{token::simple::SimpleAttestationTokenBroker, AttestationService};
+    use crate::utils::policy_fixture::PolicyFixture;
+
+    #[tokio::test]
+    async fn install_all_policies() {
+        let as_config = attestation_service::config::Config::default();
+        let mut verifier = AttestationService::new(as_config).await.unwrap();
+        let fixture = PolicyFixture::all_policies();
+        fixture.configure_verifier::<SimpleAttestationTokenBroker>(&mut verifier).await.unwrap();
     }
 }
