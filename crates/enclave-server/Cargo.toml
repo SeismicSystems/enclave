@@ -13,6 +13,15 @@ description = "Seismic enclave backend"
 name = "seismic_enclave_server"
 path = "src/lib.rs"
 
+[[bin]]
+name = "seismic_enclave_server"
+path = "src/main.rs"
+
+[[bin]]
+name = "install_policies"
+path = "src/bin/install_policies.rs"
+
+
 [dependencies]
 seismic-enclave.workspace = true
 enclave-contract.workspace = true
@@ -68,10 +77,6 @@ az-tdx-vtpm-attester = [
     "serde",
 ]
 supervisorctl = []
-
-[build-dependencies]
-enclave-policies.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]
