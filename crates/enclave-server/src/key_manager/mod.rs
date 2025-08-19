@@ -2,8 +2,8 @@ mod builder;
 mod manager;
 
 // re-export important types
-pub use builder::KeyManagerBuilder;
-pub use manager::KeyManager;
+pub(crate) use builder::KeyManagerBuilder;
+pub(crate) use manager::KeyManager;
 
 use auto_impl::auto_impl;
 

@@ -4,4 +4,4 @@ mod into_original;
 pub mod server;
 
 // re-exports
-pub use server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
+pub (crate) use server::{init_tracing, EnclaveServer, EnclaveServerBuilder};
