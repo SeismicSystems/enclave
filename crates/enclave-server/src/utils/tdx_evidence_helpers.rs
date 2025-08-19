@@ -19,7 +19,7 @@ pub(crate) struct Evidence {
 }
 
 /// parses an attestation, serialized as bytes, to the [`Evidence`] strruct
-pub (crate) fn tdx_attestation_bytes_to_evidence_struct(
+pub(crate) fn tdx_attestation_bytes_to_evidence_struct(
     attestation_bytes: &[u8],
 ) -> anyhow::Result<Evidence> {
     let evidence = serde_json::from_slice::<Evidence>(attestation_bytes)
@@ -63,7 +63,7 @@ macro_rules! parse_claim {
     };
 }
 
-pub (crate) fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
+pub(crate) fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
     let mut quote_map = Map::new();
     let mut quote_body = Map::new();
     let mut quote_header = Map::new();
@@ -492,7 +492,7 @@ impl fmt::Display for Quote {
 
 pub const QUOTE_HEADER_SIZE: usize = 48;
 
-pub (crate) fn parse_tdx_quote(quote_bin: &[u8]) -> Result<Quote> {
+pub(crate) fn parse_tdx_quote(quote_bin: &[u8]) -> Result<Quote> {
     let quote_header = &quote_bin[..QUOTE_HEADER_SIZE];
     let header = quote_header
         .pread::<QuoteHeader>(0)

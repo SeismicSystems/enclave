@@ -95,7 +95,10 @@ impl PolicyFixture {
     }
 
     /// Configure the verifier with all policies in this fixture
-    pub(crate) async fn configure_verifier<T>(&self, verifier: &mut AttestationService) -> Result<()>
+    pub(crate) async fn configure_verifier<T>(
+        &self,
+        verifier: &mut AttestationService,
+    ) -> Result<()>
     where
         T: AttestationTokenBroker + Send + Sync + 'static,
     {

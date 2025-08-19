@@ -77,7 +77,9 @@ impl SeismicAttestationAgent {
     }
 
     #[allow(dead_code)]
-    pub(crate) async fn query_reference_values(&self) -> Result<HashMap<String, serde_json::Value>> {
+    pub(crate) async fn query_reference_values(
+        &self,
+    ) -> Result<HashMap<String, serde_json::Value>> {
         self.verifier.query_reference_values().await
     }
 
