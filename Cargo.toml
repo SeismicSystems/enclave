@@ -120,8 +120,8 @@ enclave-contract = { path = "crates/enclave-contract" }
 # also note the patches at the bottom
 attestation-agent = { git = "https://github.com/confidential-containers/guest-components", rev="eb0d89751800a435659f97d6f55cdb822223dc86", default-features = false}
 attestation-service = { git = "https://github.com/confidential-containers/trustee", rev="b526a2ee0e2e5c33d2f49b6215a6eaf1be93f1fd", default-features = false}
-az-tdx-vtpm = "=0.7.1"
-az-cvm-vtpm = "=0.7.1"
+az-tdx-vtpm = "0.7.4"
+az-cvm-vtpm = "0.7.4"
 kbs-types = { "git" = "https://github.com/virtee/kbs-types.git", rev = "e3cc706" }
 
 # Other deps
@@ -154,7 +154,7 @@ quote = "1.0"
 syn = "2.0"
 zeroize = "1.8.1"
 
-[patch.crates-io]
-az-cvm-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
-az-tdx-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
-az-snp-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
+# [patch.crates-io]
+# az-cvm-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
+# az-tdx-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
+# az-snp-vtpm = { git = "https://github.com/kinvolk/azure-cvm-tooling", rev = "2bef60b88db7554935177ec63dd169190a39eab7" }
