@@ -69,13 +69,8 @@ az-tdx-vtpm-attester = [
 ]
 supervisorctl = []
 
-
 [build-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread"] }
-attestation-service = { workspace = true }
-base64 = { workspace = true }
-anyhow = { workspace = true }
-seismic-enclave-server = { path = "." }
+enclave-policies.workspace = true
 
 [package.metadata.cargo-udeps]
 ignore = ["serial_test"]

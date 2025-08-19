@@ -1,0 +1,18 @@
+[package]
+name = "enclave-policies"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+attestation-service = { workspace = true }
+base64 = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

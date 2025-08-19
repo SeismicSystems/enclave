@@ -5,6 +5,7 @@ members = [
     "crates/enclave/derive",
     "crates/enclave-server",
     "crates/enclave-contract",
+    "crates/enclave_policies",
 ]
 
 [workspace.lints]
@@ -114,6 +115,7 @@ readme = "README.md"
 seismic-enclave-derive = { path = "crates/enclave/derive" }
 seismic-enclave = { path = "crates/enclave" }
 enclave-contract = { path = "crates/enclave-contract" }
+enclave-policies = { path = "crates/enclave-policies"}
 
 # coco deps
 # attestation-service depends on attestation-agent, ensure versions are compatible when updating

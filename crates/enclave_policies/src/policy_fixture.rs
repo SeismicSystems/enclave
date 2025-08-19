@@ -120,16 +120,9 @@ impl PolicyFixture {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use attestation_service::{token::simple::SimpleAttestationTokenBroker, AttestationService};
-    use crate::utils::policy_fixture::PolicyFixture;
-
-    #[tokio::test]
-    async fn install_all_policies() {
-        let as_config = attestation_service::config::Config::default();
-        let mut verifier = AttestationService::new(as_config).await.unwrap();
-        let fixture = PolicyFixture::all_policies();
-        fixture.configure_verifier::<SimpleAttestationTokenBroker>(&mut verifier).await.unwrap();
-    }
+pub async fn install_all_policies() -> anyhow::Result<()> {
+    let as_config = attestation_service::config::Config::default();
+    let mut verifier = AttestationService::new(as_config).await.unwrap();
+    let fixture = PolicyFixture::all_policies();
+    fixture.configure_verifier::<SimpleAttestationTokenBroker>(&mut verifier).await.unwrap();
 }

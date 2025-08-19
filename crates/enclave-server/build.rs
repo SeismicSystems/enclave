@@ -1,14 +1,8 @@
-use attestation_service::{token::simple::SimpleAttestationTokenBroker, AttestationService};
-use seismic_enclave_server::utils::policy_fixture::PolicyFixture;
+use enclave_policies::install_all_policies;
 
 #[tokio::main]
 async fn main() {
     println!("cargo:rerun-if-changed=src/utils/policy_fixture.rs");
-    
-    let as_config = attestation_service::config::Config::default();
-    let mut verifier = AttestationService::new(as_config).await.unwrap();
-    let fixture = PolicyFixture::all_policies();
-    fixture.configure_verifier::<SimpleAttestationTokenBroker>(&mut verifier).await.unwrap();
-    
+    install_all_policies();    
     println!("Successfully installed all policies during build");
 }
