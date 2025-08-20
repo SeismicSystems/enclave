@@ -143,9 +143,12 @@ jobs:
           fetch-depth: 0
 
       # Build seismic-reth using manifest path
+      # cargo sweep will delete files in target older than 1 day
       - name: Build seismic-reth
         run: |
+          cargo install cargo-sweep
           cargo build --bin seismic-reth --manifest-path seismic-reth/Cargo.toml
+          cargo sweep --time 1 --recursive
           echo "Current working directory: $PWD"
           echo "Full path of seismic-reth binary:"
           find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
@@ -178,4 +181,7 @@ jobs:
       # Run the integration tests
       - name: Run integration tests
         run: ./scripts/run_integration_tests.sh
-
+      
+      - name: Cleanup artifacts from target
+        run: |
+          rm -rf target/debug/seismic-*
