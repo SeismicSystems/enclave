@@ -10,7 +10,7 @@ readme.workspace = true
 description = "Seismic enclave backend"
 
 [lib]
-name = "seismic-enclave-server"
+name = "seismic_enclave_server"
 path = "src/lib.rs"
 
 [[bin]]
