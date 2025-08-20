@@ -18,7 +18,7 @@ echo "🚀 Starting integration tests..."
 cleanup() {
     echo "🧹 Cleaning up processes..."
     sudo supervisorctl stop all || true
-    sudo rm -rf /home/azureuser/.reth/
+    # sudo rm -rf /home/azureuser/.reth/
 }
 
 # # Set up trap to cleanup on exit
