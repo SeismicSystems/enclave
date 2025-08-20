@@ -4,7 +4,7 @@ pub use seismic_agent::SeismicAttestationAgent;
 use attestation_service::token::simple;
 
 /// A reasonable default mock attestation agent for testing
-pub async fn seismic_aa_mock() -> SeismicAttestationAgent {
+pub(crate) async fn seismic_aa_mock() -> SeismicAttestationAgent {
     let att_serv_config = simple_att_serv_config();
 
     let saa = SeismicAttestationAgent::new(None, att_serv_config).await;
