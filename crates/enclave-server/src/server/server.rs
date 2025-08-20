@@ -136,8 +136,7 @@ where
     }
 
     /// Simplified constructor if you want to skip the builder
-    #[allow(dead_code)]
-    pub(crate) async fn new(
+    pub async fn new(
         addr: impl Into<SocketAddr>,
         key_provider: K,
         token_broker: SeismicAttestationAgent,

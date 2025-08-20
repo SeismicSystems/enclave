@@ -1,5 +1,5 @@
 mod seismic_agent;
-pub(crate) use seismic_agent::SeismicAttestationAgent;
+pub use seismic_agent::SeismicAttestationAgent;
 
 use attestation_service::token::simple;
 
