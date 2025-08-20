@@ -20,7 +20,7 @@ pub struct SeismicAttestationAgent {
 
 impl SeismicAttestationAgent {
     /// Create a new SeismicAttestationAgent wrapper
-    pub(crate) async fn new(
+    pub async fn new(
         aa_config_path: Option<&str>,
         as_config: attestation_service::config::Config,
     ) -> Self {
