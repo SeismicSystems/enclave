@@ -12,14 +12,14 @@ use scroll::Pread;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Evidence {
+pub(crate) struct Evidence {
     pub tpm_quote: TpmQuote,
     pub hcl_report: Vec<u8>,
     pub td_quote: Vec<u8>,
 }
 
 /// parses an attestation, serialized as bytes, to the [`Evidence`] strruct
-pub fn tdx_attestation_bytes_to_evidence_struct(
+pub(crate) fn tdx_attestation_bytes_to_evidence_struct(
     attestation_bytes: &[u8],
 ) -> anyhow::Result<Evidence> {
     let evidence = serde_json::from_slice::<Evidence>(attestation_bytes)
@@ -63,7 +63,7 @@ macro_rules! parse_claim {
     };
 }
 
-pub fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
+pub(crate) fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
     let mut quote_map = Map::new();
     let mut quote_body = Map::new();
     let mut quote_header = Map::new();
@@ -170,7 +170,7 @@ pub fn generate_parsed_claim(quote: Quote) -> Result<TeeEvidenceParsedClaim> {
 /// The quote header. It is designed to compatible with earlier versions of the quote.
 #[repr(C)]
 #[derive(Debug, Pread)]
-pub struct QuoteHeader {
+pub(crate) struct QuoteHeader {
     ///< 0:  The version this quote structure.
     pub version: [u8; 2],
     ///< 2:  sgx_attestation_algorithm_id_t.  Describes the type of signature in the signature_data[] field.
@@ -210,7 +210,7 @@ impl fmt::Display for QuoteHeader {
 /// SGX Report2 body
 #[repr(C)]
 #[derive(Debug, Pread)]
-pub struct ReportBody2 {
+pub(crate) struct ReportBody2 {
     ///<  0:  TEE_TCB_SVN Array
     pub tcb_svn: [u8; 16],
     ///< 16:  Measurement of the SEAM module
@@ -283,7 +283,7 @@ impl fmt::Display for ReportBody2 {
 /// SGX Report2 body for quote v5
 #[repr(C)]
 #[derive(Debug, Pread)]
-pub struct ReportBody2v15 {
+pub(crate) struct ReportBody2v15 {
     ///<  0:  TEE_TCB_SVN Array
     pub tcb_svn: [u8; 16],
     ///< 16:  Measurement of the SEAM module
@@ -368,7 +368,7 @@ impl fmt::Display for ReportBody2v15 {
 
 #[repr(u16)]
 #[derive(Debug)]
-pub enum QuoteV5Type {
+pub(crate) enum QuoteV5Type {
     TDX10 = 2,
     TDX15 = 3,
 }
@@ -409,7 +409,7 @@ impl QuoteV5Type {
 }
 
 #[derive(Debug)]
-pub enum QuoteV5Body {
+pub(crate) enum QuoteV5Body {
     Tdx10(ReportBody2),
     Tdx15(ReportBody2v15),
 }
@@ -424,7 +424,7 @@ impl fmt::Display for QuoteV5Body {
 }
 
 #[derive(Debug)]
-pub enum Quote {
+pub(crate) enum Quote {
     /// TD Quote Payload(Version 4)
     /// First 632 bytes of TD Quote
     /// Excluding the signature data attached at the end of the Quote.
@@ -492,7 +492,7 @@ impl fmt::Display for Quote {
 
 pub const QUOTE_HEADER_SIZE: usize = 48;
 
-pub fn parse_tdx_quote(quote_bin: &[u8]) -> Result<Quote> {
+pub(crate) fn parse_tdx_quote(quote_bin: &[u8]) -> Result<Quote> {
     let quote_header = &quote_bin[..QUOTE_HEADER_SIZE];
     let header = quote_header
         .pread::<QuoteHeader>(0)

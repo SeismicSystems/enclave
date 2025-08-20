@@ -18,11 +18,18 @@ echo "🚀 Starting integration tests..."
 cleanup() {
     echo "🧹 Cleaning up processes..."
     sudo supervisorctl stop all || true
+    # Logs are stored elsewhere:
+    # ~/.reth-logs and /var/log/reth.{out,err}.log
     sudo rm -rf /home/azureuser/.reth/
 }
 
 # # Set up trap to cleanup on exit
 trap cleanup EXIT
+
+
+# Make sure enclave is NOT running so we can access TPM in test
+sudo supervisorctl stop seismic-enclave-server || true
+sleep 2
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."

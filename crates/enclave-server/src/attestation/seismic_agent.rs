@@ -32,7 +32,8 @@ impl SeismicAttestationAgent {
         }
     }
 
-    pub async fn init(&mut self) -> Result<()> {
+    #[allow(dead_code)]
+    pub(crate) async fn init(&mut self) -> Result<()> {
         self.attestation_agent.init().await
     }
 }
@@ -40,23 +41,27 @@ impl SeismicAttestationAgent {
 // delegate attestation_service fn to the inner verifier
 impl SeismicAttestationAgent {
     /// Set Attestation Verification Policy.
-    pub async fn set_policy(&mut self, policy_id: String, policy: String) -> Result<()> {
+    #[allow(dead_code)]
+    pub(crate) async fn set_policy(&mut self, policy_id: String, policy: String) -> Result<()> {
         self.verifier.set_policy(policy_id, policy).await
     }
 
     /// Get Attestation Verification Policy List.
     /// The result is a `policy-id` -> `policy hash` map.
-    pub async fn list_policies(&self) -> Result<HashMap<String, String>> {
+    #[allow(dead_code)]
+    pub(crate) async fn list_policies(&self) -> Result<HashMap<String, String>> {
         self.verifier.list_policies().await
     }
 
     /// Get a single Policy content.
-    pub async fn get_policy(&self, policy_id: String) -> Result<String> {
+    #[allow(dead_code)]
+    pub(crate) async fn get_policy(&self, policy_id: String) -> Result<String> {
         self.verifier.get_policy(policy_id).await
     }
 
     /// Evaluate evidence against policies, verifying the attestation
-    pub async fn evaluate(
+    #[allow(dead_code)]
+    pub(crate) async fn evaluate(
         &self,
         verification_requests: Vec<VerificationRequest>,
         policy_ids: Vec<String>,
@@ -66,15 +71,20 @@ impl SeismicAttestationAgent {
             .await
     }
 
-    pub async fn register_reference_value(&mut self, message: &str) -> Result<()> {
+    #[allow(dead_code)]
+    pub(crate) async fn register_reference_value(&mut self, message: &str) -> Result<()> {
         self.verifier.register_reference_value(message).await
     }
 
-    pub async fn query_reference_values(&self) -> Result<HashMap<String, serde_json::Value>> {
+    #[allow(dead_code)]
+    pub(crate) async fn query_reference_values(
+        &self,
+    ) -> Result<HashMap<String, serde_json::Value>> {
         self.verifier.query_reference_values().await
     }
 
-    pub async fn generate_supplemental_challenge(
+    #[allow(dead_code)]
+    pub(crate) async fn generate_supplemental_challenge(
         &self,
         tee: Tee,
         tee_parameters: String,
