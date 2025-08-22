@@ -4,7 +4,7 @@ mod boot;
 mod coco_aa;
 mod coco_as;
 mod health;
-mod keys;
+pub mod keys;
 mod snapshot;
 
 pub use boot::*;
