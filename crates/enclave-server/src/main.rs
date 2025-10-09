@@ -31,7 +31,11 @@ async fn main() {
 
     let args = Args::parse();
     info!("Enclave server starting on {}:{}", args.ip, args.port);
-    let key_manager = KeyManagerBuilder::build_from_os_rng().unwrap();
+
+    // Using mock keys (hardcoded [0u8; 32]) so all nodes derive the same keys
+    // TODO: Replace with proper distributed key management for production
+    let key_manager = KeyManagerBuilder::build_mock().unwrap();
+    info!("Using MOCK KEYS - all nodes will share the same temporary, insecure key");
 
     // Use type parameter for the key provider (e.g., DefaultKeyProvider)
     let builder: EnclaveServerBuilder<KeyManager> = EnclaveServer::<KeyManager>::builder()
