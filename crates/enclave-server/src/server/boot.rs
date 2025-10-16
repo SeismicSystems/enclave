@@ -6,7 +6,6 @@ use anyhow::anyhow;
 use enclave_contract;
 use hex;
 use kbs_types::Tee;
-use rand::rngs::OsRng;
 use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
