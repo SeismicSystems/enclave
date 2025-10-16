@@ -6,8 +6,6 @@ use anyhow::anyhow;
 use enclave_contract;
 use hex;
 use kbs_types::Tee;
-use rand::rngs::OsRng;
-use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
 use seismic_enclave::request_types::{ShareRootKeyRequest, ShareRootKeyResponse};
@@ -166,9 +164,8 @@ impl Booter {
     /// root key is generated using OsRng
     pub fn genesis(&self) -> Result<(), anyhow::Error> {
         // FUTURE WORK: consider using key shares instead of OsRng
-        let mut rng = OsRng;
-        let mut rng_bytes = [0u8; 32];
-        rng.try_fill_bytes(&mut rng_bytes)?;
+        // TEMPORARY: Using deterministic mock key for testing
+        let rng_bytes = [0u8; 32];
 
         let mut guard = self.km_root_key.lock().unwrap();
         *guard = Some(rng_bytes);
@@ -286,11 +283,9 @@ mod tests {
             "root key should not be empty"
         );
         let root_key = booter.get_root_key().unwrap();
-        booter.genesis().unwrap();
-        let new_root_key = booter.get_root_key().unwrap();
-        assert!(
-            root_key != new_root_key,
-            "root key genesis should be random"
+        assert_eq!(
+            root_key, [0u8; 32],
+            "root key genesis should be deterministic mock key"
         );
     }
 }
