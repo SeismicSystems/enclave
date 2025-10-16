@@ -286,8 +286,7 @@ mod tests {
         );
         let root_key = booter.get_root_key().unwrap();
         assert_eq!(
-            root_key,
-            [0u8; 32],
+            root_key, [0u8; 32],
             "root key genesis should be deterministic mock key"
         );
     }
