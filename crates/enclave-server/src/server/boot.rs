@@ -6,7 +6,6 @@ use anyhow::anyhow;
 use enclave_contract;
 use hex;
 use kbs_types::Tee;
-use rand::TryRngCore;
 use secp256k1::rand::rngs::OsRng as Secp256k1Rng;
 use secp256k1::Secp256k1;
 use seismic_enclave::request_types::{ShareRootKeyRequest, ShareRootKeyResponse};
