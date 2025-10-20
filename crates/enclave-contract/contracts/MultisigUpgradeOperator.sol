@@ -9,181 +9,332 @@ import "./UpgradeOperator.sol";
  * Uses the ANVIL test keys as the three signers
  */
 contract MultisigUpgradeOperator {
-    
     // The three signers (ANVIL keys)
-    address public constant signer1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // Alice (0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
-    address public constant signer2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // Bob (0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d)
-    address public constant signer3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // Charlie (0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
-    
+    address public constant signer1 =
+        0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // Alice (0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
+    address public constant signer2 =
+        0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // Bob (0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d)
+    address public constant signer3 =
+        0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // Charlie (0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
+
     // The UpgradeOperator contract being controlled
-    UpgradeOperator constant public upgradeOperator = UpgradeOperator(0x1000000000000000000000000000000000000001); // Set in seismic-reth genesis
-    
+    UpgradeOperator public immutable upgradeOperator =
+        UpgradeOperator(0x1000000000000000000000000000000000000001); // Set in seismic-reth genesis
+
     // Nonce counter for proposal uniqueness
     uint256 public proposalNonce;
-    
-    // Mapping to track votes for each proposal
-    mapping(bytes32 => mapping(address => bool)) public votes;
-    
-    // Mapping to track proposal execution status
-    mapping(bytes32 => bool) public executed;
-    
-    // Event emitted when a proposal is created (version 1)
-    event ProposalCreatedV1(bytes32 indexed proposalId, uint256 nonce, bytes mrtd, bytes mrseam, bytes pcr4, bool status);
-    
-    // Event emitted when a vote is cast
-    event VoteCast(bytes32 indexed proposalId, address indexed voter, bool approved);
-    
-    // Event emitted when a proposal is executed
-    event ProposalExecuted(bytes32 indexed proposalId);
-    
-    // Event emitted when upgrade operator is set
-    event UpgradeOperatorSet(address indexed upgradeOperator);
-    
+
+    // Enum for proposal types
+    enum ProposalType {
+        ADD_MEASUREMENTS,
+        DEPRECATE_MEASUREMENTS,
+        REINSTATE_MEASUREMENTS
+    }
+
+    // Proposal struct
+    struct Proposal {
+        ProposalType proposalType;
+        bytes32 tagHash;
+        UpgradeOperator.Measurements measurements;
+        bool executed;
+        uint256 voteCount;
+        mapping(address => bool) hasVoted;
+    }
+
+    // Mapping to track proposals
+    mapping(bytes32 => Proposal) public proposals;
+
+    // Events
+    event ProposalCreated(
+        bytes32 indexed proposalId,
+        ProposalType indexed proposalType,
+        string tag,
+        uint256 nonce
+    );
+
+    event VoteCast(bytes32 indexed proposalId, address indexed voter);
+
+    event ProposalExecuted(
+        bytes32 indexed proposalId,
+        ProposalType indexed proposalType
+    );
+
+    modifier onlySigner() {
+        require(
+            msg.sender == signer1 ||
+                msg.sender == signer2 ||
+                msg.sender == signer3,
+            "Not authorized"
+        );
+        _;
+    }
+
     /**
-     * @dev Creates a proposal to set defining attributes (version 1) in the UpgradeOperator
-     * @param mrtd The MRTD value (48 bytes)
-     * @param mrseam The MRSEAM value (48 bytes)
-     * @param pcr4 The PCR4 value (32 bytes)
-     * @param status The status to set
+     * @dev Creates a proposal to add new measurements
+     * @param measurements The measurements to add
      * @return proposalId The unique identifier for this proposal
      */
-    function createProposalV1(
-        bytes memory mrtd,
-        bytes memory mrseam,
-        bytes memory pcr4,
-        bool status
-    ) public returns (bytes32 proposalId) {
-        require(mrtd.length == 48, "Invalid mrtd length");
-        require(mrseam.length == 48, "Invalid mrseam length");
-        require(pcr4.length == 32, "Invalid pcr4 length");
-        
-        // Increment nonce and use it in proposal ID calculation
-        proposalNonce++;
-        proposalId = computeProposalIdV1(mrtd, mrseam, pcr4, status, proposalNonce);
+    function proposeAddMeasurements(
+        UpgradeOperator.Measurements calldata measurements
+    ) external onlySigner returns (bytes32 proposalId) {
+        // Validate inputs
+        require(bytes(measurements.tag).length > 0, "Tag cannot be empty");
+        require(measurements.mrtd.length > 0, "MRTD cannot be empty");
+        require(measurements.mrseam.length > 0, "MRSEAM cannot be empty");
+        require(
+            measurements.registrar_slots.length ==
+                measurements.registrar_values.length,
+            "Registrar arrays length mismatch"
+        );
 
-        require(!executed[proposalId], "Proposal already executed");
-        
-        emit ProposalCreatedV1(proposalId, proposalNonce, mrtd, mrseam, pcr4, status);
-        
+        proposalNonce++;
+        proposalId = keccak256(
+            abi.encodePacked(
+                ProposalType.ADD_MEASUREMENTS,
+                measurements.tag,
+                measurements.mrtd,
+                measurements.mrseam,
+                proposalNonce
+            )
+        );
+
+        Proposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Proposal already exists");
+
+        proposal.proposalType = ProposalType.ADD_MEASUREMENTS;
+        proposal.tagHash = keccak256(abi.encodePacked(measurements.tag));
+        proposal.measurements = measurements;
+
+        emit ProposalCreated(
+            proposalId,
+            ProposalType.ADD_MEASUREMENTS,
+            measurements.tag,
+            proposalNonce
+        );
+
+        // Auto-vote for proposer
+        _vote(proposalId);
+
         return proposalId;
     }
-    
+
     /**
-     * @dev Casts a vote on a proposal
+     * @dev Creates a proposal to deprecate measurements
+     * @param tag The tag of measurements to deprecate
+     * @return proposalId The unique identifier for this proposal
+     */
+    function proposeDeprecateMeasurements(
+        string calldata tag
+    ) external onlySigner returns (bytes32 proposalId) {
+        require(bytes(tag).length > 0, "Tag cannot be empty");
+
+        proposalNonce++;
+        proposalId = keccak256(
+            abi.encodePacked(
+                ProposalType.DEPRECATE_MEASUREMENTS,
+                tag,
+                proposalNonce
+            )
+        );
+
+        Proposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Proposal already exists");
+
+        proposal.proposalType = ProposalType.DEPRECATE_MEASUREMENTS;
+        proposal.tagHash = keccak256(abi.encodePacked(tag));
+        // Store tag in measurements.tag for execution
+        proposal.measurements.tag = tag;
+
+        emit ProposalCreated(
+            proposalId,
+            ProposalType.DEPRECATE_MEASUREMENTS,
+            tag,
+            proposalNonce
+        );
+
+        // Auto-vote for proposer
+        _vote(proposalId);
+
+        return proposalId;
+    }
+
+    /**
+     * @dev Creates a proposal to reinstate measurements
+     * @param tag The tag of measurements to reinstate
+     * @return proposalId The unique identifier for this proposal
+     */
+    function proposeReinstateMeasurements(
+        string calldata tag
+    ) external onlySigner returns (bytes32 proposalId) {
+        require(bytes(tag).length > 0, "Tag cannot be empty");
+
+        proposalNonce++;
+        proposalId = keccak256(
+            abi.encodePacked(
+                ProposalType.REINSTATE_MEASUREMENTS,
+                tag,
+                proposalNonce
+            )
+        );
+
+        Proposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Proposal already exists");
+
+        proposal.proposalType = ProposalType.REINSTATE_MEASUREMENTS;
+        proposal.tagHash = keccak256(abi.encodePacked(tag));
+        // Store tag in measurements.tag for execution
+        proposal.measurements.tag = tag;
+
+        emit ProposalCreated(
+            proposalId,
+            ProposalType.REINSTATE_MEASUREMENTS,
+            tag,
+            proposalNonce
+        );
+
+        // Auto-vote for proposer
+        _vote(proposalId);
+
+        return proposalId;
+    }
+
+    /**
+     * @dev Vote on a proposal
      * @param proposalId The proposal to vote on
-     * @param approved Whether to approve the proposal
      */
-    function vote(bytes32 proposalId, bool approved) public {
-        require(msg.sender == signer1 || msg.sender == signer2 || msg.sender == signer3, "Not authorized to vote");
-        require(!executed[proposalId], "Proposal already executed");
-        require(!votes[proposalId][msg.sender], "Already voted");
-        
-        votes[proposalId][msg.sender] = approved;
-        
-        emit VoteCast(proposalId, msg.sender, approved);
+    function vote(bytes32 proposalId) external onlySigner {
+        _vote(proposalId);
     }
-    
+
     /**
-     * @dev Executes a proposal if it has enough votes (version 1)
-     * @param mrtd The MRTD value (48 bytes)
-     * @param mrseam The MRSEAM value (48 bytes)
-     * @param pcr4 The PCR4 value (32 bytes)
-     * @param status The status to set
-     * @param nonce The nonce used when creating the proposal
+     * @dev Internal vote logic
      */
-    function executeProposalV1(
-        bytes memory mrtd,
-        bytes memory mrseam,
-        bytes memory pcr4,
-        bool status,
-        uint256 nonce
-    ) public {
-        bytes32 proposalId = computeProposalIdV1(mrtd, mrseam, pcr4, status, nonce);
-        
-        require(!executed[proposalId], "Proposal already executed");
-        
-        uint256 approvalCount = 0;
-        if (votes[proposalId][signer1]) approvalCount++;
-        if (votes[proposalId][signer2]) approvalCount++;
-        if (votes[proposalId][signer3]) approvalCount++;
-        
-        require(approvalCount >= 2, "Insufficient votes");
-        
-        executed[proposalId] = true;
-        
-        // Execute the actual set_id_status_v1 call on the UpgradeOperator
-        upgradeOperator.set_id_status_v1(mrtd, mrseam, pcr4, status);
-        
-        emit ProposalExecuted(proposalId);
+    function _vote(bytes32 proposalId) internal {
+        Proposal storage proposal = proposals[proposalId];
+
+        require(!proposal.executed, "Proposal already executed");
+        require(!proposal.hasVoted[msg.sender], "Already voted");
+
+        proposal.hasVoted[msg.sender] = true;
+        proposal.voteCount++;
+
+        emit VoteCast(proposalId, msg.sender);
+
+        // todo we probably dont want auto execute
+        // Auto-execute if threshold reached
+        // if (proposal.voteCount >= 2) {
+        //     _executeProposal(proposalId);
+        // }
     }
-    
+
     /**
-     * @dev Gets the vote count for a proposal
-     * @param proposalId The proposal to check
-     * @return approvalCount Number of approvals
-     * @return totalVotes Total number of votes cast
+     * @dev Execute a proposal that has enough votes
+     * @param proposalId The proposal to execute
      */
-    function getVoteCount(bytes32 proposalId) public view returns (uint256 approvalCount, uint256 totalVotes) {
-        if (votes[proposalId][signer1]) {
-            approvalCount++;
-            totalVotes++;
-        }
-        if (votes[proposalId][signer2]) {
-            approvalCount++;
-            totalVotes++;
-        }
-        if (votes[proposalId][signer3]) {
-            approvalCount++;
-            totalVotes++;
-        }
-        
-        return (approvalCount, totalVotes);
+    function executeProposal(bytes32 proposalId) external {
+        Proposal storage proposal = proposals[proposalId];
+
+        require(!proposal.executed, "Proposal already executed");
+        require(proposal.voteCount >= 2, "Insufficient votes");
+        _executeProposal(proposalId);
     }
-    
+
     /**
-     * @dev Checks if a proposal can be executed
-     * @param proposalId The proposal to check
-     * @return True if the proposal has enough votes to be executed
+     * @dev Internal execution logic
      */
-    function canExecute(bytes32 proposalId) public view returns (bool) {
-        if (executed[proposalId]) return false;
-        
-        uint256 approvalCount = 0;
-        if (votes[proposalId][signer1]) approvalCount++;
-        if (votes[proposalId][signer2]) approvalCount++;
-        if (votes[proposalId][signer3]) approvalCount++;
-        
-        return approvalCount >= 2;
-    }
-    
-    /**
-     * @dev Computes the proposal ID for given parameters and nonce (version 1)
-     * Uses the UpgradeOperator's computeIdV1 method for the base ID calculation
-     * @param mrtd The MRTD value (48 bytes)
-     * @param mrseam The MRSEAM value (48 bytes)
-     * @param pcr4 The PCR4 value (32 bytes)
-     * @param status The status to set
-     * @param nonce The nonce to use
-     * @return The computed proposal ID
-     */
-    function computeProposalIdV1(
-        bytes memory mrtd,
-        bytes memory mrseam,
-        bytes memory pcr4,
-        bool status,
-        uint256 nonce
-    ) public pure returns (bytes32) {
-        // Create the DefiningAttributesV1 struct and use the UpgradeOperator's computeIdV1 method
-        UpgradeOperator.DefiningAttributesV1 memory attrs = UpgradeOperator.DefiningAttributesV1(mrtd, mrseam, pcr4);
-        
-        bytes32 baseId;
-        try upgradeOperator.computeIdV1(attrs) returns (bytes32 result) {
-            baseId = result;
-        } catch {
-            revert("upgradeOperator.computeIdV1 failed");
+    function _executeProposal(bytes32 proposalId) internal {
+        Proposal storage proposal = proposals[proposalId];
+
+        proposal.executed = true;
+
+        if (proposal.proposalType == ProposalType.ADD_MEASUREMENTS) {
+            upgradeOperator.addAcceptedMeasurements(proposal.measurements);
+        } else if (
+            proposal.proposalType == ProposalType.DEPRECATE_MEASUREMENTS
+        ) {
+            upgradeOperator.deprecateMeasurements(proposal.measurements.tag);
+        } else if (
+            proposal.proposalType == ProposalType.REINSTATE_MEASUREMENTS
+        ) {
+            upgradeOperator.reinstateMeasurement(proposal.measurements.tag);
         }
 
-        // Combine with status and nonce for proposal uniqueness
-        return keccak256(abi.encodePacked(baseId, status, nonce));
+        emit ProposalExecuted(proposalId, proposal.proposalType);
     }
-} 
+
+    /**
+     * @dev Get vote status for a proposal
+     * @param proposalId The proposal to check
+     * @return voteCount Number of votes
+     * @return hasVoted1 Whether signer1 voted
+     * @return hasVoted2 Whether signer2 voted
+     * @return hasVoted3 Whether signer3 voted
+     * @return canExecute Whether proposal can be executed
+     */
+    function getVoteStatus(
+        bytes32 proposalId
+    )
+        external
+        view
+        returns (
+            uint256 voteCount,
+            bool hasVoted1,
+            bool hasVoted2,
+            bool hasVoted3,
+            bool canExecute
+        )
+    {
+        Proposal storage proposal = proposals[proposalId];
+
+        voteCount = proposal.voteCount;
+        hasVoted1 = proposal.hasVoted[signer1];
+        hasVoted2 = proposal.hasVoted[signer2];
+        hasVoted3 = proposal.hasVoted[signer3];
+        canExecute = !proposal.executed && proposal.voteCount >= 2;
+    }
+
+    /**
+     * @dev Get proposal details
+     * @param proposalId The proposal to query
+     * @return proposalType The type of proposal
+     * @return tag The measurement tag
+     * @return executed Whether the proposal has been executed
+     * @return voteCount Number of votes
+     */
+    function getProposalInfo(
+        bytes32 proposalId
+    )
+        external
+        view
+        returns (
+            ProposalType proposalType,
+            string memory tag,
+            bool executed,
+            uint256 voteCount
+        )
+    {
+        Proposal storage proposal = proposals[proposalId];
+
+        return (
+            proposal.proposalType,
+            proposal.measurements.tag,
+            proposal.executed,
+            proposal.voteCount
+        );
+    }
+
+    /**
+     * @dev Get full measurement details for an add proposal
+     * @param proposalId The proposal to query
+     * @return measurements The full measurements struct
+     */
+    function getProposalMeasurements(
+        bytes32 proposalId
+    ) external view returns (UpgradeOperator.Measurements memory) {
+        require(
+            proposals[proposalId].proposalType == ProposalType.ADD_MEASUREMENTS,
+            "Not an add measurements proposal"
+        );
+        return proposals[proposalId].measurements;
+    }
+}
