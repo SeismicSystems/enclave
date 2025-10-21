@@ -24,7 +24,7 @@ path = "src/bin/install_policies.rs"
 
 [dependencies]
 seismic-enclave.workspace = true
-enclave-contract.workspace = true
+#enclave-contract.workspace = true
 alloy.workspace = true
 
 attestation-agent.workspace = true
@@ -59,7 +59,7 @@ serde = {workspace = true, optional = true }
 clap = { version = "4.5", features = ["derive"] }
 
 [dev-dependencies]
-enclave-contract.workspace = true
+#enclave-contract.workspace = true
 serial_test = "3.2.0"
 tempfile = "3.17.1"
 reqwest.workspace = true
