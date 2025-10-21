@@ -49,9 +49,7 @@ echo "✅ reth service is running"
 
 # Test 1: Run boot share root key test
 echo "🧪 Running test_boot_share_root_key..."
-echo "PWD before cd ../enclave-server = $PWD"
 cd crates/enclave-server
-echo "PWD after cd ../enclave-server = $PWD"
 ls -la Cargo.toml 2>/dev/null || echo "❌ Cargo.toml not found in $(pwd)"
 
 # Build tests and get binary paths
@@ -66,7 +64,6 @@ echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
 sleep 2
 
-echo "working directory = $PWD"
 echo "🚀 Executing: sudo ${binaries[0]} test_boot_share_root_key"
 if ! sudo "${binaries[0]}" test_boot_share_root_key; then
     echo "❌ test_boot_share_root_key failed with exit code $?"
