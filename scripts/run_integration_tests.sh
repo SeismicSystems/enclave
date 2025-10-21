@@ -50,7 +50,7 @@ echo "✅ reth service is running"
 # Test 1: Run boot share root key test
 echo "🧪 Running test_boot_share_root_key..."
 echo "PWD before cd ../enclave-server = $PWD"
-cd ../enclave-server
+cd crates/enclave-server
 echo "PWD after cd ../enclave-server = $PWD"
 ls -la Cargo.toml 2>/dev/null || echo "❌ Cargo.toml not found in $(pwd)"
 
