@@ -120,19 +120,19 @@ contract MultisigUpgradeOperator {
 
     /**
      * @dev Creates a proposal to deprecate measurements
-     * @param tag The tag of measurements to deprecate
+     * @param measurements The measurements to deprecate
      * @return proposalId The unique identifier for this proposal
      */
     function proposeDeprecateMeasurements(
-        string calldata tag
+        UpgradeOperator.Measurements calldata measurements
     ) external onlySigner returns (bytes32 proposalId) {
-        require(bytes(tag).length > 0, "Tag cannot be empty");
+        require(bytes(measurements.tag).length > 0, "Tag cannot be empty");
 
         proposalNonce++;
         proposalId = keccak256(
             abi.encodePacked(
                 ProposalType.DEPRECATE_MEASUREMENTS,
-                tag,
+                measurements.tag,
                 proposalNonce
             )
         );
@@ -141,14 +141,14 @@ contract MultisigUpgradeOperator {
         require(!proposal.executed, "Proposal already exists");
 
         proposal.proposalType = ProposalType.DEPRECATE_MEASUREMENTS;
-        proposal.tagHash = keccak256(abi.encodePacked(tag));
+        proposal.tagHash = keccak256(abi.encodePacked(measurements.tag));
         // Store tag in measurements.tag for execution
-        proposal.measurements.tag = tag;
+        proposal.measurements = measurements;
 
         emit ProposalCreated(
             proposalId,
             ProposalType.DEPRECATE_MEASUREMENTS,
-            tag,
+            measurements.tag,
             proposalNonce
         );
 
@@ -160,19 +160,19 @@ contract MultisigUpgradeOperator {
 
     /**
      * @dev Creates a proposal to reinstate measurements
-     * @param tag The tag of measurements to reinstate
+     * @param measurements The measurements to reinstate
      * @return proposalId The unique identifier for this proposal
      */
     function proposeReinstateMeasurements(
-        string calldata tag
+        UpgradeOperator.Measurements calldata measurements
     ) external onlySigner returns (bytes32 proposalId) {
-        require(bytes(tag).length > 0, "Tag cannot be empty");
+        require(bytes(measurements.tag).length > 0, "Tag cannot be empty");
 
         proposalNonce++;
         proposalId = keccak256(
             abi.encodePacked(
                 ProposalType.REINSTATE_MEASUREMENTS,
-                tag,
+                measurements.tag,
                 proposalNonce
             )
         );
@@ -181,14 +181,14 @@ contract MultisigUpgradeOperator {
         require(!proposal.executed, "Proposal already exists");
 
         proposal.proposalType = ProposalType.REINSTATE_MEASUREMENTS;
-        proposal.tagHash = keccak256(abi.encodePacked(tag));
+        proposal.tagHash = keccak256(abi.encodePacked(measurements.tag));
         // Store tag in measurements.tag for execution
-        proposal.measurements.tag = tag;
+        proposal.measurements = measurements;
 
         emit ProposalCreated(
             proposalId,
             ProposalType.REINSTATE_MEASUREMENTS,
-            tag,
+            measurements.tag,
             proposalNonce
         );
 
@@ -252,11 +252,11 @@ contract MultisigUpgradeOperator {
         } else if (
             proposal.proposalType == ProposalType.DEPRECATE_MEASUREMENTS
         ) {
-            upgradeOperator.deprecateMeasurements(proposal.measurements.tag);
+            upgradeOperator.deprecateMeasurements(proposal.measurements);
         } else if (
             proposal.proposalType == ProposalType.REINSTATE_MEASUREMENTS
         ) {
-            upgradeOperator.reinstateMeasurement(proposal.measurements.tag);
+            upgradeOperator.reinstateMeasurement(proposal.measurements);
         }
 
         emit ProposalExecuted(proposalId, proposal.proposalType);

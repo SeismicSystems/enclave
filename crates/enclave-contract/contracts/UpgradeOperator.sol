@@ -52,97 +52,106 @@ contract UpgradeOperator {
             "Registrar arrays length mismatch"
         );
 
+        bytes32 measurementHash = _getMeasurementHash(measurements);
+
         // Store the measurement
-        acceptedMeasurements[tagHash] = measurements;
-        acceptedTags.push(tagHash);
+        acceptedMeasurements[measurementHash] = measurements;
+        acceptedTags.push(measurementHash);
         tagExists[tagHash] = true;
 
-        emit MeasurementAdded(measurements.tag, tagHash);
+        emit MeasurementAdded(measurements.tag, measurementHash);
     }
     /**
      * @dev accept a currently deprecated set of measurements
-     * @param tag The tag of the measurement to reinstate
+     * @param m the measurement to reinstate
      */
     function reinstateMeasurement(
-        string calldata tag
+        Measurements calldata m
     ) external onlyNetworkMultisig {
-        bytes32 tagHash = keccak256(abi.encodePacked(tag));
+        bytes32 tagHash = keccak256(abi.encodePacked(m.tag));
 
-        // Check if measurement exists in accepted
+        bytes32 measurementHash = _getMeasurementHash(m);
+
+        // Check if measurement exists in deprecated
         require(
-            bytes(deprecatedMeasurements[tagHash].tag).length > 0,
-            "No deprecated measurement with that tag"
+            keccak256(
+                abi.encodePacked(deprecatedMeasurements[measurementHash].tag)
+            ) == tagHash,
+            "No deprecated measurement with that tag or hash"
         );
 
         // Move from deprecated to accepted
-        Measurements memory measurement = deprecatedMeasurements[tagHash];
-        acceptedMeasurements[tagHash] = measurement;
-        acceptedTags.push(tagHash);
+        Measurements memory measurement = deprecatedMeasurements[
+            measurementHash
+        ];
+        acceptedMeasurements[measurementHash] = measurement;
+        acceptedTags.push(measurementHash);
 
         // Remove from deprecated
-        delete deprecatedMeasurements[tagHash];
-        _removeFromArray(deprecatedTags, tagHash);
+        delete deprecatedMeasurements[measurementHash];
+        _removeFromArray(deprecatedTags, measurementHash);
 
-        emit MeasurementAdded(tag, tagHash);
+        emit MeasurementAdded(m.tag, measurementHash);
     }
 
     /**
      * @dev Deprecate a currently allowed set of measurements
-     * @param tag The tag of the measurement to deprecate
+     * @param m the measurement to deprecate
      */
     function deprecateMeasurements(
-        string calldata tag
+        Measurements calldata m
     ) external onlyNetworkMultisig {
-        bytes32 tagHash = keccak256(abi.encodePacked(tag));
-
+        bytes32 tagHash = keccak256(abi.encodePacked(m.tag));
+        bytes32 measurementHash = _getMeasurementHash(m);
         // Check if measurement exists in accepted
         require(
-            bytes(acceptedMeasurements[tagHash].tag).length > 0,
-            "No accepted measurement with that tag"
+            keccak256(
+                abi.encodePacked(acceptedMeasurements[measurementHash].tag)
+            ) == tagHash,
+            "No deprecated measurement with that tag or hash"
         );
 
         // Move from accepted to deprecated
-        Measurements memory measurement = acceptedMeasurements[tagHash];
-        deprecatedMeasurements[tagHash] = measurement;
-        deprecatedTags.push(tagHash);
+        Measurements memory measurement = acceptedMeasurements[measurementHash];
+        deprecatedMeasurements[measurementHash] = measurement;
+        deprecatedTags.push(measurementHash);
 
         // Remove from accepted
-        delete acceptedMeasurements[tagHash];
-        _removeFromArray(acceptedTags, tagHash);
+        delete acceptedMeasurements[measurementHash];
+        _removeFromArray(acceptedTags, measurementHash);
 
-        emit MeasurementDeprecated(tag, tagHash);
+        emit MeasurementDeprecated(m.tag, measurementHash);
     }
 
     /**
      * @dev Check if measurements are accepted
-     * @param tag The tag to check
+     * @param measurementHash Hash of the measurements to check
      */
-    function isAccepted(string calldata tag) external view returns (bool) {
-        bytes32 tagHash = keccak256(abi.encodePacked(tag));
-        return bytes(acceptedMeasurements[tagHash].tag).length > 0;
+    function isAccepted(bytes32 measurementHash) external view returns (bool) {
+        return bytes(acceptedMeasurements[measurementHash].tag).length > 0;
     }
 
     /**
      * @dev Check if measurements are accepted
-     * @param tag The tag to check
+     * @param measurementHash Hash of the measurements to check
      */
-    function isDeprecated(string calldata tag) external view returns (bool) {
-        bytes32 tagHash = keccak256(abi.encodePacked(tag));
-        return bytes(deprecatedMeasurements[tagHash].tag).length > 0;
+    function isDeprecated(
+        bytes32 measurementHash
+    ) external view returns (bool) {
+        return bytes(deprecatedMeasurements[measurementHash].tag).length > 0;
     }
 
     /**
      * @dev Get accepted measurement by tag
      */
     function getAcceptedMeasurement(
-        string calldata tag
+        bytes32 measurementHash
     ) external view returns (Measurements memory) {
-        bytes32 tagHash = keccak256(abi.encodePacked(tag));
         require(
-            bytes(acceptedMeasurements[tagHash].tag).length > 0,
+            bytes(acceptedMeasurements[measurementHash].tag).length > 0,
             "Measurement not found"
         );
-        return acceptedMeasurements[tagHash];
+        return acceptedMeasurements[measurementHash];
     }
 
     /**
@@ -150,6 +159,12 @@ contract UpgradeOperator {
      */
     function getAcceptedCount() external view returns (uint256) {
         return acceptedTags.length;
+    }
+
+    function getMeasurementHash(
+        Measurements calldata measurements
+    ) external pure returns (bytes32) {
+        return _getMeasurementHash(measurements);
     }
 
     /**
@@ -166,5 +181,19 @@ contract UpgradeOperator {
                 break;
             }
         }
+    }
+
+    function _getMeasurementHash(
+        Measurements memory m
+    ) private pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encode(
+                    m.mrtd,
+                    m.mrseam,
+                    m.registrar_slots,
+                    m.registrar_values
+                )
+            );
     }
 }

@@ -18,6 +18,8 @@ contract MultisigUpgradeOperatorTest is Test {
     // Test data
     UpgradeOperator.Measurements public testMeasurement1;
     UpgradeOperator.Measurements public testMeasurement2;
+    bytes32 public measurement1Hash;
+    bytes32 public measurement2Hash;
 
     event ProposalCreated(
         bytes32 indexed proposalId,
@@ -83,6 +85,9 @@ contract MultisigUpgradeOperatorTest is Test {
         testMeasurement2.registrar_values[
             0
         ] = hex"77777777777777777777777777777777777777777777777777777777";
+
+        measurement1Hash = upgradeOperator.getMeasurementHash(testMeasurement1);
+        measurement2Hash = upgradeOperator.getMeasurementHash(testMeasurement2);
     }
 
     // Test proposal creation for adding measurements
@@ -182,12 +187,12 @@ contract MultisigUpgradeOperatorTest is Test {
         multisig.vote(addProposalId);
         multisig.executeProposal(addProposalId);
 
-        assertTrue(upgradeOperator.isAccepted("AzureV1"));
+        assertTrue(upgradeOperator.isAccepted(measurement1Hash));
 
         // Now propose to deprecate it
         vm.prank(signer1);
         bytes32 deprecateProposalId = multisig.proposeDeprecateMeasurements(
-            "AzureV1"
+            testMeasurement1
         );
 
         // Vote to execute
@@ -196,8 +201,8 @@ contract MultisigUpgradeOperatorTest is Test {
         multisig.executeProposal(deprecateProposalId);
 
         // Check it's deprecated
-        assertFalse(upgradeOperator.isAccepted("AzureV1"));
-        assertTrue(upgradeOperator.isDeprecated("AzureV1"));
+        assertFalse(upgradeOperator.isAccepted(measurement1Hash));
+        assertTrue(upgradeOperator.isDeprecated(measurement1Hash));
     }
 
     // Test reinstate measurements proposal
@@ -213,26 +218,26 @@ contract MultisigUpgradeOperatorTest is Test {
 
         vm.prank(signer1);
         bytes32 deprecateProposalId = multisig.proposeDeprecateMeasurements(
-            "AzureV1"
+            testMeasurement1
         );
         vm.prank(signer2);
         multisig.vote(deprecateProposalId);
         multisig.executeProposal(deprecateProposalId);
-        assertFalse(upgradeOperator.isAccepted("AzureV1"));
-        assertTrue(upgradeOperator.isDeprecated("AzureV1"));
+        assertFalse(upgradeOperator.isAccepted(measurement1Hash));
+        assertTrue(upgradeOperator.isDeprecated(measurement1Hash));
 
         // Now propose to reinstate
         vm.prank(signer1);
         bytes32 reinstateProposalId = multisig.proposeReinstateMeasurements(
-            "AzureV1"
+            testMeasurement1
         );
         vm.prank(signer3);
         multisig.vote(reinstateProposalId);
         multisig.executeProposal(reinstateProposalId);
 
         // Check it's reinstated
-        assertTrue(upgradeOperator.isAccepted("AzureV1"));
-        assertFalse(upgradeOperator.isDeprecated("AzureV1"));
+        assertTrue(upgradeOperator.isAccepted(measurement1Hash));
+        assertFalse(upgradeOperator.isDeprecated(measurement1Hash));
     }
 
     // Test get vote status
@@ -276,7 +281,8 @@ contract MultisigUpgradeOperatorTest is Test {
         vm.prank(signer2);
         multisig.vote(proposal1);
         multisig.executeProposal(proposal1);
-        assertTrue(upgradeOperator.isAccepted("AzureV1"));
+
+        assertTrue(upgradeOperator.isAccepted(measurement1Hash));
 
         // Signer2 proposes to add AWS measurements
         vm.prank(signer2);
@@ -288,34 +294,39 @@ contract MultisigUpgradeOperatorTest is Test {
 
         //  execute
         multisig.executeProposal(proposal2);
-        assertTrue(upgradeOperator.isAccepted("AWSV1"));
+
+        assertTrue(upgradeOperator.isAccepted(measurement2Hash));
 
         assertEq(upgradeOperator.getAcceptedCount(), 2);
 
         // Signer1 proposes to deprecate Azure
         vm.prank(signer1);
-        bytes32 proposal3 = multisig.proposeDeprecateMeasurements("AzureV1");
+        bytes32 proposal3 = multisig.proposeDeprecateMeasurements(
+            testMeasurement1
+        );
 
         // Signer2 votes
         vm.prank(signer2);
         multisig.vote(proposal3);
         multisig.executeProposal(proposal3);
 
-        assertFalse(upgradeOperator.isAccepted("AzureV1"));
-        assertTrue(upgradeOperator.isDeprecated("AzureV1"));
+        assertFalse(upgradeOperator.isAccepted(measurement1Hash));
+        assertTrue(upgradeOperator.isDeprecated(measurement1Hash));
         assertEq(upgradeOperator.getAcceptedCount(), 1);
 
         // Signer3 proposes to reinstate Azure
         vm.prank(signer3);
-        bytes32 proposal4 = multisig.proposeReinstateMeasurements("AzureV1");
+        bytes32 proposal4 = multisig.proposeReinstateMeasurements(
+            testMeasurement1
+        );
 
         // Signer1 votes
         vm.prank(signer1);
         multisig.vote(proposal4);
         multisig.executeProposal(proposal4);
 
-        assertTrue(upgradeOperator.isAccepted("AzureV1"));
-        assertFalse(upgradeOperator.isDeprecated("AzureV1"));
+        assertTrue(upgradeOperator.isAccepted(measurement1Hash));
+        assertFalse(upgradeOperator.isDeprecated(measurement1Hash));
         assertEq(upgradeOperator.getAcceptedCount(), 2);
     }
 
@@ -367,7 +378,9 @@ contract MultisigUpgradeOperatorTest is Test {
     // Test cannot get measurements for non-add proposals
     function testCannotGetMeasurementsForDeprecateProposal() public {
         vm.prank(signer1);
-        bytes32 proposalId = multisig.proposeDeprecateMeasurements("AzureV1");
+        bytes32 proposalId = multisig.proposeDeprecateMeasurements(
+            testMeasurement1
+        );
 
         vm.expectRevert("Not an add measurements proposal");
         multisig.getProposalMeasurements(proposalId);
