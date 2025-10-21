@@ -25,7 +25,6 @@ async fn test_boot_share_root_key() {
     }
     assert!(reth_is_running(), "Test startup error: Reth is not running");
 
-    let addy = UPGRADE_MULTISIG_ADDRESS;
     // Test the booter with the canonical deployment
     let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
     let new_node_booter = Booter::mock();
