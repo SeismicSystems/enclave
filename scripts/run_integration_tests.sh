@@ -63,7 +63,7 @@ fi
 echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
 sleep 2
-echo "🚀 Executing: sudo ${binaries[0]} test_boot_share_root_key"
+echo "🚀 Executing: sudo target/${binaries[0]} test_boot_share_root_key"
 if ! sudo "target/${binaries[0]}" test_boot_share_root_key; then
     echo "❌ test_boot_share_root_key failed with exit code $?"
     echo "🔍 Last 20 lines of system log:"
@@ -74,7 +74,7 @@ echo "✅ test_boot_share_root_key passed"
 
 # Test 2: Run snapshot integration handlers test
 echo "🧪 Running test_snapshot_integration_handlers..."
-sudo supervisorctl start enclave-server 
+sudo supervisorctl start enclave-server
 sleep 2
 if ! sudo "target/${binaries[0]}" test_snapshot_integration_handlers; then
     echo "❌ test_snapshot_integration_handlers failed"
