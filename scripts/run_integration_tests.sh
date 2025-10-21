@@ -26,15 +26,18 @@ cleanup() {
 # # Set up trap to cleanup on exit
 trap cleanup EXIT
 
-
-# Make sure enclave is NOT running so we can access TPM in test
-sudo supervisorctl stop seismic-enclave-server || true
+# Make sure enclave is running so we can start reth
+sudo supervisorctl start enclave-server || true
 sleep 2
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
 sudo supervisorctl start reth || true
 sleep 10
+
+# Make sure enclave is NOT running so we can access TPM in test
+sudo supervisorctl stop enclave-server || true
+sleep 2
 
 # Check if reth is running
 echo "🔍 Checking if reth is running..."
