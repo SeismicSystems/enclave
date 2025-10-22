@@ -97,7 +97,8 @@ echo "✅ test_boot_share_root_key passed"
 # Test 3: Run snapshot integration handlers test
 echo "🧪 Running test_snapshot_integration_handlers..."
 sudo supervisorctl start enclave-server
-sleep 2
+sleep 10
+
 if ! sudo "${binaries[0]}" test_snapshot_integration_handlers; then
     echo "❌ test_snapshot_integration_handlers failed"
     exit 1
