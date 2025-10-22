@@ -17,6 +17,7 @@ echo "🚀 Starting integration tests..."
 # Function to cleanup processes
 cleanup() {
     echo "🧹 Cleaning up processes..."
+    echo $(sudo supervisorctl status)
     sudo supervisorctl stop all || true
     # Logs are stored elsewhere:
     # ~/.reth-logs and /var/log/reth.{out,err}.log
@@ -26,15 +27,18 @@ cleanup() {
 # # Set up trap to cleanup on exit
 trap cleanup EXIT
 
-
-# Make sure enclave is NOT running so we can access TPM in test
-sudo supervisorctl stop seismic-enclave-server || true
-sleep 2
+# Make sure enclave is running so we can start reth
+sudo supervisorctl start enclave-server || true
+sleep 10
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
 sudo supervisorctl start reth || true
 sleep 10
+
+# Make sure enclave is NOT running so we can access TPM in test
+sudo supervisorctl stop enclave-server || true
+sleep 2
 
 # Check if reth is running
 echo "🔍 Checking if reth is running..."
@@ -43,6 +47,7 @@ if ! sudo supervisorctl status reth | grep -q "RUNNING"; then
     exit 1
 fi
 echo "✅ reth service is running"
+
 
 # Test 1: Run multisig upgrade operator workflow test
 echo "🧪 Running test_multisig_upgrade_operator_workflow..."
@@ -79,6 +84,7 @@ fi
 echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
 sleep 2
+
 echo "🚀 Executing: sudo ${binaries[0]} test_boot_share_root_key"
 if ! sudo "${binaries[0]}" test_boot_share_root_key; then
     echo "❌ test_boot_share_root_key failed with exit code $?"
@@ -90,8 +96,9 @@ echo "✅ test_boot_share_root_key passed"
 
 # Test 3: Run snapshot integration handlers test
 echo "🧪 Running test_snapshot_integration_handlers..."
-sudo supervisorctl start enclave-server 
-sleep 2
+sudo supervisorctl start enclave-server
+sleep 10
+
 if ! sudo "${binaries[0]}" test_snapshot_integration_handlers; then
     echo "❌ test_snapshot_integration_handlers failed"
     exit 1

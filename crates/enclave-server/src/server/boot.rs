@@ -231,11 +231,13 @@ impl Booter {
         }
 
         // Create ProposalParamsV1 struct
-        let params = enclave_contract::ProposalParamsV1::new(
-            alloy::primitives::Bytes::from(mr_td_bytes),
-            alloy::primitives::Bytes::from(mr_seam_bytes),
-            alloy::primitives::Bytes::from(pcr4_bytes),
-        );
+        let params = enclave_contract::Measurements {
+            tag: "AzureV1".to_string(),
+            mrtd: alloy::primitives::Bytes::from(mr_td_bytes),
+            mrseam: alloy::primitives::Bytes::from(mr_seam_bytes),
+            registrar_slots: vec![4],
+            registrar_values: vec![alloy::primitives::Bytes::from(pcr4_bytes)],
+        };
 
         // Get contract address and RPC URL from environment variables
         let upgrade_operator_address = enclave_contract::UPGRADE_OPERATOR_ADDRESS
@@ -245,7 +247,7 @@ impl Booter {
 
         // Check the proposal status against the onchain contract
         let status =
-            enclave_contract::check_proposal_status_v1(upgrade_operator_address, &rpc_url, &params)
+            enclave_contract::check_proposal_status(upgrade_operator_address, &rpc_url, params)
                 .await
                 .map_err(|e| anyhow::anyhow!("Booter failed to check proposal status: {e}"))?;
 

@@ -2,82 +2,56 @@
 
 use alloy::{
     network::EthereumWallet,
-    primitives::{bytes, Bytes, U256},
+    primitives::{FixedBytes, Log},
     providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
     sol,
 };
 
-// Generate contract bindings for the factory
-sol! {
-    #[sol(rpc)]
-    interface UpgradeOperatorFactory {
-        function deployUpgradeOperator(bytes32 salt) external returns (address);
-        function deployUpgradeOperatorWithOwner(bytes32 salt, address owner) external returns (address);
-        function deployMultisigUpgradeOperator(bytes32 salt, address upgradeOperator) external returns (address);
-        function deployUpgradeOperatorWithMultisig(bytes32 upgradeOperatorSalt, bytes32 multisigSalt) external returns (address, address);
-        function computeUpgradeOperatorAddress(bytes32 salt) external view returns (address);
-        function computeUpgradeOperatorAddressWithOwner(bytes32 salt, address owner) external view returns (address);
-        function computeMultisigUpgradeOperatorAddress(bytes32 salt, address upgradeOperator) external view returns (address);
-        function isDeployed(address contractAddress) external view returns (bool);
-    }
-}
+use crate::{Measurements, MultisigUpgradeOperator::ProposalCreated};
 
 // Generate contract bindings for the upgrade operator
 sol! {
     #[sol(rpc)]
     interface UpgradeOperator {
-        function set_id_status_v1(bytes mrtd, bytes mrseam, bytes pcr4, bool status) external;
-        function get_id_status_v1(bytes mrtd, bytes mrseam, bytes pcr4) external view returns (bool);
-        function computeIdV1(bytes mrtd, bytes mrseam, bytes pcr4) external pure returns (bytes32);
-        function owner() external view returns (address);
-    }
-}
+        struct Measurements {
+            string tag;
+            bytes mrtd;
+            bytes mrseam;
+            uint8[] registrar_slots;
+            bytes[] registrar_values;
+        }
+        function acceptedMeasurments(bytes32) public returns(Measurements);
+        function deprecatedMeasurments(bytes32) public returns(Measurements);
+        function acceptedTags() public returns(bytes32[]);
+        function deprecatedTags() public returns(bytes32[]);
 
+        function addAcceptedMeasurements(Measurements measurements) external;
+        function reinstateMeasurement(Measurements measurements) external;
+        function deprecateMeasurements(Measurements measurements) external;
+        function isAccepted(bytes32 measurementHash) external view returns(bool);
+        function isDeprecated(bytes32 measurementHash) external view returns(bool);
+        function getAcceptedMeasurement(bytes32 measurementHash) external view returns(Measurements);
+        function getAcceptedCount() external view returns (uint256);
+        function OWNER() external view returns (address);
+        function getMeasurementHash(Measurements measurements) external pure returns(bytes32);
+    }
 // Generate contract bindings for the multisig contract
-sol! {
     #[sol(rpc)]
     interface MultisigUpgradeOperator {
-        function createProposalV1(bytes mrtd, bytes mrseam, bytes pcr4, bool status) external returns (bytes32);
-        function vote(bytes32 proposalId, bool approved) external;
-        function executeProposalV1(bytes mrtd, bytes mrseam, bytes pcr4, bool status, uint256 nonce) external;
-        function getVoteCount(bytes32 proposalId) external view returns (uint256 approvalCount, uint256 totalVotes);
-        function canExecute(bytes32 proposalId) external view returns (bool);
-        function computeProposalIdV1(bytes mrtd, bytes mrseam, bytes pcr4, bool status, uint256 nonce) external view returns (bytes32);
+        event ProposalCreated(bytes32 indexed proposalId,uint8 indexed proposalType,string tag,uint256 nonce);
+
+        function proposeAddMeasurements(UpgradeOperator.Measurements measurements) external returns(bytes32 proposalId);
+        function proposeDeprecateMeasurements(UpgradeOperator.Measurements measurements) external returns(bytes32 proposalId);
+        function proposeReinstateMeasurements(UpgradeOperator.Measurements measurements) external returns(bytes32 proposalId);
+        function vote(bytes32 proposalId) external;
+        function executeProposal(bytes32 proposalId) external;
+        function getVoteStatus(bytes32 proposalId) external view returns (uint256 voteCount, bool hasVoted1, bool hasVoted2, bool hasVoted3, bool canExecute);
         function proposalNonce() external view returns (uint256);
         function signer1() external view returns (address);
         function signer2() external view returns (address);
         function signer3() external view returns (address);
         function upgradeOperator() external view returns (address);
-        function setUpgradeOperator(address _upgradeOperator) external;
-        function factory() external view returns (address);
-    }
-}
-
-/// Represents the proposal parameters for upgrade validation
-/// This struct makes it easy to change the parameters in the future
-/// To change parameters, just modify this struct and update the contract interfaces
-#[derive(Debug, Clone)]
-pub struct ProposalParamsV1 {
-    pub mrtd: Bytes,   // 48 bytes
-    pub mrseam: Bytes, // 48 bytes
-    pub pcr4: Bytes,   // 32 bytes
-}
-
-impl ProposalParamsV1 {
-    /// Creates a new ProposalParams instance
-    pub fn new(mrtd: Bytes, mrseam: Bytes, pcr4: Bytes) -> Self {
-        Self { mrtd, mrseam, pcr4 }
-    }
-
-    /// Creates test proposal parameters
-    /// Based off the devbox values
-    pub fn test_params() -> Self {
-        Self {
-            mrtd: bytes!("cbd40696f617d42254fc7037469cbcf1414fe173678798cfa1070b7d40e26fa8175b99d0cd245994278f980dec73146a"),
-            mrseam: bytes!("9790d89a10210ec6968a773cee2ca05b5aa97309f36727a968527be4606fc19e6f73acce350946c9d46a9bf7a63f8430"),
-            pcr4: bytes!("6f2f7d9a42b35a2f8f9d7bf366ca3e369a45d004f3ac49b0a93785fe817c82b5"),
-        }
     }
 }
 
@@ -98,12 +72,11 @@ pub async fn create_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    params: &ProposalParamsV1,
-    status: bool,
-) -> Result<([u8; 32], u64), anyhow::Error> {
+    params: Measurements,
+) -> Result<FixedBytes<32>, anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
-    let wallet = EthereumWallet::from(signer);
+    let wallet = EthereumWallet::from(signer.clone());
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
@@ -111,20 +84,8 @@ pub async fn create_multisig_proposal(
     let multisig_contract =
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider.clone()));
 
-    // Get current nonce before creating proposal (for debugging/logging if needed)
-    let _current_nonce = multisig_contract
-        .proposalNonce()
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get current nonce: {:?}", e))?;
-
     // Create proposal
-    let create_tx = multisig_contract.createProposalV1(
-        params.mrtd.clone(),
-        params.mrseam.clone(),
-        params.pcr4.clone(),
-        status,
-    );
+    let create_tx = multisig_contract.proposeAddMeasurements(params);
     let create_pending = create_tx.send().await.map_err(|e| {
         anyhow::anyhow!(
             "create_multisig_proposal create proposal tx failed: {:?}",
@@ -132,37 +93,17 @@ pub async fn create_multisig_proposal(
         )
     })?;
 
-    let _create_receipt = create_pending
-        .watch()
+    // wait for it to be included
+    let receipt = create_pending
+        .get_receipt()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get proposal creation receipt: {:?}", e))?;
 
-    // Get the new nonce after proposal creation
-    let new_nonce = multisig_contract
-        .proposalNonce()
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get new nonce: {:?}", e))?;
+    let event: Log<ProposalCreated> = receipt.decoded_log().unwrap();
 
-    // Compute the proposal ID using the new nonce
-    let proposal_id = multisig_contract
-        .computeProposalIdV1(
-            params.mrtd.clone(),
-            params.mrseam.clone(),
-            params.pcr4.clone(),
-            status,
-            new_nonce,
-        )
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to compute proposal ID: {:?}", e))?;
+    let proposal_id = event.proposalId;
 
-    println!(
-        "Proposal created with ID: {:?}, nonce: {}",
-        proposal_id, new_nonce
-    );
-
-    Ok((proposal_id.into(), new_nonce.try_into().unwrap()))
+    Ok(proposal_id)
 }
 
 /// Votes on a proposal in the MultisigUpgradeOperator contract.
@@ -182,8 +123,7 @@ pub async fn vote_on_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    proposal_id: [u8; 32],
-    approved: bool,
+    proposal_id: FixedBytes<32>,
 ) -> Result<(), anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
@@ -196,7 +136,7 @@ pub async fn vote_on_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Vote on proposal
-    let vote_tx = multisig_contract.vote(proposal_id.into(), approved);
+    let vote_tx = multisig_contract.vote(proposal_id);
     let vote_pending = vote_tx
         .send()
         .await
@@ -207,7 +147,7 @@ pub async fn vote_on_multisig_proposal(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get vote receipt: {:?}", e))?;
 
-    println!("Voted {} on proposal: {:?}", approved, proposal_id);
+    println!("Voted on proposal:{:?}", proposal_id);
 
     Ok(())
 }
@@ -230,9 +170,7 @@ pub async fn execute_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    params: &ProposalParamsV1,
-    status: bool,
-    nonce: u64,
+    params: FixedBytes<32>,
 ) -> Result<(), anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
@@ -245,13 +183,7 @@ pub async fn execute_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Execute proposal
-    let execute_tx = multisig_contract.executeProposalV1(
-        params.mrtd.clone(),
-        params.mrseam.clone(),
-        params.pcr4.clone(),
-        status,
-        U256::from(nonce),
-    );
+    let execute_tx = multisig_contract.executeProposal(params);
     let execute_pending = execute_tx
         .send()
         .await
@@ -281,7 +213,7 @@ pub async fn execute_multisig_proposal(
 pub async fn can_execute_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     rpc: &str,
-    proposal_id: [u8; 32],
+    proposal_id: FixedBytes<32>,
 ) -> Result<bool, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
@@ -291,13 +223,13 @@ pub async fn can_execute_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Check if proposal can be executed
-    let can_execute = multisig_contract
-        .canExecute(proposal_id.into())
+    let res = multisig_contract
+        .getVoteStatus(proposal_id)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to check if proposal can be executed: {:?}", e))?;
 
-    Ok(can_execute)
+    Ok(res.canExecute)
 }
 
 /// Gets the vote count for a proposal in the MultisigUpgradeOperator contract.
@@ -314,8 +246,8 @@ pub async fn can_execute_multisig_proposal(
 pub async fn get_multisig_vote_count(
     multisig_address: alloy::primitives::Address,
     rpc: &str,
-    proposal_id: [u8; 32],
-) -> Result<(u64, u64), anyhow::Error> {
+    proposal_id: FixedBytes<32>,
+) -> Result<u64, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
 
@@ -324,16 +256,13 @@ pub async fn get_multisig_vote_count(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Get vote count
-    let result = multisig_contract
-        .getVoteCount(proposal_id.into())
+    let res = multisig_contract
+        .getVoteStatus(proposal_id)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get vote count: {:?}", e))?;
 
-    Ok((
-        result.approvalCount.try_into().unwrap(),
-        result.totalVotes.try_into().unwrap(),
-    ))
+    Ok(res.voteCount.try_into().unwrap())
 }
 
 /// Checks if a proposal configuration is approved in the UpgradeOperator contract.
@@ -347,10 +276,10 @@ pub async fn get_multisig_vote_count(
 /// # Returns
 ///
 /// * `Result<bool, anyhow::Error>` - Returns true if the proposal is approved, or an `anyhow::Error` if an error occurs.
-pub async fn check_proposal_status_v1(
+pub async fn check_proposal_status(
     upgrade_operator_address: alloy::primitives::Address,
     rpc: &str,
-    params: &ProposalParamsV1,
+    params: Measurements,
 ) -> Result<bool, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
@@ -359,47 +288,18 @@ pub async fn check_proposal_status_v1(
     let upgrade_operator_contract =
         UpgradeOperator::new(upgrade_operator_address, std::sync::Arc::new(provider));
 
+    let measurement_hash = upgrade_operator_contract
+        .getMeasurementHash(params)
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("get_measurement_hash failed: {:?}", e))?;
+
     // Check proposal status
     let status = upgrade_operator_contract
-        .get_id_status_v1(
-            params.mrtd.clone(),
-            params.mrseam.clone(),
-            params.pcr4.clone(),
-        )
+        .isAccepted(measurement_hash)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("check_proposal_status_v1 failed: {:?}", e))?;
 
     Ok(status)
-}
-
-/// Computes the CREATE2 address for a contract without deploying it.
-///
-/// # Arguments
-///
-/// * `factory_address` - The address of the factory contract.
-/// * `rpc` - A string slice representing the RPC URL of the Ethereum node.
-/// * `salt` - A 32-byte salt value for CREATE2 deployment.
-///
-/// # Returns
-///
-/// * `Result<alloy::primitives::Address, anyhow::Error>` - Returns the computed CREATE2 address if successful, or an `anyhow::Error` if an error occurs.
-pub async fn compute_create2_address(
-    factory_address: alloy::primitives::Address,
-    rpc: &str,
-    salt: [u8; 32],
-) -> Result<alloy::primitives::Address, anyhow::Error> {
-    let rpc_url = reqwest::Url::parse(rpc).unwrap();
-    let provider = ProviderBuilder::new().connect_http(rpc_url);
-
-    let factory_contract =
-        UpgradeOperatorFactory::new(factory_address, std::sync::Arc::new(provider));
-
-    let expected_address = factory_contract
-        .computeUpgradeOperatorAddress(salt.into())
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to compute CREATE2 address: {:?}", e))?;
-
-    Ok(expected_address)
 }

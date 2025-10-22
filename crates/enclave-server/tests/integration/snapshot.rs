@@ -144,6 +144,8 @@ pub async fn test_snapshot_integration_handlers() -> Result<(), anyhow::Error> {
         "restore_from_encrypted_snapshot failed: {}",
         restore_resp.error
     );
+    // give reth some time to start back up
+    sleep(Duration::from_secs(15));
     assert!(Path::new(format!("{}/db/mdbx.dat", RETH_DATA_DIR).as_str()).exists());
     assert!(reth_is_running());
 
