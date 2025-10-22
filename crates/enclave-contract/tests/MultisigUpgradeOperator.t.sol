@@ -60,19 +60,15 @@ contract MultisigUpgradeOperatorTest is Test {
         // Setup test measurements
         testMeasurement1.tag = "AzureV1";
         testMeasurement1
-            .mrtd = hex"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111";
+            .mrtd = hex"cbd40696f617d42254fc7037469cbcf1414fe173678798cfa1070b7d40e26fa8175b99d0cd245994278f980dec73146a";
         testMeasurement1
-            .mrseam = hex"222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222";
-        testMeasurement1.registrar_slots = new uint8[](2);
+            .mrseam = hex"9790d89a10210ec6968a773cee2ca05b5aa97309f36727a968527be4606fc19e6f73acce350946c9d46a9bf7a63f8430";
+        testMeasurement1.registrar_slots = new uint8[](1);
         testMeasurement1.registrar_slots[0] = 4;
-        testMeasurement1.registrar_slots[1] = 5;
-        testMeasurement1.registrar_values = new bytes[](2);
+        testMeasurement1.registrar_values = new bytes[](1);
         testMeasurement1.registrar_values[
             0
-        ] = hex"33333333333333333333333333333333333333333333333333333333";
-        testMeasurement1.registrar_values[
-            1
-        ] = hex"44444444444444444444444444444444444444444444444444444444";
+        ] = hex"6f2f7d9a42b35a2f8f9d7bf366ca3e369a45d004f3ac49b0a93785fe817c82b5";
 
         testMeasurement2.tag = "AWSV1";
         testMeasurement2
@@ -371,8 +367,8 @@ contract MultisigUpgradeOperatorTest is Test {
         assertEq(retrieved.tag, testMeasurement1.tag);
         assertEq(retrieved.mrtd, testMeasurement1.mrtd);
         assertEq(retrieved.mrseam, testMeasurement1.mrseam);
-        assertEq(retrieved.registrar_slots.length, 2);
-        assertEq(retrieved.registrar_values.length, 2);
+        assertEq(retrieved.registrar_slots.length, 1);
+        assertEq(retrieved.registrar_values.length, 1);
     }
 
     // Test cannot get measurements for non-add proposals

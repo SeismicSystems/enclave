@@ -1,10 +1,14 @@
 //! Contract interface definitions and types
 
 use alloy::{
-    network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner, sol,
+    network::EthereumWallet,
+    primitives::{FixedBytes, Log},
+    providers::ProviderBuilder,
+    signers::local::PrivateKeySigner,
+    sol,
 };
 
-use crate::Measurements;
+use crate::{Measurements, MultisigUpgradeOperator::ProposalCreated};
 
 // Generate contract bindings for the upgrade operator
 sol! {
@@ -29,12 +33,13 @@ sol! {
         function isDeprecated(bytes32 measurementHash) external view returns(bool);
         function getAcceptedMeasurement(bytes32 measurementHash) external view returns(Measurements);
         function getAcceptedCount() external view returns (uint256);
-        function owner() external view returns (address);
+        function OWNER() external view returns (address);
         function getMeasurementHash(Measurements measurements) external pure returns(bytes32);
     }
 // Generate contract bindings for the multisig contract
     #[sol(rpc)]
     interface MultisigUpgradeOperator {
+        event ProposalCreated(bytes32 indexed proposalId,uint8 indexed proposalType,string tag,uint256 nonce);
 
         function proposeAddMeasurements(UpgradeOperator.Measurements measurements) external returns(bytes32 proposalId);
         function proposeDeprecateMeasurements(UpgradeOperator.Measurements measurements) external returns(bytes32 proposalId);
@@ -68,23 +73,16 @@ pub async fn create_multisig_proposal(
     sk: &str,
     rpc: &str,
     params: Measurements,
-) -> Result<([u8; 32], u64), anyhow::Error> {
+) -> Result<FixedBytes<32>, anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
-    let wallet = EthereumWallet::from(signer);
+    let wallet = EthereumWallet::from(signer.clone());
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
     // Create multisig contract instance
     let multisig_contract =
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider.clone()));
-
-    // Get current nonce before creating proposal (for debugging/logging if needed)
-    let _current_nonce = multisig_contract
-        .proposalNonce()
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get current nonce: {:?}", e))?;
 
     // Create proposal
     let create_tx = multisig_contract.proposeAddMeasurements(params);
@@ -95,24 +93,17 @@ pub async fn create_multisig_proposal(
         )
     })?;
 
-    let proposal_id = create_pending
-        .watch()
+    // wait for it to be included
+    let receipt = create_pending
+        .get_receipt()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get proposal creation receipt: {:?}", e))?;
 
-    // Get the new nonce after proposal creation
-    let new_nonce = multisig_contract
-        .proposalNonce()
-        .call()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get new nonce: {:?}", e))?;
+    let event: Log<ProposalCreated> = receipt.decoded_log().unwrap();
 
-    println!(
-        "Proposal created with ID: {:?}, nonce: {}",
-        proposal_id, new_nonce
-    );
+    let proposal_id = event.proposalId;
 
-    Ok((proposal_id.into(), new_nonce.try_into().unwrap()))
+    Ok(proposal_id)
 }
 
 /// Votes on a proposal in the MultisigUpgradeOperator contract.
@@ -132,7 +123,7 @@ pub async fn vote_on_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    proposal_id: [u8; 32],
+    proposal_id: FixedBytes<32>,
 ) -> Result<(), anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
@@ -145,7 +136,7 @@ pub async fn vote_on_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Vote on proposal
-    let vote_tx = multisig_contract.vote(proposal_id.into());
+    let vote_tx = multisig_contract.vote(proposal_id);
     let vote_pending = vote_tx
         .send()
         .await
@@ -179,7 +170,7 @@ pub async fn execute_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     sk: &str,
     rpc: &str,
-    params: [u8; 32],
+    params: FixedBytes<32>,
 ) -> Result<(), anyhow::Error> {
     // Set up signer with the provided sk
     let signer: PrivateKeySigner = sk.parse().unwrap();
@@ -192,7 +183,7 @@ pub async fn execute_multisig_proposal(
         MultisigUpgradeOperator::new(multisig_address, std::sync::Arc::new(provider));
 
     // Execute proposal
-    let execute_tx = multisig_contract.executeProposal(params.into());
+    let execute_tx = multisig_contract.executeProposal(params);
     let execute_pending = execute_tx
         .send()
         .await
@@ -222,7 +213,7 @@ pub async fn execute_multisig_proposal(
 pub async fn can_execute_multisig_proposal(
     multisig_address: alloy::primitives::Address,
     rpc: &str,
-    proposal_id: [u8; 32],
+    proposal_id: FixedBytes<32>,
 ) -> Result<bool, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
@@ -233,7 +224,7 @@ pub async fn can_execute_multisig_proposal(
 
     // Check if proposal can be executed
     let res = multisig_contract
-        .getVoteStatus(proposal_id.into())
+        .getVoteStatus(proposal_id)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to check if proposal can be executed: {:?}", e))?;
@@ -255,7 +246,7 @@ pub async fn can_execute_multisig_proposal(
 pub async fn get_multisig_vote_count(
     multisig_address: alloy::primitives::Address,
     rpc: &str,
-    proposal_id: [u8; 32],
+    proposal_id: FixedBytes<32>,
 ) -> Result<u64, anyhow::Error> {
     let rpc_url = reqwest::Url::parse(rpc).unwrap();
     let provider = ProviderBuilder::new().connect_http(rpc_url);
@@ -266,7 +257,7 @@ pub async fn get_multisig_vote_count(
 
     // Get vote count
     let res = multisig_contract
-        .getVoteStatus(proposal_id.into())
+        .getVoteStatus(proposal_id)
         .call()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get vote count: {:?}", e))?;

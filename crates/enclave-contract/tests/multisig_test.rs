@@ -51,15 +51,12 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     print_flush("Creating multisig proposal...\n");
 
     // Create a proposal to set MRTD
-    let (proposal_id, nonce) =
+    let proposal_id =
         create_multisig_proposal(multisig_address, ANVIL_ALICE_SK, reth_rpc, params.clone())
             .await
             .map_err(|e| anyhow::anyhow!("multisig workflow failed to create proposal: {:?}", e))?;
 
-    print_flush(format!(
-        "Proposal created with ID: {:?}, nonce: {}\n",
-        proposal_id, nonce
-    ));
+    print_flush(format!("Proposal created with ID: {:?}\n", proposal_id));
 
     // Wait a bit for the transaction to be processed
     sleep(Duration::from_secs(2));
@@ -73,7 +70,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
         "Initial vote count - Total votes: {}\n",
         total_votes
     ));
-    assert_eq!(total_votes, 0, "Initial total votes should be 0");
+    assert_eq!(total_votes, 1, "Initial total votes should be 1");
 
     // Check if proposal can be executed (should be false initially)
     let can_execute = can_execute_multisig_proposal(multisig_address, reth_rpc, proposal_id)
@@ -82,42 +79,6 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
 
     print_flush(format!("Can execute proposal: {}\n", can_execute));
     assert!(!can_execute, "Proposal should not be executable initially");
-
-    print_flush("Alice voting yes on proposal...\n");
-
-    // Alice votes yes
-    vote_on_multisig_proposal(multisig_address, ANVIL_ALICE_SK, reth_rpc, proposal_id)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to vote with Alice: {:?}", e))?;
-
-    // Wait a bit for the transaction to be processed
-    sleep(Duration::from_secs(2));
-
-    // Check vote count after Alice's vote
-    let total_votes = get_multisig_vote_count(multisig_address, reth_rpc, proposal_id)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to get vote count: {:?}", e))?;
-
-    print_flush(format!(
-        "Vote count after Alice - Total votes: {}\n",
-        total_votes
-    ));
-
-    assert_eq!(total_votes, 1, "Total votes should be 1 after Alice's vote");
-
-    // Check if proposal can be executed (should still be false with only 1 vote)
-    let can_execute = can_execute_multisig_proposal(multisig_address, reth_rpc, proposal_id)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to check if proposal can be executed: {:?}", e))?;
-
-    print_flush(format!(
-        "Can execute proposal after Alice: {}\n",
-        can_execute
-    ));
-    assert!(
-        !can_execute,
-        "Proposal should not be executable with only 1 vote"
-    );
 
     print_flush("Bob voting yes on proposal...\n");
 

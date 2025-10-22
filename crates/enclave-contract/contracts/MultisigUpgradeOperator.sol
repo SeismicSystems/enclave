@@ -18,7 +18,7 @@ contract MultisigUpgradeOperator {
         0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // Charlie (0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
 
     // The UpgradeOperator contract being controlled
-    UpgradeOperator public immutable upgradeOperator =
+    UpgradeOperator public constant upgradeOperator =
         UpgradeOperator(0x1000000000000000000000000000000000000001); // Set in seismic-reth genesis
 
     // Nonce counter for proposal uniqueness
@@ -212,6 +212,10 @@ contract MultisigUpgradeOperator {
     function _vote(bytes32 proposalId) internal {
         Proposal storage proposal = proposals[proposalId];
 
+        require(
+            bytes(proposal.measurements.tag).length > 0,
+            "proposal does not exist"
+        );
         require(!proposal.executed, "Proposal already executed");
         require(!proposal.hasVoted[msg.sender], "Already voted");
 
@@ -219,12 +223,6 @@ contract MultisigUpgradeOperator {
         proposal.voteCount++;
 
         emit VoteCast(proposalId, msg.sender);
-
-        // todo we probably dont want auto execute
-        // Auto-execute if threshold reached
-        // if (proposal.voteCount >= 2) {
-        //     _executeProposal(proposalId);
-        // }
     }
 
     /**
