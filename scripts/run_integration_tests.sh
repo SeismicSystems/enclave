@@ -29,7 +29,7 @@ trap cleanup EXIT
 
 # Make sure enclave is running so we can start reth
 sudo supervisorctl start enclave-server || true
-sleep 2
+sleep 10
 
 # Start services via supervisor
 echo "🔧 Starting supervisor services..."
