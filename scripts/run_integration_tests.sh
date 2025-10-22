@@ -17,6 +17,7 @@ echo "🚀 Starting integration tests..."
 # Function to cleanup processes
 cleanup() {
     echo "🧹 Cleaning up processes..."
+    echo $(sudo supervisorctl status)
     sudo supervisorctl stop all || true
     # Logs are stored elsewhere:
     # ~/.reth-logs and /var/log/reth.{out,err}.log
