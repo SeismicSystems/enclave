@@ -51,6 +51,7 @@ schnorrkel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
+dcap-rs = "0.1.0"
 
 hex = {workspace = true}
 scroll = { workspace = true, optional = true }
