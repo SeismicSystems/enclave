@@ -21,6 +21,7 @@ use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
     rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error, rpc_internal_server_error,
 };
+use crate::server::measurements::print_measurements;
 
 /// The main execution engine for secure enclave logic
 /// handles server api calls after http parsing and authentication
@@ -45,7 +46,7 @@ where
     /// helper function to get the key provider if it has been initialized
     /// or return an RPC uninitialized resource error
     pub fn key_provider(&self) -> Result<Arc<K>, jsonrpsee::types::ErrorObjectOwned> {
-        if !self.booter.is_compelted() {
+        if !self.booter.is_completed() {
             return Err(rpc_conflict_error(anyhow::anyhow!(
                 "Key provider not initialized"
             )));
@@ -61,7 +62,8 @@ where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {
     async fn health_check(&self) -> RpcResult<HealthCheckResponse> {
-        let boot_complete = self.booter.is_compelted();
+        print_measurements();
+        let boot_complete = self.booter.is_completed();
         Ok(HealthCheckResponse {
             status_ok: true,
             boot_complete,
@@ -479,7 +481,7 @@ mod tests {
         enclave_engine.boot_genesis().await.unwrap();
         enclave_engine.complete_boot().await.unwrap();
         assert!(
-            enclave_engine.booter.is_compelted(),
+            enclave_engine.booter.is_completed(),
             "booting should be marked complete"
         );
 

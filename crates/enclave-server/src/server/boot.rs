@@ -62,7 +62,7 @@ impl Booter {
     }
     /// Get the completion status of the booting process
     /// Used to enable/disable certain engine endpoints
-    pub fn is_compelted(&self) -> bool {
+    pub fn is_completed(&self) -> bool {
         let guard = self.completed.lock().unwrap();
         *guard
     }
