@@ -13,6 +13,7 @@ use crate::attestation::SeismicAttestationAgent;
 use crate::key_manager::KeyManager;
 use crate::key_manager::NetworkKeyProvider;
 use crate::server::into_original::IntoOriginalData;
+use crate::server::measurements::print_measurements;
 use crate::snapshot::{DATA_DISK_DIR, RETH_DATA_DIR, SNAPSHOT_DIR, SNAPSHOT_FILE};
 use seismic_enclave::request_types::*;
 use seismic_enclave::rpc::EnclaveApiServer;
@@ -21,7 +22,6 @@ use seismic_enclave::EnclaveClient;
 use seismic_enclave::{
     rpc_bad_argument_error, rpc_bad_evidence_error, rpc_conflict_error, rpc_internal_server_error,
 };
-use crate::server::measurements::print_measurements;
 
 /// The main execution engine for secure enclave logic
 /// handles server api calls after http parsing and authentication
@@ -62,7 +62,7 @@ where
     K: NetworkKeyProvider + Send + Sync + 'static,
 {
     async fn health_check(&self) -> RpcResult<HealthCheckResponse> {
-        print_measurements();
+        //  print_measurements();
         let boot_complete = self.booter.is_completed();
         Ok(HealthCheckResponse {
             status_ok: true,
