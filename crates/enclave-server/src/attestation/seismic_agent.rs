@@ -27,7 +27,7 @@ impl SeismicAttestationAgent {
         let attestation_agent =
             AttestationAgent::new(aa_config_path).expect("Failed to create an AttestationAgent");
 
-        tracing::info!("TEE TYPE: {}", attestation_agent.get_tee_type());
+        tracing::info!("TEE TYPE: {:?}", attestation_agent.get_tee_type());
         Self {
             quote_mutex: Mutex::new(()),
             attestation_agent,
