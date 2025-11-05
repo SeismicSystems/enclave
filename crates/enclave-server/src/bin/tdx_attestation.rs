@@ -1,11 +1,13 @@
 //! Binary to retrieve and display TDX attestation
 
 use anyhow::Result;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 
 fn main() -> Result<()> {
-    // Report data can be any custom data you want to include in the attestation
-    // Using an empty string for a basic attestation
-    let report_data = String::new();
+    // Report data must be exactly 64 bytes for TDX attestation
+    // Using base64 encoded 64 zero bytes for a basic attestation
+    let report_data_bytes = [0u8; 64];
+    let report_data = STANDARD.encode(&report_data_bytes);
 
     // Get TDX report
     match tdx_attest::get_td_report(report_data.clone()) {
