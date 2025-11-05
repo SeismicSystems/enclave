@@ -56,7 +56,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
 dcap-rs = "0.1.0"
-tdx_attest = "0.1.1"
+tdx_attest = { version = "0.1.1", optional = true }
 
 hex = {workspace = true}
 scroll = { workspace = true, optional = true }
@@ -73,15 +73,16 @@ alloy.workspace = true
 
 
 [features]
-default = ["az-tdx-vtpm-attester", "supervisorctl"] # remove supervisorctl before merging
+default = ["az-tdx-vtpm-attester", "supervisorctl", "tdx-attestation-bin"] # remove supervisorctl before merging
 az-tdx-vtpm-attester = [
-    "attestation-agent/az-tdx-vtpm-attester", 
+    "attestation-agent/az-tdx-vtpm-attester",
     "attestation-service/az-tdx-vtpm-verifier",
     "attestation-service/az-snp-vtpm-verifier",
     "az-tdx-vtpm",
     "scroll",
     "serde",
 ]
+tdx-attestation-bin = ["tdx_attest"]
 supervisorctl = []
 
 [package.metadata.cargo-udeps]

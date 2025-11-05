@@ -3,8 +3,12 @@
 use anyhow::Result;
 
 fn main() -> Result<()> {
+    // Report data can be any custom data you want to include in the attestation
+    // Using an empty string for a basic attestation
+    let report_data = String::new();
+
     // Get TDX report
-    match tdx_attest::get_td_report() {
+    match tdx_attest::get_td_report(report_data.clone()) {
         Ok(td_report) => {
             println!("TDX TD Report:");
             println!("{:?}", td_report);
@@ -16,7 +20,7 @@ fn main() -> Result<()> {
     }
 
     // Get TDX quote
-    match tdx_attest::get_tdx_quote() {
+    match tdx_attest::get_tdx_quote(report_data) {
         Ok(tdx_quote) => {
             println!("TDX Quote:");
             println!("{:?}", tdx_quote);
