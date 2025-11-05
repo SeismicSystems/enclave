@@ -21,6 +21,10 @@ path = "src/main.rs"
 name = "install_policies"
 path = "src/bin/install_policies.rs"
 
+[[bin]]
+name = "tdx_attestation"
+path = "src/bin/tdx_attestation.rs"
+
 
 [dependencies]
 seismic-enclave.workspace = true
@@ -52,6 +56,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
 dcap-rs = "0.1.0"
+tdx_attest = "0.1.1"
 
 hex = {workspace = true}
 scroll = { workspace = true, optional = true }
