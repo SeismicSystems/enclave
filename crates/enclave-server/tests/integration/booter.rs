@@ -1,10 +1,10 @@
-use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave::AttestationEvalEvidenceRequest;
 use seismic_enclave::ShareRootKeyRequest;
+use seismic_enclave::rpc::EnclaveApiServer;
 use seismic_enclave_server::key_manager::KeyManager;
 use seismic_enclave_server::server::boot::Booter;
-use seismic_enclave_server::server::engine::engine_mock_booted;
 use seismic_enclave_server::server::engine::AttestationEngine;
+use seismic_enclave_server::server::engine::engine_mock_booted;
 use seismic_enclave_server::utils::test_utils::is_sudo;
 use seismic_enclave_server::utils::test_utils::pub_key_eval_request;
 use serial_test::serial;
