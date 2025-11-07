@@ -6,6 +6,8 @@ use alloy::{
     signers::local::PrivateKeySigner,
 };
 
+use seismic_enclave_server::Args;
+
 /// Sends ETH from one account to another to trigger transaction persistence.
 ///
 /// # Arguments
@@ -88,4 +90,15 @@ pub async fn get_balance(
         .map_err(|e| anyhow::anyhow!("Failed to get balance: {:?}", e))?;
 
     Ok(balance.try_into().unwrap())
+}
+
+pub fn get_args(n: u16, genesis_node: bool, peers: Vec<String>) -> Args {
+    let port = 7878 + n;
+    Args {
+        ip: "0.0.0.0".to_string(),
+        port,
+        genesis_node,
+        peers,
+        reth_rpc_url: "0.0.0.0:8545".to_string(),
+    }
 }

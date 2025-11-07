@@ -1,22 +1,13 @@
-use seismic_enclave::AttestationEvalEvidenceRequest;
-use seismic_enclave::ShareRootKeyRequest;
-use seismic_enclave::rpc::EnclaveApiServer;
-use seismic_enclave_server::key_manager::KeyManager;
-use seismic_enclave_server::server::boot::Booter;
-use seismic_enclave_server::server::engine::AttestationEngine;
-use seismic_enclave_server::server::engine::engine_mock_booted;
-use seismic_enclave_server::utils::test_utils::is_sudo;
-use seismic_enclave_server::utils::test_utils::pub_key_eval_request;
-use serial_test::serial;
+use std::time::Duration;
 
-#[cfg(not(feature = "supervisorctl"))]
-use seismic_enclave_server::utils::service::reth_is_running;
-#[cfg(feature = "supervisorctl")]
-use seismic_enclave_server::utils::supervisorctl::reth_is_running;
+use crate::utils::get_args;
+use jsonrpsee::http_client::HttpClientBuilder;
+use seismic_enclave_server::api::TdxQuoteRpcClient;
+use seismic_enclave_server::utils::{is_sudo, reth_is_running};
 
 // This test expects that the booter's attestation is already allowed by the upgrade operator
 // This can be set up by running the test_multisig_upgrade_operator_workflow test in the enclave-contract crate
-#[serial(attestation_agent)]
+#[serial_test::serial(attestation_agent)]
 #[tokio::test]
 async fn test_boot_share_root_key() {
     // Check the starting conditions are as expected
@@ -25,26 +16,43 @@ async fn test_boot_share_root_key() {
     }
     assert!(reth_is_running(), "Test startup error: Reth is not running");
 
-    // Test the booter with the canonical deployment
-    let enclave_engine: AttestationEngine<KeyManager> = engine_mock_booted().await;
-    let new_node_booter = Booter::mock();
-    let eval_context: AttestationEvalEvidenceRequest = pub_key_eval_request();
-    assert_eq!(
-        seismic_enclave::request_types::Data::Raw(new_node_booter.pk().serialize().to_vec()),
-        eval_context.clone().runtime_data.unwrap(),
-        "test misconfigured, attestation should be of the new booter's public key"
-    );
-    let resp = enclave_engine
-        .boot_share_root_key(ShareRootKeyRequest {
-            evidence: eval_context.evidence,
-            tee: eval_context.tee,
-            retriever_pk: new_node_booter.pk(),
-        })
+    // Start first enclave as genesis node
+    let args1 = get_args(0, true, Default::default());
+    let enclave_one_url = format!("0.0.0.0:{}", args1.port);
+    let node1_handle = tokio::spawn(args1.start());
+
+    // sleep some time to allow him to start up
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // start second enclave with node1 as his peer
+    let args2 = get_args(1, false, vec![enclave_one_url.clone()]);
+    let enclave_two_url = format!("0.0.0.0:{}", args2.port);
+    let node2_handle = tokio::spawn(args2.start());
+    // sleep some time to allow them to share keys
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Get keys from both and make sure they match
+    let client1 = HttpClientBuilder::default()
+        .build(enclave_one_url)
+        .expect("Unable to connect to enclave 1");
+    let client2 = HttpClientBuilder::default()
+        .build(enclave_two_url)
+        .expect("Unable to connect to enclave 2");
+
+    let keys1 = client1
+        .get_purpose_keys(0)
         .await
-        .unwrap();
-    let key_plaintext = new_node_booter.process_share_response(resp).unwrap(); // erroring due to mismatch
-    assert!(
-        key_plaintext == [0u8; 32],
-        "root key does not match expected mock value"
-    );
+        .expect("Unable to get purpose keys");
+    let keys2 = client2
+        .get_purpose_keys(0)
+        .await
+        .expect("Unable to get purpose keys");
+
+    // Ensure they are the same from both nodes
+    assert_eq!(keys1.rng_keypair.secret, keys2.rng_keypair.secret);
+    assert_eq!(keys1.snapshot_key_bytes, keys2.snapshot_key_bytes);
+    assert_eq!(keys1.tx_io_sk, keys2.tx_io_sk);
+
+    node1_handle.abort();
+    node2_handle.abort();
 }

@@ -1,23 +1,19 @@
 pub mod pccs;
+pub mod upgrade_contract;
 pub mod utils;
 
 use anyhow::{Result, anyhow};
 use az_tdx_vtpm::{hcl::HclReport, imds, tdx, vtpm};
 use coco_provider::{coco::CocoDeviceType, get_coco_provider};
-use dcap_rs::{
-    types::quotes::{body::QuoteBody, version_4::QuoteV4},
-    utils::quotes::version_4::verify_quote_dcapv4,
-};
+use dcap_rs::{types::quotes::version_4::QuoteV4, utils::quotes::version_4::verify_quote_dcapv4};
 
 use crate::{
-    attestation::pccs::{IntelPccs, PccsProvider},
+    attestation::{
+        pccs::{IntelPccs, PccsProvider},
+        upgrade_contract::verify_measurements_against_contract,
+    },
     req_res::AttestationGetEvidenceResponse,
 };
-
-const EXPECTED_RTMR0: [u8; 48] = [0; 48];
-const EXPECTED_RTMR1: [u8; 48] = [0; 48];
-const EXPECTED_RTMR2: [u8; 48] = [0; 48];
-const EXPECTED_RTMR3: [u8; 48] = [0; 48];
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -76,28 +72,10 @@ impl AttestationAgent {
 
         match std::panic::catch_unwind(|| verify_quote_dcapv4(&quote, &collaterals, current_time)) {
             Ok(_) => {
-                self.verify_measurements(&quote)?;
+                verify_measurements_against_contract(&quote).await?;
                 Ok(())
             } // todo actually respond with something
             Err(e) => Err(anyhow!("DCAP Error: {:?}", e)),
         }
-    }
-
-    pub fn verify_measurements(&self, quote: &QuoteV4) -> Result<()> {
-        // todo(dalton): This is temporary and we will use consts for now
-        let QuoteBody::TD10QuoteBody(quote_body) = quote.quote_body else {
-            return Err(anyhow!("Not a tdx quote"));
-        };
-        if quote_body.rtmr0 != EXPECTED_RTMR0
-            || quote_body.rtmr1 != EXPECTED_RTMR1
-            || quote_body.rtmr2 != EXPECTED_RTMR2
-            || quote_body.rtmr3 != EXPECTED_RTMR3
-        {
-            Err(anyhow!("Unexpected RTMR measurements"))
-        } else {
-            Ok(())
-        }
-
-        // todo we probably want to check more like mrtd for initial td state
     }
 }
