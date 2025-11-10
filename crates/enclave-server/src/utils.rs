@@ -1,5 +1,7 @@
 use jsonrpsee::types::{ErrorCode, ErrorObjectOwned};
 use libc::uid_t;
+use tracing::info;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 pub fn get_current_uid() -> uid_t {
     unsafe { libc::getuid() }
@@ -34,4 +36,18 @@ pub fn is_sudo() -> bool {
 
     // Check if the user ID is 0 (which means the user is root)
     user_id == "0"
+}
+
+pub fn init_tracing() {
+    // Read log level from RUST_LOG
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
+
+    // Initialize the subscriber
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(filter) // Use dynamic log level
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+
+    info!("Enclave server tracing initialized");
 }

@@ -3,13 +3,14 @@ use std::time::Duration;
 use crate::utils::get_args;
 use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_enclave_server::api::TdxQuoteRpcClient;
-use seismic_enclave_server::utils::is_sudo;
+use seismic_enclave_server::utils::{init_tracing, is_sudo};
 
 // This test expects that the booter's attestation is already allowed by the upgrade operator
 // This can be set up by running the test_multisig_upgrade_operator_workflow test in the enclave-contract crate
 #[serial_test::serial(attestation_agent)]
 #[tokio::test]
 async fn test_boot_share_root_key() {
+    init_tracing();
     // Check the starting conditions are as expected
     if !is_sudo() {
         panic!("test_boot_share_root_key: skipped (requires sudo privileges)");

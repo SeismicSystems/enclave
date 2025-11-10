@@ -8,5 +8,6 @@ pub fn get_args(n: u16, genesis_node: bool, peers: Vec<String>) -> Args {
         genesis_node,
         peers,
         reth_rpc_url: "0.0.0.0:8545".to_string(),
+        mock: false,
     }
 }
