@@ -41,11 +41,26 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
 
     // Test data for proposal
     let params = Measurements {
-    tag: "AlloyV1".to_string(),
-    mrtd: bytes!("cbd40696f617d42254fc7037469cbcf1414fe173678798cfa1070b7d40e26fa8175b99d0cd245994278f980dec73146a"),
-    mrseam: bytes!("9790d89a10210ec6968a773cee2ca05b5aa97309f36727a968527be4606fc19e6f73acce350946c9d46a9bf7a63f8430"),
-    registrar_slots: vec![4],
-    registrar_values: vec![bytes!("6f2f7d9a42b35a2f8f9d7bf366ca3e369a45d004f3ac49b0a93785fe817c82b5")],
+        tag: "AlloyV1".to_string(),
+        mrtd: [
+            73, 182, 111, 170, 69, 29, 25, 235, 189, 190, 137, 55, 27, 141, 175, 43, 101, 170, 57,
+            132, 236, 144, 17, 3, 67, 233, 226, 238, 193, 22, 175, 8, 133, 15, 162, 14, 59, 26,
+            169, 168, 116, 215, 122, 101, 56, 14, 231, 230,
+        ]
+        .into(),
+        mrseam: [
+            18, 189, 188, 22, 9, 239, 6, 109, 183, 169, 236, 123, 38, 215, 80, 147, 70, 244, 202,
+            70, 232, 70, 39, 64, 150, 203, 37, 147, 155, 30, 113, 25, 68, 6, 28, 161, 154, 48, 198,
+            116, 63, 30, 89, 145, 72, 238, 228, 81,
+        ]
+        .into(),
+        registrar_slots: vec![0, 1, 2, 3],
+        registrar_values: vec![
+            [0; 48].into(),
+            [0; 48].into(),
+            [0; 48].into(),
+            [0; 48].into(),
+        ],
     };
 
     print_flush("Creating multisig proposal...\n");
