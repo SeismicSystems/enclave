@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::utils::get_args;
 use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_enclave_server::api::TdxQuoteRpcClient;
-use seismic_enclave_server::utils::{is_sudo, reth_is_running};
+use seismic_enclave_server::utils::is_sudo;
 
 // This test expects that the booter's attestation is already allowed by the upgrade operator
 // This can be set up by running the test_multisig_upgrade_operator_workflow test in the enclave-contract crate
@@ -14,11 +14,10 @@ async fn test_boot_share_root_key() {
     if !is_sudo() {
         panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
     }
-    assert!(reth_is_running(), "Test startup error: Reth is not running");
 
     // Start first enclave as genesis node
     let args1 = get_args(0, true, Default::default());
-    let enclave_one_url = format!("0.0.0.0:{}", args1.port);
+    let enclave_one_url = format!("http://localhost:{}", args1.port);
     let node1_handle = tokio::spawn(args1.start());
 
     // sleep some time to allow him to start up
@@ -26,10 +25,10 @@ async fn test_boot_share_root_key() {
 
     // start second enclave with node1 as his peer
     let args2 = get_args(1, false, vec![enclave_one_url.clone()]);
-    let enclave_two_url = format!("0.0.0.0:{}", args2.port);
+    let enclave_two_url = format!("http://localhost:{}", args2.port);
     let node2_handle = tokio::spawn(args2.start());
     // sleep some time to allow them to share keys
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Get keys from both and make sure they match
     let client1 = HttpClientBuilder::default()
@@ -52,6 +51,14 @@ async fn test_boot_share_root_key() {
     assert_eq!(keys1.rng_keypair.secret, keys2.rng_keypair.secret);
     assert_eq!(keys1.snapshot_key_bytes, keys2.snapshot_key_bytes);
     assert_eq!(keys1.tx_io_sk, keys2.tx_io_sk);
+
+    // test the other endpoints
+    assert_eq!(client1.health_check().await.unwrap(), "OK".to_string());
+    let evidence = client1.get_attestation_evidence().await.unwrap();
+    client1
+        .eval_attestation_evidence(evidence.hcl_report, evidence.quote)
+        .await
+        .unwrap();
 
     node1_handle.abort();
     node2_handle.abort();

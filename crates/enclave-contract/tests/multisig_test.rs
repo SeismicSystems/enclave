@@ -8,7 +8,6 @@ use enclave_contract::Measurements;
 use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
 use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 
-use alloy::primitives::bytes;
 use enclave_contract::{ANVIL_ALICE_SK, ANVIL_BOB_SK};
 use std::thread::sleep;
 use std::time::Duration;
@@ -41,17 +40,17 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
 
     // Test data for proposal
     let params = Measurements {
-        tag: "AlloyV1".to_string(),
+        tag: "AzureV1".to_string(),
         mrtd: [
-            73, 182, 111, 170, 69, 29, 25, 235, 189, 190, 137, 55, 27, 141, 175, 43, 101, 170, 57,
-            132, 236, 144, 17, 3, 67, 233, 226, 238, 193, 22, 175, 8, 133, 15, 162, 14, 59, 26,
-            169, 168, 116, 215, 122, 101, 56, 14, 231, 230,
+            254, 39, 178, 170, 58, 5, 236, 86, 134, 76, 48, 138, 255, 3, 221, 19, 193, 137, 166,
+            17, 45, 33, 228, 23, 236, 26, 254, 98, 106, 140, 185, 217, 20, 130, 209, 55, 158, 192,
+            47, 230, 48, 137, 114, 149, 10, 147, 13, 10,
         ]
         .into(),
         mrseam: [
-            18, 189, 188, 22, 9, 239, 6, 109, 183, 169, 236, 123, 38, 215, 80, 147, 70, 244, 202,
-            70, 232, 70, 39, 64, 150, 203, 37, 147, 155, 30, 113, 25, 68, 6, 28, 161, 154, 48, 198,
-            116, 63, 30, 89, 145, 72, 238, 228, 81,
+            151, 144, 216, 154, 16, 33, 14, 198, 150, 138, 119, 60, 238, 44, 160, 91, 90, 169, 115,
+            9, 243, 103, 39, 169, 104, 82, 123, 228, 96, 111, 193, 158, 111, 115, 172, 206, 53, 9,
+            70, 201, 212, 106, 155, 247, 166, 63, 132, 48,
         ]
         .into(),
         registrar_slots: vec![0, 1, 2, 3],
