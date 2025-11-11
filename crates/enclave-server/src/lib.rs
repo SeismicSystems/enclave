@@ -5,6 +5,7 @@ pub mod mock;
 mod req_res;
 mod server;
 pub mod utils;
+pub use req_res::*;
 
 const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "0.0.0.0";
 const DEFAULT_RETH_RPC: &str = "0.0.0.0:8545";
