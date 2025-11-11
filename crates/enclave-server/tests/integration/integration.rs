@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::utils::get_args;
 use jsonrpsee::http_client::HttpClientBuilder;
-use seismic_enclave_server::api::TdxQuoteRpcClient;
+use seismic_enclave::TdxQuoteRpcClient as _;
 use seismic_enclave_server::utils::{init_tracing, is_sudo};
 
 // This test expects that the booter's attestation is already allowed by the upgrade operator

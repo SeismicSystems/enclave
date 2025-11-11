@@ -1,11 +1,7 @@
-pub mod api;
 mod attestation;
 mod key_manager;
-pub mod mock;
-mod req_res;
 mod server;
 pub mod utils;
-pub use req_res::*;
 
 const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "0.0.0.0";
 const DEFAULT_RETH_RPC: &str = "0.0.0.0:8545";
@@ -13,9 +9,8 @@ pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 use anyhow::Result;
 use clap::Parser;
+use seismic_enclave::mock::start_mock_server;
 use std::net::SocketAddr;
-
-use crate::mock::start_mock_server;
 
 /// Command line arguments for the enclave server
 #[derive(Parser, Debug)]

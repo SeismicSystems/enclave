@@ -1,15 +1,13 @@
-use crate::{
-    api::{TdxQuoteRpcClient, TdxQuoteRpcServer},
-    attestation::AttestationAgent,
-    key_manager::KeyManager,
-    req_res::{AttestationGetEvidenceResponse, GetPurposeKeysResponse, ShareRootKeyResponse},
-    utils::anyhow_to_rpc_error,
-};
+use crate::{attestation::AttestationAgent, key_manager::KeyManager, utils::anyhow_to_rpc_error};
 use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
     core::{RpcResult, async_trait},
     http_client::HttpClientBuilder,
     server::ServerBuilder,
+};
+use seismic_enclave::{
+    AttestationGetEvidenceResponse, GetPurposeKeysResponse, ShareRootKeyResponse,
+    TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
 use std::{net::SocketAddr, time::Duration};
 use tracing::{info, warn};

@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/enclave-server",
-    "crates/enclave-contract", "crates/enclave-crypto",
+    "crates/enclave-contract", "crates/enclave",
 ]
 
 [workspace.package]
@@ -16,6 +16,7 @@ readme = "README.md"
 
 [workspace.dependencies]
 enclave-contract = { path = "crates/enclave-contract" }
+seismic-enclave = {path = "crates/enclave" }
 
 # Other deps
 alloy = "1.0"

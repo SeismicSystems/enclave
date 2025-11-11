@@ -17,43 +17,9 @@ path = "src/lib.rs"
 name = "seismic-enclave-server"
 path = "src/main.rs"
 
-#[[bin]]
-#name = "install_policies"
-#path = "src/bin/install_policies.rs"
-
 [dependencies]
-#seismic-enclave.workspace = true
+seismic-enclave.workspace = true
 enclave-contract.workspace = true
-#alloy.workspace = true
-
-#attestation-agent.workspace = true
-#attestation-service.workspace = true
-#az-tdx-vtpm = {workspace = true, optional = true}
-#kbs-types.workspace = true
-
-#aes-gcm.workspace = true
-#auto_impl.workspace = true
-#zeroize.workspace = true
-#anyhow.workspace = true
-#base64.workspace = true
-#hkdf.workspace = true
-#jsonrpsee.workspace = true
-#libc.workspace = true
-#log.workspace = true
-#secp256k1.workspace = true
-#serde_json.workspace = true
-#sha2.workspace = true
-#strum.workspace = true
-#strum_macros.workspace = true
-#tokio.workspace = true
-#schnorrkel.workspace = true
-#tracing.workspace = true
-#tracing-subscriber.workspace = true
-#rand.workspace = true
-
-#scroll = { workspace = true, optional = true }
-#serde = {workspace = true, optional = true }
-#clap = { version = "4.5", features = ["derive"] }
 
 alloy.workspace = true
 az-tdx-vtpm.workspace = true
@@ -84,16 +50,6 @@ rand.workspace = true
 zeroize.workspace = true
 sha2.workspace = true
 
-#[dev-dependencies]
-#enclave-contract.workspace = true
-#serial_test = "3.2.0"
-#tempfile = "3.17.1"
-#reqwest.workspace = true
-#alloy.workspace = true
+[dev-dependencies]
 serial_test = "3.2.0"
 
-#[features]
-#default = ["az-tdx-vtpm-attester", "supervisorctl"] 
-
-#[package.metadata.cargo-udeps]
-#ignore = ["serial_test"]

@@ -6,13 +6,11 @@ use anyhow::{Result, anyhow};
 use az_tdx_vtpm::{hcl::HclReport, imds, tdx, vtpm};
 use coco_provider::{coco::CocoDeviceType, get_coco_provider};
 use dcap_rs::{types::quotes::version_4::QuoteV4, utils::quotes::version_4::verify_quote_dcapv4};
+use seismic_enclave::AttestationGetEvidenceResponse;
 
-use crate::{
-    attestation::{
-        pccs::{IntelPccs, PccsProvider},
-        upgrade_contract::verify_measurements_against_contract,
-    },
-    req_res::AttestationGetEvidenceResponse,
+use crate::attestation::{
+    pccs::{IntelPccs, PccsProvider},
+    upgrade_contract::verify_measurements_against_contract,
 };
 
 #[derive(Clone, Copy)]

@@ -1,5 +1,5 @@
 [package]
-name = "seismic-enclave-crypto"
+name = "seismic-enclave"
 edition.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -8,14 +8,10 @@ authors.workspace = true
 license.workspace = true
 readme.workspace = true
 
-
-[lib]
-name = "seismic_enclave_crypto"
-path = "src/lib.rs"
-
 [dependencies]
 anyhow.workspace = true
 aes-gcm.workspace = true
+jsonrpsee.workspace = true
 hkdf.workspace = true
 schnorrkel.workspace = true
 secp256k1.workspace = true
