@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/enclave-server",
-    "crates/enclave-contract",
+    "crates/enclave-contract", "crates/enclave-crypto",
 ]
 
 [workspace.package]
