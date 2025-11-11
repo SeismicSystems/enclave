@@ -1887,20 +1887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enclave-crypto"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "hkdf",
- "rand 0.9.2",
- "schnorrkel",
- "secp256k1",
- "serde",
- "sha2",
-]
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4449,6 +4435,20 @@ checksum = "49db231d56a190491cb4aeda9527f1ad45345af50b0851622a7adb8c03b01c32"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seismic-enclave-crypto"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "hkdf",
+ "rand 0.9.2",
+ "schnorrkel",
+ "secp256k1",
+ "serde",
+ "sha2",
 ]
 
 [[package]]
