@@ -3,8 +3,8 @@ mod key_manager;
 mod server;
 pub mod utils;
 
-const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "0.0.0.0";
-const DEFAULT_RETH_RPC: &str = "0.0.0.0:8545";
+const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
+const DEFAULT_RETH_RPC: &str = "127.0.0.1:8545";
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 use anyhow::Result;
