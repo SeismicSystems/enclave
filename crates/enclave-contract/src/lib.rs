@@ -7,6 +7,7 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 pub mod contract_interface;
+pub use contract_interface::UpgradeOperator::Measurements;
 pub use contract_interface::*;
 
 /// Anvil's first secret key that they publically expose and fund for testing

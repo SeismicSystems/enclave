@@ -1,36 +1,20 @@
-
-
 [package]
 name = "seismic-enclave"
-version.workspace = true
 edition.workspace = true
+version.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Tools for building and interfacing with the Seismic enclave"
-
-[lib]
-name = "seismic_enclave"
-path = "src/lib.rs"
 
 [dependencies]
-seismic-enclave-derive.workspace = true
-aes-gcm.workspace = true
 anyhow.workspace = true
-hkdf.workspace = true
+aes-gcm.workspace = true
 jsonrpsee.workspace = true
-kbs-types.workspace = true
-rand.workspace = true
+hkdf.workspace = true
 schnorrkel.workspace = true
 secp256k1.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 sha2.workspace = true
-tracing.workspace = true
-tokio.workspace = true
-base64.workspace = true
-
-[dev-dependencies]
-reqwest.workspace = true
+rand.workspace = true
+serde.workspace = true

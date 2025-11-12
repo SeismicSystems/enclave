@@ -1,12 +1,12 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Key,
+    aead::{Aead, KeyInit},
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
 pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 use schnorrkel::{ExpansionMode, MiniSecretKey};
-use secp256k1::{ecdh::SharedSecret, ecdsa::Signature, Message, PublicKey, Secp256k1, SecretKey};
+use secp256k1::{Message, PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret, ecdsa::Signature};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::{fs, io::Read, io::Write};
