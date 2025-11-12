@@ -1,10 +1,54 @@
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-#![cfg_attr(not(test), warn(unused_crate_dependencies))]
-
-pub mod attestation;
-pub mod key_manager;
-pub mod server;
-pub mod snapshot;
+mod attestation;
+mod key_manager;
+mod server;
 pub mod utils;
 
-use clap as _; // used by main.rs
+const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
+const DEFAULT_RETH_RPC: &str = "127.0.0.1:8545";
+pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
+
+use anyhow::Result;
+use clap::Parser;
+use seismic_enclave::mock::start_mock_server;
+use std::net::SocketAddr;
+
+/// Command line arguments for the enclave server
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct Args {
+    /// The ip to bind the server to
+    #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_IP.to_string())]
+    pub ip: String,
+
+    /// The port to bind the server to
+    #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_PORT)]
+    pub port: u16,
+
+    /// Flag if this is the genesis node that needs to generate the keys
+    #[arg(long, default_value_t = false)]
+    pub genesis_node: bool,
+
+    /// List of peer ips to fetch root key from. Must be {ip}:{port}
+    #[arg(long)]
+    pub peers: Vec<String>,
+
+    #[arg(long, default_value_t =DEFAULT_RETH_RPC.to_string())]
+    pub reth_rpc_url: String,
+
+    #[arg(long, default_value_t = false)]
+    pub mock: bool,
+}
+
+impl Args {
+    pub async fn start(self) -> Result<()> {
+        let addr: SocketAddr = format!("{}:{}", self.ip, self.port).parse()?;
+
+        println!("Starting TDX Quote JSON-RPC Server on {addr}...");
+
+        if self.mock {
+            start_mock_server(addr).await
+        } else {
+            server::start_server(addr, self.genesis_node, self.peers).await
+        }
+    }
+}
