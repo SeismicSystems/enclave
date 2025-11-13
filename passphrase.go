@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -45,6 +46,11 @@ func setPassphrase() {
 	// Check if key exists
 	if _, err := os.Stat(keyFile); err != nil {
 		log.Fatalln("Error: SSH key not set. Provide public key via HTTP first.")
+	}
+
+	// Check if config exists
+	if _, err := os.Stat(tempConfigFile); err != nil {
+		log.Fatalln("Error: Config not found. Provide configuration via HTTP first.")
 	}
 
 	// Check if LUKS container exists
@@ -91,7 +97,7 @@ func setupNewDisk(passphrase string) {
 	}
 
 	// Read and include the full config if it exists
-	if configData, err := os.ReadFile(configFile); err == nil {
+	if configData, err := os.ReadFile(tempConfigFile); err == nil {
 		userData["config"] = string(configData)
 		log.Println("Including configuration data in LUKS header")
 	}
@@ -214,11 +220,33 @@ func mountExistingDisk(passphrase string) {
 		log.Fatalf("Error mounting filesystem: %v\n", err)
 	}
 
+	// Copy config to persistent storage if it doesn't exist there yet
+	copyConfigToPersistent()
+
 	fmt.Println("Encrypted disk mounted successfully")
 }
 
+func copyConfigToPersistent() {
+	// Copy config from temp location to persistent location
+	if configData, err := os.ReadFile(tempConfigFile); err == nil {
+		if err := os.MkdirAll(filepath.Dir(persistentConfigFile), 0755); err != nil {
+			log.Printf("Warning: Could not create persistent config directory: %v", err)
+			return
+		}
+		if err := os.WriteFile(persistentConfigFile, configData, 0644); err != nil {
+			log.Printf("Warning: Could not copy config to persistent storage: %v", err)
+			return
+		}
+		// Ensure file is readable by all users
+		if err := os.Chmod(persistentConfigFile, 0644); err != nil {
+			log.Printf("Warning: Could not set permissions on config file: %v", err)
+		}
+		log.Printf("Config copied to %s", persistentConfigFile)
+	}
+}
+
 func setupMountDirs() {
-	dirs := []string{"searcher", "delayed_logs", "searcher_logs"}
+	dirs := []string{"searcher", "delayed_logs", "searcher_logs", "conf"}
 	for _, dir := range dirs {
 		path := fmt.Sprintf("%s/%s", mountPoint, dir)
 		if err := os.MkdirAll(path, 0755); err != nil {
@@ -235,6 +263,9 @@ func setupMountDirs() {
 	if err := os.Chmod(fmt.Sprintf("%s/searcher_logs", mountPoint), 0755); err != nil {
 		log.Fatalf("Error setting permissions for searcher_logs: %v\n", err)
 	}
+
+	// Copy config to persistent storage
+	copyConfigToPersistent()
 }
 
 func checkMounted() bool {

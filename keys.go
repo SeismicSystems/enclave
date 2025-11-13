@@ -33,7 +33,10 @@ type ArgsConfig struct {
 	Summit  string `json:"summit"`
 }
 
-const configFile = "/etc/tdx-init/config.json"
+const (
+	tempConfigFile       = "/etc/tdx-init/config.json"
+	persistentConfigFile = "/persistent/conf/node.json"
+)
 
 func waitForKey() {
 	// Check if LUKS container exists
@@ -79,13 +82,13 @@ func waitForKey() {
 		writeKeys(config.SSHKeys)
 
 		// Write full config to disk
-		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(tempConfigFile), 0755); err != nil {
 			log.Printf("Warning: Could not create config directory: %v", err)
 		}
-		if err := os.WriteFile(configFile, []byte(configData), 0600); err != nil {
+		if err := os.WriteFile(tempConfigFile, []byte(configData), 0600); err != nil {
 			log.Printf("Warning: Could not write config file: %v", err)
 		} else {
-			log.Printf("Config extracted and written to %s", configFile)
+			log.Printf("Config extracted and written to %s", tempConfigFile)
 		}
 
 		log.Printf("%d SSH key(s) extracted from LUKS header", len(config.SSHKeys))
@@ -147,13 +150,13 @@ func waitForKey() {
 		}
 
 		// Save formatted JSON to disk
-		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(tempConfigFile), 0755); err != nil {
 			log.Printf("Warning: Could not create config directory: %v", err)
 		}
-		if err := os.WriteFile(configFile, formattedJSON, 0600); err != nil {
+		if err := os.WriteFile(tempConfigFile, formattedJSON, 0600); err != nil {
 			log.Printf("Warning: Could not write config file: %v", err)
 		} else {
-			log.Printf("Config written to %s", configFile)
+			log.Printf("Config written to %s", tempConfigFile)
 		}
 
 		w.WriteHeader(http.StatusOK)
