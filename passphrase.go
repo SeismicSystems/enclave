@@ -85,12 +85,21 @@ func setupNewDisk(passphrase string) {
 		log.Fatalf("Error reading SSH key file: %v", err)
 	}
 
+	userData := map[string]string{
+		"ssh_key": string(key),
+		"metadata": string(key), // Keep for backwards compatibility
+	}
+
+	// Read and include the full config if it exists
+	if configData, err := os.ReadFile(configFile); err == nil {
+		userData["config"] = string(configData)
+		log.Println("Including configuration data in LUKS header")
+	}
+
 	token := Token{
 		Type:     "user",
 		Keyslots: []string{},
-		UserData: map[string]string{
-			"metadata": string(key),
-		},
+		UserData: userData,
 	}
 
 	tokenJSON, err := json.Marshal(token)
