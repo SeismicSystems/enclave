@@ -94,7 +94,9 @@ pub async fn extract_luks_token(device_path: &std::path::Path) -> Result<LuksTok
             cmd: "cryptsetup token export".to_string(),
             stderr: e.to_string(),
         })?;
-    Ok(serde_json::from_slice(&cmd.stdout).map_err(|e| TdxInitError::LuksTokenParseError(e))?)
+    let token: LuksToken =
+        serde_json::from_slice(&cmd.stdout).map_err(|e| TdxInitError::Json(e))?;
+    Ok(token)
 }
 
 pub fn generate_random_passphrase() -> Result<String> {

@@ -9,6 +9,7 @@ mod luks;
 mod persistence;
 mod server;
 mod ssh;
+mod utils;
 
 #[derive(Parser)]
 struct Args {
