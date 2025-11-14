@@ -1,11 +1,12 @@
 use clap::{Parser, Subcommand};
 use error::Result;
-use tracing::{error, info};
+use tracing::info;
 
 mod config;
 mod disk;
 mod error;
 mod luks;
+mod keys;
 mod persistence;
 mod server;
 mod ssh;
@@ -43,7 +44,7 @@ async fn main() -> Result<()> {
     info!("Found persistent disk device: {}", device_path.display());
 
     match args.command {
-        Command::WaitForKey => luks::wait_for_key(device_path).await,
+        Command::WaitForKey => keys::wait_for_key(device_path).await,
         Command::SetPassphrase => passphrase::set_passphrase(device_path).await,
     }
 }

@@ -1,51 +1,15 @@
 use crate::config::{InitConfig, LuksToken};
-use crate::error::Result;
-use crate::error::TdxInitError;
-use crate::{persistence, server, ssh};
+use crate::error::{Result, TdxInitError};
+use crate::utils::command::{execute_command, execute_command_with_stdin};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
+use tokio::fs;
 use tokio::process::Command;
 use tracing::info;
 
-pub async fn wait_for_key(device_path: PathBuf) -> Result<()> {
-    if is_luks_device(&device_path).await? {
-        info!("Found existing LUKS container, extracting config...");
-        let config = extract_config(&device_path).await?;
-        ssh::write_keys(&config.ssh_keys).await?;
-        persistence::write_temp_config(&config).await?;
-        info!(
-            "{} SSH key(s) extracted from LUKS header",
-            config.ssh_keys.len()
-        );
-    } else {
-        info!("No LUKS container found, starting HTTP server on port 8080...");
-        let config = server::http::run_initialization_server().await?;
-        ssh::write_keys(&config.ssh_keys).await?;
-        persistence::write_temp_config(&config).await?;
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let passphrase = generate_random_passphrase()?;
-        initialize_with_passphrase(device_path, passphrase, &config).await?;
-
-        info!("Configuration received via HTTP and written to disk!");
-    }
-    Ok(())
-}
-
-pub async fn set_passphrase(device_path: PathBuf) -> Result<()> {
-    print!("Enter passphrase: ");
-    use std::io::{self, Write};
-    io::stdout().flush().unwrap();
-
-    let mut passphrase = String::new();
-    io::stdin().read_line(&mut passphrase)?;
-    let passphrase = passphrase.trim().to_string();
-
-    let config = persistence::read_temp_config().await?;
-    initialize_with_passphrase(device_path, passphrase, &config).await?;
-
-    Ok(())
-}
+pub const HEADER_FILE: &str = "/tmp/luks_header";
+pub const MAPPER_NAME: &str = "persistent";
+pub const MAPPER_DEVICE: &str = "/dev/mapper/persistent";
 
 pub async fn is_luks_device(device_path: &std::path::Path) -> Result<bool> {
     let cmd = Command::new("cryptsetup")
@@ -99,14 +63,77 @@ pub async fn extract_luks_token(device_path: &std::path::Path) -> Result<LuksTok
     Ok(token)
 }
 
-pub fn generate_random_passphrase() -> Result<String> {
-    todo!("Implement passphrase generation")
+pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Result<()> {
+    info!("Formatting disk with LUKS2...");
+    execute_command_with_stdin(
+        "cryptsetup",
+        &[
+            "luksFormat", "--type", "luks2",
+            "--header", HEADER_FILE,
+            "--align-payload", "32769",
+            "-q",
+            device_path.to_str().unwrap()
+        ],
+        passphrase
+    ).await
 }
 
-pub async fn initialize_with_passphrase(
-    _device_path: PathBuf,
-    _passphrase: String,
-    _config: &InitConfig,
-) -> Result<()> {
-    todo!("Implement LUKS initialization")
+pub async fn create_luks_token(ssh_key: &str, config_data: Option<String>) -> Result<LuksToken> {
+    let mut user_data = HashMap::new();
+    user_data.insert("ssh_key".to_string(), ssh_key.to_string());
+    user_data.insert("metadata".to_string(), ssh_key.to_string()); 
+
+    if let Some(config_data) = config_data {
+        user_data.insert("config".to_string(), config_data);
+        info!("Including configuration data in LUKS header");
+    }
+
+    Ok(LuksToken {
+        token_type: "user".to_string(),
+        keyslots: vec![],
+        user_data,
+    })
+}
+
+pub async fn import_luks_token(token: &LuksToken) -> Result<()> {
+    let token_json = serde_json::to_string(token).map_err(TdxInitError::Json)?;
+
+    info!("Saving searcher SSH key...");
+    execute_command_with_stdin(
+        "cryptsetup",
+        &["token", "import", "--token-id", "1", "--header", HEADER_FILE, "/dev/null"],
+        &token_json
+    ).await
+}
+
+pub async fn restore_header_to_device(device_path: &PathBuf) -> Result<()> {
+    info!("Writing header to disk...");
+    execute_command(
+        "cryptsetup",
+        &["luksHeaderRestore", device_path.to_str().unwrap(), "--header-backup-file", HEADER_FILE]
+    ).await
+}
+
+pub async fn backup_header_from_device(device_path: &PathBuf) -> Result<()> {
+    info!("Extracting LUKS header...");
+    execute_command(
+        "cryptsetup",
+        &["luksHeaderBackup", device_path.to_str().unwrap(), "--header-backup-file", HEADER_FILE]
+    ).await
+}
+
+pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Result<()> {
+    execute_command_with_stdin(
+        "cryptsetup",
+        &["open", "--header", HEADER_FILE, device_path.to_str().unwrap(), MAPPER_NAME],
+        passphrase
+    ).await
+}
+
+pub async fn close_luks_container() -> Result<()> {
+    execute_command("cryptsetup", &["close", MAPPER_NAME]).await
+}
+
+pub async fn cleanup_header_file() {
+    let _ = fs::remove_file(HEADER_FILE).await;
 }
