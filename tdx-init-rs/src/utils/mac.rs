@@ -2,8 +2,8 @@ use crate::error::{Result, TdxInitError};
 use crate::utils::command::{execute_command_with_output, execute_command_with_stdin};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use tokio::fs;
 use std::path::PathBuf;
+use tokio::fs;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -23,24 +23,38 @@ pub async fn verify_mac(passphrase: &str, header_file: &str, expected_mac: &[u8]
     Ok(())
 }
 
-
 pub async fn read_mac_from_device(device_path: &PathBuf) -> Result<Vec<u8>> {
     let mac_output = execute_command_with_output(
         "dd",
-        &[&format!("if={}", device_path.to_str().unwrap()), "bs=512", "skip=32768", "count=1"]
-    ).await?;
+        &[
+            &format!("if={}", device_path.to_str().unwrap()),
+            "bs=512",
+            "skip=32768",
+            "count=1",
+        ],
+    )
+    .await?;
 
     if mac_output.len() < 32 {
-        return Err(TdxInitError::LuksError("Incomplete MAC read from device".to_string()));
+        return Err(TdxInitError::LuksError(
+            "Incomplete MAC read from device".to_string(),
+        ));
     }
-    
+
     Ok(mac_output[..32].to_vec())
 }
 
 pub async fn write_mac_to_device(device_path: &PathBuf, mac: &[u8]) -> Result<()> {
     execute_command_with_stdin(
         "dd",
-        &[&format!("of={}", device_path.to_str().unwrap()), "bs=512", "seek=32768", "count=1", "conv=notrunc"],
-        &String::from_utf8_lossy(mac)
-    ).await
+        &[
+            &format!("of={}", device_path.to_str().unwrap()),
+            "bs=512",
+            "seek=32768",
+            "count=1",
+            "conv=notrunc",
+        ],
+        &String::from_utf8_lossy(mac),
+    )
+    .await
 }

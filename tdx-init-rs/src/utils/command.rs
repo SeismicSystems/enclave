@@ -4,11 +4,8 @@ use tracing::info;
 
 pub async fn execute_command(cmd: &str, args: &[&str]) -> Result<()> {
     info!("Executing: {} {}", cmd, args.join(" "));
-    
-    let output = Command::new(cmd)
-        .args(args)
-        .output()
-        .await?;
+
+    let output = Command::new(cmd).args(args).output().await?;
 
     if !output.status.success() {
         return Err(TdxInitError::CommandError {
@@ -22,7 +19,7 @@ pub async fn execute_command(cmd: &str, args: &[&str]) -> Result<()> {
 
 pub async fn execute_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &str) -> Result<()> {
     info!("Executing: {} {} (with stdin)", cmd, args.join(" "));
-    
+
     let mut child = Command::new(cmd)
         .args(args)
         .stdin(std::process::Stdio::piped())
@@ -50,11 +47,8 @@ pub async fn execute_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &s
 
 pub async fn execute_command_with_output(cmd: &str, args: &[&str]) -> Result<Vec<u8>> {
     info!("Executing: {} {}", cmd, args.join(" "));
-    
-    let output = Command::new(cmd)
-        .args(args)
-        .output()
-        .await?;
+
+    let output = Command::new(cmd).args(args).output().await?;
 
     if !output.status.success() {
         return Err(TdxInitError::CommandError {

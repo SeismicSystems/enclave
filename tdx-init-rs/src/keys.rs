@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::luks;
-use crate::ssh;
+use crate::passphrase;
 use crate::persistence;
 use crate::server;
-use crate::passphrase;
+use crate::ssh;
 use std::path::PathBuf;
 use std::time::Duration;
 use tracing::info;
@@ -14,7 +14,10 @@ pub async fn wait_for_key(device_path: PathBuf) -> Result<()> {
         let config = luks::extract_config(&device_path).await?;
         ssh::write_keys(&config.ssh_keys).await?;
         persistence::write_temp_config(&config).await?;
-        info!("{} SSH key(s) extracted from LUKS header", config.ssh_keys.len());
+        info!(
+            "{} SSH key(s) extracted from LUKS header",
+            config.ssh_keys.len()
+        );
     } else {
         info!("No LUKS container found, starting HTTP server on port 8080...");
         let config = server::http::run_initialization_server().await?;
@@ -29,4 +32,3 @@ pub async fn wait_for_key(device_path: PathBuf) -> Result<()> {
     }
     Ok(())
 }
-

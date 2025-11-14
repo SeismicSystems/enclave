@@ -5,13 +5,13 @@ use tracing::info;
 mod config;
 mod disk;
 mod error;
-mod luks;
 mod keys;
+mod luks;
+mod passphrase;
 mod persistence;
 mod server;
 mod ssh;
 mod utils;
-mod passphrase;
 
 #[derive(Parser)]
 struct Args {

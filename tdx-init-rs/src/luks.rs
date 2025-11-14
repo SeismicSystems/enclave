@@ -68,20 +68,25 @@ pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Resu
     execute_command_with_stdin(
         "cryptsetup",
         &[
-            "luksFormat", "--type", "luks2",
-            "--header", HEADER_FILE,
-            "--align-payload", "32769",
+            "luksFormat",
+            "--type",
+            "luks2",
+            "--header",
+            HEADER_FILE,
+            "--align-payload",
+            "32769",
             "-q",
-            device_path.to_str().unwrap()
+            device_path.to_str().unwrap(),
         ],
-        passphrase
-    ).await
+        passphrase,
+    )
+    .await
 }
 
 pub async fn create_luks_token(ssh_key: &str, config_data: Option<String>) -> Result<LuksToken> {
     let mut user_data = HashMap::new();
     user_data.insert("ssh_key".to_string(), ssh_key.to_string());
-    user_data.insert("metadata".to_string(), ssh_key.to_string()); 
+    user_data.insert("metadata".to_string(), ssh_key.to_string());
 
     if let Some(config_data) = config_data {
         user_data.insert("config".to_string(), config_data);
@@ -101,33 +106,61 @@ pub async fn import_luks_token(token: &LuksToken) -> Result<()> {
     info!("Saving searcher SSH key...");
     execute_command_with_stdin(
         "cryptsetup",
-        &["token", "import", "--token-id", "1", "--header", HEADER_FILE, "/dev/null"],
-        &token_json
-    ).await
+        &[
+            "token",
+            "import",
+            "--token-id",
+            "1",
+            "--header",
+            HEADER_FILE,
+            "/dev/null",
+        ],
+        &token_json,
+    )
+    .await
 }
 
 pub async fn restore_header_to_device(device_path: &PathBuf) -> Result<()> {
     info!("Writing header to disk...");
     execute_command(
         "cryptsetup",
-        &["luksHeaderRestore", device_path.to_str().unwrap(), "--header-backup-file", HEADER_FILE]
-    ).await
+        &[
+            "luksHeaderRestore",
+            device_path.to_str().unwrap(),
+            "--header-backup-file",
+            HEADER_FILE,
+        ],
+    )
+    .await
 }
 
 pub async fn backup_header_from_device(device_path: &PathBuf) -> Result<()> {
     info!("Extracting LUKS header...");
     execute_command(
         "cryptsetup",
-        &["luksHeaderBackup", device_path.to_str().unwrap(), "--header-backup-file", HEADER_FILE]
-    ).await
+        &[
+            "luksHeaderBackup",
+            device_path.to_str().unwrap(),
+            "--header-backup-file",
+            HEADER_FILE,
+        ],
+    )
+    .await
 }
 
 pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Result<()> {
     execute_command_with_stdin(
         "cryptsetup",
-        &["open", "--header", HEADER_FILE, device_path.to_str().unwrap(), MAPPER_NAME],
-        passphrase
-    ).await
+        &[
+            "open",
+            "--header",
+            HEADER_FILE,
+            device_path.to_str().unwrap(),
+            MAPPER_NAME,
+        ],
+        passphrase,
+    )
+    .await
 }
 
 pub async fn close_luks_container() -> Result<()> {
