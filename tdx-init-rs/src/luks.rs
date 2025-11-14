@@ -19,7 +19,7 @@ pub async fn wait_for_key(device_path: PathBuf) -> Result<()> {
         );
     } else {
         info!("No LUKS container found, starting HTTP server on port 8080...");
-        let config = server::run_initialization_server().await?;
+        let config = server::http::run_initialization_server().await?;
         ssh::write_keys(&config.ssh_keys).await?;
         persistence::write_temp_config(&config).await?;
 
