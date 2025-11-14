@@ -17,7 +17,7 @@ pub async fn execute_command(cmd: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-pub async fn execute_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &str) -> Result<()> {
+pub async fn execute_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &[u8]) -> Result<()> {
     info!("Executing: {} {} (with stdin)", cmd, args.join(" "));
 
     let mut child = Command::new(cmd)
@@ -29,7 +29,7 @@ pub async fn execute_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &s
 
     if let Some(mut stdin) = child.stdin.take() {
         use tokio::io::AsyncWriteExt;
-        stdin.write_all(stdin_data.as_bytes()).await?;
+        stdin.write_all(stdin_data).await?;
         drop(stdin);
     }
 

@@ -78,7 +78,7 @@ pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Resu
             "-q",
             device_path.to_str().unwrap(),
         ],
-        passphrase,
+        passphrase.as_bytes(),
     )
     .await
 }
@@ -115,7 +115,7 @@ pub async fn import_luks_token(token: &LuksToken) -> Result<()> {
             HEADER_FILE,
             "/dev/null",
         ],
-        &token_json,
+        token_json.as_bytes(),
     )
     .await
 }
@@ -158,7 +158,7 @@ pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Res
             device_path.to_str().unwrap(),
             MAPPER_NAME,
         ],
-        passphrase,
+        passphrase.as_bytes(),
     )
     .await
 }

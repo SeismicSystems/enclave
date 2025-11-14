@@ -54,7 +54,7 @@ pub async fn write_mac_to_device(device_path: &PathBuf, mac: &[u8]) -> Result<()
             "count=1",
             "conv=notrunc",
         ],
-        &String::from_utf8_lossy(mac),
+        mac,
     )
     .await
 }
