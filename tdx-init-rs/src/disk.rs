@@ -4,9 +4,22 @@ use crate::error::TdxInitError;
 use glob::glob;
 use std::path::PathBuf;
 use tracing::{info, warn};
+use tokio::time::Duration;
+
+const DISCOVER_RETRY_DELAY: Duration = Duration::from_secs(2);
 
 const PERSISTENT_DISK_GLOB: &str = "/dev/disk/by-path/*10";
 const GLOB_PATTERNS_FILE: &str = "/etc/tdx-init/disk-glob";
+
+pub async fn discover_persistent_disk_with_retry() -> Result<PathBuf> {
+    loop {
+        if let Some(device) = discover_persistent_disk().await? {
+            return Ok(device);
+        }
+        info!("Waiting for persistent disk device to appear...");
+        tokio::time::sleep(DISCOVER_RETRY_DELAY).await;
+    }
+}
 
 pub async fn discover_persistent_disk() -> Result<Option<PathBuf>> {
     let patterns = read_glob_patterns().await;

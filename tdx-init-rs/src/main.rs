@@ -33,7 +33,8 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let device_path = disk::discover_persistent_disk().await?;
+    let device_path = disk::discover_persistent_disk_with_retry().await?;
+    info!("Found persistent disk device: {}", device_path.display());
 
     Ok(())
     // match args.command {
