@@ -162,6 +162,8 @@ func waitForKey() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "Configuration received and stored successfully")
 
+		time.Sleep(100 * time.Millisecond)
+		initializeRandom()
 		close(done)
 	})
 

@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,6 +14,14 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+func generateRandomPassphrase() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random passphrase: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(bytes), nil
+}
 
 func computeMAC(passphrase string, headerFile string) ([]byte, error) {
 	headerData, err := os.ReadFile(headerFile)
@@ -38,6 +48,24 @@ func verifyMAC(passphrase string, headerFile string, expectedMAC []byte) error {
 }
 
 func setPassphrase() {
+	fmt.Print("Enter passphrase: ")
+	var passphrase string
+	fmt.Scanln(&passphrase)
+
+	initializeWithPassphrase(passphrase)
+}
+
+func initializeRandom() {
+	passphrase, err := generateRandomPassphrase()
+	if err != nil {
+		log.Fatalf("Error generating passphrase: %v", err)
+	}
+
+	log.Println("Automatically initializing disk with random passphrase...")
+	initializeWithPassphrase(passphrase)
+}
+
+func initializeWithPassphrase(passphrase string) {
 	// Check if already mounted
 	if checkMounted() {
 		log.Fatalln("Error: Encrypted disk already setup")
@@ -56,10 +84,6 @@ func setPassphrase() {
 	// Check if LUKS container exists
 	cmd := exec.Command("cryptsetup", "isLuks", devicePath)
 	isNewSetup := cmd.Run() != nil
-
-	fmt.Print("Enter passphrase: ")
-	var passphrase string
-	fmt.Scanln(&passphrase)
 
 	if isNewSetup {
 		setupNewDisk(passphrase)
@@ -92,7 +116,7 @@ func setupNewDisk(passphrase string) {
 	}
 
 	userData := map[string]string{
-		"ssh_key": string(key),
+		"ssh_key":  string(key),
 		"metadata": string(key), // Keep for backwards compatibility
 	}
 
@@ -125,7 +149,7 @@ func setupNewDisk(passphrase string) {
 
 	// Write header to the device
 	log.Println("Writing header to disk...")
-	cmd = exec.Command("cryptsetup", "luksHeaderRestore", devicePath, 
+	cmd = exec.Command("cryptsetup", "luksHeaderRestore", devicePath,
 		"--header-backup-file", headerFile)
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Error restoring header to device: %v\n", err)
@@ -176,7 +200,7 @@ func mountExistingDisk(passphrase string) {
 
 	// Extract the header from the device
 	log.Println("Extracting LUKS header...")
-	cmd := exec.Command("cryptsetup", "luksHeaderBackup", devicePath, 
+	cmd := exec.Command("cryptsetup", "luksHeaderBackup", devicePath,
 		"--header-backup-file", headerFile)
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Error extracting LUKS header: %v\n", err)
