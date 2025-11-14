@@ -10,6 +10,7 @@ mod persistence;
 mod server;
 mod ssh;
 mod utils;
+mod passphrase;
 
 #[derive(Parser)]
 struct Args {
@@ -43,6 +44,6 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::WaitForKey => luks::wait_for_key(device_path).await,
-        Command::SetPassphrase => luks::set_passphrase(device_path).await,
+        Command::SetPassphrase => passphrase::set_passphrase(device_path).await,
     }
 }
