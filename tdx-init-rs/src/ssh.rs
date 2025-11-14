@@ -1,5 +1,5 @@
 use crate::error::{Result, TdxInitError};
-use crate::utils::file::{set_file_permissions, set_ownership, write_file_with_perms};
+use crate::utils::file::{set_ownership, write_file_with_perms};
 use std::fs::DirBuilder;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;

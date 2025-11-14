@@ -1,4 +1,4 @@
-use crate::utils::file::{create_dir_safe, set_file_permissions_safe, write_file_with_perms};
+use crate::utils::file::{create_dir_safe, write_file_with_perms};
 use crate::{config::InitConfig, error::Result, error::TdxInitError};
 use std::path::Path;
 use tokio::fs;

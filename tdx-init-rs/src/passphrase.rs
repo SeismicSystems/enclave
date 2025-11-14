@@ -3,25 +3,19 @@ use crate::error::{Result, TdxInitError};
 use crate::luks::{self, MAPPER_DEVICE};
 use crate::utils::{
     command::execute_command,
-    file::{set_file_permissions, set_ownership},
+    file::{create_dir_with_perms, set_file_permissions, set_ownership},
     mac::{compute_mac, read_mac_from_device, verify_mac, write_mac_to_device},
 };
-use crate::{persistence, server, ssh};
+use crate::persistence;
 use rand::distr::Alphanumeric;
 use rand::Rng;
 use std::path::PathBuf;
-use std::time::Duration;
 use tokio::fs;
 use tracing::{info, warn};
 
-// Constants
 const MOUNT_POINT: &str = "/persistent";
 const KEY_FILE: &str = "/etc/searcher_key";
 const TEMP_CONFIG_FILE: &str = "/etc/tdx-init/config.json";
-
-// =============================================================================
-// Passphrase Generation
-// =============================================================================
 
 pub fn generate_random_passphrase() -> Result<String> {
     let passphrase = rand::rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
@@ -37,10 +31,6 @@ fn get_user_passphrase() -> Result<String> {
     io::stdin().read_line(&mut passphrase)?;
     Ok(passphrase.trim().to_string())
 }
-
-// =============================================================================
-// Validation Functions
-// =============================================================================
 
 async fn validate_prerequisites() -> Result<()> {
     if is_mounted().await? {
@@ -79,7 +69,7 @@ async fn create_filesystem() -> Result<()> {
 }
 
 async fn mount_filesystem() -> Result<()> {
-    fs::create_dir_all(MOUNT_POINT).await?;
+    create_dir_with_perms(&PathBuf::from(MOUNT_POINT), 0o755).await?;
     match execute_command("mount", &[MAPPER_DEVICE, MOUNT_POINT]).await {
         Ok(()) => Ok(()),
         Err(e) => {
