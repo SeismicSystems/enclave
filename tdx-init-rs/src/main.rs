@@ -2,9 +2,13 @@ use clap::{Parser, Subcommand};
 use error::Result;
 use tracing::{error, info};
 
+mod config;
 mod disk;
 mod error;
+mod luks;
 mod server;
+mod persistence;
+mod ssh;
 
 #[derive(Parser)]
 struct Args {
@@ -36,9 +40,8 @@ async fn main() -> Result<()> {
     let device_path = disk::discover_persistent_disk_with_retry().await?;
     info!("Found persistent disk device: {}", device_path.display());
 
-    Ok(())
-    // match args.command {
-    //     Commands::WaitForKey => wait_for_key().await,
-    //     Commands::SetPassphrase => set_passphrase().await,
-    // }
+    match args.command {
+        Command::WaitForKey => luks::wait_for_key(device_path).await,
+        Command::SetPassphrase => luks::set_passphrase(device_path).await,
+    }
 }

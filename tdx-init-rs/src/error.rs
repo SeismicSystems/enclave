@@ -43,6 +43,9 @@ pub enum TdxInitError {
 
     #[error("Glob error: {0}")]
     GlobError(glob::GlobError),
+
+    #[error("Failed to parse LUKS token: {0}")]
+    LuksTokenParseError(serde_json::Error),
 }
 
 pub type Result<T> = std::result::Result<T, TdxInitError>;
