@@ -6,8 +6,8 @@ mod config;
 mod disk;
 mod error;
 mod luks;
-mod server;
 mod persistence;
+mod server;
 mod ssh;
 
 #[derive(Parser)]

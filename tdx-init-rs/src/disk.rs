@@ -3,8 +3,8 @@ use crate::error::TdxInitError;
 
 use glob::glob;
 use std::path::PathBuf;
-use tracing::{info, warn};
 use tokio::time::Duration;
+use tracing::{info, warn};
 
 const DISCOVER_RETRY_DELAY: Duration = Duration::from_secs(2);
 

@@ -7,6 +7,7 @@ edition = "2024"
 axum = { version = "0.8.6" }
 clap = { version = "4.5.51", features = ["derive"] } 
 glob = "0.3.3"
+nix = { version = "0.30.1", features = ["user", "fs"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 thiserror = "2.0.17"
