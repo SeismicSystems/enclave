@@ -13,6 +13,8 @@ mod server;
 mod ssh;
 mod utils;
 
+const SYSTEM_PATH: &str = "/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin";
+
 #[derive(Parser)]
 struct Args {
     #[command(subcommand)]
@@ -32,10 +34,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     unsafe {
-        std::env::set_var(
-            "PATH",
-            "/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin",
-        );
+        std::env::set_var("PATH", SYSTEM_PATH);
     }
 
     let args = Args::parse();
