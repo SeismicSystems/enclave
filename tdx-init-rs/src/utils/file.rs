@@ -42,16 +42,6 @@ pub async fn create_dir_safe<P: AsRef<Path>>(path: P) -> bool {
     }
 }
 
-pub async fn set_file_permissions_safe<P: AsRef<Path>>(path: P, mode: u32) {
-    if let Err(e) = set_file_permissions(&path, mode).await {
-        warn!(
-            "Warning: Could not set permissions on {:?}: {}",
-            path.as_ref(),
-            e
-        );
-    }
-}
-
 pub async fn set_ownership<P: AsRef<Path>>(path: P, uid: u32, gid: u32) -> Result<()> {
     chown(
         path.as_ref(),

@@ -9,9 +9,6 @@ pub enum TdxInitError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("Disk not found")]
-    DiskNotFound,
-
     #[error("Invalid SSH key format at index {index}: {key}")]
     InvalidSshKey { index: usize, key: String },
 
@@ -44,9 +41,6 @@ pub enum TdxInitError {
 
     #[error("Glob error: {0}")]
     GlobError(glob::GlobError),
-
-    #[error("Failed to parse LUKS token: {0}")]
-    LuksTokenParseError(serde_json::Error),
 }
 
 pub type Result<T> = std::result::Result<T, TdxInitError>;
