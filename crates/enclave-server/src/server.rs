@@ -134,15 +134,17 @@ pub async fn fetch_root_key_from_peers(
                 continue;
             };
 
-            let Ok(res) = client.boot_share_root_key(evidence.quote.clone()).await else {
-                warn!("Peer({peer}) did not give us the key: \n Trying next peer...");
-                continue;
-            };
-
-            // We got the key
-            info!("Key received. Starting Key manager");
-
-            return KeyManager::new(res.root_key);
+            match client.boot_share_root_key(evidence.quote.clone()).await {
+                Ok(res) => {
+                    // We got the key
+                    info!("Key received. Starting Key manager");
+                    return KeyManager::new(res.root_key);
+                },
+                Err(e) => {
+                    warn!("Peer({peer}) did not give us the key. Trying next peer... Reason: \n{e:?}\n");
+                    continue;
+                }
+            }
         }
 
         tracing::warn!(
