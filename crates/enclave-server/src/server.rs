@@ -139,9 +139,11 @@ pub async fn fetch_root_key_from_peers(
                     // We got the key
                     info!("Key received. Starting Key manager");
                     return KeyManager::new(res.root_key);
-                },
+                }
                 Err(e) => {
-                    warn!("Peer({peer}) did not give us the key. Trying next peer... Reason: \n{e:?}\n");
+                    warn!(
+                        "Peer({peer}) did not give us the key. Trying next peer... Reason: \n{e:?}\n"
+                    );
                     continue;
                 }
             }
