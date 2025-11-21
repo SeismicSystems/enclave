@@ -37,6 +37,7 @@ pub async fn extract_config(device_path: &std::path::Path) -> Result<InitConfig>
             ssh_keys: vec![key_data.clone()],
             domain: None,
             args: None,
+            log: None,
         });
     }
 

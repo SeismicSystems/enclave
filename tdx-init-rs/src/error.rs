@@ -41,6 +41,14 @@ pub enum TdxInitError {
 
     #[error("Glob error: {0}")]
     GlobError(glob::GlobError),
+
+    #[error("Invalid argument for {binary}: argument '{arg}' conflicts with default configuration")]
+    ConflictingArgument { binary: String, arg: String },
+
+    #[error(
+        "Invalid log level '{level}' for {binary}: must be one of trace, debug, info, warn, error"
+    )]
+    InvalidLogLevel { binary: String, level: String },
 }
 
 pub type Result<T> = std::result::Result<T, TdxInitError>;
@@ -63,6 +71,20 @@ impl IntoResponse for TdxInitError {
             TdxInitError::Io(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_string(),
+            ),
+            TdxInitError::ConflictingArgument { binary, arg } => (
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "Argument '{}' for {} conflicts with default configuration",
+                    arg, binary
+                ),
+            ),
+            TdxInitError::InvalidLogLevel { binary, level } => (
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "Invalid log level '{}' for {}: must be one of trace, debug, info, warn, error",
+                    level, binary
+                ),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
