@@ -130,7 +130,7 @@ impl DefaultArgs {
                 ],
                 genesis_args: vec!["--genesis-path", "/persistent/summit/genesis.toml"],
                 store_args: vec!["--store-path", "/persistent/summit/db"],
-                key_args: vec!["--key-path", "/persistent/summit/keys/key.pem"],
+                key_args: vec!["--key-store-path", "/persistent/summit/keys"],
                 port_args: vec![
                     "--port",
                     "18551",
