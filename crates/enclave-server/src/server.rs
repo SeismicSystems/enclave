@@ -16,6 +16,8 @@ use seismic_enclave::{
     AttestationGetEvidenceResponse, GetPurposeKeysResponse, ShareRootKeyResponse,
     TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
+use std::fs;
+use std::path::Path;
 use std::{net::SocketAddr, time::Duration};
 use tokio::io::AsyncWriteExt as _;
 use tracing::{info, warn};
@@ -131,6 +133,74 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
         )
         .await
         .map_err(|e| string_to_rpc_error(format!("Failed to restore from checkpoint: {e}")))
+    }
+
+    /// Get an encrypted snapshot from this servers database
+    async fn get_encrypted_snapshot(&self, epoch: u64) -> RpcResult<Vec<u8>> {
+        let snapshot_path = format!(
+            "{}/{}-{}.tar.lz4.enc",
+            DATA_DISK_DIR, SNAPSHOT_FILE_PREFIX, epoch
+        );
+
+        if !fs::exists(&snapshot_path).unwrap_or_default() {
+            return Err(string_to_rpc_error(format!(
+                "No snapshot for epoch {epoch} stored"
+            )));
+        }
+
+        fs::read(snapshot_path).map_err(|e| {
+            string_to_rpc_error(format!(
+                "Failed to read snapshot for epoch {}: {}",
+                epoch, e
+            ))
+        })
+    }
+
+    /// List all encrypted snapshots stored in this enclave
+    async fn list_all_encrypted_snapshots(&self) -> RpcResult<Vec<u64>> {
+        let dir_path = Path::new(DATA_DISK_DIR);
+
+        let entries = fs::read_dir(dir_path).map_err(|e| {
+            string_to_rpc_error(format!("Failed to read snapshots directory: {}", e))
+        })?;
+
+        let mut epochs = Vec::new();
+        let prefix = format!("{}-", SNAPSHOT_FILE_PREFIX);
+        let suffix = ".tar.lz4.enc";
+
+        for entry in entries {
+            let entry = entry.map_err(|e| {
+                string_to_rpc_error(format!("Failed to read directory entry: {}", e))
+            })?;
+
+            if let Some(filename) = entry.file_name().to_str() {
+                if filename.starts_with(&prefix) && filename.ends_with(suffix) {
+                    // Extract epoch from filename
+                    let epoch_str = filename
+                        .strip_prefix(&prefix)
+                        .and_then(|s| s.strip_suffix(suffix));
+
+                    if let Some(epoch_str) = epoch_str {
+                        if let Ok(epoch) = epoch_str.parse::<u64>() {
+                            epochs.push(epoch);
+                        }
+                    }
+                }
+            }
+        }
+
+        epochs.sort_unstable();
+        Ok(epochs)
+    }
+
+    /// List all encrypted snapshots stored in this enclave
+    async fn list_latest_encrypted_snapshots(&self) -> RpcResult<u64> {
+        let all_snapshots = self.list_all_encrypted_snapshots().await?;
+
+        all_snapshots
+            .into_iter()
+            .max()
+            .ok_or_else(|| string_to_rpc_error("No snapshots found".to_string()))
     }
 }
 

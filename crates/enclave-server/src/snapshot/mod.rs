@@ -27,7 +27,7 @@ pub const SUMMIT_DATA_DIR: &str = "/persistent/summit/db"; // correct when runni
 #[cfg(not(feature = "systemctl"))]
 pub const SUMMIT_DATA_DIR: &str = "/home/azureuser/.summit/db"; // correct when running reth with `cargo run` on devbox
 
-pub const DATA_DISK_DIR: &str = "/mnt/datadisk";
+pub const DATA_DISK_DIR: &str = "/persistent/snapshots";
 pub const SNAPSHOT_DIR: &str = "/tmp/snapshot";
 pub const SNAPSHOT_FILE_PREFIX: &str = "seismic_reth_snapshot.tar.lz4";
 
