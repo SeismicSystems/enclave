@@ -48,7 +48,9 @@ func main() {
 	case "wait-for-key":
 		waitForKey()
 	case "set-passphrase":
-		setPassphrase()
+		if err := setPassphrase(); err != nil {
+			log.Fatalf("Error: %v\n", err)
+		}
 	default:
 		log.Fatalf("Unknown command: %s\n", os.Args[1])
 	}
