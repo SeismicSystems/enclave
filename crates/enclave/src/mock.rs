@@ -59,11 +59,11 @@ impl TdxQuoteRpcServer for MockServer {
         })
     }
 
-    async fn prepare_encrypted_snapshot(&self) -> RpcResult<()> {
+    async fn download_encrypted_snapshot(&self, _epoch: u64, _url: String) -> RpcResult<()> {
         unimplemented!("prepare_encrypted_snapshot is not implemented for mock server")
     }
 
-    async fn restore_from_encrypted_snapshot(&self) -> RpcResult<()> {
+    async fn restore_from_encrypted_snapshot(&self, _epoch: u64) -> RpcResult<()> {
         unimplemented!("restore_encrypted_snapshot is not implemented for mock server")
     }
 }

@@ -25,12 +25,12 @@ pub trait TdxQuoteRpc {
     async fn boot_share_root_key(&self, quote: Vec<u8>) -> RpcResult<ShareRootKeyResponse>;
 
     /// Prepares an encrypted snapshot
-    #[method(name = "snapshot.prepare_encrypted_snapshot")]
-    async fn prepare_encrypted_snapshot(&self) -> RpcResult<()>;
+    #[method(name = "snapshot.download_encrypted_snapshot")]
+    async fn download_encrypted_snapshot(&self, epoch: u64, url: String) -> RpcResult<()>;
 
     /// Restores from an encrypted snapshot
     #[method(name = "snapshot.restore_from_encrypted_snapshot")]
-    async fn restore_from_encrypted_snapshot(&self) -> RpcResult<()>;
+    async fn restore_from_encrypted_snapshot(&self, epoch: u64) -> RpcResult<()>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

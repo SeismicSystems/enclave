@@ -1,5 +1,5 @@
-use crate::key_manager::NetworkKeyProvider;
-use seismic_enclave::crypto::{decrypt_file, encrypt_file};
+use crate::key_manager::KeyManager;
+use seismic_enclave::{decrypt_file, encrypt_file};
 
 use std::path::Path;
 
@@ -27,8 +27,7 @@ use std::path::Path;
 /// - The input snapshot file does not exist.
 /// - Encryption fails due to an internal error in the encryption process.
 pub fn encrypt_snapshot(
-    kp: &impl NetworkKeyProvider,
-    epoch: u64,
+    kp: &KeyManager,
     input_dir: &str,
     output_dir: &str,
     snapshot_file: &str,
@@ -44,8 +43,8 @@ pub fn encrypt_snapshot(
         );
     }
 
-    let snapshot_key = kp.get_snapshot_key(epoch);
-    encrypt_file(&input_path, &output_path, &snapshot_key)
+    let snapshot_key = kp.get_snapshot_key(0);
+    encrypt_file(input_path, output_path, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to encrypt snapshot file: {:?}", e))?;
 
     Ok(())
@@ -74,25 +73,24 @@ pub fn encrypt_snapshot(
 /// - The encrypted snapshot file does not exist.
 /// - Decryption fails due to an incorrect or unavailable key, or an internal decryption error.
 pub fn decrypt_snapshot(
-    kp: &impl NetworkKeyProvider,
+    kp: &KeyManager,
     epoch: u64,
-    input_dir: &str,
-    output_dir: &str,
-    snapshot_file: &str,
+    encrypted_snapshot: impl AsRef<Path>,
+    output_dir: impl AsRef<Path>,
 ) -> Result<(), anyhow::Error> {
-    let input_path = &format!("{}/{}.enc", input_dir, snapshot_file);
-    let output_path = &format!("{}/{}", output_dir, snapshot_file);
+    let src = encrypted_snapshot.as_ref();
+    let dest = output_dir.as_ref();
 
     // confirm that the snapshot file exists
-    if !Path::new(&input_path).exists() {
+    if !src.exists() {
         anyhow::bail!(
             "Encrypted Snapshot file not found at expected path: {:?}",
-            &input_path
+            &src
         );
     }
 
     let snapshot_key = kp.get_snapshot_key(epoch);
-    decrypt_file(&input_path, &output_path, &snapshot_key)
+    decrypt_file(src, dest, &snapshot_key)
         .map_err(|e| anyhow::anyhow!("Failed to decrypt snapshot file: {:?}", e))?;
 
     Ok(())
@@ -101,25 +99,25 @@ pub fn decrypt_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key_manager::KeyManagerBuilder;
-    use crate::snapshot::SNAPSHOT_FILE;
-    use crate::utils::test_utils::{generate_dummy_file, read_first_n_bytes};
+    use crate::key_manager::KeyManager;
+    use crate::snapshot::SNAPSHOT_FILE_PREFIX;
+    use crate::utils::{generate_dummy_file, read_first_n_bytes};
 
     use anyhow::Error;
-    use std::fs;
     use std::path::Path;
     use tempfile::tempdir;
 
     #[test]
     fn test_encrypt_snapshot() -> Result<(), Error> {
-        let kp = KeyManagerBuilder::build_mock().unwrap();
+        let kp = KeyManager::new_as_genesis().unwrap();
         let epoch = 0;
 
+        let snapshot_file = format!("{SNAPSHOT_FILE_PREFIX}-{epoch}.tar.lz4");
         // Set up a temp dir
         let temp_dir = tempdir().unwrap();
         let temp_path = temp_dir.path();
-        let snapshot_path = temp_path.join(SNAPSHOT_FILE);
-        let ciphertext_path = temp_path.join(format!("{}.enc", SNAPSHOT_FILE));
+        let snapshot_path = temp_path.join(&snapshot_file);
+        let ciphertext_path = temp_path.join(format!("{}.enc", &snapshot_file));
 
         // Generate a dummy database file (e.g., 10MB)
         generate_dummy_file(&snapshot_path, 10 * 1024 * 1024)?;
@@ -131,25 +129,17 @@ mod tests {
         // Create the encrypted snapshot
         encrypt_snapshot(
             &kp,
-            epoch,
             temp_path.to_str().unwrap(),
             temp_path.to_str().unwrap(),
-            SNAPSHOT_FILE,
+            &snapshot_file,
         )
         .unwrap();
         assert!(Path::new(&ciphertext_path).exists());
 
         // Confirm that we recover the original file
-        fs::remove_file(&snapshot_path)?;
+        std::fs::remove_file(&snapshot_path)?;
         assert!(!Path::new(&snapshot_path).exists());
-        decrypt_snapshot(
-            &kp,
-            epoch,
-            temp_path.to_str().unwrap(),
-            temp_path.to_str().unwrap(),
-            SNAPSHOT_FILE,
-        )
-        .unwrap();
+        decrypt_snapshot(&kp, epoch, ciphertext_path, &snapshot_path).unwrap();
         assert!(Path::new(&snapshot_path).exists());
 
         // Check metadata of restored file matches the original

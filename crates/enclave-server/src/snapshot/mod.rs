@@ -1,62 +1,77 @@
 mod compress;
 mod file_encrypt;
 
-use crate::key_manager::NetworkKeyProvider;
-use compress::{compress_datadir, decompress_datadir};
-use file_encrypt::{decrypt_snapshot, encrypt_snapshot};
-use std::fs;
+use crate::{
+    key_manager::KeyManager,
+    utils::{copy_dir_all, rename_or_copy, start_reth, start_summit, stop_reth, stop_summit},
+};
 
-#[cfg(not(feature = "supervisorctl"))]
-use crate::utils::service::{start_reth, stop_reth};
-#[cfg(feature = "supervisorctl")]
-use crate::utils::supervisorctl::{start_reth, stop_reth};
+use anyhow::Result;
+use compress::compress_datadir;
+pub use compress::decompress_datadir;
+pub use file_encrypt::{decrypt_snapshot, encrypt_snapshot};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-#[cfg(not(feature = "supervisorctl"))]
-pub const RETH_DATA_DIR: &str = "/persistent/reth"; // correct when running with yocto builds
-#[cfg(feature = "supervisorctl")]
+#[cfg(feature = "systemctl")]
+pub const RETH_DATA_DIR: &str = "/persistent/reth"; // correct when running with Mkosi builds
+
+#[cfg(not(feature = "systemctl"))]
 pub const RETH_DATA_DIR: &str = "/home/azureuser/.reth"; // correct when running reth with `cargo run` on devbox
+
+#[cfg(feature = "systemctl")]
+pub const SUMMIT_DATA_DIR: &str = "/persistent/summit/db"; // correct when running with Mkosi builds
+
+#[cfg(not(feature = "systemctl"))]
+pub const SUMMIT_DATA_DIR: &str = "/home/azureuser/.summit/db"; // correct when running reth with `cargo run` on devbox
 
 pub const DATA_DISK_DIR: &str = "/mnt/datadisk";
 pub const SNAPSHOT_DIR: &str = "/tmp/snapshot";
-pub const SNAPSHOT_FILE: &str = "seismic_reth_snapshot.tar.lz4";
+pub const SNAPSHOT_FILE_PREFIX: &str = "seismic_reth_snapshot.tar.lz4";
 
 /// Prepares an encrypted snapshot of the Reth database and stores it on a mounted data disk.
 ///
 /// This function performs the following steps:
 /// 1. Stops the Reth process to ensure the database is in a consistent state.
 /// 2. Compresses the database directory into a snapshot archive.
-/// 3. Encrypts the compressed snapshot using the snapshot key.
-/// 4. Removes the temporary unencrypted snapshot archive.
-/// 5. Restarts the Reth process after the snapshot is created.
+/// 3. Starts reth back up
 ///
+/// This function copies the reth db and prepares it for encryption. It is split into two steps so we can keep the amount of time reth is stopped to a minimum
 /// After running this function, the encrypted snapshot is stored in a mounted data disk
 /// (separate from the OS disk) for safe backup or transfer.
-///
-/// # Arguments
-/// * `reth_data_dir` - Path to the Reth database directory.
-/// * `data_disk_dir` - Path to the mounted data disk where the encrypted snapshot will be saved.
-/// * `snapshot_dir` - Path to a temporary directory used to hold the unencrypted snapshot archive.
-/// * `snapshot_file` - Filename of the snapshot archive (e.g., `snapshot.tar.lz4`).
 ///
 /// # Errors
 /// Returns an error if any step in the process (stopping Reth, compression, encryption,
 /// removing temporary data, or restarting Reth) fails.
-pub fn prepare_encrypted_snapshot(
-    kp: &impl NetworkKeyProvider,
+pub async fn prepare_encrypted_snapshot(
     epoch: u64,
-    reth_data_dir: &str,
-    data_disk_dir: &str,
-    snapshot_dir: &str,
-    snapshot_file: &str,
+    summit_checkpoint: Vec<u8>,
 ) -> Result<(), anyhow::Error> {
-    fs::create_dir_all(snapshot_dir)
-        .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
-    stop_reth()?;
-    compress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-    encrypt_snapshot(kp, epoch, snapshot_dir, data_disk_dir, snapshot_file)?;
-    fs::remove_dir_all(snapshot_dir)
+    let destination = PathBuf::from(SNAPSHOT_DIR).join(format!("{}-snapshot", epoch));
+
+    stop_reth().await?;
+    copy_dir_all(RETH_DATA_DIR, destination.join("reth"))?;
+    start_reth().await?;
+
+    fs::write(destination.join("summit_checkpoint"), summit_checkpoint)?;
+
+    Ok(())
+}
+
+/// Finished the encryption on a prepared snapshot. This is the final step of the process and reth will have been restarted by now
+pub async fn finish_encrypted_snapshot(kp: &KeyManager, epoch: u64) -> Result<()> {
+    let snapshot_file = format!("{SNAPSHOT_FILE_PREFIX}-{epoch}.tar.lz4");
+    compress_datadir(
+        &format!("{SNAPSHOT_DIR}/{epoch}-snapshot"),
+        SNAPSHOT_DIR,
+        &snapshot_file,
+    )?;
+
+    encrypt_snapshot(kp, SNAPSHOT_DIR, DATA_DISK_DIR, &snapshot_file)?;
+    fs::remove_dir_all(SNAPSHOT_DIR)
         .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
-    start_reth()?;
     Ok(())
 }
 
@@ -80,21 +95,47 @@ pub fn prepare_encrypted_snapshot(
 /// # Errors
 /// Returns an error if any step in the process (stopping Reth, decryption, decompression,
 /// removing temporary data, or restarting Reth) fails.
-pub fn restore_from_encrypted_snapshot(
-    kp: &impl NetworkKeyProvider,
+pub async fn restore_from_encrypted_snapshot(
+    kp: &KeyManager,
     epoch: u64,
-    reth_data_dir: &str,
-    data_disk_dir: &str,
-    snapshot_dir: &str,
-    snapshot_file: &str,
+    encrypted_snapshot_path: impl AsRef<Path>,
 ) -> Result<(), anyhow::Error> {
-    fs::create_dir_all(snapshot_dir)
+    fs::create_dir_all(SNAPSHOT_DIR)
         .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
-    stop_reth()?;
-    decrypt_snapshot(kp, epoch, data_disk_dir, snapshot_dir, snapshot_file)?;
-    decompress_datadir(reth_data_dir, snapshot_dir, snapshot_file)?;
-    fs::remove_dir_all(snapshot_dir)
+    let compressed_path = format!("{SNAPSHOT_DIR}/{epoch}-snapshot.tar.lz4");
+    let uncompressed_path = PathBuf::from(format!("{SNAPSHOT_DIR}/{epoch}-snapshot"));
+
+    // Decrypt snapshot to temp folder
+    decrypt_snapshot(kp, epoch, encrypted_snapshot_path, &compressed_path)?;
+    // decompress snapshot into temp folder
+    decompress_datadir(&uncompressed_path, compressed_path)?;
+
+    // stop reth and summit
+    stop_reth().await?;
+    stop_summit().await?;
+
+    // delete both databases
+    std::fs::remove_dir_all(RETH_DATA_DIR)?;
+    std::fs::remove_dir_all(SUMMIT_DATA_DIR)?;
+
+    // move databases in proper location
+
+    // Try to rename first (fastest method, works if on same filesystem)
+    rename_or_copy(uncompressed_path.join("reth"), RETH_DATA_DIR)?;
+    // start reth
+    start_reth().await?;
+    // mv summit checkpoint to proper path
+    fs::create_dir_all(SUMMIT_DATA_DIR)
+        .map_err(|e| anyhow::anyhow!("Failed to create snapshot directory: {:?}", e))?;
+    rename_or_copy(
+        uncompressed_path.join("summit_checkpoint"),
+        format!("{SUMMIT_DATA_DIR}/checkpoint"),
+    )?;
+    // start summit
+    start_summit().await?;
+
+    fs::remove_dir_all(SNAPSHOT_DIR)
         .map_err(|e| anyhow::anyhow!("Failed to remove snapshot directory: {:?}", e))?;
-    start_reth()?;
+
     Ok(())
 }

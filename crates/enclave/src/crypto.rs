@@ -8,8 +8,8 @@ pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret, ecdsa::Signature};
 use sha2::{Digest, Sha256};
-use std::str::FromStr;
 use std::{fs, io::Read, io::Write};
+use std::{path::Path, str::FromStr};
 
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -322,12 +322,15 @@ pub fn encrypt_file(
 /// # Returns
 /// Returns `Ok(())` on success, or an error if reading, decryption, or writing fails.
 pub fn decrypt_file(
-    input_path: &str,
-    output_path: &str,
+    input_path: impl AsRef<Path>,
+    output_path: impl AsRef<Path>,
     key: &Key<Aes256Gcm>,
 ) -> Result<(), anyhow::Error> {
+    let input_path = input_path.as_ref();
+    let output_path = output_path.as_ref();
+
     let mut file = fs::File::open(input_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open input file {}: {:?}", input_path, e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to open input file {:?}: {:?}", input_path, e))?;
     let mut file_data = Vec::new();
     file.read_to_end(&mut file_data)?;
 
@@ -344,6 +347,6 @@ pub fn decrypt_file(
     let decrypted_data = aes_decrypt(key, ciphertext, nonce_bytes)?;
 
     fs::write(output_path, decrypted_data)
-        .map_err(|e| anyhow::anyhow!("Failed to write output file {}: {:?}", output_path, e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to write output file {:?}: {:?}", output_path, e))?;
     Ok(())
 }

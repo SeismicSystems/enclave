@@ -1,4 +1,11 @@
-use crate::{attestation::AttestationAgent, key_manager::KeyManager, utils::anyhow_to_rpc_error};
+use crate::snapshot::{DATA_DISK_DIR, SNAPSHOT_FILE_PREFIX, restore_from_encrypted_snapshot};
+use crate::{
+    Args,
+    attestation::AttestationAgent,
+    key_manager::KeyManager,
+    summit::run_summit_socket,
+    utils::{anyhow_to_rpc_error, string_to_rpc_error},
+};
 use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
     core::{RpcResult, async_trait},
@@ -10,6 +17,7 @@ use seismic_enclave::{
     TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
 use std::{net::SocketAddr, time::Duration};
+use tokio::io::AsyncWriteExt as _;
 use tracing::{info, warn};
 
 pub struct TdxQuoteServer {
@@ -79,28 +87,63 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
     }
 
     /// Prepares an encrypted snapshot
-    async fn prepare_encrypted_snapshot(&self) -> RpcResult<()> {
-        todo!()
+    async fn download_encrypted_snapshot(&self, epoch: u64, url: String) -> RpcResult<()> {
+        // Download the file
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| string_to_rpc_error(format!("Failed to download snapshot: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(string_to_rpc_error(format!(
+                "HTTP error: {}",
+                response.status()
+            )));
+        }
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| string_to_rpc_error(format!("Failed to read response body: {}", e)))?;
+
+        // Create the filename
+        let filename = format!("{SNAPSHOT_FILE_PREFIX}-{epoch}.tar.lz4.enc");
+
+        // Write to file
+        let mut file = tokio::fs::File::create(format!("{DATA_DISK_DIR}/{filename}"))
+            .await
+            .map_err(|e| {
+                string_to_rpc_error(format!("Failed to create file {}: {}", filename, e))
+            })?;
+
+        file.write_all(&bytes).await.map_err(|e| {
+            string_to_rpc_error(format!("Failed to write to file {}: {}", filename, e))
+        })?;
+
+        Ok(())
     }
 
     /// Restores from an encrypted snapshot
-    async fn restore_from_encrypted_snapshot(&self) -> RpcResult<()> {
-        todo!()
+    async fn restore_from_encrypted_snapshot(&self, epoch: u64) -> RpcResult<()> {
+        restore_from_encrypted_snapshot(
+            &self.key_manager,
+            epoch,
+            format!("{DATA_DISK_DIR}/{epoch}-snapshot.tar.lz4.enc"),
+        )
+        .await
+        .map_err(|e| string_to_rpc_error(format!("Failed to restore from checkpoint: {e}")))
     }
 }
 
-pub async fn start_server(
-    addr: SocketAddr,
-    genesis_node: bool,
-    peers: Vec<String>,
-) -> anyhow::Result<()> {
+pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     let attestation_agent = AttestationAgent::new().unwrap();
 
-    let key_manager = if genesis_node {
+    let key_manager = if args.genesis_node {
         KeyManager::new_as_genesis()?
     } else {
-        fetch_root_key_from_peers(peers, &attestation_agent).await
+        fetch_root_key_from_peers(args.peers, &attestation_agent).await
     };
+
+    let summit_handle = tokio::spawn(run_summit_socket(args.summit_socket, key_manager.clone()));
 
     let server = ServerBuilder::default().build(addr).await?;
 
@@ -109,6 +152,10 @@ pub async fn start_server(
     println!("TDX Quote JSON-RPC Server started at {}", addr);
 
     handle.stopped().await;
+
+    // server stopped abort the summit socket
+    summit_handle.abort();
+
     Ok(())
 }
 

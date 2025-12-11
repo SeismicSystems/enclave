@@ -1,4 +1,4 @@
-use libc;
+use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
 
@@ -85,33 +85,32 @@ pub fn compress_datadir(
 /// - The snapshot file does not exist at the specified path.
 /// - The `tar` command fails to execute or returns a non-zero exit status.
 pub fn decompress_datadir(
-    data_dir: &str,
-    snapshot_dir: &str,
-    snapshot_file: &str,
+    output: impl AsRef<Path>,
+    snapshot_path: impl AsRef<Path>,
 ) -> Result<(), anyhow::Error> {
-    let snapshot_path = format!("{}/{}", snapshot_dir, snapshot_file);
-
+    let snapshot_path = snapshot_path.as_ref();
     // Confirm that the snapshot file exists
-    if !Path::new(&snapshot_path).exists() {
+
+    if !snapshot_path.exists() {
         anyhow::bail!(
-            "Snapshot file not found at expected path: {}",
+            "Snapshot file not found at expected path: {:?}",
             snapshot_path
         );
     }
 
     // change the umask so that files can be written to by the user's group
     // so that reth can write to the files
-    let old_umask = unsafe { libc::umask(0o002) };
+    //  let old_umask = unsafe { libc::umask(0o002) };
 
     // Run the tar command to decompress the snapshot
     let output = Command::new("tar")
-        .current_dir(data_dir)
+        .current_dir(output)
         .args([
             "--use-compress-program=lz4",
             "--no-same-permissions",
             "--no-same-owner",
             "-xvPf",
-            &snapshot_path,
+            &snapshot_path.to_string_lossy(),
         ])
         .output()
         .map_err(|e| anyhow::anyhow!("Failed to spwan tar process: {:?}", e))?;
@@ -129,9 +128,9 @@ pub fn decompress_datadir(
     }
 
     // change the umask back
-    unsafe {
-        libc::umask(old_umask);
-    }
+    // unsafe {
+    //     libc::umask(old_umask);
+    // }
 
     Ok(())
 }
@@ -139,8 +138,8 @@ pub fn decompress_datadir(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::snapshot::SNAPSHOT_FILE;
-    use crate::utils::test_utils::{generate_dummy_file, read_first_n_bytes};
+    use crate::snapshot::SNAPSHOT_FILE_PREFIX;
+    use crate::utils::{generate_dummy_file, read_first_n_bytes};
 
     use std::fs;
     use std::path::Path;
@@ -148,15 +147,16 @@ mod tests {
 
     #[test]
     fn test_compress_datadir() -> Result<(), anyhow::Error> {
+        let snapshot_file = format!("{SNAPSHOT_FILE_PREFIX}-0.tar.lz4");
         // Set up a temp dir
         let temp_data_dir = tempdir().unwrap();
         let temp_data_dir_path = temp_data_dir.path();
-        let temp_snapshot_dir = tempdir().unwrap();
+
         fs::create_dir(temp_data_dir_path.join("db"))?;
         let snapshot_path = &format!(
             "{}/{}",
-            temp_snapshot_dir.path().to_str().unwrap(),
-            SNAPSHOT_FILE
+            temp_data_dir_path.to_str().unwrap(),
+            &snapshot_file
         );
         let mdbx_path = temp_data_dir_path.join("db").join("mdbx.dat");
 
@@ -167,20 +167,20 @@ mod tests {
 
         // Create the snapshot
         compress_datadir(
-            temp_data_dir.path().to_str().unwrap(),
-            temp_snapshot_dir.path().to_str().unwrap(),
-            SNAPSHOT_FILE,
+            temp_data_dir_path.join("db").to_str().unwrap(),
+            temp_data_dir_path.to_str().unwrap(),
+            &snapshot_file,
         )
         .unwrap();
+
         assert!(Path::new(&snapshot_path).exists());
 
         // Confirm that we recover the original file
         fs::remove_file(&mdbx_path)?;
         assert!(!Path::new(&mdbx_path).exists());
         decompress_datadir(
-            temp_data_dir.path().to_str().unwrap(),
-            temp_snapshot_dir.path().to_str().unwrap(),
-            SNAPSHOT_FILE,
+            temp_data_dir_path.join("db").to_str().unwrap(),
+            snapshot_path,
         )
         .unwrap();
         assert!(Path::new(&mdbx_path).exists());
