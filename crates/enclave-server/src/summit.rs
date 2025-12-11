@@ -19,33 +19,13 @@ pub async fn run_summit_socket(socket_path: String, key_manager: KeyManager) -> 
     while let Ok((mut stream, _)) = listener.accept().await {
         info!("Performing backup");
 
-        // Summit will write the epoch number over the socket first thing
-        // epoch is u64
-        let mut buffer = [0u8; 32];
-        let epoch = match stream.read(&mut buffer).await {
-            Ok(n) if n > 0 => {
-                let epoch_str = String::from_utf8_lossy(&buffer[..n]).trim().to_string();
-
-                match epoch_str.parse::<u64>() {
-                    Ok(id) => {
-                        info!("Received backup ID: {}", id);
-                        id
-                    }
-                    Err(e) => {
-                        error!("Invalid u64 received for epoch over summit socket: {}", e);
-                        if let Err(e) = stream.write_all(b"ERROR: Invalid epoch format\n").await {
-                            error!("Failed to send error response: {}", e);
-                        }
-                        continue;
-                    }
-                }
-            }
+        // Read epoch number as u64 (8 bytes, little-endian)
+        let mut epoch_bytes = [0u8; 8];
+        let epoch = match stream.read_exact(&mut epoch_bytes).await {
             Ok(_) => {
-                error!("Empty message received");
-                if let Err(e) = stream.write_all(b"ERROR: Empty message\n").await {
-                    error!("Failed to send error response: {}", e);
-                }
-                continue;
+                let epoch = u64::from_le_bytes(epoch_bytes);
+                info!("Received backup ID: {}", epoch);
+                epoch
             }
             Err(e) => {
                 error!("Failed to read epoch over summit socket: {}", e);
@@ -57,29 +37,28 @@ pub async fn run_summit_socket(socket_path: String, key_manager: KeyManager) -> 
         };
 
         // Send acknowledgment that epoch was received
-        if let Err(e) = stream.write_all(b"OK\n").await {
+        if let Err(e) = stream.write_all(b"ACK\n").await {
             error!("Failed to send acknowledgment: {}", e);
             continue;
         }
 
-        // Now read the checkpoint data
-        // Read all available bytes from the stream
-        let mut checkpoint_data = Vec::new();
-        match stream.read_to_end(&mut checkpoint_data).await {
-            Ok(n) => {
+        // Read the length of the checkpoint data (u32, 4 bytes, little-endian)
+        let mut len_bytes = [0u8; 4];
+        if let Err(e) = stream.read_exact(&mut len_bytes).await {
+            error!("Failed to read checkpoint data length: {}", e);
+            continue;
+        }
+        let data_len = u32::from_le_bytes(len_bytes) as usize;
+        info!("Expecting {} bytes of checkpoint data", data_len);
+        // Read the checkpoint data
+        let mut checkpoint_data = vec![0u8; data_len];
+
+        match stream.read_exact(&mut checkpoint_data).await {
+            Ok(_) => {
                 info!(
                     "Received {} bytes of checkpoint data for epoch {}",
-                    n, epoch
+                    data_len, epoch
                 );
-
-                // Process the checkpoint data here
-                // For example:
-                // if let Err(e) = process_checkpoint(epoch, &checkpoint_data, &key_manager).await {
-                //     error!("Failed to process checkpoint: {}", e);
-                //     continue;
-                // }
-
-                info!("Successfully processed checkpoint for epoch {}", epoch);
             }
             Err(e) => {
                 error!("Failed to read checkpoint data: {}", e);
@@ -89,7 +68,7 @@ pub async fn run_summit_socket(socket_path: String, key_manager: KeyManager) -> 
 
         // Copy the database and prepare for it to be encrypted
         let response = match prepare_encrypted_snapshot(epoch, checkpoint_data).await {
-            Ok(_) => "SUCCESS\n",
+            Ok(_) => "ACK\n",
             Err(e) => {
                 error!("Backup failed: {}", e);
                 "FAILURE\n"
