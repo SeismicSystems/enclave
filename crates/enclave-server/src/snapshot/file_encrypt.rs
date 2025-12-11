@@ -12,6 +12,7 @@ use std::path::Path;
 ///
 /// # Arguments
 ///
+/// * `kp` - KeyManager to derive the encryption key
 /// * `input_dir` - Directory containing the plaintext snapshot file.
 /// * `output_dir` - Directory where the encrypted file should be written.
 /// * `snapshot_file` - Filename of the snapshot file to encrypt (e.g., `snapshot.tar.lz4`).
@@ -58,9 +59,10 @@ pub fn encrypt_snapshot(
 ///
 /// # Arguments
 ///
-/// * `input_dir` - Directory containing the encrypted snapshot file (e.g., `snapshot.tar.lz4.enc`).
+/// * `kp` - KeyManager to derive the encryption key
+/// * `epoch` - The epoch this snapshot is from
+/// * `encrypted_snapshot` - path to the encrypted snapshot file (e.g., `snapshot.tar.lz4.enc`).
 /// * `output_dir` - Directory where the decrypted snapshot file should be saved.
-/// * `snapshot_file` - Base filename of the snapshot archive (without `.enc` suffix).
 ///
 /// # Returns
 ///

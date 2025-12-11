@@ -35,8 +35,9 @@ pub const SNAPSHOT_FILE_PREFIX: &str = "seismic_reth_snapshot.tar.lz4";
 ///
 /// This function performs the following steps:
 /// 1. Stops the Reth process to ensure the database is in a consistent state.
-/// 2. Compresses the database directory into a snapshot archive.
+/// 2. Copies the database directory into a snapshot archive.
 /// 3. Starts reth back up
+/// 4. Places the summit checkpoint with the reth checkpoint
 ///
 /// This function copies the reth db and prepares it for encryption. It is split into two steps so we can keep the amount of time reth is stopped to a minimum
 /// After running this function, the encrypted snapshot is stored in a mounted data disk
@@ -78,19 +79,18 @@ pub async fn finish_encrypted_snapshot(kp: &KeyManager, epoch: u64) -> Result<()
 /// Restores the Reth database from an encrypted snapshot stored on a mounted data disk.
 ///
 /// This function performs the following steps:
-/// 1. Stops the Reth process to allow safe restoration.
+/// 1. Stops the Reth/Summit process to allow safe restoration.
 /// 2. Decrypts the encrypted snapshot archive using the snapshot key.
 /// 3. Decompresses the decrypted archive into the database directory.
 /// 4. Removes the temporary snapshot data after restoration.
-/// 5. Restarts the Reth process with the restored database state.
+/// 5. Restarts the Reth/Summit process with the restored database state.
 ///
 /// The encrypted snapshot must be available on the mounted data disk before calling this function.
 ///
 /// # Arguments
-/// * `reth_data_dir` - Path to the Reth database directory where the snapshot will be restored.
-/// * `data_disk_dir` - Path to the mounted data disk where the encrypted snapshot archive is located.
-/// * `snapshot_dir` - Temporary directory used during the decryption and decompression steps.
-/// * `snapshot_file` - Filename of the snapshot archive (e.g., `snapshot.tar.lz4`).
+/// * `kp` - Path to the Reth database directory where the snapshot will be restored.
+/// * `epoch` - Path to the mounted data disk where the encrypted snapshot archive is located.
+/// * `encrypted_snapshot_path` - Path to the snapshot archive
 ///
 /// # Errors
 /// Returns an error if any step in the process (stopping Reth, decryption, decompression,

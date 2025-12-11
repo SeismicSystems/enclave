@@ -63,7 +63,7 @@ pub fn compress_datadir(
     Ok(())
 }
 
-/// Decompresses a `.tar.lz4` snapshot archive into a specified data directory (`data_dir`).
+/// Decompresses a `.tar.lz4` snapshot archive into a specified data directory (`output`).
 ///
 /// This function restores the contents of a previously created snapshot archive by extracting
 /// its contents using the `tar` command with LZ4 decompression. It is commonly used for
@@ -71,9 +71,8 @@ pub fn compress_datadir(
 ///
 /// # Arguments
 ///
-/// * `data_dir` - Path to the directory where the archive should be extracted.
-/// * `snapshot_dir` - Path to the directory where the snapshot archive is stored.
-/// * `snapshot_file` - Filename of the `.tar.lz4` snapshot archive to restore (e.g., `snapshot.tar.lz4`).
+/// * `output` - Path to the directory where the archive should be extracted.
+/// * `snapshot_path` - Path to where the compressed snapshot file is stored.
 ///
 /// # Returns
 ///
