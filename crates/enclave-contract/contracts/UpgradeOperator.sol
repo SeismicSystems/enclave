@@ -16,6 +16,7 @@ contract UpgradeOperator {
     // Keep track of all tags for enumeration if needed
     bytes32[] public acceptedTags;
     bytes32[] public deprecatedTags;
+    bool public initialIsDeprecated = false;
 
     // Track if a tag exists to prevent duplicates
     mapping(bytes32 => bool) public tagExists;
@@ -128,7 +129,14 @@ contract UpgradeOperator {
      * @param measurementHash Hash of the measurements to check
      */
     function isAccepted(bytes32 measurementHash) external view returns (bool) {
-        return bytes(acceptedMeasurements[measurementHash].tag).length > 0;
+        if (
+            !initialIsDeprecated &&
+            measurementHash == _getMeasurementHash(getInitialMeasurements())
+        ) {
+            return true;
+        } else {
+            return bytes(acceptedMeasurements[measurementHash].tag).length > 0;
+        }
     }
 
     /**
@@ -147,6 +155,17 @@ contract UpgradeOperator {
     function getAcceptedMeasurement(
         bytes32 measurementHash
     ) external view returns (Measurements memory) {
+        if (
+            !initialIsDeprecated &&
+            measurementHash == _getMeasurementHash(getInitialMeasurements())
+        ) {
+            Measurements memory initialMeasurements = getInitialMeasurements();
+
+            if (_getMeasurementHash(initialMeasurements) == measurementHash) {
+                return initialMeasurements;
+            }
+        }
+
         require(
             bytes(acceptedMeasurements[measurementHash].tag).length > 0,
             "Measurement not found"
@@ -195,5 +214,35 @@ contract UpgradeOperator {
                     m.registrar_values
                 )
             );
+    }
+
+    function getInitialMeasurements()
+        public
+        pure
+        returns (Measurements memory)
+    {
+        Measurements memory m;
+
+        m.tag = "Initial";
+
+        m
+            .mrtd = hex"f858414aef26d52a3b21614bab4bafab13b3ed62ebdd9d46a6be799228c2e27bc0d025cc6e4e90daff827cbe0316bbd9";
+
+        m
+            .mrseam = hex"49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6";
+
+        m.registrar_slots = new uint8[](4);
+        m.registrar_slots[0] = 0;
+        m.registrar_slots[1] = 1;
+        m.registrar_slots[2] = 2;
+        m.registrar_slots[3] = 3;
+
+        m.registrar_values = new bytes[](4);
+        m.registrar_values[0] = new bytes(48); // All zeros by default
+        m.registrar_values[1] = new bytes(48);
+        m.registrar_values[2] = new bytes(48);
+        m.registrar_values[3] = new bytes(48);
+
+        return m;
     }
 }

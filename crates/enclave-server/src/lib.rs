@@ -1,11 +1,14 @@
 mod attestation;
 mod key_manager;
 mod server;
+mod snapshot;
+mod summit;
 pub mod utils;
 
 const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
 const DEFAULT_RETH_RPC: &str = "127.0.0.1:8545";
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
+const DEFAULT_ENCLAVE_SUMMIT_SOCKET: &str = "/tmp/reth_enclave_socket.ipc";
 
 use anyhow::Result;
 use clap::Parser;
@@ -32,6 +35,10 @@ pub struct Args {
     #[arg(long)]
     pub peers: Vec<String>,
 
+    /// path to unix socket used to communicate with Summit
+    #[arg(long, default_value_t = DEFAULT_ENCLAVE_SUMMIT_SOCKET.to_string())]
+    pub summit_socket: String,
+
     #[arg(long, default_value_t =DEFAULT_RETH_RPC.to_string())]
     pub reth_rpc_url: String,
 
@@ -48,7 +55,7 @@ impl Args {
         if self.mock {
             start_mock_server(addr).await
         } else {
-            server::start_server(addr, self.genesis_node, self.peers).await
+            server::start_server(addr, self).await
         }
     }
 }

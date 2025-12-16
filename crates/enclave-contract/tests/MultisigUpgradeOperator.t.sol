@@ -236,6 +236,37 @@ contract MultisigUpgradeOperatorTest is Test {
         assertFalse(upgradeOperator.isDeprecated(measurement1Hash));
     }
 
+    function testInitialMeasurments() public view {
+        // Setup test measurements
+        UpgradeOperator.Measurements memory m;
+
+        m.tag = "Initial";
+
+        m
+            .mrtd = hex"f858414aef26d52a3b21614bab4bafab13b3ed62ebdd9d46a6be799228c2e27bc0d025cc6e4e90daff827cbe0316bbd9";
+
+        m
+            .mrseam = hex"49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6";
+
+        m.registrar_slots = new uint8[](4);
+        m.registrar_slots[0] = 0;
+        m.registrar_slots[1] = 1;
+        m.registrar_slots[2] = 2;
+        m.registrar_slots[3] = 3;
+
+        m.registrar_values = new bytes[](4);
+        m.registrar_values[0] = new bytes(48); // All zeros by default
+        m.registrar_values[1] = new bytes(48);
+        m.registrar_values[2] = new bytes(48);
+        m.registrar_values[3] = new bytes(48);
+
+        console.logBytes(m.mrtd);
+        console.logBytes(m.mrseam);
+        bytes32 measurementHash = upgradeOperator.getMeasurementHash(m);
+
+        assertTrue(upgradeOperator.isAccepted(measurementHash));
+    }
+
     // Test get vote status
     function testGetVoteStatus() public {
         vm.prank(signer1);

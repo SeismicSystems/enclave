@@ -38,7 +38,6 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     // Wait a bit for the transaction to be processed
     sleep(Duration::from_secs(2));
 
-    // Test data for proposal
     let params = Measurements {
         tag: "AzureV1".to_string(),
         mrtd: [

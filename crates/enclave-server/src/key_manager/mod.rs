@@ -9,7 +9,7 @@ const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
 /// Prefix used in domain separation when deriving purpose-specific keys.
 const PREFIX: &str = "seismic-purpose";
 
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Zeroize, ZeroizeOnDrop, Clone)]
 pub struct Key([u8; 32]);
 
 impl AsRef<[u8]> for Key {
@@ -18,6 +18,7 @@ impl AsRef<[u8]> for Key {
     }
 }
 
+#[derive(Clone)]
 pub struct KeyManager {
     root_key: Key,
 }
