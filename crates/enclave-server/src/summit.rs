@@ -37,7 +37,7 @@ pub async fn run_summit_socket(socket_path: String, key_manager: KeyManager) -> 
         };
 
         // Send acknowledgment that epoch was received
-        if let Err(e) = stream.write_all(b"ACK\n").await {
+        if let Err(e) = stream.write_all(b"ACK").await {
             error!("Failed to send acknowledgment: {}", e);
             continue;
         }
@@ -68,15 +68,15 @@ pub async fn run_summit_socket(socket_path: String, key_manager: KeyManager) -> 
 
         // Copy the database and prepare for it to be encrypted
         let response = match prepare_encrypted_snapshot(epoch, checkpoint_data).await {
-            Ok(_) => "ACK\n",
+            Ok(_) => b"ACK",
             Err(e) => {
                 error!("Backup failed: {}", e);
-                "FAILURE\n"
+                b"ACK"
             }
         };
 
         // Let summit know that it can continue and reth is restarted
-        if let Err(e) = stream.write_all(response.as_bytes()).await {
+        if let Err(e) = stream.write_all(response).await {
             error!("Failed to respond to Summit: {}", e);
         }
 

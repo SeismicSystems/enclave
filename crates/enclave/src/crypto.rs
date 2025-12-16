@@ -300,6 +300,11 @@ pub fn encrypt_file(
     // Encrypt the data
     let ciphertext = aes_encrypt(key, &plaintext, nonce.clone()).expect("Encryption failed!");
 
+    // Get the parent directory and create it if it doesn't exist
+    if let Some(parent) = Path::new(output_path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+
     // Save nonce + ciphertext together
     let mut output_file = fs::File::create(output_path)
         .map_err(|e| anyhow::anyhow!("Failed to create output file {}: {:?}", output_path, e))?;

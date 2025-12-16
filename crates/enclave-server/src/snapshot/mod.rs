@@ -29,7 +29,7 @@ pub const SUMMIT_DATA_DIR: &str = "/home/azureuser/.summit/db"; // correct when 
 
 pub const DATA_DISK_DIR: &str = "/persistent/snapshots";
 pub const SNAPSHOT_DIR: &str = "/tmp/snapshot";
-pub const SNAPSHOT_FILE_PREFIX: &str = "seismic_reth_snapshot.tar.lz4";
+pub const SNAPSHOT_FILE_PREFIX: &str = "seismic_reth_snapshot";
 
 /// Prepares an encrypted snapshot of the Reth database and stores it on a mounted data disk.
 ///
