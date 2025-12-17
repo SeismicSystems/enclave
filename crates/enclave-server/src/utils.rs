@@ -10,7 +10,7 @@ use std::{
 use tracing::info;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 #[cfg(feature = "systemctl")]
-pub const RETH_CONTROL_CMD: &str = "systemctl";
+pub const RETH_CONTROL_CMD: &str = "/usr/bin/systemctl";
 
 #[cfg(not(feature = "systemctl"))]
 pub const RETH_CONTROL_CMD: &str = "supervisorctl";
@@ -106,6 +106,7 @@ pub async fn start_reth() -> Result<()> {
 }
 
 pub async fn stop_reth() -> Result<()> {
+    info!("Stopping reth with: {RETH_CONTROL_CMD} stop {SEISMIC_RETH_SERVICE}");
     let mut child = Command::new(RETH_CONTROL_CMD)
         .arg("stop")
         .arg(SEISMIC_RETH_SERVICE)
