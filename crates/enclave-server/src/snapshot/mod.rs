@@ -13,6 +13,7 @@ pub use file_encrypt::{decrypt_snapshot, encrypt_snapshot};
 use std::{
     fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 #[cfg(feature = "systemctl")]
@@ -51,9 +52,12 @@ pub async fn prepare_encrypted_snapshot(
     summit_checkpoint: Vec<u8>,
 ) -> Result<(), anyhow::Error> {
     let destination = PathBuf::from(SNAPSHOT_DIR).join(format!("{}-snapshot", epoch));
-
+    tracing::info!("Blocking for 20 seconds to give reth time to write");
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    tracing::info!("stopping reth");
     stop_reth().await?;
     copy_dir_all(RETH_DATA_DIR, destination.join("reth"))?;
+    tracing::info!("starting reth");
     start_reth().await?;
 
     fs::write(destination.join("summit_checkpoint"), summit_checkpoint)?;
