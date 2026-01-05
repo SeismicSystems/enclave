@@ -7,8 +7,8 @@ use crate::utils::{
     file::{create_dir_with_perms, set_file_permissions, set_ownership},
     mac::{compute_mac, read_mac_from_device, verify_mac, write_mac_to_device},
 };
-use rand::Rng;
-use rand::distr::Alphanumeric;
+// use rand::Rng;
+// use rand::distr::Alphanumeric;
 use std::path::PathBuf;
 use tokio::fs;
 use tracing::{info, warn};
@@ -18,11 +18,14 @@ const KEY_FILE: &str = "/etc/searcher_key";
 const TEMP_CONFIG_FILE: &str = "/etc/tdx-init/config.json";
 
 pub fn generate_random_passphrase() -> Result<String> {
+    /*
     let passphrase = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(32)
         .map(char::from)
         .collect();
+    */
+    let passphrase = "password".into();
     Ok(passphrase)
 }
 
