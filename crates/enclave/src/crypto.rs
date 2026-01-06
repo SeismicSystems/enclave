@@ -114,7 +114,13 @@ pub fn aes_encrypt_aead(
     let nonce_array: Nonce = nonce.into();
     let cipher = Aes256Gcm::new(key);
     cipher
-        .encrypt(&nonce_array.into(), Payload { msg: plaintext, aad })
+        .encrypt(
+            &nonce_array.into(),
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
         .map_err(|e| anyhow!("AES-AEAD encryption failed: {:?}", e))
 }
 
