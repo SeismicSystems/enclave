@@ -1,6 +1,6 @@
 use aes_gcm::{
     Aes256Gcm, Key,
-    aead::{Aead, KeyInit},
+    aead::{Aead, KeyInit, Payload},
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
@@ -88,6 +88,42 @@ pub fn aes_encrypt(
         .map_err(|e| anyhow!("AES encryption failed: {:?}", e))
 }
 
+/// Encrypts plaintext using AES-256 GCM with AEAD (authenticated encryption with additional data).
+///
+/// This function provides authenticated encryption where both the plaintext and additional
+/// authenticated data (AAD) are cryptographically protected. The AAD is not encrypted but
+/// its integrity is verified during decryption.
+///
+/// # Arguments
+/// * `key` - The AES-256 GCM key used for encryption.
+/// * `plaintext` - The slice of bytes to encrypt.
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
+/// * `aad` - Additional authenticated data that will be authenticated but not encrypted.
+///
+/// # Returns
+/// A `Vec<u8>` containing the bytes of encrypted ciphertext with authentication tag.
+///
+/// # Errors
+/// Returns an error if the nonce size is incorrect or if encryption fails.
+pub fn aes_encrypt_aead(
+    key: &Key<Aes256Gcm>,
+    plaintext: &[u8],
+    nonce: impl Into<Nonce>,
+    aad: &[u8],
+) -> anyhow::Result<Vec<u8>> {
+    let nonce_array: Nonce = nonce.into();
+    let cipher = Aes256Gcm::new(key);
+    cipher
+        .encrypt(
+            &nonce_array.into(),
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .map_err(|e| anyhow!("AES-AEAD encryption failed: {:?}", e))
+}
+
 /// Decrypts ciphertext using AES-256 GCM with a 92-bit nonce.
 ///
 /// This function requires the nonce to be exactly 92 bits (12 bytes),
@@ -115,6 +151,37 @@ pub fn aes_decrypt(
     cipher
         .decrypt(&nonce_array.into(), ciphertext)
         .map_err(|_| anyhow!("AES decryption failed. Authentication tag does not match the given ciphertext/nonce"))
+}
+
+/// Decrypts ciphertext using AES-256 GCM with AEAD (authenticated encryption with additional data).
+///
+/// This function provides authenticated decryption where both the ciphertext and additional
+/// authenticated data (AAD) are cryptographically verified. The decryption will fail if
+/// either the ciphertext or AAD have been tampered with.
+///
+/// # Arguments
+/// * `key` - The AES-256 GCM key used for decryption.
+/// * `ciphertext` - A slice of bytes representing the encrypted data with authentication tag.
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
+/// * `aad` - Additional authenticated data that must match what was used during encryption.
+///
+/// # Returns
+/// A `Vec<u8>` containing the bytes of the decrypted plaintext.
+///
+/// # Errors
+/// Returns an error if decryption fails or if the authentication tag verification fails.
+pub fn aes_decrypt_aead(
+    key: &Key<Aes256Gcm>,
+    ciphertext: &[u8],
+    nonce: impl Into<Nonce>,
+    aad: &[u8],
+) -> anyhow::Result<Vec<u8>> {
+    let nonce_array: Nonce = nonce.into();
+    let cipher = Aes256Gcm::new(key);
+
+    cipher
+        .decrypt(&nonce_array.into(), Payload { msg: ciphertext, aad })
+        .map_err(|_| anyhow!("AES-AEAD decryption failed. Authentication tag does not match the given ciphertext/nonce/aad"))
 }
 
 /// Derives an AES key from a shared secret using HKDF and SHA-256.
@@ -269,6 +336,38 @@ pub fn ecdh_decrypt(
     let aes_key =
         derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let decrypted_data = aes_decrypt(&aes_key, data, nonce)?;
+    Ok(decrypted_data)
+}
+
+/// Encrypts the provided data using AEAD with an AES key derived from
+/// the provided public key and the provided private key
+pub fn ecdh_encrypt_aead(
+    pk: &PublicKey,
+    sk: &SecretKey,
+    data: &[u8],
+    nonce: impl Into<Nonce>,
+    aad: &[u8],
+) -> Result<Vec<u8>, anyhow::Error> {
+    let shared_secret = SharedSecret::new(pk, sk);
+    let aes_key =
+        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let encrypted_data = aes_encrypt_aead(&aes_key, data, nonce, aad)?;
+    Ok(encrypted_data)
+}
+
+/// Decrypts the provided data using AEAD with an AES key derived from
+/// the provided public key and the provided private key
+pub fn ecdh_decrypt_aead(
+    pk: &PublicKey,
+    sk: &SecretKey,
+    data: &[u8],
+    nonce: impl Into<Nonce>,
+    aad: &[u8],
+) -> Result<Vec<u8>, anyhow::Error> {
+    let shared_secret = SharedSecret::new(pk, sk);
+    let aes_key =
+        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let decrypted_data = aes_decrypt_aead(&aes_key, data, nonce, aad)?;
     Ok(decrypted_data)
 }
 
