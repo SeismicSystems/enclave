@@ -14,6 +14,13 @@ export RUST_LOG=info
 
 echo "🚀 Starting integration tests..."
 
+# Clean up stale state from previous runs to ensure fresh genesis
+echo "🧹 Cleaning up stale state from previous runs..."
+sudo supervisorctl stop all 2>/dev/null || true
+sudo pkill -9 -f seismic-reth 2>/dev/null || true
+sudo rm -rf /home/azureuser/.reth/
+sleep 2
+
 # Function to cleanup processes
 cleanup() {
     echo "🧹 Cleaning up processes..."
