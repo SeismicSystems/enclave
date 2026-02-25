@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::server::ServerBuilder;
+use tracing::info;
 
 use crate::api::{
     AttestationGetEvidenceResponse, GetPurposeKeysResponse, ShareRootKeyResponse, TdxQuoteRpcServer,
@@ -20,7 +21,7 @@ pub async fn start_mock_server(addr: SocketAddr) -> anyhow::Result<()> {
 
     let handle = server.start(MockServer {}.into_rpc());
 
-    println!("TDX Quote JSON-RPC Server started at {}", addr);
+    info!("TDX Quote JSON-RPC Server started at {}", addr);
 
     handle.stopped().await;
     Ok(())

@@ -7,6 +7,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
+use tracing::info;
 
 use crate::{Measurements, MultisigUpgradeOperator::ProposalCreated};
 
@@ -147,7 +148,7 @@ pub async fn vote_on_multisig_proposal(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get vote receipt: {:?}", e))?;
 
-    println!("Voted on proposal:{:?}", proposal_id);
+    info!("Voted on proposal:{:?}", proposal_id);
 
     Ok(())
 }
@@ -194,7 +195,7 @@ pub async fn execute_multisig_proposal(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get execution receipt: {:?}", e))?;
 
-    println!("Proposal executed successfully");
+    info!("Proposal executed successfully");
 
     Ok(())
 }
