@@ -1884,6 +1884,7 @@ dependencies = [
  "anyhow",
  "reqwest 0.11.27",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4450,6 +4451,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "sha2",
+ "tracing",
 ]
 
 [[package]]

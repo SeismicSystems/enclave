@@ -219,7 +219,7 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
 
     let handle = server.start(TdxQuoteServer::new(attestation_agent, key_manager).into_rpc());
 
-    println!("TDX Quote JSON-RPC Server started at {}", addr);
+    info!("TDX Quote JSON-RPC Server started at {}", addr);
 
     handle.stopped().await;
 
