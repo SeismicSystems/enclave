@@ -22,7 +22,6 @@ seismic-enclave.workspace = true
 enclave-contract.workspace = true
 
 alloy.workspace = true
-az-tdx-vtpm.workspace = true
 openssl.workspace = true
 coco-provider.workspace = true
 chrono = "0.4.40"
@@ -50,6 +49,14 @@ rand.workspace = true
 zeroize.workspace = true
 sha2.workspace = true
 
+# az-tdx-vtpm pulls in tss-esapi-sys, which links against the Linux tpm2-tss
+# user-space stack and only ships prebuilt bindings for Linux tuples (plus
+# x86_64-darwin in theory, but pkg-config can't find tss2-* on macOS anyway).
+# Production runs on x86_64 Linux Azure TDX VMs, so gate the dep on Linux to
+# let the rest of the crate build on macOS for development.
+[target.'cfg(target_os = "linux")'.dependencies]
+az-tdx-vtpm.workspace = true
+
 [dev-dependencies]
 serial_test = "3.2.0"
 tempfile = "3.17.1"
@@ -57,4 +64,3 @@ tempfile = "3.17.1"
 [features]
 default = []
 systemctl = []
-
