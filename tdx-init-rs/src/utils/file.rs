@@ -22,12 +22,6 @@ pub async fn set_file_permissions<P: AsRef<Path>>(path: P, mode: u32) -> Result<
     Ok(())
 }
 
-pub async fn create_dir_with_perms<P: AsRef<Path>>(path: P, mode: u32) -> Result<()> {
-    fs::create_dir_all(&path).await?;
-    set_file_permissions(&path, mode).await?;
-    Ok(())
-}
-
 pub async fn create_dir_safe<P: AsRef<Path>>(path: P) -> bool {
     match fs::create_dir_all(&path).await {
         Ok(()) => true,

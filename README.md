@@ -1,35 +1,51 @@
 # tdx-init
 
-Rust rewrite of [flashbots/tdx-init](https://github.com/flashbots/tdx-init) — a utility for secure disk encryption and SSH configuration in Intel TDX VMs. Used by [seismic-images](https://github.com/SeismicSystems/seismic-images) to initialize Seismic validator nodes running in TEEs.
+Small HTTP service that receives node configuration on first boot of a
+Seismic TDX VM and writes it to `/persistent/conf/node.json` for
+downstream services to consume (currently
+[`setup-nginx-ssl`](https://github.com/SeismicSystems/seismic-images/blob/seismic/modules/seismic/mkosi.extra/usr/bin/setup-nginx-ssl),
+which reads the domain and email for Let's Encrypt cert issuance).
+
+Used by [seismic-images](https://github.com/SeismicSystems/seismic-images)
+as part of the TDX VM boot sequence. Runs after
+`persistent-luks-setup.service` has provisioned and mounted `/persistent`,
+before `nginx-ssl-setup.service` consumes the config.
 
 ## Usage
 
 ```
-tdx-init wait-for-key     # Wait for config via HTTP or extract from existing LUKS header
-tdx-init set-passphrase   # Set up or mount an encrypted disk with passphrase
+tdx-init wait-for-config
 ```
 
-- `wait-for-key` runs during early boot, before persistent storage is mounted.
-- `set-passphrase` runs after the node operator has provided credentials via an authenticated channel.
+Behavior:
 
-TODO: we should probably rename `wait-for-key` to `wait-for-config`, but that would need a coordinated update with seismic-images.
+- **Subsequent boots**: if `/persistent/conf/node.json` already exists,
+  exits immediately.
+- **First boot**: starts an HTTP server on port 8080 and waits for the
+  operator to POST an `InitConfig` JSON. On receipt: writes the config
+  to `/persistent/conf/node.json` (plus, transitionally, any SSH keys to
+  `authorized_keys` — see "transitional fields" below), exits.
 
-## What it does
+The expected payload after follow-up cleanups land is:
 
-1. **First boot**: Starts an HTTP server on port 8080, waits for a JSON config payload containing SSH keys, domain config, and service args. Once received, writes SSH keys to `authorized_keys`, persists config to `/etc/tdx-init/config.json`, then auto-initializes the disk with LUKS2 encryption (random passphrase).
+```json
+{
+  "domain": {
+    "name": "<your.public.dns.name>",
+    "email": "<contact@example.com>"
+  }
+}
+```
 
-2. **Subsequent boots**: Extracts the config from the LUKS2 header token and restores SSH keys and config files.
+### Transitional fields
 
-3. **Disk management** (`set-passphrase`): Formats new disks with LUKS2 or mounts existing ones. Stores SSH keys and config as LUKS token metadata. Creates and permissions standard directories under `/persistent/`.
+The current `InitConfig` schema also accepts `ssh_keys`, `args`, and
+`log` fields, all inherited from the prior version of this fork. They
+are slated for removal in follow-up commits:
 
-## Changes from upstream
-
-The upstream Go version accepts a single raw SSH key string. This Rust rewrite:
-
-- Accepts a **JSON config payload** (`InitConfig`) instead of a raw key, carrying SSH keys, domain config (email, name), and per-service args (reth, summit, enclave)
-- Supports **multiple SSH keys**
-- **Auto-initializes** the disk with a random passphrase after receiving config (no manual searcher SSH step needed)
-- **Persists full config** to `/persistent/conf/node.json` and embeds it in the LUKS header
-- Includes **default args** for seismic-reth, summit, and enclave-server with flag validation
-- Adds disk device **discovery with polling** and **disk resize** on LUKS unlock
-- Backwards-compatible with the old single-key LUKS token format
+- `ssh_keys` — written to `/home/searcher/.ssh/authorized_keys`. The
+  seismic image has no `openssh-server` package and no `searcher`
+  user, so these keys are inert. Removal in next commit.
+- `args.{reth, summit, enclave}` and `log.{reth, summit, enclave}` —
+  no longer read by anything since the seismic-images service unit
+  files were inlined. Removal in commit after.

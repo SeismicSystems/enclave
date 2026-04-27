@@ -15,32 +15,11 @@ pub enum TdxInitError {
     #[error("SSH keys array cannot be empty")]
     EmptyKeys,
 
-    #[error("LUKS operation failed: {0}")]
-    LuksError(String),
-
     #[error("Command execution failed: {cmd} - {stderr}")]
     CommandError { cmd: String, stderr: String },
 
-    #[error("MAC verification failed")]
-    MacVerificationFailed,
-
-    #[error("Config not found: {0}")]
-    ConfigNotFound(String),
-
     #[error("Server error: {0}")]
     ServerError(String),
-
-    #[error("Device already mounted")]
-    AlreadyMounted,
-
-    #[error("SSH key file not found")]
-    SshKeyNotFound,
-
-    #[error("Glob error: {0}")]
-    GlobPatternError(glob::PatternError),
-
-    #[error("Glob error: {0}")]
-    GlobError(glob::GlobError),
 
     #[error("Invalid argument for {binary}: argument '{arg}' conflicts with default configuration")]
     ConflictingArgument { binary: String, arg: String },

@@ -1,34 +1,34 @@
 use crate::error::Result;
-use crate::luks;
-use crate::passphrase;
-use crate::persistence;
+use crate::persistence::{self, PERSISTENT_CONFIG_FILE};
 use crate::server;
 use crate::ssh;
-use std::path::PathBuf;
-use std::time::Duration;
+use tokio::fs;
 use tracing::info;
 
-pub async fn wait_for_key(device_path: PathBuf) -> Result<()> {
-    if luks::is_luks_device(&device_path).await? {
-        info!("Found existing LUKS container, extracting config...");
-        let config = luks::extract_config(&device_path).await?;
-        ssh::write_keys(&config.ssh_keys).await?;
-        persistence::write_temp_config(&config).await?;
+/// Wait for an InitConfig to be POSTed by the operator, then write it to
+/// `/persistent/conf/node.json`. Idempotent across reboots: if the config
+/// file already exists, exits immediately.
+///
+/// LUKS provisioning is no longer this binary's responsibility — see
+/// seismic-images' `setup-persistent-luks` script + the
+/// `persistent-luks-setup.service` unit, which run before this service
+/// and ensure /persistent is already mounted by the time we get here.
+pub async fn wait_for_config() -> Result<()> {
+    if fs::try_exists(PERSISTENT_CONFIG_FILE).await? {
         info!(
-            "{} SSH key(s) extracted from LUKS header",
-            config.ssh_keys.len()
+            "config already present at {}; nothing to do",
+            PERSISTENT_CONFIG_FILE,
         );
-    } else {
-        info!("No LUKS container found, starting HTTP server on port 8080...");
-        let config = server::http::run_initialization_server().await?;
-        ssh::write_keys(&config.ssh_keys).await?;
-        persistence::write_temp_config(&config).await?;
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let passphrase = passphrase::generate_random_passphrase()?;
-        passphrase::initialize_with_passphrase(device_path, passphrase, &config).await?;
-
-        info!("Configuration received via HTTP and written to disk!");
+        return Ok(());
     }
+
+    info!(
+        "no config at {}; starting HTTP server on port 8080",
+        PERSISTENT_CONFIG_FILE,
+    );
+    let config = server::http::run_initialization_server().await?;
+    ssh::write_keys(&config.ssh_keys).await?;
+    persistence::write_persistent_config(&config).await?;
+    info!("configuration received and written to disk");
     Ok(())
 }

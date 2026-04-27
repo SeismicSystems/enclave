@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitConfig {
@@ -36,14 +35,6 @@ pub struct LogConfig {
     pub reth: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enclave: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LuksToken {
-    #[serde(rename = "type")]
-    pub token_type: String,
-    pub keyslots: Vec<String>,
-    pub user_data: HashMap<String, String>,
 }
 
 // Default arguments structured as individual components
