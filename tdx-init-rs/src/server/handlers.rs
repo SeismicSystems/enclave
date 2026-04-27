@@ -1,7 +1,7 @@
 use crate::config::InitConfig;
 use crate::error::Result;
 use crate::server::http::AppState;
-use crate::server::validation::{validate_arguments, validate_log_config, validate_ssh_keys};
+use crate::server::validation::{validate_arguments, validate_log_config};
 use axum::response::IntoResponse;
 use axum::{Json, extract::State, http::StatusCode, response::Response};
 
@@ -9,8 +9,6 @@ pub async fn handle_config(
     State(state): State<AppState>,
     Json(config): Json<InitConfig>,
 ) -> Result<Response> {
-    validate_ssh_keys(&config.ssh_keys)?;
-
     if let Some(args) = &config.args {
         validate_arguments(&args)?;
     }

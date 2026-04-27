@@ -1,7 +1,6 @@
 use crate::error::Result;
 use crate::persistence::{self, PERSISTENT_CONFIG_FILE};
 use crate::server;
-use crate::ssh;
 use tokio::fs;
 use tracing::info;
 
@@ -27,7 +26,6 @@ pub async fn wait_for_config() -> Result<()> {
         PERSISTENT_CONFIG_FILE,
     );
     let config = server::http::run_initialization_server().await?;
-    ssh::write_keys(&config.ssh_keys).await?;
     persistence::write_persistent_config(&config).await?;
     info!("configuration received and written to disk");
     Ok(())

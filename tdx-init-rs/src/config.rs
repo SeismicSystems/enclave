@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitConfig {
-    pub ssh_keys: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<DomainConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -1,5 +1,4 @@
-use crate::error::{Result, TdxInitError};
-use nix::unistd::{Gid, Uid, chown};
+use crate::error::Result;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tokio::fs;
@@ -29,23 +28,9 @@ pub async fn create_dir_safe<P: AsRef<Path>>(path: P) -> bool {
             warn!(
                 "Warning: Could not create directory {:?}: {}",
                 path.as_ref(),
-                e
+                e,
             );
             false
         }
     }
-}
-
-pub async fn set_ownership<P: AsRef<Path>>(path: P, uid: u32, gid: u32) -> Result<()> {
-    chown(
-        path.as_ref(),
-        Some(Uid::from_raw(uid)),
-        Some(Gid::from_raw(gid)),
-    )
-    .map_err(|e| TdxInitError::CommandError {
-        cmd: format!("chown {}:{} {:?}", uid, gid, path.as_ref()),
-        stderr: e.to_string(),
-    })?;
-
-    Ok(())
 }

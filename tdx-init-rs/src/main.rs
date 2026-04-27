@@ -6,7 +6,6 @@ mod error;
 mod keys;
 mod persistence;
 mod server;
-mod ssh;
 mod utils;
 
 #[derive(Parser)]

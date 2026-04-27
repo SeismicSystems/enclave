@@ -23,10 +23,9 @@ Behavior:
   exits immediately.
 - **First boot**: starts an HTTP server on port 8080 and waits for the
   operator to POST an `InitConfig` JSON. On receipt: writes the config
-  to `/persistent/conf/node.json` (plus, transitionally, any SSH keys to
-  `authorized_keys` — see "transitional fields" below), exits.
+  to `/persistent/conf/node.json`, exits.
 
-The expected payload after follow-up cleanups land is:
+The expected payload after follow-up cleanup lands is:
 
 ```json
 {
@@ -39,13 +38,7 @@ The expected payload after follow-up cleanups land is:
 
 ### Transitional fields
 
-The current `InitConfig` schema also accepts `ssh_keys`, `args`, and
-`log` fields, all inherited from the prior version of this fork. They
-are slated for removal in follow-up commits:
-
-- `ssh_keys` — written to `/home/searcher/.ssh/authorized_keys`. The
-  seismic image has no `openssh-server` package and no `searcher`
-  user, so these keys are inert. Removal in next commit.
-- `args.{reth, summit, enclave}` and `log.{reth, summit, enclave}` —
-  no longer read by anything since the seismic-images service unit
-  files were inlined. Removal in commit after.
+The current `InitConfig` schema also accepts `args` and `log` fields,
+inherited from the prior version of this fork. They are no longer
+read by anything since seismic-images inlined service args directly
+into the systemd unit files; removal in the next commit.
