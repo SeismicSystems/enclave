@@ -3,6 +3,7 @@ pub mod upgrade_contract;
 pub mod utils;
 
 use anyhow::{Result, anyhow};
+#[cfg(target_os = "linux")]
 use az_tdx_vtpm::{hcl::HclReport, imds, tdx, vtpm};
 use coco_provider::{coco::CocoDeviceType, get_coco_provider};
 use dcap_rs::{types::quotes::version_4::QuoteV4, utils::quotes::version_4::verify_quote_dcapv4};
@@ -43,6 +44,12 @@ impl AttestationAgent {
         }
     }
 
+    // Only this function (and its `az_tdx_vtpm` import above) is gated on Linux
+    // — not the whole `attestation` module or `enclave-server` crate — so the
+    // rest of the codebase remains buildable / IDE-navigable on macOS. CI runs
+    // on Linux and exercises the gated body. See the matching `[target.'cfg(...)'.dependencies]`
+    // comment in Cargo.toml for why the dep itself is Linux-only.
+    #[cfg(target_os = "linux")]
     fn get_attestation_evidence_tpm(&self) -> Result<AttestationGetEvidenceResponse> {
         // todo this will be included in the quote, placeholding this for now we probably want our public key or a nonce here instead
         let report_data = [1u8; 32];
@@ -62,6 +69,13 @@ impl AttestationAgent {
             hcl_report: hcl_report_bytes,
             quote: signed_td_report_bytes,
         })
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn get_attestation_evidence_tpm(&self) -> Result<AttestationGetEvidenceResponse> {
+        Err(anyhow!(
+            "TPM attestation requires az-tdx-vtpm, which is only available on Linux"
+        ))
     }
 
     pub async fn verify_attestation_report(&self, quote: QuoteV4) -> Result<()> {
