@@ -75,10 +75,10 @@ async fn wait_for_and_persist_config() -> Result<()> {
 async fn write_persistent_config(config: &InitConfig) -> Result<()> {
     let path = Path::new(PERSISTENT_CONFIG_FILE);
 
-    if let Some(parent) = path.parent()
-        && let Err(e) = fs::create_dir_all(parent).await
-    {
-        warn!("could not create config directory {:?}: {}", parent, e);
+    if let Some(parent) = path.parent() {
+        if let Err(e) = fs::create_dir_all(parent).await {
+            warn!("could not create config directory {:?}: {}", parent, e);
+        }
     }
 
     let content = serde_json::to_string_pretty(config).map_err(TdxInitError::Json)?;

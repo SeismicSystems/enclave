@@ -1,0 +1,13 @@
+# Pinned to match the rustc version in the Debian Trixie snapshot used by
+# seismic-images' build container:
+#   https://snapshot.debian.org/archive/debian/20260301T083349Z/
+# `apt install rustc` against that snapshot resolves to 1.85.0 in trixie/main
+# (https://packages.debian.org/trixie/rustc), so dev rustc is pinned here to
+# match. Bump in lockstep with the seismic-images snapshot pin.
+#
+# rustup obeys this file automatically. Plain-Debian dev environments (no
+# rustup) ignore it but already have 1.85 from apt, so no harm done. The
+# seismic-images build container ignores it too — it gets 1.85 from its own
+# apt invocation against the same snapshot.
+[toolchain]
+channel = "1.85.0"
