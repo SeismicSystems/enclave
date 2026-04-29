@@ -29,11 +29,12 @@ pub struct Args {
     pub port: u16,
 
     /// Flag if this is the genesis node that needs to generate the keys
-    #[arg(long, default_value_t = false)]
+    #[arg(long, env = "SEISMIC_ENCLAVE_GENESIS_NODE", default_value_t = false)]
     pub genesis_node: bool,
 
-    /// List of peer ips to fetch root key from. Must be {ip}:{port}
-    #[arg(long)]
+    /// Comma-separated list of peer URLs to fetch root key from (e.g. `http://10.0.0.1:7878`).
+    /// Required when `genesis_node` is false.
+    #[arg(long, env = "SEISMIC_ENCLAVE_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
 
     /// path to unix socket used to communicate with Summit
