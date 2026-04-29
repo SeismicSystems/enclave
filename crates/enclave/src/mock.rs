@@ -59,27 +59,4 @@ impl TdxQuoteRpcServer for MockServer {
             root_key: *get_unsecure_sample_secp256k1_sk().as_ref(),
         })
     }
-
-    async fn download_encrypted_snapshot(&self, _epoch: u64, _url: String) -> RpcResult<()> {
-        unimplemented!("prepare_encrypted_snapshot is not implemented for mock server")
-    }
-
-    async fn restore_from_encrypted_snapshot(&self, _epoch: u64) -> RpcResult<()> {
-        unimplemented!("restore_encrypted_snapshot is not implemented for mock server")
-    }
-
-    /// Get an encrypted snapshot from this servers database
-    async fn get_encrypted_snapshot(&self, _epoch: u64) -> RpcResult<Vec<u8>> {
-        unimplemented!("get_encrypted_snapshot is not implemented for mock server")
-    }
-
-    /// List all encrypted snapshots stored in this enclave
-    async fn list_all_encrypted_snapshots(&self) -> RpcResult<Vec<u64>> {
-        unimplemented!("list_all_encrypted_snapshot is not implemented for mock server")
-    }
-
-    /// List all encrypted snapshots stored in this enclave
-    async fn list_latest_encrypted_snapshots(&self) -> RpcResult<u64> {
-        unimplemented!("list_latest_encrypted_snapshot is not implemented for mock server")
-    }
 }
