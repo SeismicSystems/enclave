@@ -4462,8 +4462,6 @@ dependencies = [
  "alloy",
  "anyhow",
  "az-tdx-vtpm",
- "base64-url",
- "bincode",
  "chrono",
  "clap",
  "coco-provider",
