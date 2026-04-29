@@ -208,8 +208,24 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     let attestation_agent = AttestationAgent::new().unwrap();
 
     let key_manager = if args.genesis_node {
+        info!("Starting as genesis node; generating fresh network root key");
         KeyManager::new_as_genesis()?
     } else {
+        if args.peers.is_empty() {
+            anyhow::bail!(
+                "Non-genesis enclave started with no peers. Either:\n  \
+                 - set SEISMIC_ENCLAVE_PEERS to a comma-separated list of \
+                 peer enclave URLs (e.g. http://10.0.0.1:7878) to fetch \
+                 the root_key from an existing peer, OR\n  \
+                 - set SEISMIC_ENCLAVE_GENESIS_NODE=true to bootstrap a new \
+                 chain (set this on exactly one node in the deployment; \
+                 setting it on multiple nodes causes a silent network split)."
+            );
+        }
+        info!(
+            "Starting as peer node; fetching root key from {} peer(s)",
+            args.peers.len()
+        );
         fetch_root_key_from_peers(args.peers, &attestation_agent).await
     };
 
@@ -233,12 +249,6 @@ pub async fn fetch_root_key_from_peers(
     peers: Vec<String>,
     attestation_agent: &AttestationAgent,
 ) -> KeyManager {
-    // let peers: Vec<SocketAddr> = peers.iter().filter_map(|p| p.parse().ok()).collect();
-
-    if peers.is_empty() {
-        panic!("Started in non-genesis with no valid peers");
-    }
-
     info!("Starting root key fetching from peers");
     loop {
         let evidence = attestation_agent
