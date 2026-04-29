@@ -1,14 +1,10 @@
 mod attestation;
 mod key_manager;
 mod server;
-mod snapshot;
-mod summit;
 pub mod utils;
 
 const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
-const DEFAULT_RETH_RPC: &str = "127.0.0.1:8545";
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
-const DEFAULT_ENCLAVE_SUMMIT_SOCKET: &str = "/tmp/reth_enclave_socket.ipc";
 
 use anyhow::Result;
 use clap::Parser;
@@ -20,7 +16,7 @@ use tracing::info;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// The ip to bind the server to
+    /// The ip to bind the JSON-RPC server to.
     #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_IP.to_string())]
     pub ip: String,
 
@@ -37,13 +33,21 @@ pub struct Args {
     #[arg(long, env = "SEISMIC_ENCLAVE_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
 
-    /// path to unix socket used to communicate with Summit
-    #[arg(long, default_value_t = DEFAULT_ENCLAVE_SUMMIT_SOCKET.to_string())]
-    pub summit_socket: String,
-
-    #[arg(long, default_value_t =DEFAULT_RETH_RPC.to_string())]
-    pub reth_rpc_url: String,
-
+    /// Run the dev-only mock server instead of the real enclave.
+    ///
+    /// When set, `Args::start` dispatches to
+    /// `seismic_enclave::mock::start_mock_server` (in
+    /// `crates/enclave/src/mock.rs`) which serves the same JSON-RPC
+    /// surface but returns hardcoded test keys
+    /// (`311d54d3bf8359c70827122a44a7b4458733adce3c51c6b59d9acfce85e07505`
+    /// for tx_io_sk, zero-bytes for snapshot_key, etc.). Skips
+    /// attestation and peer fetch. Used by `sanvil` / `sreth` local
+    /// dev where TDX isn't available and clients know the dev pubkeys.
+    ///
+    /// **Never set this flag in a TDX deployment** — it disables every
+    /// confidentiality property the chain depends on (anyone can
+    /// decrypt any TxSeismic calldata, snapshots are unencrypted, RNG
+    /// is predictable).
     #[arg(long, default_value_t = false)]
     pub mock: bool,
 }

@@ -7,8 +7,6 @@ pub fn get_args(n: u16, genesis_node: bool, peers: Vec<String>) -> Args {
         port,
         genesis_node,
         peers,
-        summit_socket: "/tmp/reth_enclave_socket.ipc".to_string(),
-        reth_rpc_url: "0.0.0.0:8545".to_string(),
         mock: false,
     }
 }

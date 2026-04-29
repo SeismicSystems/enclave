@@ -1,10 +1,5 @@
-use crate::snapshot::{DATA_DISK_DIR, SNAPSHOT_FILE_PREFIX, restore_from_encrypted_snapshot};
 use crate::{
-    Args,
-    attestation::AttestationAgent,
-    key_manager::KeyManager,
-    summit::run_summit_socket,
-    utils::{anyhow_to_rpc_error, string_to_rpc_error},
+    Args, attestation::AttestationAgent, key_manager::KeyManager, utils::anyhow_to_rpc_error,
 };
 use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
@@ -16,10 +11,7 @@ use seismic_enclave::{
     AttestationGetEvidenceResponse, GetPurposeKeysResponse, ShareRootKeyResponse,
     TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
-use std::fs;
-use std::path::Path;
 use std::{net::SocketAddr, time::Duration};
-use tokio::io::AsyncWriteExt as _;
 use tracing::{info, warn};
 
 pub struct TdxQuoteServer {
@@ -87,121 +79,6 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
         let root_key = self.key_manager.get_root_key();
         Ok(ShareRootKeyResponse { root_key })
     }
-
-    /// Prepares an encrypted snapshot
-    async fn download_encrypted_snapshot(&self, epoch: u64, url: String) -> RpcResult<()> {
-        // Download the file
-        let response = reqwest::get(&url)
-            .await
-            .map_err(|e| string_to_rpc_error(format!("Failed to download snapshot: {}", e)))?;
-
-        if !response.status().is_success() {
-            return Err(string_to_rpc_error(format!(
-                "HTTP error: {}",
-                response.status()
-            )));
-        }
-
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| string_to_rpc_error(format!("Failed to read response body: {}", e)))?;
-
-        // Create the filename
-        let filename = format!("{SNAPSHOT_FILE_PREFIX}-{epoch}.tar.lz4.enc");
-
-        // Write to file
-        let mut file = tokio::fs::File::create(format!("{DATA_DISK_DIR}/{filename}"))
-            .await
-            .map_err(|e| {
-                string_to_rpc_error(format!("Failed to create file {}: {}", filename, e))
-            })?;
-
-        file.write_all(&bytes).await.map_err(|e| {
-            string_to_rpc_error(format!("Failed to write to file {}: {}", filename, e))
-        })?;
-
-        Ok(())
-    }
-
-    /// Restores from an encrypted snapshot
-    async fn restore_from_encrypted_snapshot(&self, epoch: u64) -> RpcResult<()> {
-        restore_from_encrypted_snapshot(
-            &self.key_manager,
-            epoch,
-            format!("{DATA_DISK_DIR}/{epoch}-snapshot.tar.lz4.enc"),
-        )
-        .await
-        .map_err(|e| string_to_rpc_error(format!("Failed to restore from checkpoint: {e}")))
-    }
-
-    /// Get an encrypted snapshot from this servers database
-    async fn get_encrypted_snapshot(&self, epoch: u64) -> RpcResult<Vec<u8>> {
-        let snapshot_path = format!(
-            "{}/{}-{}.tar.lz4.enc",
-            DATA_DISK_DIR, SNAPSHOT_FILE_PREFIX, epoch
-        );
-
-        if !fs::exists(&snapshot_path).unwrap_or_default() {
-            return Err(string_to_rpc_error(format!(
-                "No snapshot for epoch {epoch} stored"
-            )));
-        }
-
-        fs::read(snapshot_path).map_err(|e| {
-            string_to_rpc_error(format!(
-                "Failed to read snapshot for epoch {}: {}",
-                epoch, e
-            ))
-        })
-    }
-
-    /// List all encrypted snapshots stored in this enclave
-    async fn list_all_encrypted_snapshots(&self) -> RpcResult<Vec<u64>> {
-        let dir_path = Path::new(DATA_DISK_DIR);
-
-        let entries = fs::read_dir(dir_path).map_err(|e| {
-            string_to_rpc_error(format!("Failed to read snapshots directory: {}", e))
-        })?;
-
-        let mut epochs = Vec::new();
-        let prefix = format!("{}-", SNAPSHOT_FILE_PREFIX);
-        let suffix = ".tar.lz4.enc";
-
-        for entry in entries {
-            let entry = entry.map_err(|e| {
-                string_to_rpc_error(format!("Failed to read directory entry: {}", e))
-            })?;
-
-            if let Some(filename) = entry.file_name().to_str() {
-                if filename.starts_with(&prefix) && filename.ends_with(suffix) {
-                    // Extract epoch from filename
-                    let epoch_str = filename
-                        .strip_prefix(&prefix)
-                        .and_then(|s| s.strip_suffix(suffix));
-
-                    if let Some(epoch_str) = epoch_str {
-                        if let Ok(epoch) = epoch_str.parse::<u64>() {
-                            epochs.push(epoch);
-                        }
-                    }
-                }
-            }
-        }
-
-        epochs.sort_unstable();
-        Ok(epochs)
-    }
-
-    /// List all encrypted snapshots stored in this enclave
-    async fn list_latest_encrypted_snapshots(&self) -> RpcResult<u64> {
-        let all_snapshots = self.list_all_encrypted_snapshots().await?;
-
-        all_snapshots
-            .into_iter()
-            .max()
-            .ok_or_else(|| string_to_rpc_error("No snapshots found".to_string()))
-    }
 }
 
 pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
@@ -229,8 +106,6 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
         fetch_root_key_from_peers(args.peers, &attestation_agent).await
     };
 
-    let summit_handle = tokio::spawn(run_summit_socket(args.summit_socket, key_manager.clone()));
-
     let server = ServerBuilder::default().build(addr).await?;
 
     let handle = server.start(TdxQuoteServer::new(attestation_agent, key_manager).into_rpc());
@@ -238,9 +113,6 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     info!("TDX Quote JSON-RPC Server started at {}", addr);
 
     handle.stopped().await;
-
-    // server stopped abort the summit socket
-    summit_handle.abort();
 
     Ok(())
 }
