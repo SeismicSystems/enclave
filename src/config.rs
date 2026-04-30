@@ -1,193 +1,122 @@
 use serde::{Deserialize, Serialize};
 
+/// Operator-supplied initialization config, received over HTTP at deploy
+/// time and fanned out by tdx-init into per-component env files under
+/// `/persistent/conf/`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InitConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub domain: Option<DomainConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub args: Option<ArgsConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub log: Option<LogConfig>,
+    pub domain: DomainConfig,
+    #[serde(default)]
+    pub enclave: EnclaveConfig,
 }
 
+/// DNS name + contact email for the Let's Encrypt cert that fronts this
+/// node's public RPC. Written by the writer module to
+/// `/persistent/conf/domain.env` as `DOMAIN_NAME=...` /
+/// `DOMAIN_EMAIL=...`, which `setup-nginx-ssl` (seismic-images) sources
+/// before invoking certbot for cert issuance and renewal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DomainConfig {
     pub email: String,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArgsConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enclave: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reth: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summit: Option<String>,
+/// Bootstrap config for the enclave server. Fields get converted to env vars,
+/// and written to `/persistent/conf/enclave.env` which `enclave.service`
+/// (in seismic-images) loads via `EnvironmentFile=`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnclaveConfig {
+    /// True iff this node is the network's genesis enclave — the one that
+    /// generates `root_key` locally with OsRng. Every other node must
+    /// leave this `false` (the default) and fetch from peers. Setting
+    /// it on multiple nodes causes a silent network split (each generates
+    /// a different `root_key`; downstream nodes that fetch from one
+    /// can't decrypt state from the other).
+    #[serde(default)]
+    pub genesis_node: bool,
+
+    /// Peer enclave URLs (e.g. `http://10.0.0.1:7878`). When
+    /// `genesis_node` is false, the enclave fetches `root_key` from one
+    /// of these peers via the `boot_share_root_key` RPC. Required for
+    /// non-genesis nodes; the enclave fails fast at startup if this
+    /// list is empty and `genesis_node` is false.
+    #[serde(default)]
+    pub peers: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LogConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summit: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reth: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enclave: Option<String>,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// Default arguments structured as individual components
-#[derive(Debug, Clone)]
-pub struct DefaultArgs {
-    pub seismic_reth: RethDefaultArgs,
-    pub summit: SummitDefaultArgs,
-    pub enclave: EnclaveDefaultArgs,
-}
+    #[test]
+    fn parses_full_toml_payload() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
 
-#[derive(Debug, Clone)]
-pub struct RethDefaultArgs {
-    pub node_args: Vec<&'static str>,
-    pub enclave_args: Vec<&'static str>,
-    pub chain_args: Vec<&'static str>,
-    pub datadir_args: Vec<&'static str>,
-    pub http_args: Vec<&'static str>,
-    pub ws_args: Vec<&'static str>,
-    pub auth_args: Vec<&'static str>,
-    pub log_args: Vec<&'static str>,
-    pub metrics_args: Vec<&'static str>,
-}
-
-#[derive(Debug, Clone)]
-pub struct SummitDefaultArgs {
-    pub engine_args: Vec<&'static str>,
-    pub genesis_args: Vec<&'static str>,
-    pub store_args: Vec<&'static str>,
-    pub key_args: Vec<&'static str>,
-    pub port_args: Vec<&'static str>,
-    pub log_args: Vec<&'static str>,
-    pub db_args: Vec<&'static str>,
-}
-
-#[derive(Debug, Clone)]
-pub struct EnclaveDefaultArgs {
-    pub endpoint_args: Vec<&'static str>,
-}
-
-impl DefaultArgs {
-    pub fn new() -> Self {
-        Self {
-            seismic_reth: RethDefaultArgs {
-                node_args: vec!["node", "-vvv"],
-                enclave_args: vec![
-                    "--enclave.endpoint-addr",
-                    "0.0.0.0",
-                    "--enclave.endpoint-port",
-                    "7878",
-                ],
-                chain_args: vec!["--chain", "/usr/share/seismic-reth/genesis.json", "--full"],
-                datadir_args: vec!["--datadir", "/persistent/reth"],
-                http_args: vec![
-                    "--http",
-                    "--http.addr",
-                    "0.0.0.0",
-                    "--http.port",
-                    "8545",
-                    "--http.api",
-                    "eth,net,web3,trace,rpc,debug,txpool",
-                ],
-                ws_args: vec![
-                    "--ws",
-                    "--ws.addr",
-                    "0.0.0.0",
-                    "--ws.port",
-                    "8546",
-                    "--ws.api",
-                    "eth,net,trace,web3,rpc,debug,txpool",
-                ],
-                auth_args: vec![
-                    "--auth-ipc",
-                    "--auth-ipc.path",
-                    "/var/volatile/reth_engine_api.ipc",
-                ],
-                log_args: vec!["--log.stdout.format", "json", "--log.file.max-files", "0"],
-                metrics_args: vec!["--metrics", "127.0.0.1:9001"],
-            },
-            summit: SummitDefaultArgs {
-                engine_args: vec![
-                    "run",
-                    "--engine-ipc-path",
-                    "/var/volatile/reth_engine_api.ipc",
-                ],
-                genesis_args: vec!["--genesis-path", "/persistent/summit/genesis.toml"],
-                store_args: vec!["--store-path", "/persistent/summit/db"],
-                key_args: vec!["--key-store-path", "/persistent/summit/keys"],
-                port_args: vec![
-                    "--port",
-                    "18551",
-                    "--rpc-port",
-                    "3030",
-                    "--prom-port",
-                    "9090",
-                ],
-                log_args: vec![],
-                db_args: vec!["--db-prefix", "quarts"],
-            },
-            enclave: EnclaveDefaultArgs {
-                endpoint_args: vec!["--ip", "0.0.0.0", "--port", "7878"],
-            },
-        }
+[enclave]
+genesis_node = true
+peers = ["http://10.0.0.1:7878", "http://10.0.0.2:7878"]
+"#;
+        let cfg: InitConfig = toml::from_str(toml_input).unwrap();
+        assert_eq!(cfg.domain.name, "node1.example.com");
+        assert_eq!(cfg.domain.email, "ops@example.com");
+        assert!(cfg.enclave.genesis_node);
+        assert_eq!(cfg.enclave.peers.len(), 2);
     }
 
-    pub fn get_all_reth_flags(&self) -> Vec<&'static str> {
-        let mut flags = Vec::new();
-        flags.extend(&self.seismic_reth.node_args);
-        flags.extend(&self.seismic_reth.enclave_args);
-        flags.extend(&self.seismic_reth.chain_args);
-        flags.extend(&self.seismic_reth.datadir_args);
-        flags.extend(&self.seismic_reth.http_args);
-        flags.extend(&self.seismic_reth.ws_args);
-        flags.extend(&self.seismic_reth.auth_args);
-        flags.extend(&self.seismic_reth.log_args);
-        flags.extend(&self.seismic_reth.metrics_args);
-        flags
+    #[test]
+    fn enclave_section_is_optional_with_defaults() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+"#;
+        let cfg: InitConfig = toml::from_str(toml_input).unwrap();
+        assert!(!cfg.enclave.genesis_node);
+        assert!(cfg.enclave.peers.is_empty());
     }
 
-    pub fn get_all_summit_flags(&self) -> Vec<&'static str> {
-        let mut flags = Vec::new();
-        flags.extend(&self.summit.engine_args);
-        flags.extend(&self.summit.genesis_args);
-        flags.extend(&self.summit.store_args);
-        flags.extend(&self.summit.key_args);
-        flags.extend(&self.summit.port_args);
-        flags.extend(&self.summit.log_args);
-        flags.extend(&self.summit.db_args);
-        flags
+    #[test]
+    fn rejects_unknown_top_level_section() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+
+[bogus]
+field = "value"
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("unknown"));
     }
 
-    pub fn get_reth_flag_names(&self) -> Vec<&'static str> {
-        self.get_all_reth_flags()
-            .into_iter()
-            .filter(|arg| arg.starts_with("--"))
-            .collect()
+    #[test]
+    fn rejects_unknown_field_in_enclave_section() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+
+[enclave]
+genesis_node = false
+log_level = "trace"
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("unknown"));
     }
 
-    pub fn get_summit_flag_names(&self) -> Vec<&'static str> {
-        self.get_all_summit_flags()
-            .into_iter()
-            .filter(|arg| arg.starts_with("--"))
-            .collect()
-    }
-
-    pub fn get_all_enclave_flags(&self) -> Vec<&'static str> {
-        let mut flags = Vec::new();
-        flags.extend(&self.enclave.endpoint_args);
-        flags
-    }
-
-    pub fn get_enclave_flag_names(&self) -> Vec<&'static str> {
-        self.get_all_enclave_flags()
-            .into_iter()
-            .filter(|arg| arg.starts_with("--"))
-            .collect()
+    #[test]
+    fn requires_domain_section() {
+        let toml_input = r#"
+[enclave]
+genesis_node = true
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().contains("domain"));
     }
 }

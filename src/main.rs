@@ -1,22 +1,19 @@
 use clap::{Parser, Subcommand};
-use config::InitConfig;
-use error::{Result, TdxInitError};
-use std::os::unix::fs::PermissionsExt;
+use error::Result;
 use std::path::Path;
 use tokio::fs;
-use tracing::{info, warn};
+use tracing::info;
 
 mod config;
 mod error;
 mod server;
+mod writer;
 
-const PERSISTENT_CONFIG_FILE: &str = "/persistent/conf/node.json";
-// TODO: ownership and permissions on this file should be a seismic-images
-// concern (User= + ExecStartPre/Post in tdx-init.service), not baked into
-// the binary. Today tdx-init runs as root and we explicitly chmod to 0o644;
-// the cleaner shape is to run tdx-init as a tdx-init:eth system user, let
-// the default umask produce 0o644, and stop setting mode here.
-const PERSISTENT_CONFIG_MODE: u32 = 0o644;
+const CONF_DIR: &str = "/persistent/conf";
+/// Sentinel marking that the per-service config write completed.
+/// On reboot, presence of this file short-circuits the HTTP server so
+/// we don't re-listen for config that's already been delivered.
+const SENTINEL_FILE: &str = "/persistent/conf/.tdx-init-done";
 
 #[derive(Parser)]
 struct Args {
@@ -26,8 +23,9 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Wait for an InitConfig POST and write it to [PERSISTENT_CONFIG_FILE].
-    /// Exits immediately if the config file already exists (subsequent boots).
+    /// Wait for an InitConfig POST and translate it into per-service env
+    /// files under [CONF_DIR]. Exits immediately on subsequent boots
+    /// (sentinel file present).
     WaitForConfig,
 }
 
@@ -42,50 +40,32 @@ async fn main() -> Result<()> {
     }
 }
 
-/// Wait for an InitConfig to be POSTed by the operator, then write it to
-/// [PERSISTENT_CONFIG_FILE]. Idempotent across reboots: if the config
-/// file already exists, exits immediately.
+/// Wait for an InitConfig (TOML) to be POSTed by the operator, then fan
+/// out per-component env files under [CONF_DIR]. Idempotent across
+/// reboots: if the sentinel exists, exits immediately.
 ///
 /// LUKS provisioning is no longer this binary's responsibility — see
 /// seismic-images' `setup-persistent-luks` script + the
 /// `persistent-luks-setup.service` unit, which run before this service
 /// and ensure /persistent is already mounted by the time we get here.
 async fn wait_for_and_persist_config() -> Result<()> {
-    if fs::try_exists(PERSISTENT_CONFIG_FILE).await? {
+    if fs::try_exists(SENTINEL_FILE).await? {
         info!(
-            "config already present at {}; nothing to do",
-            PERSISTENT_CONFIG_FILE,
+            "config already delivered (sentinel {} present); nothing to do",
+            SENTINEL_FILE,
         );
         return Ok(());
     }
 
     info!(
-        "no config at {}; starting HTTP server on port 8080",
-        PERSISTENT_CONFIG_FILE,
+        "no sentinel at {}; starting HTTP server on port 8080",
+        SENTINEL_FILE,
     );
     let config = server::run_initialization_server().await?;
-    write_persistent_config(&config).await?;
-    info!("configuration received and written to disk");
-    Ok(())
-}
 
-/// Write the operator-supplied InitConfig to [PERSISTENT_CONFIG_FILE].
-/// Caller must ensure /persistent is mounted first (handled by the
-/// `persistent-luks-setup.service` ordering in seismic-images).
-async fn write_persistent_config(config: &InitConfig) -> Result<()> {
-    let path = Path::new(PERSISTENT_CONFIG_FILE);
-
-    if let Some(parent) = path.parent() {
-        if let Err(e) = fs::create_dir_all(parent).await {
-            warn!("could not create config directory {:?}: {}", parent, e);
-        }
-    }
-
-    let content = serde_json::to_string_pretty(config).map_err(TdxInitError::Json)?;
-    fs::write(path, &content).await?;
-    let mut perms = fs::metadata(path).await?.permissions();
-    perms.set_mode(PERSISTENT_CONFIG_MODE);
-    fs::set_permissions(path, perms).await?;
-    info!("config written to {}", PERSISTENT_CONFIG_FILE);
+    let conf_dir = Path::new(CONF_DIR);
+    writer::write_service_configs(conf_dir, &config).await?;
+    fs::write(SENTINEL_FILE, b"").await?;
+    info!("configuration received and written under {}", CONF_DIR);
     Ok(())
 }
