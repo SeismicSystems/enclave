@@ -55,14 +55,12 @@ the schema translator.
 
 ## Security
 
-The HTTP listener on port 8080 is **unauthenticated and
-first-POST-wins**. An attacker who reaches that port ahead of the
-operator can write malicious config — most damagingly, attacker-
-controlled enclave peers, which causes the enclave to fetch `root_key`
-from an attacker-controlled endpoint at startup (the
-`boot_share_root_key` flow doesn't verify the responder's TDX quote).
-Today the only defense is cloud-firewall ACLs restricting :8080 to the
-operator's IP. Tracked as a TODO in `src/server.rs` with three fix
-candidates (RA-TLS on the listener, cloud-metadata-pull instead of an
-inbound port, or signed payloads with an image-baked verifier
-pubkey).
+The HTTP listener on port 8080 is **unauthenticated and first-POST-wins**.
+An attacker reaching :8080 ahead of the operator can post a malicious config.
+
+Until the listener moves to a pull-based design (see TODO in `src/server.rs`):
+
+- **Firewall ACL** restricting :8080 to the operator's /32, opened just
+  before the deploy and closed after the POST returns. A `200 OK` confirms
+  your config was accepted; `409 Conflict` or connection-refused means
+  someone else won the race — tear down and redeploy.

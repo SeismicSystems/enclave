@@ -27,14 +27,17 @@ pub async fn run_initialization_server() -> Result<InitConfig> {
         .route("/", post(handle_config))
         .with_state(state);
 
-    // TODO: this listener is unauthenticated and first-POST-wins. An
-    // attacker reaching :8080 ahead of the operator can write malicious
-    // config (e.g., attacker-controlled enclave peers → `root_key`
-    // exfiltration during bootstrap). Today's only defense is cloud-
-    // firewall ACLs restricting :8080 to the operator's IP. Fix candidates:
-    // - RA-TLS (operator verifies TDX quote in cert before posting)
-    // - cloud-metadata-pull (no inbound port; operator posts to cloud metadata service using cloud CLI)
-    // - signed payloads with image-baked verifier pubkey
+    // This listener is unauthenticated and first-POST-wins. An attacker reaching :8080
+    // before the operator can post a malicious config. Make sure to:
+    // 1. Only open the port to the operator IP (eg. via firewall ACL).
+    // 2. Tear down and redeploy if the POST doesn't return 200 OK
+    //    (409 Conflict or connection-refused = someone else won the race).
+    //
+    // TODO(samlaf): move to a pull-based design to remove the inbound port. Either:
+    // 1. Enclave fetches from cloud metadata (eg. UserData in Azure IMDS) - trusts cloud
+    // 2. Pull from operator-run service that (whose url/domain would be whitelisted in the TDX image).
+    //    This model has the advantage of also being able to have the vault remote attest the TDX
+    //    before uploading a config/secret. See https://github.com/flashbots/vault-auth-plugin-attest
     let listener = TcpListener::bind(format!("0.0.0.0:{}", HTTP_PORT)).await?;
     info!("HTTP server listening on port {}", HTTP_PORT);
 
@@ -55,13 +58,19 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
     let config: InitConfig = toml::from_str(&body)?;
 
     let mut sender_guard = state.config_sender.lock().await;
-    if let Some(sender) = sender_guard.take() {
-        let _ = sender.send(config);
+    match sender_guard.take() {
+        Some(sender) => {
+            let _ = sender.send(config);
+            Ok((
+                StatusCode::OK,
+                "Configuration received and stored successfully".to_string(),
+            )
+                .into_response())
+        }
+        None => Ok((
+            StatusCode::CONFLICT,
+            "Configuration already received from another caller".to_string(),
+        )
+            .into_response()),
     }
-
-    Ok((
-        StatusCode::OK,
-        "Configuration received and stored successfully".to_string(),
-    )
-        .into_response())
 }
