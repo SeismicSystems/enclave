@@ -92,12 +92,11 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
             // Non-destructive: if a key file exists, use it regardless of
             // --genesis-node. Closes the "operator forgot to unset
             // --genesis-node between reboots" footgun.
-            info!(
-                "Loaded persisted root_key from {}",
-                args.data_dir.display()
-            );
+            info!("Loaded persisted root_key from {}", args.data_dir.display());
             if args.genesis_node {
-                warn!("--genesis-node set but a persisted root_key already exists; ignoring the flag");
+                warn!(
+                    "--genesis-node set but a persisted root_key already exists; ignoring the flag"
+                );
             }
             KeyManager::new(bytes)
         }
