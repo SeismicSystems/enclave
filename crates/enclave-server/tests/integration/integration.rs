@@ -16,8 +16,13 @@ async fn test_boot_share_root_key() {
         panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
     }
 
+    // Each enclave needs its own data_dir for root_key persistence.
+    // Tempdirs must outlive the spawned tasks; bind them in the test scope.
+    let data_dir1 = tempfile::tempdir().unwrap();
+    let data_dir2 = tempfile::tempdir().unwrap();
+
     // Start first enclave as genesis node
-    let args1 = get_args(0, true, Default::default());
+    let args1 = get_args(0, true, Default::default(), data_dir1.path().to_path_buf());
     let enclave_one_url = format!("http://localhost:{}", args1.port);
     let node1_handle = tokio::spawn(args1.start());
 
@@ -25,7 +30,12 @@ async fn test_boot_share_root_key() {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // start second enclave with node1 as his peer
-    let args2 = get_args(1, false, vec![enclave_one_url.clone()]);
+    let args2 = get_args(
+        1,
+        false,
+        vec![enclave_one_url.clone()],
+        data_dir2.path().to_path_buf(),
+    );
     let enclave_two_url = format!("http://localhost:{}", args2.port);
     let node2_handle = tokio::spawn(args2.start());
     // sleep some time to allow them to share keys

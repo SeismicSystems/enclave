@@ -5,11 +5,12 @@ pub mod utils;
 
 const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
 pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
+const ENCLAVE_DEFAULT_DATA_DIR: &str = "/var/lib/enclave";
 
 use anyhow::Result;
 use clap::Parser;
 use seismic_enclave::mock::start_mock_server;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
 
 /// Command line arguments for the enclave server
@@ -32,6 +33,19 @@ pub struct Args {
     /// Required when `genesis_node` is false.
     #[arg(long, env = "SEISMIC_ENCLAVE_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
+
+    /// Directory for service-managed persistent state (currently just `root_key`).
+    ///
+    /// FHS-shaped default (`/var/lib/enclave`); production routes this onto a
+    /// LUKS-encrypted mount via a `BindPaths=` entry in the systemd unit so the
+    /// binary stays unaware of the underlying storage layout. Tests inject a
+    /// `tempfile::tempdir()`; local dev can point at any writable path.
+    #[arg(
+        long,
+        env = "SEISMIC_ENCLAVE_DATA_DIR",
+        default_value = ENCLAVE_DEFAULT_DATA_DIR,
+    )]
+    pub data_dir: PathBuf,
 
     /// Run the dev-only mock server instead of the real enclave.
     ///
