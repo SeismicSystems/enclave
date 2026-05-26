@@ -24,7 +24,7 @@ aes-gcm = "0.10"
 anyhow = "1.0"
 az-tdx-vtpm = "0.7.4"
 bincode = "1.3.3"
-clap = { version = "4.5.51", features = ["derive", "env"] }
+clap = { version = "4.5.60", features = ["derive", "env"] }
 dcap-rs = "0.1.0"
 #auto_impl = "1"
 #base64 = "0.22"
