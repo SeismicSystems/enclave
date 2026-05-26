@@ -23,7 +23,6 @@ enclave-contract.workspace = true
 
 alloy.workspace = true
 openssl.workspace = true
-coco-provider.workspace = true
 chrono = "0.4.40"
 hex.workspace = true
 hkdf.workspace = true
