@@ -5,7 +5,6 @@ pub mod utils;
 use anyhow::{Result, anyhow};
 #[cfg(target_os = "linux")]
 use az_tdx_vtpm::{hcl::HclReport, imds, tdx, vtpm};
-use coco_provider::{coco::CocoDeviceType, get_coco_provider};
 use dcap_rs::{types::quotes::version_4::QuoteV4, utils::quotes::version_4::verify_quote_dcapv4};
 use seismic_enclave::AttestationGetEvidenceResponse;
 
@@ -23,25 +22,23 @@ pub enum CA {
 }
 
 pub struct AttestationAgent {
-    provider: CocoDeviceType,
     pccs: IntelPccs,
 }
 
+// Currently Azure-only. The vTPM-via-IMDS path is the canonical surface on Azure CVMs
+// (paravisor-mediated TDX; /dev/tdx_guest is not exposed to the guest).
+// TODO(samlaf): For GCP support — fully-enlightened TDX with /dev/tdx_guest
+// or /sys/kernel/config/tsm/report. We'll need a cloud-detect step (IMDS probe) and
+// a second `get_attestation_evidence_gcp()` arm.
 impl AttestationAgent {
     pub fn new() -> Result<Self> {
-        let provider = get_coco_provider()?;
         Ok(Self {
-            provider: provider.device_type,
             pccs: IntelPccs::new(),
         })
     }
 
     pub fn get_attestation_evidence(&self) -> Result<AttestationGetEvidenceResponse> {
-        match self.provider {
-            // Azure and other TDX cloud providers use TPM
-            CocoDeviceType::Tpm => self.get_attestation_evidence_tpm(),
-            _ => self.get_attestation_evidence_tpm(), // todo: For some reason on Azure Ubuntu CVM it is going to Mock device type even when the tpm is available
-        }
+        self.get_attestation_evidence_tpm()
     }
 
     // Only this function (and its `az_tdx_vtpm` import above) is gated on Linux

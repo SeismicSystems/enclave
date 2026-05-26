@@ -54,5 +54,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["e
 #syn = "2.0"
 urlencoding = "2.1"
 zeroize = "1.8.1"
-coco-provider =  { git = "https://github.com/automata-network/coco-provider-sdk", default-features = false}
 x509-parser = "0.15.1"
