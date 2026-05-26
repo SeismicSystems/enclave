@@ -1,5 +1,8 @@
 use crate::{
-    Args, attestation::AttestationAgent, key_manager::KeyManager, utils::anyhow_to_rpc_error,
+    Args,
+    attestation::AttestationAgent,
+    key_manager::{KeyManager, persistence},
+    utils::anyhow_to_rpc_error,
 };
 use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
@@ -84,26 +87,46 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
 pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     let attestation_agent = AttestationAgent::new().unwrap();
 
-    let key_manager = if args.genesis_node {
-        info!("Starting as genesis node; generating fresh network root key");
-        KeyManager::new_as_genesis()?
-    } else {
-        if args.peers.is_empty() {
-            anyhow::bail!(
-                "Non-genesis enclave started with no peers. Either:\n  \
-                 - set SEISMIC_ENCLAVE_PEERS to a comma-separated list of \
-                 peer enclave URLs (e.g. http://10.0.0.1:7878) to fetch \
-                 the root_key from an existing peer, OR\n  \
-                 - set SEISMIC_ENCLAVE_GENESIS_NODE=true to bootstrap a new \
-                 chain (set this on exactly one node in the deployment; \
-                 setting it on multiple nodes causes a silent network split)."
+    let key_manager = match persistence::read_root_key(&args.data_dir)? {
+        Some(bytes) => {
+            // Non-destructive: if a key file exists, use it regardless of
+            // --genesis-node. Closes the "operator forgot to unset
+            // --genesis-node between reboots" footgun.
+            info!(
+                "Loaded persisted root_key from {}",
+                args.data_dir.display()
             );
+            if args.genesis_node {
+                warn!("--genesis-node set but a persisted root_key already exists; ignoring the flag");
+            }
+            KeyManager::new(bytes)
         }
-        info!(
-            "Starting as peer node; fetching root key from {} peer(s)",
-            args.peers.len()
-        );
-        fetch_root_key_from_peers(args.peers, &attestation_agent).await
+        None => {
+            let km = if args.genesis_node {
+                info!("No persisted root_key; generating a fresh network root key as genesis node");
+                KeyManager::new_as_genesis()?
+            } else {
+                if args.peers.is_empty() {
+                    anyhow::bail!(
+                        "Non-genesis enclave started with no persisted root_key and no peers. Either:\n  \
+                         - set SEISMIC_ENCLAVE_PEERS to a comma-separated list of \
+                         peer enclave URLs (e.g. http://10.0.0.1:7878) to fetch \
+                         the root_key from an existing peer, OR\n  \
+                         - set SEISMIC_ENCLAVE_GENESIS_NODE=true to bootstrap a new \
+                         chain (set this on exactly one node in the deployment; \
+                         setting it on multiple nodes causes a silent network split)."
+                    );
+                }
+                info!(
+                    "No persisted root_key; fetching from {} peer(s)",
+                    args.peers.len()
+                );
+                fetch_root_key_from_peers(args.peers, &attestation_agent).await
+            };
+            persistence::write_root_key(&args.data_dir, &km.get_root_key())?;
+            info!("Persisted root_key under {}", args.data_dir.display());
+            km
+        }
     };
 
     let server = ServerBuilder::default().build(addr).await?;
