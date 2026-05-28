@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Operator-supplied initialization config, received over HTTP at deploy
 /// time and fanned out by tdx-init into per-component env files under
-/// `/persistent/conf/`.
+/// [`crate::CONF_DIR`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InitConfig {
@@ -12,10 +12,10 @@ pub struct InitConfig {
 }
 
 /// DNS name + contact email for the Let's Encrypt cert that fronts this
-/// node's public RPC. Written by the writer module to
-/// `/persistent/conf/domain.env` as `DOMAIN_NAME=...` /
-/// `DOMAIN_EMAIL=...`, which `setup-nginx-ssl` (seismic-images) sources
-/// before invoking certbot for cert issuance and renewal.
+/// node's public RPC. Written by the writer module to `domain.env` under
+/// [`crate::CONF_DIR`] as `DOMAIN_NAME=...` / `DOMAIN_EMAIL=...`, which
+/// `setup-nginx-ssl` (seismic-images) sources before invoking certbot
+/// for cert issuance and renewal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DomainConfig {
@@ -24,8 +24,8 @@ pub struct DomainConfig {
 }
 
 /// Bootstrap config for the enclave server. Fields get converted to env vars,
-/// and written to `/persistent/conf/enclave.env` which `enclave.service`
-/// (in seismic-images) loads via `EnvironmentFile=`.
+/// and written to `enclave.env` under [`crate::CONF_DIR`] which
+/// `enclave.service` (in seismic-images) loads via `EnvironmentFile=`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnclaveConfig {

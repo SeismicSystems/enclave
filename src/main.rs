@@ -9,11 +9,17 @@ mod error;
 mod server;
 mod writer;
 
-const CONF_DIR: &str = "/persistent/conf";
+/// Per-service env file drop-zone. Lives on tmpfs (cleared each boot),
+/// reachable before /persistent is mounted. The directory itself is
+/// created by `systemd-tmpfiles` from a snippet shipped in seismic-images;
+/// this binary only writes into it.
+pub(crate) const CONF_DIR: &str = "/run/seismic/conf";
 /// Sentinel marking that the per-service config write completed.
-/// On reboot, presence of this file short-circuits the HTTP server so
-/// we don't re-listen for config that's already been delivered.
-const SENTINEL_FILE: &str = "/persistent/conf/.tdx-init-done";
+/// Lives under [`CONF_DIR`] (tmpfs, cleared each boot), so the binary
+/// always blocks for a fresh POST on subsequent boots — deploy tooling
+/// re-supplies the config every time. The sentinel still gates against
+/// multiple POSTs within a single boot (e.g. manual `systemctl restart`).
+const SENTINEL_FILE: &str = "/run/seismic/conf/.tdx-init-done";
 
 #[derive(Parser)]
 struct Args {
@@ -41,13 +47,10 @@ async fn main() -> Result<()> {
 }
 
 /// Wait for an InitConfig (TOML) to be POSTed by the operator, then fan
-/// out per-component env files under [CONF_DIR]. Idempotent across
-/// reboots: if the sentinel exists, exits immediately.
-///
-/// LUKS provisioning is no longer this binary's responsibility — see
-/// seismic-images' `setup-persistent-luks` script + the
-/// `persistent-luks-setup.service` unit, which run before this service
-/// and ensure /persistent is already mounted by the time we get here.
+/// out per-component env files under [CONF_DIR]. Outputs go to /run
+/// (tmpfs), so the binary re-derives them on every boot; deploy tooling
+/// re-POSTs each time. The sentinel only gates against multiple POSTs
+/// within a single boot.
 async fn wait_for_and_persist_config() -> Result<()> {
     if fs::try_exists(SENTINEL_FILE).await? {
         info!(
