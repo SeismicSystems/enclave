@@ -1,5 +1,6 @@
 mod attestation;
 mod key_manager;
+mod luks_keys;
 mod server;
 pub mod utils;
 

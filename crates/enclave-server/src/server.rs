@@ -1,5 +1,6 @@
 use crate::{
-    Args, attestation::AttestationAgent, key_manager::KeyManager, utils::anyhow_to_rpc_error,
+    Args, attestation::AttestationAgent, key_manager::KeyManager, luks_keys,
+    utils::anyhow_to_rpc_error,
 };
 use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
@@ -105,6 +106,12 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
         );
         fetch_root_key_from_peers(args.peers, &attestation_agent).await
     };
+
+    // Hand off the LUKS storage + header-MAC keys to setup-persistent-luks
+    // (seismic-images script) via a tmpfs file. Fatal on failure — without
+    // these keys reaching the LUKS-setup script, /persistent can't
+    // mount and the node can't proceed past this boot.
+    luks_keys::write_keys_for_luks_setup(&key_manager)?;
 
     let server = ServerBuilder::default().build(addr).await?;
 

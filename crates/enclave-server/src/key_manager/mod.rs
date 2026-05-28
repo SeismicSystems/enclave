@@ -29,6 +29,14 @@ pub enum KeyPurpose {
     Snapshot,
     RngPrecompile,
     TxIo,
+    /// LUKS volume unlock key.
+    Storage,
+    /// HMAC key for verifying the LUKS2 header against tampering:
+    /// https://blog.trailofbits.com/2025/10/30/vulnerabilities-in-luks2-disk-encryption-for-confidential-vms/
+    /// Used by setup-persistent-luks to MAC `segments + keyslots + digests`
+    /// and store the result as a custom LUKS2 token; verified on every subsequent boot
+    /// before `cryptsetup open`.
+    LuksHeaderMac,
 }
 
 impl KeyPurpose {
@@ -38,6 +46,8 @@ impl KeyPurpose {
             KeyPurpose::Snapshot => "snapshot",
             KeyPurpose::RngPrecompile => "rng-precompile",
             KeyPurpose::TxIo => "tx-io",
+            KeyPurpose::Storage => "storage",
+            KeyPurpose::LuksHeaderMac => "luks-header-mac",
         }
     }
 
