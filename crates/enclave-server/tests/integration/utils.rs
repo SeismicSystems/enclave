@@ -1,7 +1,6 @@
 use seismic_enclave_server::Args;
-use std::path::PathBuf;
 
-pub fn get_args(n: u16, genesis_node: bool, peers: Vec<String>, data_dir: PathBuf) -> Args {
+pub fn get_args(n: u16, genesis_node: bool, peers: Vec<String>) -> Args {
     let port = 7878 + n;
     Args {
         ip: "0.0.0.0".to_string(),
@@ -9,6 +8,5 @@ pub fn get_args(n: u16, genesis_node: bool, peers: Vec<String>, data_dir: PathBu
         genesis_node,
         peers,
         mock: false,
-        data_dir,
     }
 }
