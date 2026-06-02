@@ -37,10 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let hcl_report_bytes = vtpm::get_report_with_report_data(&binding)?;
     let hcl_report = HclReport::new(hcl_report_bytes.clone())?;
-    let hcl_var_data = hcl_report.var_data();
+    let hcl_var_data = hcl_report.var_data().to_vec();
     let hcl_var_data_sha256 = hcl_report.var_data_sha256();
 
-    let td_report: tdx::TdReport = hcl_report.try_into()?;
+    let td_report: tdx::TdReport = (&hcl_report).try_into()?;
     let td_report_report_data = td_report.report_mac.reportdata;
 
     let quote_bytes = imds::get_td_quote(&td_report)?;
