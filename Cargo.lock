@@ -4375,6 +4375,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "seismic-attestation"
+version = "0.1.0"
+dependencies = [
+ "az-cvm-vtpm",
+ "az-tdx-vtpm",
+ "dcap-rs",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.14",
+]
+
+[[package]]
 name = "seismic-enclave"
 version = "0.1.0"
 dependencies = [
