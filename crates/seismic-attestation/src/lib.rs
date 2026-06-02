@@ -177,10 +177,18 @@ fn verify_azure_user_data(
     expected_binding: &[u8],
 ) -> Result<(), AttestationError> {
     let user_data = extract_azure_user_data(hcl_report)?;
-    if user_data != expected_binding {
-        return Err(AttestationError::SeismicBindingMismatch);
+    if user_data == expected_binding || user_data == azure_user_data_for_binding(expected_binding) {
+        return Ok(());
     }
-    Ok(())
+    Err(AttestationError::SeismicBindingMismatch)
+}
+
+fn azure_user_data_for_binding(binding: &[u8]) -> Vec<u8> {
+    let mut user_data = binding.to_vec();
+    if user_data.len() < 64 {
+        user_data.resize(64, 0);
+    }
+    user_data
 }
 
 /// Panic-safe parse of the current `dcap-rs` QuoteV4 type.
@@ -246,6 +254,16 @@ mod tests {
             hex::encode(root_key_response_binding(b"nonce", b"pk_a", b"wrapped")),
             "d2ac32239b55995fb355fc426dc0876d629d00abdcf244359dee2c0f2b6c2681"
         );
+    }
+
+    #[test]
+    fn azure_user_data_binding_allows_zero_padding() {
+        let binding = [1u8; 32];
+        let mut padded = binding.to_vec();
+        padded.resize(64, 0);
+
+        assert_eq!(azure_user_data_for_binding(&binding), padded);
+        assert_eq!(azure_user_data_for_binding(&padded), padded);
     }
 
     #[test]

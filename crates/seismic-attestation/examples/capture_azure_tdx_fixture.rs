@@ -38,6 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hcl_report_bytes = vtpm::get_report_with_report_data(&binding)?;
     let hcl_report = HclReport::new(hcl_report_bytes.clone())?;
     let hcl_var_data = hcl_report.var_data().to_vec();
+    let hcl_user_data = extract_hcl_user_data(&hcl_var_data)?;
     let hcl_var_data_sha256 = hcl_report.var_data_sha256();
 
     let td_report: tdx::TdReport = (&hcl_report).try_into()?;
@@ -55,7 +56,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "binding_hex": hex::encode(&binding),
         "hcl_report_hex": hex::encode(&hcl_report_bytes),
         "quote_hex": hex::encode(&quote_bytes),
-        "hcl_var_data_hex": hex::encode(hcl_var_data),
+        "hcl_var_data_hex": hex::encode(&hcl_var_data),
+        "hcl_user_data_hex": hex::encode(&hcl_user_data),
         "hcl_var_data_sha256_hex": hex::encode(hcl_var_data_sha256),
         "td_report_report_data_hex": hex::encode(td_report_report_data),
         "quote_report_data_hex": hex::encode(quote_report_data),
@@ -75,6 +77,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn extract_hcl_user_data(var_data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    #[derive(serde::Deserialize)]
+    struct HclVarDataUserData {
+        #[serde(rename = "user-data")]
+        user_data: String,
+    }
+
+    let parsed: HclVarDataUserData = serde_json::from_slice(var_data)?;
+    Ok(hex::decode(parsed.user_data.trim_start_matches("0x"))?)
 }
 
 #[cfg(not(target_os = "linux"))]
