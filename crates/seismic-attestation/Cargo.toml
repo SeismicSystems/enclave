@@ -18,4 +18,8 @@ sha2.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
+anyhow.workspace = true
 az-tdx-vtpm.workspace = true
+attestation = { git = "https://github.com/flashbots/attested-tls", rev = "4ebc03703510e65fd1317736b8887fc388860481", features = ["azure"] }
+clap.workspace = true
+tokio.workspace = true
