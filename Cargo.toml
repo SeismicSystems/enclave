@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
+    "crates/seismic-attestation",
 ]
 
 [workspace.package]
@@ -22,36 +23,28 @@ seismic-enclave = {path = "crates/enclave" }
 alloy = "1.0"
 aes-gcm = "0.10"
 anyhow = "1.0"
+az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
 bincode = "1.3.3"
 clap = { version = "4.5.51", features = ["derive", "env"] }
 dcap-rs = "0.1.0"
-#auto_impl = "1"
-#base64 = "0.22"
 base64-url = "3.0.0"
-#thiserror = "2.0"
+thiserror = "2.0"
 hex = "0.4.3"
 hkdf = "0.12"
 jsonrpsee = { version = "0.26.0", features = ["server", "client","macros"] }
 libc = "0.2.177"
 openssl = "0.10.74"
-#log = "0.4"
 rand = "0.9.2"
 reqwest = { version = "0.11", features = ["json"] }
 schnorrkel = { version = "0.11.2", features = ["serde"] }
-#scroll = { version = "0.11.0", default-features = false, features = ["derive"] }
 secp256k1 = { version = "0.30", features = ["rand", "recovery", "std", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10.9"
-#strum = { version = "0.26", features = ["derive"] }
-#strum_macros = "0.26"
 tokio = { version = "1.44", features = ["full"] }
 tracing = { version = "0.1.41"}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "json"] }
-#proc-macro2 = "1.0"
-#quote = "1.0"
-#syn = "2.0"
 urlencoding = "2.1"
 zeroize = "1.8.1"
 x509-parser = "0.15.1"

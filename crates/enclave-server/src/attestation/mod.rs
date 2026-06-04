@@ -48,17 +48,31 @@ impl AttestationAgent {
     // comment in Cargo.toml for why the dep itself is Linux-only.
     #[cfg(target_os = "linux")]
     fn get_attestation_evidence_tpm(&self) -> Result<AttestationGetEvidenceResponse> {
-        // todo this will be included in the quote, placeholding this for now we probably want our public key or a nonce here instead
+        // TODO(attestation): replace this placeholder with a protocol-bound value
+        // (for example, a nonce/public-key/tx_io_pk binding). Azure's vTPM report-data
+        // NV index is 64 bytes, so we may pass either a 32-byte digest or a full 64-byte
+        // value. Seismic bindings should normally be 32-byte domain-separated hashes,
+        // leaving the remaining capacity unused unless a protocol explicitly needs it.
+        //
+        // Azure TDX evidence is generated through the Azure vTPM/HCL path rather than
+        // by writing directly to a native TDX quote device. The input written via
+        // vtpm::get_report_with_report_data(input) is exposed in HCL runtime claims as
+        // `user-data`; the TD report's reportdata contains hash(HCL runtime claims),
+        // not `input` directly. Since IMDS quotes that TD report, verifiers must check:
+        //   1. HCL `user-data` == expected Seismic protocol binding.
+        //   2. quote.report_data[..32] == hcl_report.var_data_sha256().
+        // See https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design
+        // A fixture test should assert this on real Azure evidence.
         let report_data = [1u8; 32];
 
-        // Get Unsigned td report
+        // Get Azure HCL/vTPM report containing the caller-supplied report data.
         let hcl_report_bytes = vtpm::get_report_with_report_data(&report_data)?;
         let hcl_report = HclReport::new(hcl_report_bytes.clone())?;
 
-        // get the unsigned td report
+        // Extract the unsigned TD report that Azure IMDS will convert into a DCAP quote.
         let unsigned_td_report: tdx::TdReport = hcl_report.try_into()?;
 
-        // send td report to the imds to be signed
+        // Ask Azure IMDS to produce the signed TDX quote.
         let signed_td_report_bytes = imds::get_td_quote(&unsigned_td_report).unwrap();
 
         // let quote = QuoteV4::from_bytes(&signed_td_report_bytes);
