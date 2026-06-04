@@ -74,6 +74,8 @@ pub enum AttestationError {
     AzureQuoteBindingMismatch,
     #[error("Seismic binding mismatch")]
     SeismicBindingMismatch,
+    #[error("Seismic binding is too long for Azure user-data: {len} bytes > 64")]
+    BindingTooLong { len: usize },
     #[error("TDX measurements not allowed")]
     MeasurementMismatch,
 }
@@ -177,18 +179,23 @@ fn verify_azure_user_data(
     expected_binding: &[u8],
 ) -> Result<(), AttestationError> {
     let user_data = extract_azure_user_data(hcl_report)?;
-    if user_data == expected_binding || user_data == azure_user_data_for_binding(expected_binding) {
+    if user_data == expected_binding || user_data == azure_user_data_for_binding(expected_binding)?
+    {
         return Ok(());
     }
     Err(AttestationError::SeismicBindingMismatch)
 }
 
-fn azure_user_data_for_binding(binding: &[u8]) -> Vec<u8> {
+fn azure_user_data_for_binding(binding: &[u8]) -> Result<Vec<u8>, AttestationError> {
+    if binding.len() > 64 {
+        return Err(AttestationError::BindingTooLong { len: binding.len() });
+    }
+
     let mut user_data = binding.to_vec();
     if user_data.len() < 64 {
         user_data.resize(64, 0);
     }
-    user_data
+    Ok(user_data)
 }
 
 /// Panic-safe parse of the current `dcap-rs` QuoteV4 type.
@@ -262,8 +269,8 @@ mod tests {
         let mut padded = binding.to_vec();
         padded.resize(64, 0);
 
-        assert_eq!(azure_user_data_for_binding(&binding), padded);
-        assert_eq!(azure_user_data_for_binding(&padded), padded);
+        assert_eq!(azure_user_data_for_binding(&binding).unwrap(), padded);
+        assert_eq!(azure_user_data_for_binding(&padded).unwrap(), padded);
     }
 
     #[test]
@@ -289,10 +296,92 @@ mod tests {
     }
 
     #[test]
+    fn azure_tdx_fixture_verifies_policy() {
+        let fixture = AzureFixture::load();
+        let evidence = AzureTdxEvidence {
+            hcl_report: fixture.hcl_report.clone(),
+            quote: fixture.quote.clone(),
+        };
+
+        let verified =
+            verify_azure_tdx_policy(&evidence, &fixture.binding, &MeasurementPolicy::Any).unwrap();
+
+        assert_eq!(verified.report_data, fixture.quote_report_data);
+    }
+
+    #[test]
+    fn azure_tdx_fixture_rejects_wrong_binding() {
+        let fixture = AzureFixture::load();
+        let evidence = AzureTdxEvidence {
+            hcl_report: fixture.hcl_report,
+            quote: fixture.quote,
+        };
+        let wrong_binding = [0xff; 32];
+
+        assert!(matches!(
+            verify_azure_tdx_policy(&evidence, &wrong_binding, &MeasurementPolicy::Any,),
+            Err(AttestationError::SeismicBindingMismatch)
+        ));
+    }
+
+    #[test]
+    fn azure_tdx_fixture_rejects_wrong_measurement() {
+        let fixture = AzureFixture::load();
+        let evidence = AzureTdxEvidence {
+            hcl_report: fixture.hcl_report,
+            quote: fixture.quote,
+        };
+        let wrong_measurement = TdxMeasurements {
+            mrtd: [0xff; 48],
+            mrseam: [0xff; 48],
+            rtmr0: [0xff; 48],
+            rtmr1: [0xff; 48],
+            rtmr2: [0xff; 48],
+            rtmr3: [0xff; 48],
+        };
+
+        assert!(matches!(
+            verify_azure_tdx_policy(
+                &evidence,
+                &fixture.binding,
+                &MeasurementPolicy::Allowlist(vec![wrong_measurement]),
+            ),
+            Err(AttestationError::MeasurementMismatch)
+        ));
+    }
+
+    #[test]
     fn quote_parse_error_is_structured() {
         assert!(matches!(
             parse_quote_v4(b"not a quote"),
             Err(AttestationError::QuoteParse)
         ));
+    }
+
+    struct AzureFixture {
+        binding: Vec<u8>,
+        hcl_report: Vec<u8>,
+        quote: Vec<u8>,
+        quote_report_data: [u8; 64],
+    }
+
+    impl AzureFixture {
+        fn load() -> Self {
+            let fixture: serde_json::Value =
+                serde_json::from_str(include_str!("../fixtures/azure-tdx-v1.json")).unwrap();
+
+            Self {
+                binding: decode_fixture_hex(&fixture, "binding_hex"),
+                hcl_report: decode_fixture_hex(&fixture, "hcl_report_hex"),
+                quote: decode_fixture_hex(&fixture, "quote_hex"),
+                quote_report_data: decode_fixture_hex(&fixture, "quote_report_data_hex")
+                    .try_into()
+                    .unwrap(),
+            }
+        }
+    }
+
+    fn decode_fixture_hex(fixture: &serde_json::Value, key: &str) -> Vec<u8> {
+        hex::decode(fixture[key].as_str().unwrap()).unwrap()
     }
 }
