@@ -2,6 +2,11 @@ use anyhow::{Result, anyhow};
 use dcap_rs::types::quotes::{body::QuoteBody, version_4::QuoteV4};
 use enclave_contract::UpgradeOperator;
 
+/// Checks TDX quote fields against the current UpgradeOperator policy.
+///
+/// Azure caveat: for Azure CVMs these fields are platform/paravisor
+/// measurements, not sufficient Seismic guest OS measurements. Do not use this
+/// as the sole Azure production allowlist once vTPM/MAA verification is added.
 pub async fn verify_measurements_against_contract(quote: &QuoteV4) -> Result<()> {
     let QuoteBody::TD10QuoteBody(quote_body) = quote.quote_body else {
         return Err(anyhow!("Not a tdx quote"));
@@ -32,6 +37,6 @@ pub async fn verify_measurements_against_contract(quote: &QuoteV4) -> Result<()>
     {
         Ok(())
     } else {
-        Err(anyhow!("Now approved"))
+        Err(anyhow!("Not approved"))
     }
 }

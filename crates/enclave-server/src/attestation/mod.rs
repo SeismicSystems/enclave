@@ -27,6 +27,12 @@ pub struct AttestationAgent {
 
 // Currently Azure-only. The vTPM-via-IMDS path is the canonical surface on Azure CVMs
 // (paravisor-mediated TDX; /dev/tdx_guest is not exposed to the guest).
+//
+// Important: Azure's raw TDX quote measurements primarily attest the Microsoft
+// OpenHCL/OpenVMM paravisor TD, not Seismic's nested guest OS image. Production
+// Azure guest attestation also needs vTPM AK/PCR quote + event-log verification
+// or equivalent MAA JWT claim verification. The current HCL+TDX envelope is only
+// a platform endorsement and protocol-binding primitive.
 // TODO(samlaf): For GCP support — fully-enlightened TDX with /dev/tdx_guest
 // or /sys/kernel/config/tsm/report. We'll need a cloud-detect step (IMDS probe) and
 // a second `get_attestation_evidence_gcp()` arm.
@@ -89,6 +95,11 @@ impl AttestationAgent {
         ))
     }
 
+    /// Verifies the current raw DCAP quote path.
+    ///
+    /// Azure caveat: this checks Intel DCAP collateral and current TDX fields
+    /// only. It does not verify Seismic guest PCRs/event logs, so it is not a
+    /// complete Azure CVM guest attestation verifier.
     pub async fn verify_attestation_report(&self, quote: QuoteV4) -> Result<()> {
         let collaterals = self.pccs.get_collateral(&quote).await?;
         let current_time = chrono::Utc::now().timestamp() as u64;
