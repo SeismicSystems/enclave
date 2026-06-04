@@ -8,7 +8,7 @@
 //!
 //! Usage:
 //!   cargo run -p seismic-attestation --example capture_azure_tdx_fixture -- \
-//!     <binding-hex> [out.json]
+//!     <binding-hex>
 //!
 //! If TPM access is denied, rerun with `sudo` or fix the VM's TPM device group
 //! permissions.
@@ -21,19 +21,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use az_tdx_vtpm::{hcl::HclReport, imds, tdx, vtpm};
     use dcap_rs::types::quotes::{body::QuoteBody, version_4::QuoteV4};
     use serde_json::json;
-    use std::{env, fs};
+    use std::env;
 
     let mut args = env::args().skip(1);
     let Some(binding_hex) = args.next() else {
         eprintln!(
-            "usage: capture_azure_tdx_fixture <binding-hex> [out.json]\n\
+            "usage: capture_azure_tdx_fixture <binding-hex>\n\
              example binding: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
         );
         std::process::exit(2);
     };
-    let out_path = args.next();
 
     let binding = hex::decode(binding_hex.trim_start_matches("0x"))?;
+    if binding.len() > 64 {
+        return Err(format!(
+            "binding is too long for Azure user-data: {} bytes > 64",
+            binding.len()
+        )
+        .into());
+    }
 
     let hcl_report_bytes = vtpm::get_report_with_report_data(&binding)?;
     let hcl_report = HclReport::new(hcl_report_bytes.clone())?;
@@ -68,13 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let pretty = serde_json::to_string_pretty(&fixture)?;
-    if let Some(out_path) = out_path {
-        fs::write(&out_path, pretty)?;
-        eprintln!("wrote fixture to {out_path}");
-    } else {
-        println!("{pretty}");
-    }
+    println!("{}", serde_json::to_string_pretty(&fixture)?);
 
     Ok(())
 }
