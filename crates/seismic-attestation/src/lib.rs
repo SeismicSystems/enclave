@@ -4,6 +4,13 @@
 //! Seismic-specific semantics around evidence envelopes, protocol bindings,
 //! measurements, and provider-specific binding checks. The underlying QVL can be
 //! swapped later behind this crate's public types.
+//!
+//! Azure caveat: Azure CVMs run the guest under Microsoft OpenHCL/OpenVMM
+//! paravisor/nested virtualization. The raw TDX quote measurements surfaced here
+//! are therefore platform/paravisor measurements, not sufficient Seismic guest OS
+//! identity. Azure production policy also needs vTPM PCR quote/event-log (or MAA
+//! JWT claim) verification before treating an enclave as running the expected
+//! Seismic image.
 
 use az_cvm_vtpm::hcl::{HclReport, ReportType};
 use dcap_rs::types::quotes::{body::QuoteBody, version_4::QuoteV4};
@@ -30,13 +37,20 @@ pub struct AzureTdxEvidence {
 }
 
 /// Minimal verified quote fields needed by Seismic policy.
+///
+/// On Azure these fields describe the paravisor-backed TDX platform evidence.
+/// They must not be used as the only guest image measurement policy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedQuoteFields {
     pub report_data: [u8; 64],
     pub measurements: TdxMeasurements,
 }
 
-/// TDX measurement identity surfaced to Seismic policy.
+/// TDX platform/paravisor measurements surfaced to Seismic policy.
+///
+/// TODO(attestation): split this into `TdxPlatformMeasurements` and add an
+/// Azure `GuestMeasurements`/PCR policy type. The old name is kept temporarily
+/// to avoid churn while callers migrate.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TdxMeasurements {
     pub mrtd: [u8; 48],
@@ -47,7 +61,10 @@ pub struct TdxMeasurements {
     pub rtmr3: [u8; 48],
 }
 
-/// Static measurement policy for fixtures and initial deploy checks.
+/// Static TDX platform measurement policy for fixtures.
+///
+/// On Azure this is not sufficient for production guest allowlisting; use vTPM
+/// PCR/event-log or MAA claims once those evidence types are added.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MeasurementPolicy {
     Any,
@@ -82,12 +99,15 @@ pub enum AttestationError {
 
 // === Public API ===
 
-/// Main entrypoint for verifying the Seismic policy around the current Azure
-/// TDX evidence envelope.
+/// Main entrypoint for checking bindings around the current Azure HCL + TDX
+/// evidence envelope.
 ///
 /// This currently performs parsing/extraction and Seismic policy checks. Full
 /// DCAP cryptographic verification is still done by the caller and will move
 /// behind this API when we migrate to the chosen QVL.
+///
+/// Azure caveat: this does not verify guest PCRs/event logs or an MAA JWT. A
+/// successful result is not by itself proof of the Seismic guest OS image.
 pub fn verify_azure_tdx_policy(
     evidence: &AzureTdxEvidence,
     expected_binding: &[u8],
