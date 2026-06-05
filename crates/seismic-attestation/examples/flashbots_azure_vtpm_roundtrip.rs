@@ -41,6 +41,12 @@ struct Args {
     #[arg(long)]
     input_hex: Option<String>,
 
+    /// Write the generated raw attestation document to this path before
+    /// verification. Useful for inspecting AK certificates and HCL claims when
+    /// verification fails.
+    #[arg(long)]
+    write_evidence: Option<std::path::PathBuf>,
+
     /// Allow Flashbots' Azure outdated-TCB override path.
     ///
     /// This exists because their crate carries a workaround for some Azure v6
@@ -71,20 +77,25 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Generating Azure TDX + vTPM attestation...");
     let generator = AttestationGenerator::new(AttestationType::AzureTdx, None)?;
-    let evidence = generator.generate_attestation(input_data).await?;
+    let evidence = generator.generate_attestation(input_data)?;
     println!(
         "Generated {} evidence: {} bytes",
         evidence.attestation_type,
         evidence.attestation.len()
     );
 
+    if let Some(path) = &args.write_evidence {
+        std::fs::write(path, &evidence.attestation)?;
+        println!("Wrote raw Azure attestation document to {}", path.display());
+    }
+
     println!("Verifying Azure TDX + vTPM attestation...");
-    let verifier = AttestationVerifier {
+    let verifier = AttestationVerifier::new(
         measurement_policy,
-        pccs_url: args.pccs_url,
-        log_dcap_quote: false,
-        override_azure_outdated_tcb: args.override_azure_outdated_tcb,
-    };
+        args.pccs_url,
+        false,
+        args.override_azure_outdated_tcb,
+    );
 
     let measurements = verifier.verify_attestation(evidence, input_data).await?;
     println!("Verification succeeded.");
