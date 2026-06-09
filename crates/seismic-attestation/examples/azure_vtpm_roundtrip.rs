@@ -1,16 +1,16 @@
-//! Generate and verify an Azure TDX + vTPM attestation using Flashbots'
-//! experimental Rust `attestation` crate.
+//! Generate and verify an Azure TDX + vTPM attestation through the
+//! `seismic-attestation` policy wrapper.
 //!
-//! Run on an Azure TDX CVM with vTPM access. This is a spike/example, not yet a
-//! Seismic production verifier. It checks that the Flashbots crate can produce
-//! Azure evidence and verify its quoted PCRs against a `make measure` output.
+//! Run on an Azure TDX CVM with vTPM access. It checks that the attestation
+//! backend can produce Azure evidence and verify its quoted PCRs against a
+//! `make measure` output.
 //!
 //! Example:
-//!   cargo run -p seismic-attestation --example flashbots_azure_vtpm_roundtrip -- \
+//!   cargo run -p seismic-attestation --example azure_vtpm_roundtrip -- \
 //!     --measurements /path/to/seismic-images/build/measurements.json
 //!
 //! For debugging without enforcing PCR values, use:
-//!   cargo run -p seismic-attestation --example flashbots_azure_vtpm_roundtrip -- --accept-any
+//!   cargo run -p seismic-attestation --example azure_vtpm_roundtrip -- --accept-any
 
 #[cfg(target_os = "linux")]
 use clap::Parser;
@@ -30,8 +30,8 @@ struct Args {
     #[arg(long)]
     accept_any: bool,
 
-    /// Optional PCCS URL for DCAP collateral. If omitted, the Flashbots
-    /// attestation crate uses its default DCAP collateral path.
+    /// Optional PCCS URL for DCAP collateral. If omitted, the attestation
+    /// backend uses its default DCAP collateral path.
     #[arg(long)]
     pccs_url: Option<String>,
 
@@ -47,11 +47,10 @@ struct Args {
     #[arg(long)]
     write_evidence: Option<std::path::PathBuf>,
 
-    /// Allow Flashbots' Azure outdated-TCB override path.
+    /// Allow the Azure outdated-TCB override path.
     ///
-    /// This exists because their crate carries a workaround for some Azure v6
-    /// TCB collateral. Leave false unless you are specifically testing that
-    /// environment.
+    /// This exists as a workaround for some Azure v6 TCB collateral. Leave false
+    /// unless you are specifically testing that environment.
     #[arg(long)]
     override_azure_outdated_tcb: bool,
 }
@@ -59,25 +58,25 @@ struct Args {
 #[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use attestation::{
-        AttestationGenerator, AttestationType, AttestationVerifier, measurements::MeasurementPolicy,
+    use seismic_attestation::{
+        AttestationType, SeismicMeasurementPolicy, VerifyOptions, generate_evidence,
+        verify_evidence_with_options,
     };
 
     let args = Args::parse();
     let input_data = parse_or_default_input(args.input_hex.as_deref())?;
 
     let measurement_policy = if args.accept_any {
-        MeasurementPolicy::single_attestation_type(AttestationType::AzureTdx)
+        SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx)
     } else {
         let Some(path) = args.measurements else {
             anyhow::bail!("pass --measurements <file> or --accept-any");
         };
-        MeasurementPolicy::from_file(path).await?
+        SeismicMeasurementPolicy::from_json_bytes(&tokio::fs::read(path).await?)?
     };
 
     println!("Generating Azure TDX + vTPM attestation...");
-    let generator = AttestationGenerator::new(AttestationType::AzureTdx, None)?;
-    let evidence = generator.generate_attestation(input_data)?;
+    let evidence = generate_evidence(AttestationType::AzureTdx, input_data)?;
     println!(
         "Generated {} evidence: {} bytes",
         evidence.attestation_type,
@@ -90,16 +89,19 @@ async fn main() -> anyhow::Result<()> {
     }
 
     println!("Verifying Azure TDX + vTPM attestation...");
-    let verifier = AttestationVerifier::new(
+    let verified = verify_evidence_with_options(
+        evidence,
+        input_data,
         measurement_policy,
-        args.pccs_url,
-        false,
-        args.override_azure_outdated_tcb,
-    );
-
-    let measurements = verifier.verify_attestation(evidence, input_data).await?;
+        VerifyOptions {
+            pccs_url: args.pccs_url,
+            dump_dcap_quotes: false,
+            override_azure_outdated_tcb: args.override_azure_outdated_tcb,
+        },
+    )
+    .await?;
     println!("Verification succeeded.");
-    println!("Verified measurements: {measurements:#?}");
+    println!("Verified Seismic attestation: {verified:#?}");
 
     Ok(())
 }
@@ -114,7 +116,8 @@ fn parse_or_default_input(input_hex: Option<&str>) -> anyhow::Result<[u8; 64]> {
     }
 
     // Deterministic demo-only input. First half is the TPM quote nonce used by
-    // Flashbots' Azure path; full 64 bytes are also placed into HCL user-data.
+    // The Azure backend uses the first half as the TPM quote nonce; full 64
+    // bytes are also placed into HCL user-data.
     let mut input = [0u8; 64];
     input[..32].copy_from_slice(b"seismic-demo-azure-vtpm-input!!!");
     input[32..].copy_from_slice(b"do-not-use-this-in-production!!!");
@@ -123,6 +126,6 @@ fn parse_or_default_input(input_hex: Option<&str>) -> anyhow::Result<[u8; 64]> {
 
 #[cfg(not(target_os = "linux"))]
 fn main() {
-    eprintln!("flashbots_azure_vtpm_roundtrip must be run on a Linux Azure TDX CVM");
+    eprintln!("azure_vtpm_roundtrip must be run on a Linux Azure TDX CVM");
     std::process::exit(1);
 }
