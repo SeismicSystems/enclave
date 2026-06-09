@@ -1,265 +1,363 @@
-//! Seismic attestation policy helpers.
+//! Seismic attestation policy wrapper.
 //!
-//! This crate intentionally does not implement DCAP cryptography. It owns the
-//! Seismic-specific semantics around evidence envelopes, protocol bindings,
-//! measurements, and provider-specific binding checks. The underlying QVL can be
-//! swapped later behind this crate's public types.
+//! Low-level quote, Azure HCL, vTPM, AK-certificate-chain, DCAP verification,
+//! and measurement-policy matching are delegated to the Flashbots `attestation`
+//! backend. This crate should stay thin: it owns Seismic protocol bindings,
+//! safe policy constructors, and typed verified outputs for Seismic callers.
 //!
-//! Azure caveat: Azure CVMs run the guest under Microsoft OpenHCL/OpenVMM
-//! paravisor/nested virtualization. The raw TDX quote measurements surfaced here
-//! are therefore platform/paravisor measurements, not sufficient Seismic guest OS
-//! identity. Azure production policy also needs vTPM PCR quote/event-log (or MAA
-//! JWT claim) verification before treating an enclave as running the expected
-//! Seismic image.
+//! # Main entry points
+//!
+//! Production callers usually only need these APIs:
+//!
+//! - [`generate_evidence`] to produce local attestation evidence for a
+//!   caller-supplied 64-byte protocol binding.
+//! - [`verify_evidence`] to verify remote evidence against a
+//!   [`SeismicMeasurementPolicy`].
+//! - [`SeismicMeasurementPolicy::from_json_bytes`] or
+//!   [`SeismicMeasurementPolicy::from_file`] to load Flashbots-compatible
+//!   measurement artifacts, such as `seismic-images build/measurements.json`.
+//!
+//! The [`bindings`] module contains helper digests for Seismic protocol
+//! transcripts. These helpers are not complete protocols by themselves; callers
+//! should feed the resulting 32-byte digest through
+//! [`bindings::binding64_from_digest32`] before attestation.
 
-use az_cvm_vtpm::hcl::{HclReport, ReportType};
-use dcap_rs::types::quotes::{body::QuoteBody, version_4::QuoteV4};
-use serde::Deserialize;
-use sha2::{Digest, Sha256};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+/// Backend measurement types returned after successful verification.
+pub use attestation::measurements::{DcapMeasurementRegister, MultiMeasurements};
+/// Backend evidence envelope and attestation-type enum used on the wire.
+pub use attestation::{AttestationExchangeMessage, AttestationType};
+
+use attestation::{
+    AttestationGenerator, AttestationVerifier,
+    measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
+};
+use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
 
-/// Current Azure TDX evidence envelope produced by `seismic-enclave-server`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AzureTdxEvidence {
-    /// Azure HCL/vTPM attestation report bytes.
-    ///
-    /// Microsoft documents this as the Azure-defined attestation report read
-    /// from TPM NV index `0x01400001`. It contains a header, the hardware
-    /// report payload, and runtime data/claims. The hardware report's
-    /// `report_data` captures the hash of the runtime claims, including
-    /// `user-data` read from NV index `0x01400002`.
-    ///
-    /// See: https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design
-    pub hcl_report: Vec<u8>,
-    /// Raw Intel TDX DCAP quote bytes returned by Azure IMDS.
-    pub quote: Vec<u8>,
+// === Main public entrypoints ===
+
+/// Generate local attestation evidence bound to `binding`.
+///
+/// This is generic over the backend [`AttestationType`] and delegates evidence
+/// creation directly to Flashbots `attestation`.
+pub fn generate_evidence(
+    attestation_type: AttestationType,
+    binding: [u8; 64],
+) -> Result<AttestationExchangeMessage, AttestationError> {
+    let generator = AttestationGenerator::new(attestation_type, None)?;
+    Ok(generator.generate_attestation(binding)?)
 }
 
-/// Minimal verified quote fields needed by Seismic policy.
+/// Verify remote attestation evidence with the backend, enforce the supplied
+/// measurement policy, and return typed Seismic output.
+pub async fn verify_evidence(
+    evidence: AttestationExchangeMessage,
+    expected_binding: [u8; 64],
+    policy: SeismicMeasurementPolicy,
+) -> Result<VerifiedSeismicAttestation, AttestationError> {
+    verify_evidence_with_options(evidence, expected_binding, policy, VerifyOptions::default()).await
+}
+
+/// Same as [`verify_evidence`], with backend operational options.
+pub async fn verify_evidence_with_options(
+    evidence: AttestationExchangeMessage,
+    expected_binding: [u8; 64],
+    policy: SeismicMeasurementPolicy,
+    options: VerifyOptions,
+) -> Result<VerifiedSeismicAttestation, AttestationError> {
+    let attestation_type = evidence.attestation_type;
+    let verifier = AttestationVerifier::new(
+        policy.into_backend_policy(),
+        options.pccs_url,
+        options.dump_dcap_quotes,
+        options.override_azure_outdated_tcb,
+    );
+
+    let measurements = verifier
+        .verify_attestation(evidence, expected_binding)
+        .await?;
+
+    VerifiedSeismicAttestation::from_backend(attestation_type, expected_binding, measurements)
+}
+
+/// Generate local Azure TDX + vTPM evidence bound to `binding`.
 ///
-/// On Azure these fields describe the paravisor-backed TDX platform evidence.
-/// They must not be used as the only guest image measurement policy.
+/// Convenience wrapper around [`generate_evidence`] for the backend Seismic uses
+/// today.
+pub fn generate_azure_evidence(
+    binding: [u8; 64],
+) -> Result<AttestationExchangeMessage, AttestationError> {
+    generate_evidence(AttestationType::AzureTdx, binding)
+}
+
+/// Verify remote Azure TDX + vTPM evidence and return typed Azure output.
+///
+/// Measurement parsing and matching still use the backend policy format; this
+/// function only checks that the verified result is Azure and unwraps it for
+/// Azure-specific callers.
+pub async fn verify_azure_evidence(
+    evidence: AttestationExchangeMessage,
+    expected_binding: [u8; 64],
+    policy: SeismicMeasurementPolicy,
+) -> Result<VerifiedAzureAttestation, AttestationError> {
+    verify_azure_evidence_with_options(evidence, expected_binding, policy, VerifyOptions::default())
+        .await
+}
+
+/// Same as [`verify_azure_evidence`], with backend operational options.
+pub async fn verify_azure_evidence_with_options(
+    evidence: AttestationExchangeMessage,
+    expected_binding: [u8; 64],
+    policy: SeismicMeasurementPolicy,
+    options: VerifyOptions,
+) -> Result<VerifiedAzureAttestation, AttestationError> {
+    if evidence.attestation_type != AttestationType::AzureTdx {
+        return Err(AttestationError::WrongAttestationType {
+            expected: AttestationType::AzureTdx,
+            actual: evidence.attestation_type,
+        });
+    }
+
+    match verify_evidence_with_options(evidence, expected_binding, policy, options).await? {
+        VerifiedSeismicAttestation::AzureTdx(verified) => Ok(verified),
+        verified => Err(AttestationError::WrongAttestationType {
+            expected: AttestationType::AzureTdx,
+            actual: verified.attestation_type(),
+        }),
+    }
+}
+
+// === Public policy and output types ===
+
+/// Seismic-safe wrapper around Flashbots measurement policy.
+///
+/// The underlying JSON/file format is the backend's format. This wrapper exists
+/// to keep production constructors explicit and to avoid spreading backend
+/// operational choices throughout Seismic services.
+#[derive(Clone, Debug)]
+pub struct SeismicMeasurementPolicy {
+    backend_policy: BackendMeasurementPolicy,
+}
+
+impl SeismicMeasurementPolicy {
+    /// Parse a Flashbots-compatible measurement policy JSON document.
+    ///
+    /// This is the expected path for `seismic-images build/measurements.json`.
+    pub fn from_json_bytes(bytes: &[u8]) -> Result<Self, AttestationError> {
+        Ok(Self {
+            backend_policy: BackendMeasurementPolicy::from_json_bytes(bytes.to_vec())?,
+        })
+    }
+
+    /// Load a Flashbots-compatible measurement policy from a file.
+    pub async fn from_file(path: impl Into<PathBuf>) -> Result<Self, AttestationError> {
+        Ok(Self {
+            backend_policy: BackendMeasurementPolicy::from_file(path.into()).await?,
+        })
+    }
+
+    /// Intentionally accept any measurements for one attestation type after
+    /// backend cryptographic verification succeeds.
+    ///
+    /// This is useful for local debugging and measurement capture before a
+    /// measurements file exists. Do not use it in production authorization
+    /// paths.
+    pub fn dangerously_accept_any_for_testing(attestation_type: AttestationType) -> Self {
+        Self {
+            backend_policy: BackendMeasurementPolicy::single_attestation_type(attestation_type),
+        }
+    }
+
+    fn into_backend_policy(self) -> BackendMeasurementPolicy {
+        self.backend_policy
+    }
+}
+
+/// Operational options passed through to the attestation backend verifier.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VerifyOptions {
+    /// Optional PCCS URL for DCAP collateral. If omitted, the backend default is used.
+    pub pccs_url: Option<String>,
+    /// Ask the backend to log/dump DCAP quote material for debugging.
+    pub dump_dcap_quotes: bool,
+    /// Allow the backend's Azure outdated-TCB override path.
+    pub override_azure_outdated_tcb: bool,
+}
+
+/// Generic verified Seismic attestation output.
+///
+/// Provider-specific measurements stay in provider-specific variants so callers
+/// cannot accidentally combine, for example, `dcap-tdx` with Azure PCRs.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VerifiedQuoteFields {
-    pub report_data: [u8; 64],
+pub enum VerifiedSeismicAttestation {
+    AzureTdx(VerifiedAzureAttestation),
+    DcapTdx(VerifiedTdxAttestation),
+    GcpTdx(VerifiedTdxAttestation),
+    QemuTdx(VerifiedTdxAttestation),
+    NoAttestation { binding: [u8; 64] },
+}
+
+impl VerifiedSeismicAttestation {
+    fn from_backend(
+        attestation_type: AttestationType,
+        binding: [u8; 64],
+        measurements: Option<MultiMeasurements>,
+    ) -> Result<Self, AttestationError> {
+        match (attestation_type, measurements) {
+            (AttestationType::None, None | Some(MultiMeasurements::NoAttestation)) => {
+                Ok(Self::NoAttestation { binding })
+            }
+            (AttestationType::AzureTdx, Some(MultiMeasurements::Azure(pcrs))) => {
+                Ok(Self::AzureTdx(VerifiedAzureAttestation {
+                    binding,
+                    guest_measurements: AzureGuestMeasurements {
+                        pcrs: pcrs.into_iter().collect(),
+                    },
+                }))
+            }
+            (AttestationType::DcapTdx, Some(MultiMeasurements::Dcap(registers))) => {
+                Ok(Self::DcapTdx(VerifiedTdxAttestation {
+                    binding,
+                    measurements: TdxMeasurements { registers },
+                }))
+            }
+            (AttestationType::GcpTdx, Some(MultiMeasurements::Dcap(registers))) => {
+                Ok(Self::GcpTdx(VerifiedTdxAttestation {
+                    binding,
+                    measurements: TdxMeasurements { registers },
+                }))
+            }
+            (AttestationType::QemuTdx, Some(MultiMeasurements::Dcap(registers))) => {
+                Ok(Self::QemuTdx(VerifiedTdxAttestation {
+                    binding,
+                    measurements: TdxMeasurements { registers },
+                }))
+            }
+            (attestation_type, None) => {
+                Err(AttestationError::MissingMeasurements { attestation_type })
+            }
+            (attestation_type, Some(measurements)) => {
+                Err(AttestationError::MeasurementTypeMismatch {
+                    attestation_type,
+                    measurements,
+                })
+            }
+        }
+    }
+
+    pub fn attestation_type(&self) -> AttestationType {
+        match self {
+            Self::AzureTdx(_) => AttestationType::AzureTdx,
+            Self::DcapTdx(_) => AttestationType::DcapTdx,
+            Self::GcpTdx(_) => AttestationType::GcpTdx,
+            Self::QemuTdx(_) => AttestationType::QemuTdx,
+            Self::NoAttestation { .. } => AttestationType::None,
+        }
+    }
+
+    pub fn binding(&self) -> &[u8; 64] {
+        match self {
+            Self::AzureTdx(verified) => &verified.binding,
+            Self::DcapTdx(verified) | Self::GcpTdx(verified) | Self::QemuTdx(verified) => {
+                &verified.binding
+            }
+            Self::NoAttestation { binding } => binding,
+        }
+    }
+}
+
+/// Verified Azure TDX + vTPM identity consumed by higher-level Seismic services.
+///
+/// The measurements are Azure vTPM PCR state. They are not raw TDX
+/// platform/paravisor MRTD/RTMR values.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedAzureAttestation {
+    /// The 64-byte transcript/protocol binding verified by the backend.
+    pub binding: [u8; 64],
+    /// Backend-verified Azure guest measurements after backend policy matched.
+    pub guest_measurements: AzureGuestMeasurements,
+}
+
+/// Azure guest measurements verified by the backend and checked by backend policy.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AzureGuestMeasurements {
+    pub pcrs: HashMap<u32, [u8; 32]>,
+}
+
+/// Verified TDX quote measurements for DCAP-like backends.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedTdxAttestation {
+    /// The 64-byte transcript/protocol binding verified by the backend.
+    pub binding: [u8; 64],
+    /// Backend-verified TDX measurements after backend policy matched.
     pub measurements: TdxMeasurements,
 }
 
-/// TDX platform/paravisor measurements surfaced to Seismic policy.
-///
-/// TODO(attestation): split this into `TdxPlatformMeasurements` and add an
-/// Azure `GuestMeasurements`/PCR policy type. The old name is kept temporarily
-/// to avoid churn while callers migrate.
+/// TDX measurements surfaced by DCAP/GCP/QEMU backend attestation types.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TdxMeasurements {
-    pub mrtd: [u8; 48],
-    pub mrseam: [u8; 48],
-    pub rtmr0: [u8; 48],
-    pub rtmr1: [u8; 48],
-    pub rtmr2: [u8; 48],
-    pub rtmr3: [u8; 48],
-}
-
-/// Static TDX platform measurement policy for fixtures.
-///
-/// On Azure this is not sufficient for production guest allowlisting; use vTPM
-/// PCR/event-log or MAA claims once those evidence types are added.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MeasurementPolicy {
-    Any,
-    Allowlist(Vec<TdxMeasurements>),
+    pub registers: HashMap<DcapMeasurementRegister, [u8; 48]>,
 }
 
 #[derive(Debug, Error)]
 pub enum AttestationError {
-    #[error("failed to parse Azure HCL report: {0}")]
-    Hcl(#[from] az_cvm_vtpm::hcl::HclError),
-    #[error("Azure HCL report is not a TDX report")]
-    NotTdxHclReport,
-    #[error("failed to parse HCL variable data JSON: {0}")]
-    VarDataJson(#[from] serde_json::Error),
-    #[error("HCL variable data is missing user-data")]
-    MissingUserData,
-    #[error("HCL user-data is not valid hex: {0}")]
-    UserDataHex(#[from] hex::FromHexError),
-    #[error("failed to parse DCAP quote")]
-    QuoteParse,
-    #[error("DCAP quote is not a TDX quote")]
-    NotTdxQuote,
-    #[error("Azure HCL variable-data hash does not match quote report_data")]
-    AzureQuoteBindingMismatch,
-    #[error("Seismic binding mismatch")]
-    SeismicBindingMismatch,
-    #[error("Seismic binding is too long for Azure user-data: {len} bytes > 64")]
-    BindingTooLong { len: usize },
-    #[error("TDX measurements not allowed")]
-    MeasurementMismatch,
+    #[error("attestation backend error: {0}")]
+    Backend(#[from] attestation::AttestationError),
+    #[error("measurement policy format error: {0}")]
+    PolicyFormat(#[from] MeasurementFormatError),
+    #[error("expected {expected} attestation, got {actual}")]
+    WrongAttestationType {
+        expected: AttestationType,
+        actual: AttestationType,
+    },
+    #[error("attestation backend returned no measurements for {attestation_type}")]
+    MissingMeasurements { attestation_type: AttestationType },
+    #[error("backend returned measurements inconsistent with {attestation_type}: {measurements:?}")]
+    MeasurementTypeMismatch {
+        attestation_type: AttestationType,
+        measurements: MultiMeasurements,
+    },
 }
 
-// === Public API ===
-
-/// Main entrypoint for checking bindings around the current Azure HCL + TDX
-/// evidence envelope.
+/// Helpers for deriving Seismic protocol-binding digests.
 ///
-/// This currently performs parsing/extraction and Seismic policy checks. Full
-/// DCAP cryptographic verification is still done by the caller and will move
-/// behind this API when we migrate to the chosen QVL.
-///
-/// Azure caveat: this does not verify guest PCRs/event logs or an MAA JWT. A
-/// successful result is not by itself proof of the Seismic guest OS image.
-pub fn verify_azure_tdx_policy(
-    evidence: &AzureTdxEvidence,
-    expected_binding: &[u8],
-    measurement_policy: &MeasurementPolicy,
-) -> Result<VerifiedQuoteFields, AttestationError> {
-    let hcl_report = parse_azure_tdx_hcl_report(&evidence.hcl_report)?;
-    let quote = parse_quote_v4(&evidence.quote)?;
-    let quote_fields = extract_tdx_quote_fields(&quote)?;
+/// These helpers return 32-byte SHA-256 digests. Attestation evidence generation
+/// takes a 64-byte input, so use [`binding64_from_digest32`] before calling
+/// [`crate::generate_evidence`] or [`crate::verify_evidence`].
+pub mod bindings {
+    use sha2::{Digest, Sha256};
 
-    verify_azure_quote_binding(&hcl_report, &quote_fields.report_data)?;
-    verify_azure_user_data(&hcl_report, expected_binding)?;
-    verify_measurements(&quote_fields.measurements, measurement_policy)?;
-
-    Ok(quote_fields)
-}
-
-/// Binding for TxSeismic tx_io public key evidence.
-pub fn tx_io_binding(tx_io_pk: &[u8], epoch: u64) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(b"seismic-tx-io:");
-    hasher.update(tx_io_pk);
-    hasher.update(epoch.to_be_bytes());
-    hasher.finalize().into()
-}
-
-/// Binding for a root-key bootstrap requester quote.
-pub fn root_key_request_binding(nonce_b: &[u8], eph_pk_b: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(nonce_b);
-    hasher.update(eph_pk_b);
-    hasher.finalize().into()
-}
-
-/// Binding for a root-key bootstrap responder quote.
-pub fn root_key_response_binding(nonce_b: &[u8], eph_pk_a: &[u8], wrapped: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(nonce_b);
-    hasher.update(eph_pk_a);
-    hasher.update(wrapped);
-    hasher.finalize().into()
-}
-
-// === Internal helpers ===
-
-#[derive(Deserialize)]
-struct HclVarDataUserData {
-    #[serde(rename = "user-data")]
-    user_data: Option<String>,
-}
-
-/// Parse the Azure HCL report and ensure it wraps a TDX report.
-fn parse_azure_tdx_hcl_report(bytes: &[u8]) -> Result<HclReport, AttestationError> {
-    let hcl_report = HclReport::new(bytes.to_vec())?;
-    if hcl_report.report_type() != ReportType::Tdx {
-        return Err(AttestationError::NotTdxHclReport);
-    }
-    Ok(hcl_report)
-}
-
-/// Extract the caller-supplied Azure HCL `user-data` bytes.
-fn extract_azure_user_data(hcl_report: &HclReport) -> Result<Vec<u8>, AttestationError> {
-    let var_data: HclVarDataUserData = serde_json::from_slice(hcl_report.var_data())?;
-    let user_data = var_data
-        .user_data
-        .ok_or(AttestationError::MissingUserData)?;
-    Ok(hex::decode(user_data.trim_start_matches("0x"))?)
-}
-
-/// Compute the hash Azure places in the TD report / quote report_data prefix.
-fn azure_var_data_hash(hcl_report: &HclReport) -> [u8; 32] {
-    hcl_report.var_data_sha256()
-}
-
-/// Verify that the raw DCAP quote is bound to the Azure HCL variable data.
-fn verify_azure_quote_binding(
-    hcl_report: &HclReport,
-    quote_report_data: &[u8; 64],
-) -> Result<(), AttestationError> {
-    let expected = azure_var_data_hash(hcl_report);
-    if quote_report_data[..32] != expected {
-        return Err(AttestationError::AzureQuoteBindingMismatch);
-    }
-    Ok(())
-}
-
-/// Verify that the Azure HCL user-data equals the Seismic protocol binding.
-fn verify_azure_user_data(
-    hcl_report: &HclReport,
-    expected_binding: &[u8],
-) -> Result<(), AttestationError> {
-    let user_data = extract_azure_user_data(hcl_report)?;
-    if user_data == expected_binding || user_data == azure_user_data_for_binding(expected_binding)?
-    {
-        return Ok(());
-    }
-    Err(AttestationError::SeismicBindingMismatch)
-}
-
-fn azure_user_data_for_binding(binding: &[u8]) -> Result<Vec<u8>, AttestationError> {
-    if binding.len() > 64 {
-        return Err(AttestationError::BindingTooLong { len: binding.len() });
+    /// Binding for TxSeismic tx_io public key evidence.
+    pub fn tx_io_binding(tx_io_pk: &[u8], epoch: u64) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(b"seismic-tx-io:");
+        hasher.update(tx_io_pk);
+        hasher.update(epoch.to_be_bytes());
+        hasher.finalize().into()
     }
 
-    let mut user_data = binding.to_vec();
-    if user_data.len() < 64 {
-        user_data.resize(64, 0);
-    }
-    Ok(user_data)
-}
-
-/// Panic-safe parse of the current `dcap-rs` QuoteV4 type.
-fn parse_quote_v4(bytes: &[u8]) -> Result<QuoteV4, AttestationError> {
-    // `dcap-rs` 0.1.0 indexes into the input directly and panics on short
-    // buffers. Avoid invoking it for obviously invalid data so tests and CLI
-    // callers don't emit panic noise even though `catch_unwind` would recover.
-    if bytes.len() < 48 {
-        return Err(AttestationError::QuoteParse);
+    /// Binding for a root-key bootstrap requester quote.
+    pub fn root_key_request_binding(nonce_b: &[u8], eph_pk_b: &[u8]) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(nonce_b);
+        hasher.update(eph_pk_b);
+        hasher.finalize().into()
     }
 
-    catch_unwind(AssertUnwindSafe(|| QuoteV4::from_bytes(bytes)))
-        .map_err(|_| AttestationError::QuoteParse)
-}
+    /// Binding for a root-key bootstrap responder quote.
+    pub fn root_key_response_binding(nonce_b: &[u8], eph_pk_a: &[u8], wrapped: &[u8]) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(nonce_b);
+        hasher.update(eph_pk_a);
+        hasher.update(wrapped);
+        hasher.finalize().into()
+    }
 
-/// Extract TDX report data and measurements from a parsed quote.
-fn extract_tdx_quote_fields(quote: &QuoteV4) -> Result<VerifiedQuoteFields, AttestationError> {
-    let QuoteBody::TD10QuoteBody(body) = quote.quote_body else {
-        return Err(AttestationError::NotTdxQuote);
-    };
-
-    Ok(VerifiedQuoteFields {
-        report_data: body.report_data,
-        measurements: TdxMeasurements {
-            mrtd: body.mrtd,
-            mrseam: body.mrseam,
-            rtmr0: body.rtmr0,
-            rtmr1: body.rtmr1,
-            rtmr2: body.rtmr2,
-            rtmr3: body.rtmr3,
-        },
-    })
-}
-
-fn verify_measurements(
-    measurements: &TdxMeasurements,
-    policy: &MeasurementPolicy,
-) -> Result<(), AttestationError> {
-    match policy {
-        MeasurementPolicy::Any => Ok(()),
-        MeasurementPolicy::Allowlist(allowed) if allowed.iter().any(|m| m == measurements) => {
-            Ok(())
-        }
-        MeasurementPolicy::Allowlist(_) => Err(AttestationError::MeasurementMismatch),
+    /// Expand a shorter protocol digest into the 64-byte attestation input.
+    pub fn binding64_from_digest32(digest: [u8; 32]) -> [u8; 64] {
+        let mut binding = [0u8; 64];
+        binding[..32].copy_from_slice(&digest);
+        binding
     }
 }
 
@@ -270,138 +368,156 @@ mod tests {
     #[test]
     fn binding_helpers_are_stable() {
         assert_eq!(
-            hex::encode(tx_io_binding(b"pk", 7)),
+            hex::encode(bindings::tx_io_binding(b"pk", 7)),
             "0cf7d05bc0019123fdf7a69cb91ad265625f9673172508b4f682e3d917b0f11c"
         );
         assert_eq!(
-            hex::encode(root_key_request_binding(b"nonce", b"pk_b")),
+            hex::encode(bindings::root_key_request_binding(b"nonce", b"pk_b")),
             "3375ae192a636e95828a472e73d218576813c66fb67bd42f123f810c1953ca6d"
         );
         assert_eq!(
-            hex::encode(root_key_response_binding(b"nonce", b"pk_a", b"wrapped")),
+            hex::encode(bindings::root_key_response_binding(
+                b"nonce", b"pk_a", b"wrapped"
+            )),
             "d2ac32239b55995fb355fc426dc0876d629d00abdcf244359dee2c0f2b6c2681"
         );
     }
 
     #[test]
-    fn azure_user_data_binding_allows_zero_padding() {
-        let binding = [1u8; 32];
-        let mut padded = binding.to_vec();
-        padded.resize(64, 0);
-
-        assert_eq!(azure_user_data_for_binding(&binding).unwrap(), padded);
-        assert_eq!(azure_user_data_for_binding(&padded).unwrap(), padded);
+    fn binding64_zero_pads_digest32() {
+        let digest = [7u8; 32];
+        let binding = bindings::binding64_from_digest32(digest);
+        assert_eq!(&binding[..32], &digest);
+        assert_eq!(&binding[32..], &[0u8; 32]);
     }
 
     #[test]
-    fn measurement_policy_allowlist() {
-        let measurements = TdxMeasurements {
-            mrtd: [1; 48],
-            mrseam: [2; 48],
-            rtmr0: [3; 48],
-            rtmr1: [4; 48],
-            rtmr2: [5; 48],
-            rtmr3: [6; 48],
-        };
-
-        assert!(verify_measurements(&measurements, &MeasurementPolicy::Any).is_ok());
-        assert!(
-            verify_measurements(
-                &measurements,
-                &MeasurementPolicy::Allowlist(vec![measurements.clone()])
-            )
-            .is_ok()
+    fn backend_policy_parses_flashbots_measurement_json_and_preserves_record_correlation() {
+        let image_a_pcr4 = [0xA4u8; 32];
+        let image_a_pcr9 = [0xA9u8; 32];
+        let image_b_pcr4 = [0xB4u8; 32];
+        let image_b_pcr9 = [0xB9u8; 32];
+        let json = format!(
+            r#"[
+                {{
+                    "measurement_id": "image-a",
+                    "attestation_type": "azure-tdx",
+                    "measurements": {{
+                        "pcr4": {{ "expected": "{}" }},
+                        "pcr9": {{ "expected": "{}" }}
+                    }}
+                }},
+                {{
+                    "measurement_id": "image-b",
+                    "attestation_type": "azure-tdx",
+                    "measurements": {{
+                        "pcr4": {{ "expected": "{}" }},
+                        "pcr9": {{ "expected": "{}" }}
+                    }}
+                }}
+            ]"#,
+            hex::encode(image_a_pcr4),
+            hex::encode(image_a_pcr9),
+            hex::encode(image_b_pcr4),
+            hex::encode(image_b_pcr9),
         );
-        assert!(verify_measurements(&measurements, &MeasurementPolicy::Allowlist(vec![])).is_err());
+        let policy = SeismicMeasurementPolicy::from_json_bytes(json.as_bytes()).unwrap();
+
+        let cross_product_measurements =
+            MultiMeasurements::Azure(HashMap::from([(4, image_a_pcr4), (9, image_b_pcr9)]));
+        assert!(
+            policy
+                .backend_policy
+                .check_measurement(&cross_product_measurements)
+                .is_err()
+        );
+
+        let image_b_measurements =
+            MultiMeasurements::Azure(HashMap::from([(4, image_b_pcr4), (9, image_b_pcr9)]));
+        policy
+            .backend_policy
+            .check_measurement(&image_b_measurements)
+            .unwrap();
     }
 
     #[test]
-    fn azure_tdx_fixture_verifies_policy() {
-        let fixture = AzureFixture::load();
-        let evidence = AzureTdxEvidence {
-            hcl_report: fixture.hcl_report.clone(),
-            quote: fixture.quote.clone(),
-        };
+    fn dangerous_accept_any_is_explicit() {
+        let policy =
+            SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx);
 
-        let verified =
-            verify_azure_tdx_policy(&evidence, &fixture.binding, &MeasurementPolicy::Any).unwrap();
-
-        assert_eq!(verified.report_data, fixture.quote_report_data);
+        policy
+            .backend_policy
+            .check_measurement(&MultiMeasurements::Azure(HashMap::new()))
+            .unwrap();
+        assert!(
+            policy
+                .backend_policy
+                .check_measurement(&MultiMeasurements::NoAttestation)
+                .is_err()
+        );
     }
 
     #[test]
-    fn azure_tdx_fixture_rejects_wrong_binding() {
-        let fixture = AzureFixture::load();
-        let evidence = AzureTdxEvidence {
-            hcl_report: fixture.hcl_report,
-            quote: fixture.quote,
-        };
-        let wrong_binding = [0xff; 32];
+    fn converts_backend_azure_measurements_to_verified_output() {
+        let binding = [3u8; 64];
+        let pcr4 = [4u8; 32];
+        let verified = VerifiedSeismicAttestation::from_backend(
+            AttestationType::AzureTdx,
+            binding,
+            Some(MultiMeasurements::Azure(HashMap::from([(4, pcr4)]))),
+        )
+        .unwrap();
 
-        assert!(matches!(
-            verify_azure_tdx_policy(&evidence, &wrong_binding, &MeasurementPolicy::Any,),
-            Err(AttestationError::SeismicBindingMismatch)
-        ));
-    }
-
-    #[test]
-    fn azure_tdx_fixture_rejects_wrong_measurement() {
-        let fixture = AzureFixture::load();
-        let evidence = AzureTdxEvidence {
-            hcl_report: fixture.hcl_report,
-            quote: fixture.quote,
-        };
-        let wrong_measurement = TdxMeasurements {
-            mrtd: [0xff; 48],
-            mrseam: [0xff; 48],
-            rtmr0: [0xff; 48],
-            rtmr1: [0xff; 48],
-            rtmr2: [0xff; 48],
-            rtmr3: [0xff; 48],
-        };
-
-        assert!(matches!(
-            verify_azure_tdx_policy(
-                &evidence,
-                &fixture.binding,
-                &MeasurementPolicy::Allowlist(vec![wrong_measurement]),
-            ),
-            Err(AttestationError::MeasurementMismatch)
-        ));
-    }
-
-    #[test]
-    fn quote_parse_error_is_structured() {
-        assert!(matches!(
-            parse_quote_v4(b"not a quote"),
-            Err(AttestationError::QuoteParse)
-        ));
-    }
-
-    struct AzureFixture {
-        binding: Vec<u8>,
-        hcl_report: Vec<u8>,
-        quote: Vec<u8>,
-        quote_report_data: [u8; 64],
-    }
-
-    impl AzureFixture {
-        fn load() -> Self {
-            let fixture: serde_json::Value =
-                serde_json::from_str(include_str!("../fixtures/azure-tdx-v1.json")).unwrap();
-
-            Self {
-                binding: decode_fixture_hex(&fixture, "binding_hex"),
-                hcl_report: decode_fixture_hex(&fixture, "hcl_report_hex"),
-                quote: decode_fixture_hex(&fixture, "quote_hex"),
-                quote_report_data: decode_fixture_hex(&fixture, "quote_report_data_hex")
-                    .try_into()
-                    .unwrap(),
+        assert_eq!(verified.attestation_type(), AttestationType::AzureTdx);
+        assert_eq!(verified.binding(), &binding);
+        match verified {
+            VerifiedSeismicAttestation::AzureTdx(azure) => {
+                assert_eq!(azure.guest_measurements.pcrs.get(&4), Some(&pcr4));
             }
+            _ => panic!("expected Azure output"),
         }
     }
 
-    fn decode_fixture_hex(fixture: &serde_json::Value, key: &str) -> Vec<u8> {
-        hex::decode(fixture[key].as_str().unwrap()).unwrap()
+    #[test]
+    fn converts_backend_dcap_measurements_to_verified_output() {
+        let binding = [5u8; 64];
+        let mrtd = [7u8; 48];
+        let verified = VerifiedSeismicAttestation::from_backend(
+            AttestationType::DcapTdx,
+            binding,
+            Some(MultiMeasurements::Dcap(HashMap::from([(
+                DcapMeasurementRegister::MRTD,
+                mrtd,
+            )]))),
+        )
+        .unwrap();
+
+        assert_eq!(verified.attestation_type(), AttestationType::DcapTdx);
+        assert_eq!(verified.binding(), &binding);
+        match verified {
+            VerifiedSeismicAttestation::DcapTdx(dcap) => {
+                assert_eq!(
+                    dcap.measurements
+                        .registers
+                        .get(&DcapMeasurementRegister::MRTD),
+                    Some(&mrtd),
+                );
+            }
+            _ => panic!("expected DCAP output"),
+        }
+    }
+
+    #[test]
+    fn represents_verified_no_attestation() {
+        let binding = [9u8; 64];
+        let verified =
+            VerifiedSeismicAttestation::from_backend(AttestationType::None, binding, None).unwrap();
+
+        assert_eq!(verified.attestation_type(), AttestationType::None);
+        assert_eq!(verified.binding(), &binding);
+        assert_eq!(
+            verified,
+            VerifiedSeismicAttestation::NoAttestation { binding }
+        );
     }
 }
