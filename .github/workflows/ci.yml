@@ -24,25 +24,22 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
-  warnings:
+  check_and_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # The TPM stack (az-cvm-vtpm -> tss-esapi-sys, Linux-only via cfg) links
+      # the native tpm2-tss libraries; GitHub-hosted runners don't ship them.
+      - name: Install TPM build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libtss2-dev
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
-
-  test_workspace:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # Default coverage for every workspace crate, so new crates get tested
-      # without anyone remembering to add a job. Exclusions, each for its own reason:
+      # Default test coverage for every workspace crate, so new crates get
+      # tested without anyone remembering to add a job. Exclusions, each for
+      # its own reason:
       #   - seismic-enclave / seismic-enclave-server: tests need root on a
       #     TDX CVM (vTPM/IMDS access); they have dedicated sudo jobs below.
       #   - enclave-contract: its integration test needs a live RPC node at localhost:8545.
