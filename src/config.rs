@@ -9,6 +9,14 @@ pub struct InitConfig {
     pub domain: DomainConfig,
     #[serde(default)]
     pub enclave: EnclaveConfig,
+    /// TODO: drop the `Option` (make `[network]` required) once both hold:
+    /// (1) enclave-server reads `network-manifest.json` for its attestation
+    /// `network_id` bindings — the consumer that breaks at boot when the
+    /// file is missing; (2) deploy flows embed the section in every
+    /// node.toml by default. Until then a missing section must stay
+    /// tolerated: nothing consumes the file yet, and existing node.tomls
+    /// don't carry it.
+    pub network: Option<NetworkConfig>,
 }
 
 /// DNS name + contact email for the Let's Encrypt cert that fronts this
@@ -47,6 +55,21 @@ pub struct EnclaveConfig {
     pub peers: Vec<String>,
 }
 
+/// The network's identity document, common to genesis and joining nodes.
+///
+/// `network_id = SHA-256(exact network-manifest.json bytes)`, so the manifest
+/// travels base64-encoded (opaque bytes) rather than as an inline string:
+/// tdx-init validates it at POST time and writes the decoded bytes verbatim
+/// to `network-manifest.json` under [`crate::CONF_DIR`], never
+/// parse-and-re-serialize. Validation rules live in `src/manifest.rs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NetworkConfig {
+    /// base64 (standard alphabet) of the network-manifest.json bytes, as
+    /// emitted by the deploy tool's manifest assembly step.
+    pub manifest_base64: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,6 +90,39 @@ peers = ["http://10.0.0.1:7878", "http://10.0.0.2:7878"]
         assert_eq!(cfg.domain.email, "ops@example.com");
         assert!(cfg.enclave.genesis_node);
         assert_eq!(cfg.enclave.peers.len(), 2);
+        assert!(cfg.network.is_none());
+    }
+
+    #[test]
+    fn parses_network_section() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+
+[network]
+manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+"#;
+        let cfg: InitConfig = toml::from_str(toml_input).unwrap();
+        assert_eq!(
+            cfg.network.unwrap().manifest_base64,
+            "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_field_in_network_section() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+
+[network]
+manifest_base64 = "eyJ9"
+network_id = "0xabcd"
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("unknown"));
     }
 
     #[test]

@@ -22,6 +22,27 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
     fs::create_dir_all(conf_dir).await?;
     write_domain_env(conf_dir, config).await?;
     write_enclave_env(conf_dir, config).await?;
+    if let Some(network) = &config.network {
+        write_network_manifest(conf_dir, network).await?;
+    }
+    Ok(())
+}
+
+/// Write the decoded manifest bytes verbatim (byte-exactness rule):
+/// consumers derive `network_id` by hashing this file themselves, so any
+/// re-rendering here would silently change the network's identity.
+async fn write_network_manifest(
+    conf_dir: &Path,
+    network: &crate::config::NetworkConfig,
+) -> Result<()> {
+    let path = conf_dir.join("network-manifest.json");
+    let bytes = crate::manifest::decode_and_validate(&network.manifest_base64)?;
+    write_with_mode(&path, &bytes, DEFAULT_FILE_MODE).await?;
+    info!(
+        "wrote {} (network_id {})",
+        path.display(),
+        crate::manifest::network_id_hex(&bytes),
+    );
     Ok(())
 }
 
@@ -48,7 +69,7 @@ async fn write_enclave_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     Ok(())
 }
 
-async fn write_with_mode(path: &Path, content: &str, mode: u32) -> Result<()> {
+async fn write_with_mode(path: &Path, content: impl AsRef<[u8]>, mode: u32) -> Result<()> {
     fs::write(path, content).await?;
     let mut perms = fs::metadata(path).await?.permissions();
     perms.set_mode(mode);
@@ -72,6 +93,7 @@ mod tests {
                 genesis_node,
                 peers: peers.into_iter().map(String::from).collect(),
             },
+            network: None,
         }
     }
 
@@ -108,6 +130,39 @@ mod tests {
             enclave,
             "SEISMIC_ENCLAVE_GENESIS_NODE=false\nSEISMIC_ENCLAVE_PEERS=\n"
         );
+    }
+
+    #[tokio::test]
+    async fn writes_network_manifest_verbatim() {
+        use base64::Engine as _;
+
+        let tmp = TempDir::new().unwrap();
+        let mut cfg = sample_config(false, vec![]);
+        // A valid manifest with a non-canonical byte (trailing newline): the
+        // written file must be the decoded bytes exactly, not a re-rendering.
+        let raw = [
+            include_bytes!("../fixtures/network-manifest-v1.json").as_slice(),
+            b"\n",
+        ]
+        .concat();
+        cfg.network = Some(crate::config::NetworkConfig {
+            manifest_base64: base64::engine::general_purpose::STANDARD.encode(&raw),
+        });
+
+        write_service_configs(tmp.path(), &cfg).await.unwrap();
+
+        let written = std::fs::read(tmp.path().join("network-manifest.json")).unwrap();
+        assert_eq!(written, raw);
+    }
+
+    #[tokio::test]
+    async fn skips_network_manifest_when_section_absent() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = sample_config(false, vec![]);
+
+        write_service_configs(tmp.path(), &cfg).await.unwrap();
+
+        assert!(!tmp.path().join("network-manifest.json").exists());
     }
 
     #[tokio::test]

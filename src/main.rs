@@ -6,6 +6,7 @@ use tracing::info;
 
 mod config;
 mod error;
+mod manifest;
 mod server;
 mod writer;
 
