@@ -168,10 +168,12 @@ fn check_hex(value: &str, nbytes: usize, field: &str) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// Copy of enclave/crates/seismic-attestation/fixtures/network-manifest-v1.json;
-    /// the network_id vector below is asserted by that crate (and by the
-    /// deploy tool's tests), pinning all three stacks to the same bytes.
-    const FIXTURE: &[u8] = include_bytes!("../fixtures/network-manifest-v1.json");
+    /// seismic-attestation's fixture, included directly so this mirror can
+    /// never drift from the authoritative parser unnoticed; the network_id
+    /// vector below is asserted by that crate (and by the deploy tool's
+    /// tests), pinning all stacks to the same bytes.
+    const FIXTURE: &[u8] =
+        include_bytes!("../../seismic-attestation/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
         "0xc4d4721b2e287df26022e6d27c8cf772841a872b6be08b1938cbc76d88703747";
 
