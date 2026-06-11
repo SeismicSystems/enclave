@@ -1,0 +1,8 @@
+# Pinned to match RUST_VERSION in seismic-images' modules/seismic/mkosi.build,
+# which installs the image-build toolchain via rustup (a single version for
+# all repos; per-repo toolchain files are ignored there). Keeping dev in
+# lockstep means local builds — and rust-analyzer's proc-macro server, which
+# is spawned from this toolchain — use the same compiler that produces the
+# measured image binaries. Bump together with the mkosi.build pin.
+[toolchain]
+channel = "1.91.1"
