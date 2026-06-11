@@ -79,6 +79,25 @@ jobs:
             sudo "$binary"
           done
 
+  test_workspace:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace-test-cache"
+      # Default coverage for every workspace crate, so new crates get tested
+      # without anyone remembering to add a job. Exclusions, each for its own
+      # reason:
+      #   - seismic-enclave / seismic-enclave-server: tests need root on a
+      #     TDX CVM (vTPM/IMDS access); they have dedicated sudo jobs below.
+      #   - enclave-contract: its integration test needs a live RPC node at
+      #     localhost:8545.
+      - name: Run workspace tests
+        run: cargo test --workspace --exclude seismic-enclave --exclude seismic-enclave-server --exclude enclave-contract
+
   test_enclave_server:
     runs-on: self-hosted
     timeout-minutes: 30
