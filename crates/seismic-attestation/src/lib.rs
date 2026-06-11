@@ -10,17 +10,17 @@
 //! Production callers usually only need these APIs:
 //!
 //! - [`generate_evidence`] to produce local attestation evidence for a
-//!   caller-supplied 64-byte protocol binding.
+//!   caller-supplied 64-byte protocol binding (see [`bindings`]).
 //! - [`verify_evidence`] to verify remote evidence against a
 //!   [`SeismicMeasurementPolicy`].
 //! - [`SeismicMeasurementPolicy::from_json_bytes`] or
-//!   [`SeismicMeasurementPolicy::from_file`] to load Flashbots-compatible
-//!   measurement artifacts, such as `seismic-images build/measurements.json`.
-//!
-//! The [`bindings`] module contains helper digests for Seismic protocol
-//! transcripts. These helpers are not complete protocols by themselves; callers
-//! should feed the resulting 32-byte digest through
-//! [`bindings::binding64_from_digest32`] before attestation.
+//!   [`SeismicMeasurementPolicy::from_file`] to load measurement policies,
+//!   such as seismic-images' `build/measurements.json`.
+
+pub mod bindings;
+pub mod manifest;
+
+pub use manifest::{ManifestError, NetworkId, NetworkManifestV1};
 
 /// Backend measurement types returned after successful verification.
 pub use attestation::measurements::{DcapMeasurementRegister, MultiMeasurements};
@@ -129,7 +129,7 @@ pub async fn verify_azure_evidence_with_options(
 
 // === Public policy and output types ===
 
-/// Seismic-safe wrapper around Flashbots measurement policy.
+/// Seismic-safe wrapper around the attestation backend's measurement policy.
 ///
 /// The underlying JSON/file format is the backend's format. This wrapper exists
 /// to keep production constructors explicit and to avoid spreading backend
@@ -140,16 +140,17 @@ pub struct SeismicMeasurementPolicy {
 }
 
 impl SeismicMeasurementPolicy {
-    /// Parse a Flashbots-compatible measurement policy JSON document.
+    /// Parse a measurement policy JSON document.
     ///
-    /// This is the expected path for `seismic-images build/measurements.json`.
+    /// This is the expected path for seismic-images' `build/measurements.json`
+    /// (the `make measure` output).
     pub fn from_json_bytes(bytes: &[u8]) -> Result<Self, AttestationError> {
         Ok(Self {
             backend_policy: BackendMeasurementPolicy::from_json_bytes(bytes.to_vec())?,
         })
     }
 
-    /// Load a Flashbots-compatible measurement policy from a file.
+    /// Load a measurement policy from a file.
     pub async fn from_file(path: impl Into<PathBuf>) -> Result<Self, AttestationError> {
         Ok(Self {
             backend_policy: BackendMeasurementPolicy::from_file(path.into()).await?,
@@ -319,77 +320,9 @@ pub enum AttestationError {
     },
 }
 
-/// Helpers for deriving Seismic protocol-binding digests.
-///
-/// These helpers return 32-byte SHA-256 digests. Attestation evidence generation
-/// takes a 64-byte input, so use [`binding64_from_digest32`] before calling
-/// [`crate::generate_evidence`] or [`crate::verify_evidence`].
-pub mod bindings {
-    use sha2::{Digest, Sha256};
-
-    /// Binding for TxSeismic tx_io public key evidence.
-    pub fn tx_io_binding(tx_io_pk: &[u8], epoch: u64) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(b"seismic-tx-io:");
-        hasher.update(tx_io_pk);
-        hasher.update(epoch.to_be_bytes());
-        hasher.finalize().into()
-    }
-
-    /// Binding for a root-key bootstrap requester quote.
-    pub fn root_key_request_binding(nonce_b: &[u8], eph_pk_b: &[u8]) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(nonce_b);
-        hasher.update(eph_pk_b);
-        hasher.finalize().into()
-    }
-
-    /// Binding for a root-key bootstrap responder quote.
-    pub fn root_key_response_binding(nonce_b: &[u8], eph_pk_a: &[u8], wrapped: &[u8]) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(nonce_b);
-        hasher.update(eph_pk_a);
-        hasher.update(wrapped);
-        hasher.finalize().into()
-    }
-
-    /// Expand a shorter protocol digest into the 64-byte attestation input.
-    pub fn binding64_from_digest32(digest: [u8; 32]) -> [u8; 64] {
-        let mut binding = [0u8; 64];
-        binding[..32].copy_from_slice(&digest);
-        binding
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn binding_helpers_are_stable() {
-        assert_eq!(
-            hex::encode(bindings::tx_io_binding(b"pk", 7)),
-            "0cf7d05bc0019123fdf7a69cb91ad265625f9673172508b4f682e3d917b0f11c"
-        );
-        assert_eq!(
-            hex::encode(bindings::root_key_request_binding(b"nonce", b"pk_b")),
-            "3375ae192a636e95828a472e73d218576813c66fb67bd42f123f810c1953ca6d"
-        );
-        assert_eq!(
-            hex::encode(bindings::root_key_response_binding(
-                b"nonce", b"pk_a", b"wrapped"
-            )),
-            "d2ac32239b55995fb355fc426dc0876d629d00abdcf244359dee2c0f2b6c2681"
-        );
-    }
-
-    #[test]
-    fn binding64_zero_pads_digest32() {
-        let digest = [7u8; 32];
-        let binding = bindings::binding64_from_digest32(digest);
-        assert_eq!(&binding[..32], &digest);
-        assert_eq!(&binding[32..], &[0u8; 32]);
-    }
 
     #[test]
     fn backend_policy_parses_flashbots_measurement_json_and_preserves_record_correlation() {
