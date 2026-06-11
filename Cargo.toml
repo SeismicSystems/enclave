@@ -4,6 +4,7 @@ members = [
     "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
     "crates/seismic-attestation",
+    "crates/tdx-init",
 ]
 
 [workspace.package]
