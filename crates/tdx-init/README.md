@@ -50,9 +50,9 @@ the manifest against the v1 schema at POST time — a bad manifest fails the
 deploy with `400`, not a later boot — and writes the decoded bytes
 verbatim to `network-manifest.json`, never parse-and-re-serialize. The
 deploy tool's manifest-assembly step produces the value; the schema's
-authoritative parser lives in the enclave repo
-(`crates/seismic-attestation`), kept in lockstep with this crate via a
-shared fixture.
+authoritative parser is the sibling
+[`seismic-attestation`](../seismic-attestation) crate, kept in lockstep
+with this crate via its shared fixture.
 
 ## Per-service outputs
 
@@ -61,8 +61,8 @@ After validation, tdx-init writes:
 | File | Schema | Consumer |
 |---|---|---|
 | `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
-| `/run/seismic/conf/enclave.env` | `SEISMIC_ENCLAVE_GENESIS_NODE=...`, `SEISMIC_ENCLAVE_PEERS=...` | `enclave.service` (seismic-images) — loaded via `EnvironmentFile=`, then consumed by `seismic-enclave-server` through clap `env=` attributes |
-| `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes (only when `[network]` present) | `seismic-enclave-server` — hashes the file itself to derive `network_id` for attestation bindings |
+| `/run/seismic/conf/enclave.env` | `SEISMIC_ENCLAVE_GENESIS_NODE=...`, `SEISMIC_ENCLAVE_PEERS=...` | `enclave.service` (seismic-images) — loaded via `EnvironmentFile=`, then consumed by [`seismic-enclave-server`](../enclave-server) through clap `env=` attributes |
+| `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes (only when `[network]` present) | [`seismic-enclave-server`](../enclave-server) — hashes the file itself to derive `network_id` for attestation bindings |
 
 Each downstream service reads its own native format (env-var pairs,
 either via systemd `EnvironmentFile=` or shell `source`); tdx-init is
