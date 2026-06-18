@@ -11,3 +11,9 @@ tracing.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
+# The multisig integration test spawns a local `anvil` node and seeds the two
+# upgrade contracts at their fixed addresses via `anvil_setCode`, so it needs the
+# node bindings (`Anvil`) and the anvil-api provider ext (`anvil_set_code`).
+alloy = { workspace = true, features = ["node-bindings", "provider-anvil-api"] }
+# Reading the `deployedBytecode` out of the forge-built contract artifacts.
+serde_json = { workspace = true }
