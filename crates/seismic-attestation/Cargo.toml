@@ -9,18 +9,23 @@ license.workspace = true
 description = "Seismic attestation evidence types and policy checks"
 
 [dependencies]
-attestation = { git = "https://github.com/SeismicSystems/attested-tls", branch = "fix/azure-vtpm-aia-intermediates-clean" }
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+attestation.workspace = true # all platforms; the Linux block below adds the `azure` feature
 
+# Linux-only: the `azure` feature turns on attestation *evidence generation*
+# (Intel TDX quote + Azure vTPM quote), which depends on crates that only
+# compile on Linux — notably the `tss-esapi` TPM stack.
 [target.'cfg(target_os = "linux")'.dependencies]
-attestation = { git = "https://github.com/SeismicSystems/attested-tls", branch = "fix/azure-vtpm-aia-intermediates-clean", features = [
-    "azure",
-] }
+attestation = { workspace = true, features = ["azure"] }
 
+# Linux-only for the same reason: the examples here (`azure_vtpm_roundtrip`,
+# `capture_azure_tdx_fixture`) produce real Azure TDX + vTPM evidence, pulling
+# the Azure device crates (`az-tdx-vtpm`, `az-cvm-vtpm`) and `dcap-rs`, which
+# only compile on Linux.
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 anyhow.workspace = true
 az-tdx-vtpm.workspace = true

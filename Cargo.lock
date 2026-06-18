@@ -1098,7 +1098,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "attestation"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?branch=fix%2Fazure-vtpm-aia-intermediates-clean#79a0b65dd61aaac3812f3c7cd6d8360668d6951d"
+source = "git+https://github.com/flashbots/attested-tls?rev=05a79a3f16a6d074bc10ce7aa29a3cd804fdc613#05a79a3f16a6d074bc10ce7aa29a3cd804fdc613"
 dependencies = [
  "anyhow",
  "az-tdx-vtpm",
@@ -2985,7 +2985,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -4046,7 +4046,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pccs"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?branch=fix%2Fazure-vtpm-aia-intermediates-clean#79a0b65dd61aaac3812f3c7cd6d8360668d6951d"
+source = "git+https://github.com/flashbots/attested-tls?rev=05a79a3f16a6d074bc10ce7aa29a3cd804fdc613#05a79a3f16a6d074bc10ce7aa29a3cd804fdc613"
 dependencies = [
  "anyhow",
  "dcap-qvl",
@@ -4332,7 +4332,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -4369,7 +4369,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -6460,7 +6460,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
