@@ -35,6 +35,13 @@ jobs:
       # the native tpm2-tss libraries; GitHub-hosted runners don't ship them.
       - name: Install TPM build dependencies
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
+      # enclave-contract's multisig integration test spawns a local `anvil` and
+      # builds the (plain Solidity) upgrade contracts with `forge`. Vanilla
+      # foundry is enough: the contracts use no shielded types, so no Seismic
+      # toolchain (sforge/sanvil) is needed — and sanvil would in fact break it,
+      # since it forces every tx through the encrypted Seismic path.
+      - name: Install foundry (forge + anvil)
+        uses: foundry-rs/foundry-toolchain@v1
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
       # Default test coverage for every workspace crate, so new crates get
@@ -42,9 +49,8 @@ jobs:
       # its own reason:
       #   - seismic-enclave / seismic-enclave-server: tests need root on a
       #     TDX CVM (vTPM/IMDS access); they have dedicated sudo jobs below.
-      #   - enclave-contract: its integration test needs a live RPC node at localhost:8545.
       - name: Run workspace tests
-        run: cargo test --workspace --exclude seismic-enclave --exclude seismic-enclave-server --exclude enclave-contract
+        run: cargo test --workspace --exclude seismic-enclave --exclude seismic-enclave-server
 
   build:
     runs-on: self-hosted
