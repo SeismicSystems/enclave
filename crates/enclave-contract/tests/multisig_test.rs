@@ -9,6 +9,12 @@ use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
 use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 
 use enclave_contract::{ANVIL_ALICE_SK, ANVIL_BOB_SK};
+
+use alloy::node_bindings::Anvil;
+use alloy::primitives::{Address, Bytes};
+use alloy::providers::{ext::AnvilApi, ProviderBuilder};
+use std::path::PathBuf;
+use std::process::Command;
 use std::thread::sleep;
 use std::time::Duration;
 /// Prints a string to standard output and immediately flushes the output buffer.
@@ -21,13 +27,101 @@ pub fn print_flush<S: AsRef<str>>(s: S) {
     handle.flush().unwrap();
 }
 
+/// Compile the upgrade contracts with `forge` and return the deployed (runtime)
+/// bytecode for `name` from its foundry artifact.
+///
+/// seismic-reth places this same bytecode at a fixed genesis address; here we
+/// build it from the checked-in sources so the test can seed it into a local
+/// `anvil` node (see [`deploy_upgrade_contracts`]). The contracts are plain
+/// Solidity (no shielded types), so vanilla `forge`/`anvil` — installed in CI via
+/// foundryup — are all this test needs; no Seismic toolchain or node.
+fn deployed_bytecode(name: &str) -> Bytes {
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    // Idempotent: recompiles only when sources change. `--skip tests/**` keeps
+    // the forge-std-dependent `.t.sol` out of the build (it isn't needed here).
+    let status = Command::new("forge")
+        .current_dir(&crate_dir)
+        .args([
+            "build",
+            "--contracts",
+            "contracts/",
+            "--skip",
+            "tests/**",
+            "--out",
+            "out",
+        ])
+        .status()
+        .expect("failed to run `forge build` (is forge on PATH? install via foundryup)");
+    assert!(status.success(), "`forge build` failed");
+
+    let artifact = crate_dir.join(format!("out/{name}.sol/{name}.json"));
+    let json: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(&artifact)
+            .unwrap_or_else(|e| panic!("reading artifact {}: {e}", artifact.display())),
+    )
+    .expect("parsing foundry artifact json");
+
+    let hex = json["deployedBytecode"]["object"]
+        .as_str()
+        .expect("artifact missing deployedBytecode.object");
+    hex.parse::<Bytes>()
+        .expect("deployedBytecode is not valid hex")
+}
+
+/// Seed the UpgradeOperator and MultisigUpgradeOperator runtime bytecode at their
+/// fixed addresses, replicating seismic-reth's genesis alloc on a local `anvil`
+/// node.
+///
+/// Both addresses are baked into the contracts as `constant`s (the multisig's
+/// `upgradeOperator`, the operator's `OWNER`), so they must land at exactly these
+/// addresses for the cross-contract calls and the `onlyNetworkMultisig` guard to
+/// work. Neither contract has constructor-initialized storage, so placing the
+/// runtime code is sufficient — no deploy transaction or storage seeding needed.
+async fn deploy_upgrade_contracts(rpc: &str) {
+    let provider = ProviderBuilder::new().connect_http(rpc.parse().unwrap());
+
+    let operator: Address = UPGRADE_OPERATOR_ADDRESS.parse().unwrap();
+    let multisig: Address = UPGRADE_MULTISIG_ADDRESS.parse().unwrap();
+
+    provider
+        .anvil_set_code(operator, deployed_bytecode("UpgradeOperator"))
+        .await
+        .expect("anvil_setCode UpgradeOperator");
+    provider
+        .anvil_set_code(multisig, deployed_bytecode("MultisigUpgradeOperator"))
+        .await
+        .expect("anvil_setCode MultisigUpgradeOperator");
+}
+
 /// Test the complete multisig workflow for controlling UpgradeOperator
 /// This test verifies that the multisig contract can properly control the UpgradeOperator
 /// through a 2-of-3 voting mechanism
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Error> {
-    // Set path to the factory contract's json file
-    let reth_rpc = "http://localhost:8545";
+    // Two modes, one binary:
+    //   - Default (hosted `check_and_test`): spin up a throwaway anvil and seed
+    //     the two upgrade contracts at their fixed addresses. Self-contained logic
+    //     coverage — no reth, enclave-server, or TPM.
+    //   - `MULTISIG_RPC=<url>` set (self-hosted `run_integration_tests.sh`): run
+    //     against that node instead. There the contracts already exist at genesis
+    //     (seismic-reth's dev alloc), so we skip the spawn + `anvil_setCode`. This
+    //     run is the on-chain allowlist *setup* that `test_boot_share_root_key`
+    //     later reads from reth at :8545.
+    let _anvil; // keep the spawned node alive for the whole test in default mode
+    let endpoint;
+    let reth_rpc = if let Ok(rpc) = std::env::var("MULTISIG_RPC") {
+        endpoint = rpc;
+        endpoint.as_str()
+    } else {
+        let anvil = Anvil::new().try_spawn()?;
+        endpoint = anvil.endpoint();
+        _anvil = anvil;
+        let rpc = endpoint.as_str();
+        deploy_upgrade_contracts(rpc).await;
+        rpc
+    };
+
     let multisig_address = UPGRADE_MULTISIG_ADDRESS
         .parse::<alloy::primitives::Address>()
         .unwrap();
