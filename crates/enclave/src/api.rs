@@ -20,9 +20,21 @@ pub trait TdxQuoteRpc {
     async fn eval_attestation_evidence(&self, hcl_report: Vec<u8>, quote: Vec<u8>)
     -> RpcResult<()>;
 
-    /// Shares the root key with an existing node
-    #[method(name = "boot.share_root_key")]
-    async fn boot_share_root_key(&self, quote: Vec<u8>) -> RpcResult<ShareRootKeyResponse>;
+    /// Get the network root key from an existing node, wrapped to this caller.
+    ///
+    /// Called by a booting/joining node on a peer that already holds the
+    /// network root key. `request` is a serialized [`RootKeyRequest`] carrying
+    /// the caller's attested ephemeral key + nonce, and the reply is a
+    /// serialized [`RootKeyResponse`] carrying the root key AEAD-wrapped under
+    /// an ECDH key bound into the attested transcript.
+    ///
+    /// The wire body is opaque bytes here so this crate need not depend on the
+    /// attestation stack.
+    ///
+    /// [`RootKeyRequest`]: ../../enclave-server/src/bootstrap.rs
+    /// [`RootKeyResponse`]: ../../enclave-server/src/bootstrap.rs
+    #[method(name = "getWrappedRootKey")]
+    async fn get_wrapped_root_key(&self, request: Vec<u8>) -> RpcResult<Vec<u8>>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -37,9 +49,4 @@ pub struct GetPurposeKeysResponse {
 pub struct AttestationGetEvidenceResponse {
     pub hcl_report: Vec<u8>,
     pub quote: Vec<u8>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ShareRootKeyResponse {
-    pub root_key: [u8; 32],
 }

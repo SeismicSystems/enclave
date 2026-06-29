@@ -5173,6 +5173,7 @@ dependencies = [
  "reqwest 0.11.27",
  "schnorrkel",
  "secp256k1",
+ "seismic-attestation",
  "seismic-enclave",
  "serde",
  "serde_json",

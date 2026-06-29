@@ -19,6 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 seismic-enclave.workspace = true
+seismic-attestation.workspace = true
 enclave-contract.workspace = true
 
 alloy.workspace = true

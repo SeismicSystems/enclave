@@ -106,7 +106,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     //   - `MULTISIG_RPC=<url>` set (self-hosted `run_integration_tests.sh`): run
     //     against that node instead. There the contracts already exist at genesis
     //     (seismic-reth's dev alloc), so we skip the spawn + `anvil_setCode`. This
-    //     run is the on-chain allowlist *setup* that `test_boot_share_root_key`
+    //     run is the on-chain allowlist *setup* that `test_get_wrapped_root_key_bootstrap`
     //     later reads from reth at :8545.
     let _anvil; // keep the spawned node alive for the whole test in default mode
     let endpoint;

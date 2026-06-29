@@ -43,8 +43,25 @@ impl AttestationAgent {
         })
     }
 
-    pub fn get_attestation_evidence(&self) -> Result<AttestationGetEvidenceResponse> {
-        self.get_attestation_evidence_tpm()
+    /// Generate Azure TDX + vTPM evidence bound to a Seismic protocol binding.
+    ///
+    /// `binding` is a 32-byte domain-separated transcript digest from
+    /// `seismic_attestation::bindings` (e.g. [`tx_io_binding`] for the standalone
+    /// evidence endpoint, or the root-key handshake bindings). The evidence
+    /// commits to this digest through Azure HCL/vTPM report data; verifiers
+    /// recompute the expected binding and reject mismatches.
+    ///
+    /// TODO(attestation-v2): this helper serves the current
+    /// `AttestationGetEvidenceResponse { hcl_report, quote }` RPC shape. Add the
+    /// planned `getAttestationEvidenceV2(binding) -> AttestationExchangeMessage`
+    /// endpoint and route RPC evidence generation through `seismic-attestation`.
+    ///
+    /// [`tx_io_binding`]: seismic_attestation::bindings::tx_io_binding
+    pub fn get_attestation_evidence(
+        &self,
+        binding: [u8; 32],
+    ) -> Result<AttestationGetEvidenceResponse> {
+        self.get_attestation_evidence_tpm(binding)
     }
 
     // Only this function (and its `az_tdx_vtpm` import above) is gated on Linux
@@ -53,12 +70,13 @@ impl AttestationAgent {
     // on Linux and exercises the gated body. See the matching `[target.'cfg(...)'.dependencies]`
     // comment in Cargo.toml for why the dep itself is Linux-only.
     #[cfg(target_os = "linux")]
-    fn get_attestation_evidence_tpm(&self) -> Result<AttestationGetEvidenceResponse> {
-        // TODO(attestation): replace this placeholder with a protocol-bound value
-        // (for example, a nonce/public-key/tx_io_pk binding). Azure's vTPM report-data
-        // NV index is 64 bytes, so we may pass either a 32-byte digest or a full 64-byte
-        // value. Seismic bindings should normally be 32-byte domain-separated hashes,
-        // leaving the remaining capacity unused unless a protocol explicitly needs it.
+    fn get_attestation_evidence_tpm(
+        &self,
+        binding: [u8; 32],
+    ) -> Result<AttestationGetEvidenceResponse> {
+        // Azure's vTPM report-data NV index is 64 bytes, so we may pass either a
+        // 32-byte digest or a full 64-byte value. Seismic bindings are 32-byte
+        // domain-separated hashes, leaving the remaining capacity unused.
         //
         // Azure TDX evidence is generated through the Azure vTPM/HCL path rather than
         // by writing directly to a native TDX quote device. The input written via
@@ -69,7 +87,7 @@ impl AttestationAgent {
         //   2. quote.report_data[..32] == hcl_report.var_data_sha256().
         // See https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design
         // A fixture test should assert this on real Azure evidence.
-        let report_data = [1u8; 32];
+        let report_data = binding;
 
         // Get Azure HCL/vTPM report containing the caller-supplied report data.
         let hcl_report_bytes = vtpm::get_report_with_report_data(&report_data)?;
@@ -89,7 +107,10 @@ impl AttestationAgent {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn get_attestation_evidence_tpm(&self) -> Result<AttestationGetEvidenceResponse> {
+    fn get_attestation_evidence_tpm(
+        &self,
+        _binding: [u8; 32],
+    ) -> Result<AttestationGetEvidenceResponse> {
         Err(anyhow!(
             "TPM attestation requires az-tdx-vtpm, which is only available on Linux"
         ))
