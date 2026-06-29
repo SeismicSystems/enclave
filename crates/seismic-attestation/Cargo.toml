@@ -6,6 +6,7 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 license.workspace = true
+readme = "README.md"
 description = "Seismic attestation evidence types and policy checks"
 
 [dependencies]
