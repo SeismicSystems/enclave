@@ -9,11 +9,11 @@ use seismic_enclave_server::utils::{init_tracing, is_sudo};
 // This can be set up by running the test_multisig_upgrade_operator_workflow test in the enclave-contract crate
 #[serial_test::serial(attestation_agent)]
 #[tokio::test]
-async fn test_boot_share_root_key() {
+async fn test_get_wrapped_root_key_bootstrap() {
     init_tracing();
     // Check the starting conditions are as expected
     if !is_sudo() {
-        panic!("test_boot_share_root_key: skipped (requires sudo privileges)");
+        panic!("test_get_wrapped_root_key_bootstrap: skipped (requires sudo privileges)");
     }
 
     // Start first enclave as genesis node

@@ -18,6 +18,7 @@ readme = "README.md"
 
 [workspace.dependencies]
 enclave-contract = { path = "crates/enclave-contract" }
+seismic-attestation = { path = "crates/seismic-attestation" }
 seismic-enclave = {path = "crates/enclave" }
 
 # Other deps

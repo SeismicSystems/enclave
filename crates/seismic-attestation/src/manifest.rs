@@ -135,7 +135,7 @@ pub struct SummitManifest {
 #[serde(deny_unknown_fields)]
 pub struct MeasurementsManifest {
     /// SHA-256 of the measurement-policy artifact bytes, eg:
-    /// https://github.com/flashbots/attested-tls/blob/f3b47739d17650a9489c8707cd94d0e80751ec40/crates/attestation/test-assets/measurements.json
+    /// <https://github.com/flashbots/attested-tls/blob/f3b47739d17650a9489c8707cd94d0e80751ec40/crates/attestation/test-assets/measurements.json>
     /// Produced by seismic-images' `make measure`, and lands under `build/measurements.json`.
     /// [`crate::SeismicMeasurementPolicy`] parses this file.
     ///
