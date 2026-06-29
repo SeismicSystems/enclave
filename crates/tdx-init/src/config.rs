@@ -48,7 +48,7 @@ pub struct EnclaveConfig {
 
     /// Peer enclave URLs (e.g. `http://10.0.0.1:7878`). When
     /// `genesis_node` is false, the enclave fetches `root_key` from one
-    /// of these peers via the `boot_share_root_key` RPC. Required for
+    /// of these peers via the `getWrappedRootKey` RPC. Required for
     /// non-genesis nodes; the enclave fails fast at startup if this
     /// list is empty and `genesis_node` is false.
     #[serde(default)]

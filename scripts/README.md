@@ -7,7 +7,7 @@ This directory contains scripts for running integration tests for the Seismic en
 The `run_integration_tests.sh` script runs three integration tests in the correct order:
 
 1. **test_multisig_upgrade_operator_workflow** - Sets up the upgrade operator contract and multisig workflow
-2. **test_boot_share_root_key** - Tests the boot process for sharing root keys (requires setup from test 1)
+2. **test_get_wrapped_root_key_bootstrap** - Tests the boot process for fetching the wrapped root key (requires setup from test 1)
 3. **test_snapshot_integration_handlers** - Tests snapshot creation and restoration functionality
 
 ## Prerequisites
@@ -25,9 +25,9 @@ The integration tests require:
 - **Purpose**: Tests the complete multisig workflow for controlling the UpgradeOperator contract
 - **Dependencies**: Reth service running via supervisor
 
-### test_boot_share_root_key
-- **Location**: `crates/enclave-server/tests/integration/booter.rs`
-- **Purpose**: Tests the boot process for sharing root keys between enclave instances
+### test_get_wrapped_root_key_bootstrap
+- **Location**: `crates/enclave-server/tests/integration/integration.rs`
+- **Purpose**: Tests the boot process for fetching the wrapped root key between enclave instances
 - **Dependencies**: 
   - Reth service running via supervisor
   - Enclave-server service NOT running

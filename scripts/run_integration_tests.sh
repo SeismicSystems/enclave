@@ -5,7 +5,7 @@
 # The assertion-bearing multisig coverage now lives in the hosted `check_and_test`
 # job (test_multisig_upgrade_operator_workflow against a throwaway anvil). Here we
 # only need the multisig flow as on-chain SETUP: it writes the booter's measurement
-# into the UpgradeOperator on the reth devnet, which test_boot_share_root_key reads
+# into the UpgradeOperator on the reth devnet, which test_get_wrapped_root_key_bootstrap reads
 # at boot (enclave-server queries reth at :8545 for the allowlist — see
 # crates/enclave-server/src/attestation/upgrade_contract.rs).
 #
@@ -15,10 +15,10 @@
 # point reth's RPC had dropped — that ConnectionRefused was the original failure.)
 #
 # 1. multisig setup           -> seed the UpgradeOperator allowlist on reth
-# 2. test_boot_share_root_key -> needs enclave-server stopped (TPM) + the setup above
+# 2. test_get_wrapped_root_key_bootstrap -> needs enclave-server stopped (TPM) + the setup above
 #
 # KNOWN RESIDUAL (out of scope for this script, tracked separately):
-# test_boot_share_root_key can still fail for two infra reasons unrelated to this
+# test_get_wrapped_root_key_bootstrap can still fail for two infra reasons unrelated to this
 # script's structure:
 #   (i)  enclave-server exiting at startup — it now requires a network manifest at
 #        /run/seismic/conf/network-manifest.json; supervisor reports "Exited too
@@ -92,8 +92,8 @@ echo "✅ UpgradeOperator allowlist setup complete"
 sudo supervisorctl stop enclave-server || true
 sleep 2
 
-# Test: Run boot share root key test
-echo "🧪 Running test_boot_share_root_key..."
+# Test: run wrapped root-key bootstrap test
+echo "🧪 Running test_get_wrapped_root_key_bootstrap..."
 cd ../enclave-server
 ls -la Cargo.toml 2>/dev/null || echo "❌ Cargo.toml not found in $(pwd)"
 
@@ -109,13 +109,13 @@ echo "Found binaries: ${binaries[*]}"
 # Run the first binary with the specific test
 sleep 2
 
-echo "🚀 Executing: sudo ${binaries[0]} test_boot_share_root_key"
-if ! sudo "${binaries[0]}" test_boot_share_root_key; then
-    echo "❌ test_boot_share_root_key failed with exit code $?"
+echo "🚀 Executing: sudo ${binaries[0]} test_get_wrapped_root_key_bootstrap"
+if ! sudo "${binaries[0]}" test_get_wrapped_root_key_bootstrap; then
+    echo "❌ test_get_wrapped_root_key_bootstrap failed with exit code $?"
     echo "🔍 Last 20 lines of system log:"
     sudo journalctl -n 20 --no-pager 2>/dev/null || echo "Could not access journalctl"
     exit 1
 fi
-echo "✅ test_boot_share_root_key passed"
+echo "✅ test_get_wrapped_root_key_bootstrap passed"
 
 echo "🎉 All integration tests passed!" 

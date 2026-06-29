@@ -6,9 +6,7 @@ use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::server::ServerBuilder;
 use tracing::info;
 
-use crate::api::{
-    AttestationGetEvidenceResponse, GetPurposeKeysResponse, ShareRootKeyResponse, TdxQuoteRpcServer,
-};
+use crate::api::{AttestationGetEvidenceResponse, GetPurposeKeysResponse, TdxQuoteRpcServer};
 use crate::{
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
@@ -54,9 +52,11 @@ impl TdxQuoteRpcServer for MockServer {
         unimplemented!("eval_attestation_evidence not implemented for mock server")
     }
 
-    async fn boot_share_root_key(&self, _quote: Vec<u8>) -> RpcResult<ShareRootKeyResponse> {
-        Ok(ShareRootKeyResponse {
-            root_key: *get_unsecure_sample_secp256k1_sk().as_ref(),
-        })
+    async fn get_wrapped_root_key(&self, _request: Vec<u8>) -> RpcResult<Vec<u8>> {
+        // The v2 wrapped bootstrap needs the attestation stack (quote
+        // generation + verification) the mock deliberately omits. Dev/`sanvil`
+        // nodes start with `genesis_node=true` and never fetch a peer root key,
+        // so this path is unreachable in mock deployments.
+        unimplemented!("get_wrapped_root_key not implemented for mock server")
     }
 }
