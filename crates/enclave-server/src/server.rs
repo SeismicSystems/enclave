@@ -18,8 +18,8 @@ use jsonrpsee::{
 };
 use seismic_attestation::{AttestationType, NetworkId, SeismicMeasurementPolicy};
 use seismic_enclave::{
-    AttestationGetEvidenceResponse, GetPurposeKeysResponse, TdxQuoteRpcClient as _,
-    api::TdxQuoteRpcServer,
+    AttestationGetEvidenceResponse, GetPurposeKeysResponse, LuksProvisioningStatus,
+    TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
 use std::{net::SocketAddr, time::Duration};
 use tracing::{info, warn};
@@ -122,6 +122,13 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
         .map_err(anyhow_to_rpc_error)?;
 
         serde_json::to_vec(&response).map_err(|e| anyhow_to_rpc_error(e.into()))
+    }
+
+    /// Serve the first-boot LUKS-wipe progress the setup-persistent-luks
+    /// script publishes (read-only; `Idle` when no wipe is in flight). See
+    /// [`crate::luks_status`].
+    async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
+        Ok(crate::luks_status::read())
     }
 }
 
