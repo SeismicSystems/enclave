@@ -6,7 +6,10 @@ use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::server::ServerBuilder;
 use tracing::info;
 
-use crate::api::{AttestationGetEvidenceResponse, GetPurposeKeysResponse, TdxQuoteRpcServer};
+use crate::api::{
+    AttestationGetEvidenceResponse, GetPurposeKeysResponse, LuksProvisioningStatus,
+    TdxQuoteRpcServer,
+};
 use crate::{
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
@@ -58,5 +61,10 @@ impl TdxQuoteRpcServer for MockServer {
         // nodes start with `genesis_node=true` and never fetch a peer root key,
         // so this path is unreachable in mock deployments.
         unimplemented!("get_wrapped_root_key not implemented for mock server")
+    }
+
+    async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
+        // The mock has no real persistent disk, so nothing is ever provisioning.
+        Ok(LuksProvisioningStatus::Idle)
     }
 }
