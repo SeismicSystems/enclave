@@ -9,14 +9,12 @@ pub struct InitConfig {
     pub domain: DomainConfig,
     #[serde(default)]
     pub enclave: EnclaveConfig,
-    /// TODO: drop the `Option` (make `[network]` required) once both hold:
-    /// (1) enclave-server reads `network-manifest.json` for its attestation
-    /// `network_id` bindings — the consumer that breaks at boot when the
-    /// file is missing; (2) deploy flows embed the section in every
-    /// node.toml by default. Until then a missing section must stay
-    /// tolerated: nothing consumes the file yet, and existing node.tomls
-    /// don't carry it.
-    pub network: Option<NetworkConfig>,
+    /// Required: enclave-server reads `network-manifest.json` at startup to
+    /// derive `network_id` and bind every attestation to it, and is fatal
+    /// without it. A POST that omits `[network]` therefore 400s here rather
+    /// than booting a node that crash-loops on the missing file. The deploy
+    /// CLI merges the network-wide manifest into the per-node config at POST time.
+    pub network: NetworkConfig,
 }
 
 /// DNS name + contact email for the Let's Encrypt cert that fronts this
@@ -84,13 +82,19 @@ email = "ops@example.com"
 [enclave]
 genesis_node = true
 peers = ["http://10.0.0.1:7878", "http://10.0.0.2:7878"]
+
+[network]
+manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert_eq!(cfg.domain.name, "node1.example.com");
         assert_eq!(cfg.domain.email, "ops@example.com");
         assert!(cfg.enclave.genesis_node);
         assert_eq!(cfg.enclave.peers.len(), 2);
-        assert!(cfg.network.is_none());
+        assert_eq!(
+            cfg.network.manifest_base64,
+            "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+        );
     }
 
     #[test]
@@ -105,7 +109,7 @@ manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert_eq!(
-            cfg.network.unwrap().manifest_base64,
+            cfg.network.manifest_base64,
             "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
         );
     }
@@ -131,10 +135,27 @@ network_id = "0xabcd"
 [domain]
 name = "node1.example.com"
 email = "ops@example.com"
+
+[network]
+manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert!(!cfg.enclave.genesis_node);
         assert!(cfg.enclave.peers.is_empty());
+    }
+
+    #[test]
+    fn requires_network_section() {
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+
+[enclave]
+genesis_node = true
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().contains("network"));
     }
 
     #[test]
@@ -143,6 +164,9 @@ email = "ops@example.com"
 [domain]
 name = "node1.example.com"
 email = "ops@example.com"
+
+[network]
+manifest_base64 = "eyJ9"
 
 [bogus]
 field = "value"
@@ -161,6 +185,9 @@ email = "ops@example.com"
 [enclave]
 genesis_node = false
 log_level = "trace"
+
+[network]
+manifest_base64 = "eyJ9"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("unknown"));
@@ -171,6 +198,9 @@ log_level = "trace"
         let toml_input = r#"
 [enclave]
 genesis_node = true
+
+[network]
+manifest_base64 = "eyJ9"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("domain"));
