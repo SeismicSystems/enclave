@@ -57,11 +57,10 @@ pub async fn run_initialization_server() -> Result<InitConfig> {
 async fn handle_config(State(state): State<AppState>, body: String) -> Result<Response> {
     let config: InitConfig = toml::from_str(&body)?;
 
-    // Validate the manifest embed while the operator's POST is still waiting
-    // on a response: a bad manifest must 400 the deploy, not fail at boot.
-    if let Some(network) = &config.network {
-        crate::manifest::decode_and_validate(&network.manifest_base64)?;
-    }
+    // Validate the manifest while the operator's POST is still waiting on a
+    // response: a bad (or absent) manifest must 400 the deploy, not fail at boot
+    // when enclave-server tries to use it.
+    crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
 
     let mut sender_guard = state.config_sender.lock().await;
     match sender_guard.take() {

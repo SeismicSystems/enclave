@@ -22,9 +22,7 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
     fs::create_dir_all(conf_dir).await?;
     write_domain_env(conf_dir, config).await?;
     write_enclave_env(conf_dir, config).await?;
-    if let Some(network) = &config.network {
-        write_network_manifest(conf_dir, network).await?;
-    }
+    write_network_manifest(conf_dir, &config.network).await?;
     Ok(())
 }
 
@@ -80,7 +78,8 @@ async fn write_with_mode(path: &Path, content: impl AsRef<[u8]>, mode: u32) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DomainConfig, EnclaveConfig};
+    use crate::config::{DomainConfig, EnclaveConfig, NetworkConfig};
+    use base64::Engine as _;
     use tempfile::TempDir;
 
     fn sample_config(genesis_node: bool, peers: Vec<&str>) -> InitConfig {
@@ -93,7 +92,12 @@ mod tests {
                 genesis_node,
                 peers: peers.into_iter().map(String::from).collect(),
             },
-            network: None,
+            network: NetworkConfig {
+                // A valid manifest (the shared seismic-attestation fixture);
+                manifest_base64: base64::engine::general_purpose::STANDARD.encode(include_bytes!(
+                    "../../seismic-attestation/fixtures/network-manifest-v1.json"
+                )),
+            },
         }
     }
 
@@ -134,8 +138,6 @@ mod tests {
 
     #[tokio::test]
     async fn writes_network_manifest_verbatim() {
-        use base64::Engine as _;
-
         let tmp = TempDir::new().unwrap();
         let mut cfg = sample_config(false, vec![]);
         // A valid manifest with a non-canonical byte (trailing newline): the
@@ -146,24 +148,14 @@ mod tests {
             b"\n",
         ]
         .concat();
-        cfg.network = Some(crate::config::NetworkConfig {
+        cfg.network = NetworkConfig {
             manifest_base64: base64::engine::general_purpose::STANDARD.encode(&raw),
-        });
+        };
 
         write_service_configs(tmp.path(), &cfg).await.unwrap();
 
         let written = std::fs::read(tmp.path().join("network-manifest.json")).unwrap();
         assert_eq!(written, raw);
-    }
-
-    #[tokio::test]
-    async fn skips_network_manifest_when_section_absent() {
-        let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(false, vec![]);
-
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
-
-        assert!(!tmp.path().join("network-manifest.json").exists());
     }
 
     #[tokio::test]
