@@ -40,8 +40,9 @@ email = "<contact@example.com>"     # ACME registration / renewal email
 genesis_node = false                # true on exactly one VM per network
 peers = ["http://10.0.0.1:7878"]    # required when genesis_node = false
 
-[network]                           # optional during rollout
+[network]
 manifest_base64 = "eyJib290c3RyYXBfbWVhc3VyZW1lbn..."
+reth_genesis_base64 = "eyJjb25maWciOnsiY2hhaW5JZCI..."
 ```
 
 `manifest_base64` carries the network's `network-manifest.json` as opaque
@@ -54,6 +55,15 @@ authoritative parser is the sibling
 [`seismic-attestation`](../seismic-attestation) crate, kept in lockstep
 with this crate via its shared fixture.
 
+`reth_genesis_base64` carries the reth genesis JSON (chain spec) every
+node's reth boots from. It is network-wide like the manifest, whose
+`eth.genesis_hash` pins its genesis *block* (header and, via the state
+root, the alloc) but not the file's `config` section (fork schedule) —
+so POST-time validation is structural: valid JSON whose `config.chainId`
+matches the manifest's `eth.chain_id`. The block-hash commitment is
+enforced deploy-side and at ceremony time; see `src/reth_genesis.rs`.
+Written verbatim to `reth-genesis.json`.
+
 ## Per-service outputs
 
 After validation, tdx-init writes:
@@ -62,7 +72,8 @@ After validation, tdx-init writes:
 |---|---|---|
 | `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
 | `/run/seismic/conf/enclave.env` | `SEISMIC_ENCLAVE_GENESIS_NODE=...`, `SEISMIC_ENCLAVE_PEERS=...` | `enclave.service` (seismic-images) — loaded via `EnvironmentFile=`, then consumed by [`seismic-enclave-server`](../enclave-server) through clap `env=` attributes |
-| `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes (only when `[network]` present) | [`seismic-enclave-server`](../enclave-server) — hashes the file itself to derive `network_id` for attestation bindings |
+| `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-enclave-server`](../enclave-server) — hashes the file itself to derive `network_id` for attestation bindings |
+| `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
 
 Each downstream service reads its own native format (env-var pairs,
 either via systemd `EnvironmentFile=` or shell `source`); tdx-init is

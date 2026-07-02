@@ -65,10 +65,17 @@ struct ContractsManifest {
     authority: String,
 }
 
+/// A manifest that passed strict validation: the exact bytes to write (and
+/// hash) — callers must not transform them further — plus the fields other
+/// POST-time checks cross-reference, so they never re-parse the schema.
+#[derive(Debug)]
+pub struct ValidatedManifest {
+    pub bytes: Vec<u8>,
+    pub chain_id: u64,
+}
+
 /// Decode the `[network].manifest_base64` embed and strictly validate it.
-/// Returns the exact manifest bytes to write (and hash) — callers must not
-/// transform them further.
-pub fn decode_and_validate(manifest_base64: &str) -> Result<Vec<u8>> {
+pub fn decode_and_validate(manifest_base64: &str) -> Result<ValidatedManifest> {
     // Be forgiving about transport-layer line wrapping (PEM-style); this
     // changes nothing about the decoded bytes.
     let stripped: String = manifest_base64
@@ -80,8 +87,11 @@ pub fn decode_and_validate(manifest_base64: &str) -> Result<Vec<u8>> {
         .map_err(|e| {
             TdxInitError::InvalidManifest(format!("manifest_base64 is not valid base64: {e}"))
         })?;
-    validate_manifest_bytes(&bytes)?;
-    Ok(bytes)
+    let manifest = validate_manifest_bytes(&bytes)?;
+    Ok(ValidatedManifest {
+        bytes,
+        chain_id: manifest.eth.chain_id,
+    })
 }
 
 /// `network_id` presentation form: lowercase 0x-hex of SHA-256(bytes).
@@ -97,7 +107,7 @@ pub fn network_id_hex(manifest_bytes: &[u8]) -> String {
     out
 }
 
-fn validate_manifest_bytes(bytes: &[u8]) -> Result<()> {
+fn validate_manifest_bytes(bytes: &[u8]) -> Result<NetworkManifestV1> {
     // Probe the version before the strict parse: a future-version manifest
     // carries fields this schema doesn't know, and "unsupported
     // manifest_version 2" is the actionable error, not "unknown field".
@@ -148,7 +158,7 @@ fn validate_manifest_bytes(bytes: &[u8]) -> Result<()> {
         manifest.summit.namespace,
         network_id_hex(bytes),
     );
-    Ok(())
+    Ok(manifest)
 }
 
 fn check_hex(value: &str, nbytes: usize, field: &str) -> Result<()> {
@@ -183,9 +193,10 @@ mod tests {
 
     #[test]
     fn decodes_and_validates_fixture() {
-        let bytes = decode_and_validate(&b64(FIXTURE)).unwrap();
-        assert_eq!(bytes, FIXTURE, "decoded bytes must be verbatim");
-        assert_eq!(network_id_hex(&bytes), FIXTURE_NETWORK_ID);
+        let manifest = decode_and_validate(&b64(FIXTURE)).unwrap();
+        assert_eq!(manifest.bytes, FIXTURE, "decoded bytes must be verbatim");
+        assert_eq!(network_id_hex(&manifest.bytes), FIXTURE_NETWORK_ID);
+        assert_eq!(manifest.chain_id, 5124);
     }
 
     #[test]
@@ -193,8 +204,8 @@ mod tests {
         let mut wrapped = b64(FIXTURE);
         wrapped.insert(10, '\n');
         wrapped.insert(40, ' ');
-        let bytes = decode_and_validate(&wrapped).unwrap();
-        assert_eq!(bytes, FIXTURE);
+        let manifest = decode_and_validate(&wrapped).unwrap();
+        assert_eq!(manifest.bytes, FIXTURE);
     }
 
     // Byte-exactness: a cosmetic edit still parses but is a different network.

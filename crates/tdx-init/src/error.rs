@@ -12,6 +12,9 @@ pub enum TdxInitError {
     #[error("invalid network manifest: {0}")]
     InvalidManifest(String),
 
+    #[error("invalid reth genesis: {0}")]
+    InvalidRethGenesis(String),
+
     #[error("Server error: {0}")]
     ServerError(String),
 }
@@ -27,6 +30,10 @@ impl IntoResponse for TdxInitError {
             TdxInitError::InvalidManifest(msg) => (
                 StatusCode::BAD_REQUEST,
                 format!("invalid network manifest: {msg}"),
+            ),
+            TdxInitError::InvalidRethGenesis(msg) => (
+                StatusCode::BAD_REQUEST,
+                format!("invalid reth genesis: {msg}"),
             ),
             TdxInitError::Io(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -7,6 +7,7 @@ use tracing::info;
 mod config;
 mod error;
 mod manifest;
+mod reth_genesis;
 mod server;
 mod writer;
 
