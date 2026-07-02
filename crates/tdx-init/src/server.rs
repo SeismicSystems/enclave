@@ -1,7 +1,11 @@
 use crate::config::InitConfig;
 use crate::error::{Result, TdxInitError};
 use axum::{
-    Router, extract::State, http::StatusCode, response::IntoResponse, response::Response,
+    Router,
+    extract::{DefaultBodyLimit, State},
+    http::StatusCode,
+    response::IntoResponse,
+    response::Response,
     routing::post,
 };
 use std::sync::Arc;
@@ -25,6 +29,10 @@ pub async fn run_initialization_server() -> Result<InitConfig> {
 
     let app = Router::new()
         .route("/", post(handle_config))
+        // axum's 2 MiB default is too tight for the config since it embeds
+        // the reth genesis: a mainnet-sized alloc is ~1 MiB of JSON, ~1.4 MiB
+        // as base64, before the rest of the payload.
+        .layer(DefaultBodyLimit::max(16 * 1024 * 1024))
         .with_state(state);
 
     // This listener is unauthenticated and first-POST-wins. An attacker reaching :8080
@@ -57,10 +65,14 @@ pub async fn run_initialization_server() -> Result<InitConfig> {
 async fn handle_config(State(state): State<AppState>, body: String) -> Result<Response> {
     let config: InitConfig = toml::from_str(&body)?;
 
-    // Validate the manifest while the operator's POST is still waiting on a
-    // response: a bad (or absent) manifest must 400 the deploy, not fail at boot
-    // when enclave-server tries to use it.
-    crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
+    // Validate the network artifacts while the operator's POST is still
+    // waiting on a response: a bad (or absent) manifest or reth genesis must
+    // 400 the deploy, not fail at boot when enclave-server/reth try to use them.
+    let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
+    crate::reth_genesis::decode_and_validate(
+        &config.network.reth_genesis_base64,
+        manifest.chain_id,
+    )?;
 
     let mut sender_guard = state.config_sender.lock().await;
     match sender_guard.take() {
