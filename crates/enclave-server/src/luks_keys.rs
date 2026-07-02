@@ -48,8 +48,7 @@ pub fn write_keys_for_luks_setup(km: &KeyManager) -> Result<()> {
     f.write_all(&buf)?;
     f.sync_all()?;
     drop(f);
-    fs::rename(&tmp, path)
-        .with_context(|| format!("renaming {} into place", tmp.display()))?;
+    fs::rename(&tmp, path).with_context(|| format!("renaming {} into place", tmp.display()))?;
     info!(
         "wrote LUKS keys for setup-persistent-luks at {}",
         path.display()
