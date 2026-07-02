@@ -66,6 +66,16 @@ pub struct NetworkConfig {
     /// base64 (standard alphabet) of the network-manifest.json bytes, as
     /// emitted by the deploy tool's manifest assembly step.
     pub manifest_base64: String,
+
+    /// base64 encoding of the reth genesis JSON — the chain spec
+    /// every node's reth boots from (`--chain
+    /// /run/seismic/conf/reth-genesis.json`). Network-wide like the manifest,
+    /// whose `eth.genesis_hash` pins its genesis block; required because a
+    /// node booted without it has no chain spec and reth crash-loops.
+    /// Validated at POST time against the manifest's `eth.chain_id`
+    /// (`src/reth_genesis.rs`) and written verbatim to `reth-genesis.json`
+    /// under [`crate::CONF_DIR`].
+    pub reth_genesis_base64: String,
 }
 
 #[cfg(test)]
@@ -85,6 +95,7 @@ peers = ["http://10.0.0.1:7878", "http://10.0.0.2:7878"]
 
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert_eq!(cfg.domain.name, "node1.example.com");
@@ -106,6 +117,7 @@ email = "ops@example.com"
 
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert_eq!(
@@ -123,6 +135,7 @@ email = "ops@example.com"
 
 [network]
 manifest_base64 = "eyJ9"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 network_id = "0xabcd"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
@@ -138,10 +151,27 @@ email = "ops@example.com"
 
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert!(!cfg.enclave.genesis_node);
         assert!(cfg.enclave.peers.is_empty());
+    }
+
+    #[test]
+    fn requires_reth_genesis_field() {
+        // An older deploy CLI that doesn't send the genesis must get a clean
+        // 400 here, not a node whose reth has no chain spec.
+        let toml_input = r#"
+[domain]
+name = "node1.example.com"
+email = "ops@example.com"
+
+[network]
+manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().contains("reth_genesis_base64"));
     }
 
     #[test]
@@ -167,6 +197,7 @@ email = "ops@example.com"
 
 [network]
 manifest_base64 = "eyJ9"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 
 [bogus]
 field = "value"
@@ -188,6 +219,7 @@ log_level = "trace"
 
 [network]
 manifest_base64 = "eyJ9"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("unknown"));
@@ -201,6 +233,7 @@ genesis_node = true
 
 [network]
 manifest_base64 = "eyJ9"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("domain"));

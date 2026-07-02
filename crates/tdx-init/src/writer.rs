@@ -22,25 +22,39 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
     fs::create_dir_all(conf_dir).await?;
     write_domain_env(conf_dir, config).await?;
     write_enclave_env(conf_dir, config).await?;
-    write_network_manifest(conf_dir, &config.network).await?;
+    let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
+    let genesis = crate::reth_genesis::decode_and_validate(
+        &config.network.reth_genesis_base64,
+        manifest.chain_id,
+    )?;
+    write_network_manifest(conf_dir, &manifest).await?;
+    write_reth_genesis(conf_dir, &genesis).await?;
     Ok(())
 }
 
-/// Write the decoded manifest bytes verbatim (byte-exactness rule):
+/// Write the validated manifest bytes verbatim (byte-exactness rule):
 /// consumers derive `network_id` by hashing this file themselves, so any
 /// re-rendering here would silently change the network's identity.
 async fn write_network_manifest(
     conf_dir: &Path,
-    network: &crate::config::NetworkConfig,
+    manifest: &crate::manifest::ValidatedManifest,
 ) -> Result<()> {
     let path = conf_dir.join("network-manifest.json");
-    let bytes = crate::manifest::decode_and_validate(&network.manifest_base64)?;
-    write_with_mode(&path, &bytes, DEFAULT_FILE_MODE).await?;
+    write_with_mode(&path, &manifest.bytes, DEFAULT_FILE_MODE).await?;
     info!(
         "wrote {} (network_id {})",
         path.display(),
-        crate::manifest::network_id_hex(&bytes),
+        crate::manifest::network_id_hex(&manifest.bytes),
     );
+    Ok(())
+}
+
+/// Write the validated reth genesis bytes verbatim: reth parses the file
+/// itself (`--chain`), so tdx-init never re-renders it.
+async fn write_reth_genesis(conf_dir: &Path, genesis_bytes: &[u8]) -> Result<()> {
+    let path = conf_dir.join("reth-genesis.json");
+    write_with_mode(&path, genesis_bytes, DEFAULT_FILE_MODE).await?;
+    info!("wrote {}", path.display());
     Ok(())
 }
 
@@ -97,6 +111,12 @@ mod tests {
                 manifest_base64: base64::engine::general_purpose::STANDARD.encode(include_bytes!(
                     "../../seismic-attestation/fixtures/network-manifest-v1.json"
                 )),
+                // A genesis whose chainId matches the fixture manifest's.
+                reth_genesis_base64: base64::engine::general_purpose::STANDARD.encode(
+                    crate::reth_genesis::tests::genesis_json(
+                        crate::reth_genesis::tests::FIXTURE_CHAIN_ID,
+                    ),
+                ),
             },
         }
     }
@@ -150,12 +170,26 @@ mod tests {
         .concat();
         cfg.network = NetworkConfig {
             manifest_base64: base64::engine::general_purpose::STANDARD.encode(&raw),
+            ..cfg.network
         };
 
         write_service_configs(tmp.path(), &cfg).await.unwrap();
 
         let written = std::fs::read(tmp.path().join("network-manifest.json")).unwrap();
         assert_eq!(written, raw);
+    }
+
+    #[tokio::test]
+    async fn writes_reth_genesis_verbatim() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = sample_config(false, vec![]);
+
+        write_service_configs(tmp.path(), &cfg).await.unwrap();
+
+        let written = std::fs::read(tmp.path().join("reth-genesis.json")).unwrap();
+        let expected =
+            crate::reth_genesis::tests::genesis_json(crate::reth_genesis::tests::FIXTURE_CHAIN_ID);
+        assert_eq!(written, expected);
     }
 
     #[tokio::test]
