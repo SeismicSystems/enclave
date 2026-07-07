@@ -39,7 +39,7 @@ mod tests {
     use std::io::Write;
 
     const FIXTURE: &[u8] =
-        include_bytes!("../../seismic-attestation/fixtures/network-manifest-v1.json");
+        include_bytes!("../../network-manifest/fixtures/network-manifest-v1.json");
 
     #[test]
     fn derives_network_id_from_manifest_file() {

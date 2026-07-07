@@ -5129,6 +5129,7 @@ dependencies = [
  "clap",
  "dcap-rs",
  "hex",
+ "seismic-network-manifest",
  "serde",
  "serde_json",
  "sha2",
@@ -5186,6 +5187,17 @@ dependencies = [
  "urlencoding",
  "x509-parser 0.15.1",
  "zeroize",
+]
+
+[[package]]
+name = "seismic-network-manifest"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -5759,9 +5771,9 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "clap",
+ "seismic-network-manifest",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
