@@ -20,32 +20,28 @@ path = "src/main.rs"
 [dependencies]
 seismic-enclave.workspace = true
 seismic-attestation.workspace = true
+seismic-key-custodian.workspace = true
 enclave-contract.workspace = true
 
 alloy.workspace = true
 openssl.workspace = true
 chrono = "0.4.40"
 hex.workspace = true
-hkdf.workspace = true
 jsonrpsee.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 secp256k1.workspace = true
-schnorrkel.workspace = true
 dcap-rs.workspace = true
 libc.workspace = true
 x509-parser.workspace = true
 reqwest.workspace = true
 urlencoding.workspace = true
 clap.workspace = true
-aes-gcm.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
-zeroize.workspace = true
-sha2.workspace = true
 
 # az-tdx-vtpm pulls in tss-esapi-sys, which links against the Linux tpm2-tss
 # user-space stack and only ships prebuilt bindings for Linux tuples (plus

@@ -1,6 +1,5 @@
 mod attestation;
 mod bootstrap;
-mod key_manager;
 mod luks_keys;
 mod luks_status;
 mod network;
