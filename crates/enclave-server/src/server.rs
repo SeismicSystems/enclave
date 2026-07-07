@@ -5,7 +5,6 @@ use crate::{
         RootKeyRequest, RootKeyResponse, answer_root_key_request, build_root_key_request,
         unwrap_root_key_from_response,
     },
-    key_manager::KeyManager,
     luks_keys,
     network::{NETWORK_MANIFEST_PATH, load_network_id},
     utils::anyhow_to_rpc_error,
@@ -21,6 +20,7 @@ use seismic_enclave::{
     AttestationGetEvidenceResponse, GetPurposeKeysResponse, LuksProvisioningStatus,
     TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
+use seismic_key_custodian::Custodian;
 use std::{net::SocketAddr, time::Duration};
 use tracing::{info, warn};
 
@@ -33,7 +33,7 @@ const TX_IO_BINDING_EPOCH: u64 = 0;
 
 pub struct TdxQuoteServer {
     attestation_agent: AttestationAgent,
-    key_manager: KeyManager,
+    custodian: Custodian,
     /// This node's network identity: `H(network-manifest.json)`. Every
     /// attestation binding this server mints or verifies is scoped to it.
     network_id: NetworkId,
@@ -42,12 +42,12 @@ pub struct TdxQuoteServer {
 impl TdxQuoteServer {
     pub fn new(
         attestation_agent: AttestationAgent,
-        key_manager: KeyManager,
+        custodian: Custodian,
         network_id: NetworkId,
     ) -> Self {
         Self {
             attestation_agent,
-            key_manager,
+            custodian,
             network_id,
         }
     }
@@ -63,10 +63,10 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
     /// Get the secp256k1 public key
     async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse> {
         Ok(GetPurposeKeysResponse {
-            tx_io_sk: self.key_manager.get_tx_io_sk(epoch),
-            tx_io_pk: self.key_manager.get_tx_io_pk(epoch),
-            snapshot_key_bytes: self.key_manager.get_snapshot_key(epoch).into(),
-            rng_keypair: self.key_manager.get_rng_keypair(epoch),
+            tx_io_sk: self.custodian.get_tx_io_sk(epoch),
+            tx_io_pk: self.custodian.get_tx_io_pk(epoch),
+            snapshot_key_bytes: self.custodian.get_snapshot_key(epoch).into(),
+            rng_keypair: self.custodian.get_rng_keypair(epoch),
         })
     }
 
@@ -75,10 +75,7 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
     /// The quote commits to `tx_io_binding(network_id, tx_io_pk, epoch)`, so a
     /// verifier learns the attested node holds this tx_io key on this network.
     async fn get_attestation_evidence(&self) -> RpcResult<AttestationGetEvidenceResponse> {
-        let tx_io_pk = self
-            .key_manager
-            .get_tx_io_pk(TX_IO_BINDING_EPOCH)
-            .serialize();
+        let tx_io_pk = self.custodian.get_tx_io_pk(TX_IO_BINDING_EPOCH).serialize();
         let binding = seismic_attestation::bindings::tx_io_binding(
             &self.network_id,
             &tx_io_pk,
@@ -114,7 +111,7 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
         let response = answer_root_key_request(
             &request,
             &self.network_id,
-            &self.key_manager.get_root_key(),
+            &self.custodian,
             bootstrap_measurement_policy(),
             ATTESTATION_TYPE,
         )
@@ -141,9 +138,9 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     let network_id = load_network_id(NETWORK_MANIFEST_PATH)?;
     info!("Derived network_id {network_id} from {NETWORK_MANIFEST_PATH}");
 
-    let key_manager = if args.genesis_node {
+    let custodian = if args.genesis_node {
         info!("Starting as genesis node; generating fresh network root key");
-        KeyManager::new_as_genesis()?
+        Custodian::new_as_genesis()?
     } else {
         if args.peers.is_empty() {
             anyhow::bail!(
@@ -167,12 +164,12 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // (seismic-images script) via a tmpfs file. Fatal on failure — without
     // these keys reaching the LUKS-setup script, /persistent can't
     // mount and the node can't proceed past this boot.
-    luks_keys::write_keys_for_luks_setup(&key_manager)?;
+    luks_keys::write_keys_for_luks_setup(&custodian)?;
 
     let server = ServerBuilder::default().build(addr).await?;
 
     let handle =
-        server.start(TdxQuoteServer::new(attestation_agent, key_manager, network_id).into_rpc());
+        server.start(TdxQuoteServer::new(attestation_agent, custodian, network_id).into_rpc());
 
     info!("TDX Quote JSON-RPC Server started at {}", addr);
 
@@ -188,14 +185,14 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
 /// POST it, then verify the peer's response quote and AEAD-open the wrapped
 /// key. A fresh ephemeral key per attempt means a failed exchange leaks nothing
 /// reusable.
-pub async fn fetch_root_key_from_peers(peers: Vec<String>, network_id: &NetworkId) -> KeyManager {
+pub async fn fetch_root_key_from_peers(peers: Vec<String>, network_id: &NetworkId) -> Custodian {
     info!("Starting root key fetching from peers");
     loop {
         for peer in &peers {
             match try_fetch_root_key_from_peer(peer, network_id).await {
                 Ok(root_key) => {
-                    info!("Key received from {peer}. Starting Key manager");
-                    return KeyManager::new(root_key);
+                    info!("Key received from {peer}. Starting key custodian");
+                    return Custodian::new(root_key);
                 }
                 Err(e) => {
                     warn!(

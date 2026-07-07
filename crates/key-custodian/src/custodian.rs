@@ -18,9 +18,11 @@ impl AsRef<[u8]> for Key {
     }
 }
 
-#[derive(Clone)]
-pub struct KeyManager {
-    root_key: Key,
+/// Holder of the network root key; every other secret is derived from it on
+/// demand. Deliberately not `Clone`: exactly one copy per process, dropped
+/// (and zeroized) with the custodian itself.
+pub struct Custodian {
+    pub(crate) root_key: Key,
 }
 
 /// Enum representing the intended usage ("purpose") of a derived key.
@@ -32,7 +34,7 @@ pub enum KeyPurpose {
     /// LUKS volume unlock key.
     Storage,
     /// HMAC key for verifying the LUKS2 header against tampering:
-    /// https://blog.trailofbits.com/2025/10/30/vulnerabilities-in-luks2-disk-encryption-for-confidential-vms/
+    /// <https://blog.trailofbits.com/2025/10/30/vulnerabilities-in-luks2-disk-encryption-for-confidential-vms/>
     /// Used by setup-persistent-luks to MAC `segments + keyslots + digests`
     /// and store the result as a custom LUKS2 token; verified on every subsequent boot
     /// before `cryptsetup open`.
@@ -57,19 +59,22 @@ impl KeyPurpose {
     }
 }
 
-impl KeyManager {
+impl Custodian {
+    /// Install an already-obtained root key (the joining-node path: the caller
+    /// ran the attested bootstrap handshake and unwrapped the peer's response).
     pub fn new(root_key: [u8; 32]) -> Self {
         Self {
             root_key: Key(root_key),
         }
     }
 
+    /// Generate a fresh root key from the OS CSPRNG (the genesis-node path).
     pub fn new_as_genesis() -> Result<Self> {
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;
 
-        let km = KeyManager::new(rng_bytes);
+        let km = Custodian::new(rng_bytes);
         Ok(km)
     }
 
@@ -93,7 +98,7 @@ impl KeyManager {
     pub fn get_tx_io_sk(&self, epoch: u64) -> secp256k1::SecretKey {
         let key = self
             .derive_purpose_key(KeyPurpose::TxIo, epoch)
-            .expect("KeyManager should always have a snapshot key");
+            .expect("purpose key derivation must succeed");
         secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid")
     }
@@ -102,7 +107,7 @@ impl KeyManager {
     pub fn get_tx_io_pk(&self, epoch: u64) -> secp256k1::PublicKey {
         let key = self
             .derive_purpose_key(KeyPurpose::TxIo, epoch)
-            .expect("KeyManager should always have a snapshot key");
+            .expect("purpose key derivation must succeed");
         let sk = secp256k1::SecretKey::from_slice(key.as_ref())
             .expect("retrieved secp256k1 secret key should be valid");
 
@@ -113,7 +118,7 @@ impl KeyManager {
     pub fn get_rng_keypair(&self, epoch: u64) -> schnorrkel::keys::Keypair {
         let mini_key = self
             .derive_purpose_key(KeyPurpose::RngPrecompile, epoch)
-            .expect("KeyManager should always have a snapshot key");
+            .expect("purpose key derivation must succeed");
         let mini_key_bytes = mini_key.as_ref();
         let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(mini_key_bytes)
             .expect("mini_secret_key should be valid");
@@ -126,14 +131,8 @@ impl KeyManager {
     pub fn get_snapshot_key(&self, epoch: u64) -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
         let key = self
             .derive_purpose_key(KeyPurpose::Snapshot, epoch)
-            .expect("KeyManager should always have a snapshot key");
+            .expect("purpose key derivation must succeed");
         let bytes: [u8; 32] = key.as_ref().try_into().expect("Key should be 32 bytes");
         bytes.into()
-    }
-    /// Retrieves a copy of the root secp256k1 secret key used for key management.
-    pub fn get_root_key(&self) -> [u8; 32] {
-        let root_guard = self.root_key.0;
-        let bytes: [u8; 32] = root_guard.as_ref().try_into().unwrap();
-        bytes
     }
 }

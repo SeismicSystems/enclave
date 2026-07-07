@@ -4,6 +4,7 @@ members = [
     "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
     "crates/enclave-crypto",
+    "crates/key-custodian",
     "crates/network-manifest",
     "crates/seismic-attestation",
     "crates/tdx-init",
@@ -24,6 +25,7 @@ enclave-contract = { path = "crates/enclave-contract" }
 seismic-attestation = { path = "crates/seismic-attestation" }
 seismic-enclave = {path = "crates/enclave" }
 seismic-enclave-crypto = { path = "crates/enclave-crypto" }
+seismic-key-custodian = { path = "crates/key-custodian" }
 seismic-network-manifest = { path = "crates/network-manifest" }
 
 # Other deps
