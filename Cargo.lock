@@ -5141,16 +5141,27 @@ dependencies = [
 name = "seismic-enclave"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "jsonrpsee",
+ "schnorrkel",
+ "secp256k1",
+ "seismic-enclave-crypto",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "seismic-enclave-crypto"
+version = "0.1.0"
+dependencies = [
  "aes-gcm",
  "anyhow",
  "hkdf",
- "jsonrpsee",
  "rand 0.9.2",
  "schnorrkel",
  "secp256k1",
  "serde",
  "sha2",
- "tracing",
 ]
 
 [[package]]

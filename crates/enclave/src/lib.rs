@@ -1,7 +1,9 @@
 pub mod api;
-mod crypto;
 pub mod mock;
 
 pub use api::*;
-pub use crypto::*;
 pub use secp256k1;
+// Compatibility re-export: the crypto helpers moved to their own crate so key
+// custody code can use them without pulling in this crate's JSON-RPC surface.
+// Existing users (seismic-reth) keep importing them from here unchanged.
+pub use seismic_enclave_crypto::*;
