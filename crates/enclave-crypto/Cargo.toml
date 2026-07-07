@@ -1,5 +1,5 @@
 [package]
-name = "seismic-enclave"
+name = "seismic-enclave-crypto"
 edition.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -7,13 +7,14 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
+description = "AES-GCM / ECDH / HKDF helpers shared across the Seismic enclave stack"
 
 [dependencies]
-seismic-enclave-crypto.workspace = true
-
+aes-gcm.workspace = true
 anyhow.workspace = true
-jsonrpsee.workspace = true
+hkdf.workspace = true
+rand.workspace = true
 schnorrkel.workspace = true
 secp256k1.workspace = true
 serde.workspace = true
-tracing.workspace = true
+sha2.workspace = true
