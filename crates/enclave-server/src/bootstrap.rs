@@ -1,4 +1,4 @@
-//! Phase P: the protocol-first, encrypted root-key bootstrap.
+//! The encrypted root-key bootstrap.
 //!
 //! A booting non-genesis node (the *requester*, side `b` in the binding
 //! helpers) needs the network root key. A node that already holds it (the

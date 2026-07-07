@@ -1,12 +1,18 @@
-//! The manifest module parses `network-manifest.json` and derives the
-//! [`NetworkId`] that every transcript binding consumes.
+//! Schema for `network-manifest.json` and derivation of the [`NetworkId`]
+//! that every transcript binding consumes.
+//!
+//! This crate is deliberately dependency-light (serde + sha2): parsing the
+//! manifest and deriving `network_id` must be possible without the
+//! attestation stack — in the boot binary (tdx-init) and in deploy-side
+//! manifest tooling. Consumers that also verify evidence depend on
+//! `seismic-attestation`, which builds on this crate and re-exports it.
 //!
 //! The manifest is the deploy-time artifact that defines a network's identity:
 //! `network_id = SHA-256(exact file bytes)`. The file travels as opaque bytes
 //! through every hop (deploy artifact → node.toml embed → tdx-init → network-manifest.json).
 //! Consumers hash the bytes they read themselves rather than trusting a precomputed id.
 //!
-//! This module deliberately implements `Deserialize` only. The deploy tool is
+//! This crate deliberately implements `Deserialize` only. The deploy tool is
 //! the manifest's sole emitter; nothing on the node side may
 //! parse-and-re-serialize the file, because any re-rendering risks changing the
 //! bytes and therefore the `network_id`. The emitter renders deterministically
@@ -137,7 +143,7 @@ pub struct MeasurementsManifest {
     /// SHA-256 of the measurement-policy artifact bytes, eg:
     /// <https://github.com/flashbots/attested-tls/blob/f3b47739d17650a9489c8707cd94d0e80751ec40/crates/attestation/test-assets/measurements.json>
     /// Produced by seismic-images' `make measure`, and lands under `build/measurements.json`.
-    /// [`crate::SeismicMeasurementPolicy`] parses this file.
+    /// `seismic-attestation`'s `SeismicMeasurementPolicy` parses this file.
     ///
     /// Pins the *bootstrap* policy only — the measurement set in force at
     /// genesis, frozen forever by this hash. Post-genesis additions and

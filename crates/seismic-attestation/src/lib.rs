@@ -18,9 +18,12 @@
 //!   such as seismic-images' `build/measurements.json`.
 
 pub mod bindings;
-pub mod manifest;
 
-pub use manifest::{ManifestError, NetworkId, NetworkManifestV1};
+/// Manifest schema and `network_id` derivation, re-exported from the
+/// dependency-light `seismic-network-manifest` crate so node-side callers
+/// keep one import path.
+pub use seismic_network_manifest as manifest;
+pub use seismic_network_manifest::{ManifestError, NetworkId, NetworkManifestV1};
 
 /// Backend measurement types returned after successful verification.
 pub use attestation::measurements::{DcapMeasurementRegister, MultiMeasurements};

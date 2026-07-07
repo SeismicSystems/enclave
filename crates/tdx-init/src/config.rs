@@ -59,7 +59,8 @@ pub struct EnclaveConfig {
 /// travels base64-encoded (opaque bytes) rather than as an inline string:
 /// tdx-init validates it at POST time and writes the decoded bytes verbatim
 /// to `network-manifest.json` under [`crate::CONF_DIR`], never
-/// parse-and-re-serialize. Validation rules live in `src/manifest.rs`.
+/// parse-and-re-serialize. Validation lives in `src/manifest.rs` (schema in
+/// the `seismic-network-manifest` crate).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
+    "crates/network-manifest",
     "crates/seismic-attestation",
     "crates/tdx-init",
 ]
@@ -17,9 +18,11 @@ license = "MIT"
 readme = "README.md"
 
 [workspace.dependencies]
+# workspace libs
 enclave-contract = { path = "crates/enclave-contract" }
 seismic-attestation = { path = "crates/seismic-attestation" }
 seismic-enclave = {path = "crates/enclave" }
+seismic-network-manifest = { path = "crates/network-manifest" }
 
 # Other deps
 alloy = "1.0"
