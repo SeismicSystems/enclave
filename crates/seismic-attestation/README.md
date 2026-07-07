@@ -24,7 +24,9 @@ internals directly.
 
 This crate is responsible for:
 
-- parsing `network-manifest.json` and deriving `NetworkId = SHA-256(file bytes)`;
+- re-exporting the `network-manifest.json` schema and
+  `NetworkId = SHA-256(file bytes)` derivation from the dependency-light
+  `seismic-network-manifest` crate, so node-side callers keep one import path;
 - deriving domain-separated protocol bindings, including:
   - `tx_io_binding`,
   - `root_key_request_binding`,
