@@ -9,7 +9,10 @@ use crate::{
     network::{NETWORK_MANIFEST_PATH, load_network_id},
     utils::anyhow_to_rpc_error,
 };
-use dcap_rs::types::quotes::version_4::QuoteV4;
+use dcap_rs::{
+    constants::{ENCLAVE_REPORT_LEN, HEADER_LEN, SGX_TEE_TYPE, TD10_REPORT_LEN, TDX_TEE_TYPE},
+    types::quotes::version_4::QuoteV4,
+};
 use jsonrpsee::{
     core::{RpcResult, async_trait},
     http_client::HttpClientBuilder,
@@ -21,7 +24,11 @@ use seismic_enclave::{
     TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
 use seismic_key_custodian::Custodian;
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::SocketAddr,
+    panic::{AssertUnwindSafe, catch_unwind},
+    time::Duration,
+};
 use tracing::{info, warn};
 
 /// Attestation type this build mints and verifies evidence for. Azure TDX +
@@ -92,7 +99,7 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
         _hcl_report: Vec<u8>,
         quote: Vec<u8>,
     ) -> RpcResult<()> {
-        let quote = QuoteV4::from_bytes(&quote); // todo(dalton): This will panic if invalid quote bytes are sent find a way to catch or alternative
+        let quote = parse_quote(&quote).map_err(anyhow_to_rpc_error)?;
         self.attestation_agent
             .verify_attestation_report(quote)
             .await
@@ -127,6 +134,58 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
         Ok(crate::luks_status::read())
     }
+}
+
+/// Parse an untrusted DCAP quote without allowing malformed input to panic the
+/// JSON-RPC server. `dcap-rs` 0.1.0 exposes an infallible parser and indexes
+/// several variable-length fields directly, so both structural checks and a
+/// panic boundary are required at this network-facing boundary.
+fn parse_quote(raw_bytes: &[u8]) -> anyhow::Result<QuoteV4> {
+    if raw_bytes.len() < HEADER_LEN {
+        anyhow::bail!("attestation quote is shorter than its {HEADER_LEN}-byte header");
+    }
+
+    let tee_type = u32::from_le_bytes(
+        raw_bytes[4..8]
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("attestation quote header is malformed"))?,
+    );
+    let quote_body_len = match tee_type {
+        SGX_TEE_TYPE => ENCLAVE_REPORT_LEN,
+        TDX_TEE_TYPE => TD10_REPORT_LEN,
+        _ => anyhow::bail!("unsupported DCAP quote TEE type: 0x{tee_type:08x}"),
+    };
+
+    let signature_len_offset = HEADER_LEN + quote_body_len;
+    let signature_len_end = signature_len_offset + std::mem::size_of::<u32>();
+    if raw_bytes.len() < signature_len_end {
+        anyhow::bail!("attestation quote is missing its signature length");
+    }
+
+    let signature_len = u32::from_le_bytes(
+        raw_bytes[signature_len_offset..signature_len_end]
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("attestation quote signature length is malformed"))?,
+    ) as usize;
+    // QuoteSignatureDataV4 starts with a 64-byte ECDSA signature and a
+    // 64-byte public key before parsing QE certification data.
+    const MIN_SIGNATURE_DATA_LEN: usize = 128;
+    if signature_len < MIN_SIGNATURE_DATA_LEN {
+        anyhow::bail!(
+            "attestation quote signature data is shorter than {MIN_SIGNATURE_DATA_LEN} bytes"
+        );
+    }
+
+    let signature_end = signature_len_end
+        .checked_add(signature_len)
+        .ok_or_else(|| anyhow::anyhow!("attestation quote signature length overflows"))?;
+    if raw_bytes.len() < signature_end {
+        anyhow::bail!("attestation quote is truncated at its signature data");
+    }
+
+    catch_unwind(AssertUnwindSafe(|| QuoteV4::from_bytes(raw_bytes))).map_err(|_| {
+        anyhow::anyhow!("attestation quote contains malformed nested certification data")
+    })
 }
 
 pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
@@ -247,4 +306,59 @@ fn bootstrap_measurement_policy() -> SeismicMeasurementPolicy {
          peer image measurements are NOT being checked against an allowlist"
     );
     SeismicMeasurementPolicy::dangerously_accept_any_for_testing(ATTESTATION_TYPE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn quote_with(tee_type: u32, signature_len: u32, signature_bytes: usize) -> Vec<u8> {
+        let body_len = match tee_type {
+            SGX_TEE_TYPE => ENCLAVE_REPORT_LEN,
+            TDX_TEE_TYPE => TD10_REPORT_LEN,
+            _ => 0,
+        };
+        let signature_len_offset = HEADER_LEN + body_len;
+        let mut quote = vec![0; signature_len_offset + 4 + signature_bytes];
+        quote[4..8].copy_from_slice(&tee_type.to_le_bytes());
+        quote[signature_len_offset..signature_len_offset + 4]
+            .copy_from_slice(&signature_len.to_le_bytes());
+        quote
+    }
+
+    #[test]
+    fn rejects_short_header() {
+        assert!(parse_quote(&[0; HEADER_LEN - 1]).is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_tee_type() {
+        assert!(parse_quote(&quote_with(0xdead_beef, 128, 128)).is_err());
+    }
+
+    #[test]
+    fn rejects_truncated_body() {
+        let quote = quote_with(TDX_TEE_TYPE, 128, 128);
+        assert!(parse_quote(&quote[..HEADER_LEN + TD10_REPORT_LEN - 1]).is_err());
+    }
+
+    #[test]
+    fn rejects_short_signature_data() {
+        let quote = quote_with(TDX_TEE_TYPE, 127, 127);
+        assert!(parse_quote(&quote).is_err());
+    }
+
+    #[test]
+    fn rejects_truncated_signature_data() {
+        let quote = quote_with(TDX_TEE_TYPE, 256, 128);
+        assert!(parse_quote(&quote).is_err());
+    }
+
+    #[test]
+    fn catches_malformed_nested_certification_data() {
+        // The outer quote is large enough for the fixed signature fields, but
+        // the missing six-byte CertData header would panic in dcap-rs.
+        let quote = quote_with(TDX_TEE_TYPE, 128, 128);
+        assert!(parse_quote(&quote).is_err());
+    }
 }
