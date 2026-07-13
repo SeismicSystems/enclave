@@ -1,5 +1,6 @@
 mod attestation;
 mod bootstrap;
+pub mod ipc;
 mod luks_keys;
 mod luks_status;
 mod network;

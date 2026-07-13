@@ -1,0 +1,53 @@
+[package]
+name = "seismic-custodian-ipc"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Wire protocol, client, and server for the Seismic key-custodian Unix socket"
+
+[dependencies]
+# Core (wire protocol + blocking framing): kept minimal on purpose — this is
+# the dependency floor for any process that links the crate.
+ciborium.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+thiserror.workspace = true
+zeroize = { workspace = true, features = ["derive"] }
+
+# `client` feature: async client for tokio hosts (reth, enclave-server).
+tokio = { workspace = true, optional = true }
+
+# `server` feature: synchronous socket server (peer creds via libc).
+libc = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+# `cli` feature: debug binary.
+anyhow = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+
+[features]
+# Default-on client keeps async consumers frictionless; the custodian binary
+# opts out with default-features = false, features = ["server"] and links no
+# tokio at all.
+#
+# CAUTION — feature unification: that no-tokio guarantee only holds when the
+# server-only consumer is built in its own cargo invocation. Building it
+# together with a `client` consumer (--workspace, or one `cargo build` with
+# multiple --bin targets) unifies features on this crate and silently pulls
+# tokio back into the server consumer's build. Keep the key-holding binary's
+# build standalone; if that convention ever proves too fragile, split this
+# crate into core/client/server crates so the boundary is structural.
+default = ["client"]
+client = ["dep:tokio"]
+server = ["dep:libc", "dep:tracing"]
+cli = ["client", "dep:anyhow", "dep:clap", "dep:hex", "dep:sha2"]
+
+[[bin]]
+name = "custodian-ipc-cli"
+required-features = ["cli"]

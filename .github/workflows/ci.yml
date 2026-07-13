@@ -44,6 +44,11 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
       - name: cargo check warnings
         run: RUSTFLAGS="-D warnings" cargo check
+      # The workspace pass builds seismic-custodian-ipc with default features
+      # only, which compiles out the `server` module (and its ACL tests) and
+      # skips the `cli` binary entirely (required-features). Cover them here.
+      - name: Run seismic-custodian-ipc tests (all features)
+        run: cargo test -p seismic-custodian-ipc --all-features
       # Default test coverage for every workspace crate, so new crates get
       # tested without anyone remembering to add a job. Exclusions, each for
       # its own reason:

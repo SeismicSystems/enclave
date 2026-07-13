@@ -9,6 +9,7 @@ use crate::{
     network::{NETWORK_MANIFEST_PATH, load_network_id},
     utils::anyhow_to_rpc_error,
 };
+use anyhow::Context as _;
 use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
     core::{RpcResult, async_trait},
@@ -16,12 +17,13 @@ use jsonrpsee::{
     server::ServerBuilder,
 };
 use seismic_attestation::{AttestationType, NetworkId, SeismicMeasurementPolicy};
+use seismic_custodian_ipc::CUSTODIAN_SOCKET_PATH;
 use seismic_enclave::{
     AttestationGetEvidenceResponse, GetPurposeKeysResponse, LuksProvisioningStatus,
     TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
 };
 use seismic_key_custodian::Custodian;
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
 use tracing::{info, warn};
 
 /// Attestation type this build mints and verifies evidence for. Azure TDX +
@@ -33,7 +35,12 @@ const TX_IO_BINDING_EPOCH: u64 = 0;
 
 pub struct TdxQuoteServer {
     attestation_agent: AttestationAgent,
-    custodian: Custodian,
+    /// `Arc` because the one `Custodian` per process (it is deliberately not
+    /// `Clone`) is shared with the IPC socket thread spawned in
+    /// [`start_server`]; every method on it is `&self`, so no lock.
+    /// TODO: once the custodian runs as its own process and this server reaches it
+    /// over the socket, drop the `Arc` with the field.
+    custodian: Arc<Custodian>,
     /// This node's network identity: `H(network-manifest.json)`. Every
     /// attestation binding this server mints or verifies is scoped to it.
     network_id: NetworkId,
@@ -42,7 +49,7 @@ pub struct TdxQuoteServer {
 impl TdxQuoteServer {
     pub fn new(
         attestation_agent: AttestationAgent,
-        custodian: Custodian,
+        custodian: Arc<Custodian>,
         network_id: NetworkId,
     ) -> Self {
         Self {
@@ -165,6 +172,28 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // these keys reaching the LUKS-setup script, /persistent can't
     // mount and the node can't proceed past this boot.
     luks_keys::write_keys_for_luks_setup(&custodian)?;
+
+    // The same process also serves local key ops over a Unix socket — the
+    // seam along which the custodian later splits into its own process. The
+    // transport is `seismic_custodian_ipc::server` (synchronous, hence the
+    // dedicated thread); only dispatch (`crate::ipc`) lives here. No
+    // production caller connects yet: in-process users call `Custodian`
+    // directly and reth still fetches keys over HTTP `getPurposeKeys`, so
+    // until the split moves them onto the socket, only the debug CLI (and
+    // tests) exercise it. Bind failure is fatal anyway: a
+    // node that can't serve the socket should fail this boot, not at the
+    // split, and /run/seismic already had to exist for the manifest read.
+    let custodian = Arc::new(custodian);
+    let ipc_listener = seismic_custodian_ipc::server::bind(Path::new(CUSTODIAN_SOCKET_PATH))
+        .with_context(|| format!("binding custodian socket {CUSTODIAN_SOCKET_PATH}"))?;
+    let ipc_custodian = custodian.clone();
+    std::thread::spawn(move || {
+        seismic_custodian_ipc::server::serve(
+            ipc_listener,
+            seismic_custodian_ipc::server::MethodAcl::own_uid_only(),
+            move |request| crate::ipc::dispatch(&ipc_custodian, request),
+        )
+    });
 
     let server = ServerBuilder::default().build(addr).await?;
 
