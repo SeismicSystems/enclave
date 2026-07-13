@@ -91,7 +91,10 @@ jobs:
       - name: Run tests for seismic-enclave
         run: |
           cd crates/enclave
-          OUTPUT=$(cargo test -p seismic-enclave --no-run 2>&1)
+          # CARGO_TERM_COLOR=never: the workflow forces color globally, and
+          # the ANSI codes around cargo's status verbs would break the
+          # line-anchored sed below.
+          OUTPUT=$(CARGO_TERM_COLOR=never cargo test -p seismic-enclave --no-run 2>&1)
           echo "$OUTPUT"
           # Parse cargo's `Executable ... (path)` lines rather than grepping
           # for crate-named binaries: name greps silently skip standalone
@@ -113,7 +116,10 @@ jobs:
       - name: Run tests for seismic-enclave-server
         run: |
           cd crates/enclave-server
-          OUTPUT=$(cargo test -p seismic-enclave-server --no-run 2>&1)
+          # CARGO_TERM_COLOR=never: the workflow forces color globally, and
+          # the ANSI codes around cargo's status verbs would break the
+          # line-anchored sed below.
+          OUTPUT=$(CARGO_TERM_COLOR=never cargo test -p seismic-enclave-server --no-run 2>&1)
           echo "$OUTPUT"
           # Parse cargo's `Executable ... (path)` lines rather than grepping
           # for crate-named binaries: name greps silently skip standalone
