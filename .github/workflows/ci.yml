@@ -128,14 +128,13 @@ jobs:
           [ ${#binaries[@]} -gt 0 ] || { echo "no test binaries found"; exit 1; }
           for binary in "${binaries[@]}"; do
             case "$(basename "$binary")" in
-              # tests/integration is the integration_tests job's payload:
-              # run_integration_tests.sh runs it against the supervisor
-              # devnet, which provides the network manifest that
-              # enclave-server fatally requires at startup. It cannot pass
-              # in this job's bare environment. Do NOT add further entries
-              # here without a matching reason.
+              # tests/integration is the integration_tests job's payload: it
+              # starts two live enclave-server instances and exercises the
+              # Azure TPM/IMDS evidence path. Keep that environment setup in
+              # one job. Do NOT add further entries here without a matching
+              # reason.
               integration-*)
-                echo "SKIPPING $binary (integration_tests job's payload; needs the devnet)"
+                echo "SKIPPING $binary (integration_tests job's live-TEE payload)"
                 continue
                 ;;
             esac
@@ -148,84 +147,14 @@ jobs:
     timeout-minutes: 30
     needs: build
     steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-cache"
           cache-on-failure: true
-          cache-directories: |
-            ~/.cargo/bin
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target/
 
-      # Download the built enclave binaries
-      - name: Download enclave binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: enclave-binaries
-          path: target/debug/
-
-      # Make enclave binaries executable
-      - name: Make enclave binaries executable
-        run: |
-          echo "current directory: $PWD"
-          ls -la target/debug/seismic-*
-          chmod +x target/debug/seismic-enclave*
-          chmod +x target/debug/seismic-enclave-server*
-          echo "Made enclave binaries executable:"
-          ls -la target/debug/seismic-*
-
-      # Checkout seismic-reth into subdir
-      - name: Checkout seismic-reth
-        uses: actions/checkout@v4
-        with:
-          repository: SeismicSystems/seismic-reth
-          path: seismic-reth
-          clean: false
-          fetch-depth: 0
-
-      # Build seismic-reth using manifest path
-      # cargo sweep will delete files in target older than 1 day
-      - name: Build seismic-reth
-        run: |
-          cargo install cargo-sweep
-          cargo build --bin seismic-reth --manifest-path seismic-reth/Cargo.toml
-          cargo sweep --time 1 --recursive
-          echo "Current working directory: $PWD"
-          echo "Full path of seismic-reth binary:"
-          find $PWD/seismic-reth/target/debug -name "seismic-reth" -type f -executable -exec realpath {} \;
-
-      # Checkout the current repo (enclave)
-      - name: Checkout enclave repo
-        uses: actions/checkout@v4
-        with:
-          clean: false
-          fetch-depth: 0
-
-      # Make integration test script executable
-      - name: Make test script executable
-        run: chmod +x scripts/run_integration_tests.sh
-
-      # Debug: Check if binary exists and supervisor config
-      - name: Debug binary and supervisor config
-        run: |
-          echo "=== Checking if seismic-reth binary exists ==="
-          ls -la /home/azureuser/actions-runner/_work/enclave/enclave/seismic-reth/target/debug/seismic-reth || echo "Binary not found"
-          echo "=== Checking if seismic-enclave-server binary exists ==="
-          ls -la /home/azureuser/actions-runner/_work/enclave/enclave/target/debug/seismic-enclave-server || echo "seismic-enclave-server binary not found"
-          echo "=== Current working directory ==="
-          pwd
-          echo "=== Supervisor config ==="
-          sudo cat /etc/supervisor/conf.d/devnet.conf || echo "No supervisor config found"
-          echo "=== Checking supervisor status ==="
-          sudo supervisorctl status || echo "Supervisor not running"
-
-      # Run the integration tests
+      # TODO: add a separate reth-backed integration job for contract-backed
+      # bootstrap admission with PCR policy seeded in genesis.
       - name: Run integration tests
         run: ./scripts/run_integration_tests.sh
-
-      - name: Cleanup artifacts from target
-        run: |
-          rm -rf target/debug/seismic-*

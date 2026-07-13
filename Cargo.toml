@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/attestation-rpc",
     "crates/custodian-ipc",
     "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
@@ -24,6 +25,7 @@ readme = "README.md"
 # workspace libs
 enclave-contract = { path = "crates/enclave-contract" }
 seismic-attestation = { path = "crates/seismic-attestation" }
+seismic-attestation-rpc = { path = "crates/attestation-rpc" }
 seismic-custodian-ipc = { path = "crates/custodian-ipc" }
 seismic-enclave = {path = "crates/enclave" }
 seismic-enclave-crypto = { path = "crates/enclave-crypto" }
@@ -47,7 +49,6 @@ hex = "0.4.3"
 hkdf = "0.12"
 jsonrpsee = { version = "0.26.0", features = ["server", "client","macros"] }
 libc = "0.2.177"
-openssl = "0.10.74"
 rand = "0.9.2"
 reqwest = { version = "0.11", features = ["json"] }
 schnorrkel = { version = "0.11.2", features = ["serde"] }
@@ -59,6 +60,4 @@ sha2 = "0.10.9"
 tokio = { version = "1.44", features = ["full"] }
 tracing = { version = "0.1.41"}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "json"] }
-urlencoding = "2.1"
 zeroize = "1.8.1"
-x509-parser = "0.15.1"
