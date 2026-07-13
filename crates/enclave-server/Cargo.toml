@@ -20,6 +20,7 @@ path = "src/main.rs"
 [dependencies]
 seismic-enclave.workspace = true
 seismic-attestation.workspace = true
+seismic-custodian-ipc = { workspace = true, features = ["server"] }
 seismic-key-custodian.workspace = true
 enclave-contract.workspace = true
 

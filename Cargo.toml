@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/custodian-ipc",
     "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
     "crates/enclave-crypto",
@@ -23,6 +24,7 @@ readme = "README.md"
 # workspace libs
 enclave-contract = { path = "crates/enclave-contract" }
 seismic-attestation = { path = "crates/seismic-attestation" }
+seismic-custodian-ipc = { path = "crates/custodian-ipc" }
 seismic-enclave = {path = "crates/enclave" }
 seismic-enclave-crypto = { path = "crates/enclave-crypto" }
 seismic-key-custodian = { path = "crates/key-custodian" }
@@ -36,6 +38,7 @@ attestation = { git = "https://github.com/flashbots/attested-tls", rev = "05a79a
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
 bincode = "1.3.3"
+ciborium = "0.2"
 clap = { version = "4.5.51", features = ["derive", "env"] }
 dcap-rs = "0.1.0"
 base64-url = "3.0.0"
@@ -50,6 +53,7 @@ reqwest = { version = "0.11", features = ["json"] }
 schnorrkel = { version = "0.11.2", features = ["serde"] }
 secp256k1 = { version = "0.30", features = ["rand", "recovery", "std", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
 serde_json = "1.0"
 sha2 = "0.10.9"
 tokio = { version = "1.44", features = ["full"] }
