@@ -6,13 +6,13 @@
 use std::time::Duration;
 
 use crate::utils::get_args;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy,
     bindings::{binding64_from_digest32, tx_io_binding},
     verify_evidence,
 };
-use seismic_attestation_rpc::AttestationRpcClient as _;
+use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
 use seismic_enclave::TdxQuoteRpcClient as _;
 use seismic_enclave_server::utils::{init_tracing, is_sudo};
 
@@ -23,6 +23,9 @@ use seismic_enclave_server::utils::{init_tracing, is_sudo};
 // evidence verification confirms that both sides use the same network ID.
 const EXPECTED_NETWORK_MANIFEST: &[u8] =
     include_bytes!("../../../network-manifest/fixtures/network-manifest-v1.json");
+const NODE_STARTUP_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const EVIDENCE_RPC_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
 #[serial_test::serial(attestation_evidence)]
 #[tokio::test]
@@ -37,24 +40,22 @@ async fn test_get_wrapped_root_key_bootstrap() {
     let args1 = get_args(0, true, Default::default());
     let enclave_one_url = format!("http://localhost:{}", args1.port);
     let node1_handle = tokio::spawn(args1.start());
+    let client1 = HttpClientBuilder::default()
+        .build(enclave_one_url.clone())
+        .expect("Unable to create enclave 1 client");
+    wait_for_health(&client1, "genesis enclave").await;
 
-    // sleep some time to allow him to start up
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // start second enclave with node1 as his peer
-    let args2 = get_args(1, false, vec![enclave_one_url.clone()]);
+    // Start the second enclave with node 1 as its peer. Its RPC listener comes
+    // up after the attested root-key exchange completes.
+    let args2 = get_args(1, false, vec![enclave_one_url]);
     let enclave_two_url = format!("http://localhost:{}", args2.port);
     let node2_handle = tokio::spawn(args2.start());
-    // sleep some time to allow them to share keys
-    tokio::time::sleep(Duration::from_secs(10)).await;
-
-    // Get keys from both and make sure they match
-    let client1 = HttpClientBuilder::default()
-        .build(enclave_one_url)
-        .expect("Unable to connect to enclave 1");
     let client2 = HttpClientBuilder::default()
         .build(enclave_two_url)
-        .expect("Unable to connect to enclave 2");
+        .expect("Unable to create enclave 2 client");
+    wait_for_health(&client2, "joining enclave").await;
+
+    // Get keys from both and make sure they match
 
     let keys1 = client1
         .get_purpose_keys(0)
@@ -76,10 +77,7 @@ async fn test_get_wrapped_root_key_bootstrap() {
     // independently from the manifest bytes, response key, and requested
     // epoch, then verify through seismic-attestation.
     let epoch = 0;
-    let response = client1
-        .get_tx_io_attestation_evidence(epoch)
-        .await
-        .expect("Unable to get tx-io attestation evidence");
+    let response = get_tx_io_attestation_evidence(&client1, epoch).await;
     assert_eq!(response.epoch, epoch);
     assert_eq!(response.tx_io_pk, keys1.tx_io_pk);
 
@@ -139,4 +137,46 @@ async fn test_get_wrapped_root_key_bootstrap() {
 /// measurement admission is covered by the separately tracked on-chain policy.
 fn test_measurement_policy() -> SeismicMeasurementPolicy {
     SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx)
+}
+
+/// Wait until the server's `healthCheck` RPC returns `OK`.
+///
+/// The joining server binds its RPC listener after fetching and installing the
+/// root key, so readiness also confirms that its bootstrap exchange completed.
+async fn wait_for_health(client: &HttpClient, service: &str) {
+    let deadline = tokio::time::Instant::now() + NODE_STARTUP_TIMEOUT;
+
+    loop {
+        let last_error = match client.health_check().await {
+            Ok(status) if status == "OK" => return,
+            Ok(status) => format!("unexpected health response: {status}"),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "{service} did not become healthy within {NODE_STARTUP_TIMEOUT:?}: {last_error}"
+        );
+        tokio::time::sleep(RETRY_INTERVAL).await;
+    }
+}
+
+async fn get_tx_io_attestation_evidence(
+    client: &HttpClient,
+    epoch: u64,
+) -> TxIoAttestationResponse {
+    let deadline = tokio::time::Instant::now() + EVIDENCE_RPC_TIMEOUT;
+
+    loop {
+        match client.get_tx_io_attestation_evidence(epoch).await {
+            Ok(response) => return response,
+            Err(error) => {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "Unable to get tx-io attestation evidence within {EVIDENCE_RPC_TIMEOUT:?}: {error}"
+                );
+            }
+        }
+        tokio::time::sleep(RETRY_INTERVAL).await;
+    }
 }
