@@ -49,109 +49,37 @@ jobs:
       # skips the `cli` binary entirely (required-features). Cover them here.
       - name: Run seismic-custodian-ipc tests (all features)
         run: cargo test -p seismic-custodian-ipc --all-features
-      # Default test coverage for every workspace crate, so new crates get
-      # tested without anyone remembering to add a job. Exclusions, each for
-      # its own reason:
-      #   - seismic-enclave / seismic-enclave-server: tests need root on a
-      #     TDX CVM (vTPM/IMDS access); they have dedicated sudo jobs below.
+      # The one live enclave-server integration target needs a TDX CVM and is
+      # run separately below. Everything else can run on the hosted runner.
       - name: Run workspace tests
-        run: cargo test --workspace --exclude seismic-enclave --exclude seismic-enclave-server
+        run: cargo test --workspace --exclude seismic-enclave-server
+      - name: Run enclave-server unit tests
+        run: cargo test -p seismic-enclave-server --lib --bins
 
   build:
-    runs-on: self-hosted
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      # shared-key deliberately matches integration_tests, which restores this
-      # job's cache instead of recompiling the workspace.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "build-cache"
-          cache-on-failure: true
-      - name: cargo build without flags
-        run: cargo build
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: enclave-binaries
-          path: |
-            target/debug/seismic-enclave*
-            target/debug/seismic-enclave-server*
-            target/debug/enclave-contract*
-          retention-days: 1
-
-  test_enclave:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run tests for seismic-enclave
-        run: |
-          cd crates/enclave
-          # CARGO_TERM_COLOR=never: the workflow forces color globally, and
-          # the ANSI codes around cargo's status verbs would break the
-          # line-anchored sed below.
-          OUTPUT=$(CARGO_TERM_COLOR=never cargo test -p seismic-enclave --no-run 2>&1)
-          echo "$OUTPUT"
-          # Parse cargo's `Executable ... (path)` lines rather than grepping
-          # for crate-named binaries: name greps silently skip standalone
-          # tests/*.rs targets, whose binaries are named after the test file.
-          mapfile -t binaries < <(echo "$OUTPUT" | sed -nE 's/^[[:space:]]*Executable .*\((.+)\)$/\1/p')
-          [ ${#binaries[@]} -gt 0 ] || { echo "no test binaries found"; exit 1; }
-          for binary in "${binaries[@]}"; do
-            echo "Running binary: $binary"
-            sudo "$binary"
-          done
-
-  test_enclave_server:
-    runs-on: self-hosted
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests for seismic-enclave-server
-        run: |
-          cd crates/enclave-server
-          # CARGO_TERM_COLOR=never: the workflow forces color globally, and
-          # the ANSI codes around cargo's status verbs would break the
-          # line-anchored sed below.
-          OUTPUT=$(CARGO_TERM_COLOR=never cargo test -p seismic-enclave-server --no-run 2>&1)
-          echo "$OUTPUT"
-          # Parse cargo's `Executable ... (path)` lines rather than grepping
-          # for crate-named binaries: name greps silently skip standalone
-          # tests/*.rs targets, whose binaries are named after the test file.
-          mapfile -t binaries < <(echo "$OUTPUT" | sed -nE 's/^[[:space:]]*Executable .*\((.+)\)$/\1/p')
-          [ ${#binaries[@]} -gt 0 ] || { echo "no test binaries found"; exit 1; }
-          for binary in "${binaries[@]}"; do
-            case "$(basename "$binary")" in
-              # tests/integration is the integration_tests job's payload: it
-              # starts two live enclave-server instances and exercises the
-              # Azure TPM/IMDS evidence path. Keep that environment setup in
-              # one job. Do NOT add further entries here without a matching
-              # reason.
-              integration-*)
-                echo "SKIPPING $binary (integration_tests job's live-TEE payload)"
-                continue
-                ;;
-            esac
-            echo "Running binary: $binary"
-            sudo "$binary"
-          done
+      - name: Install TPM build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libtss2-dev
+      - name: Build workspace binaries
+        run: cargo build --workspace
 
   integration_tests:
-    runs-on: [self-hosted, azure-tdx-v6]
+    runs-on: [self-hosted, linux, x64, azure-tdx-v6]
+    # This runner has passwordless sudo and must never execute fork PR code.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 30
-    needs: build
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "build-cache"
           cache-on-failure: true
 
       # TODO: add a separate reth-backed integration job for contract-backed
