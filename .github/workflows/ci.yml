@@ -93,7 +93,11 @@ jobs:
           cd crates/enclave
           OUTPUT=$(cargo test -p seismic-enclave --no-run 2>&1)
           echo "$OUTPUT"
-          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave-[a-z0-9]*')
+          # Parse cargo's `Executable ... (path)` lines rather than grepping
+          # for crate-named binaries: name greps silently skip standalone
+          # tests/*.rs targets, whose binaries are named after the test file.
+          mapfile -t binaries < <(echo "$OUTPUT" | sed -nE 's/^[[:space:]]*Executable .*\((.+)\)$/\1/p')
+          [ ${#binaries[@]} -gt 0 ] || { echo "no test binaries found"; exit 1; }
           for binary in "${binaries[@]}"; do
             echo "Running binary: $binary"
             sudo "$binary"
@@ -111,8 +115,24 @@ jobs:
           cd crates/enclave-server
           OUTPUT=$(cargo test -p seismic-enclave-server --no-run 2>&1)
           echo "$OUTPUT"
-          mapfile -t binaries < <(echo "$OUTPUT" | grep -o '/[^ ]*seismic_enclave_server-[a-z0-9]*')
+          # Parse cargo's `Executable ... (path)` lines rather than grepping
+          # for crate-named binaries: name greps silently skip standalone
+          # tests/*.rs targets, whose binaries are named after the test file.
+          mapfile -t binaries < <(echo "$OUTPUT" | sed -nE 's/^[[:space:]]*Executable .*\((.+)\)$/\1/p')
+          [ ${#binaries[@]} -gt 0 ] || { echo "no test binaries found"; exit 1; }
           for binary in "${binaries[@]}"; do
+            case "$(basename "$binary")" in
+              # tests/integration is the integration_tests job's payload:
+              # run_integration_tests.sh runs it against the supervisor
+              # devnet, which provides the network manifest that
+              # enclave-server fatally requires at startup. It cannot pass
+              # in this job's bare environment. Do NOT add further entries
+              # here without a matching reason.
+              integration-*)
+                echo "SKIPPING $binary (integration_tests job's payload; needs the devnet)"
+                continue
+                ;;
+            esac
             echo "Running binary: $binary"
             sudo "$binary"
           done
