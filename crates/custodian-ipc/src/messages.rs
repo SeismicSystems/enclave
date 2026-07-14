@@ -21,26 +21,69 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub enum Request {
     /// Liveness probe; carries no key material in either direction.
     Ping,
+
+    // ==================== Purpose-key access ====================
     /// Derive this epoch's tx-io ECDH keypair (TxSeismic calldata
     /// encryption). Epochs are fixed at 0 until a consensus-driven manual
     /// rotation exists; same for the other purposes below.
     GetTxIoKeypair { epoch: u64 },
+    /// Derive only the public half of this epoch's tx-io key. The
+    /// attestation service uses this to mint tx-io evidence without gaining
+    /// access to `tx_io_sk`.
+    GetTxIoPublicKey { epoch: u64 },
     /// Derive this epoch's RNG-precompile keypair.
     GetRngKeypair { epoch: u64 },
     /// Derive this epoch's snapshot encryption key.
     GetSnapshotKey { epoch: u64 },
+
+    // ==================== Root-key bootstrap ====================
+    /// Start requester-side bootstrap without exposing the requester's
+    /// ephemeral ECDH secret to the network-facing attestation service.
+    ///
+    /// At most one attempt is retained. Starting another attempt invalidates
+    /// and drops the previous one.
+    CreateRootKeyBootstrapAttempt,
     /// AEAD-wrap the root key for an attestation-verified peer.
     ///
-    /// `root_key_request_binding` is the digest of the request transcript the
-    /// *caller* already verified (it becomes the AEAD AAD; the custodian
-    /// carries it opaquely). Sending this request asserts that verification
-    /// succeeded — the ACL must confine it to the attestation-service.
+    /// Verify the bootstrap requester before calling this method: recompute
+    /// its expected request binding from the local network ID, requester nonce,
+    /// and requester ephemeral public key, then verify its evidence against
+    /// that binding. Calling this method authorizes release of the wrapped root
+    /// key, so the ACL must confine it to the attestation service.
     WrapRootKey {
+        /// SHA-256 binding of the original bootstrap request transcript:
+        /// `root_key_request_binding(network_id, nonce_b, eph_pk_b)`. The
+        /// custodian carries it opaquely into the root-key ciphertext as AEAD
+        /// AAD.
         #[serde(with = "serde_bytes")]
         root_key_request_binding: [u8; 32],
         /// Peer's ephemeral ECDH public key, 33-byte compressed SEC1.
         #[serde(with = "serde_bytes")]
         peer_eph_pk: [u8; 33],
+    },
+    /// Install a root key from a verified bootstrap response.
+    ///
+    /// Verify the responder's evidence and response transcript before calling
+    /// this method. Raw evidence deliberately does not cross this boundary;
+    /// possession of the ACL grant is the authorization assertion.
+    InstallRootKeyFromVerifiedBootstrapResponse {
+        /// Opaque attempt identifier returned by the initial
+        /// [`Request::CreateRootKeyBootstrapAttempt`] call. It selects the
+        /// requester ephemeral secret retained for this bootstrap exchange.
+        #[serde(with = "serde_bytes")]
+        attempt_id: [u8; 32],
+        /// SHA-256 binding of the original bootstrap request transcript:
+        /// `root_key_request_binding(network_id, nonce_b, eph_pk_b)`. This must
+        /// be the same value supplied to [`Request::WrapRootKey`] by the
+        /// responder; the custodian uses it as AEAD AAD when unwrapping.
+        #[serde(with = "serde_bytes")]
+        root_key_request_binding: [u8; 32],
+        /// Responder ephemeral ECDH public key, 33-byte compressed SEC1.
+        #[serde(with = "serde_bytes")]
+        responder_eph_pk: [u8; 33],
+        /// `nonce(12) || AES-256-GCM ciphertext+tag` over the root key.
+        #[serde(with = "serde_bytes")]
+        wrapped_root_key: Vec<u8>,
     },
 }
 
@@ -50,34 +93,73 @@ impl Request {
         match self {
             Request::Ping => "ping",
             Request::GetTxIoKeypair { .. } => "get_tx_io_keypair",
+            Request::GetTxIoPublicKey { .. } => "get_tx_io_public_key",
             Request::GetRngKeypair { .. } => "get_rng_keypair",
             Request::GetSnapshotKey { .. } => "get_snapshot_key",
+            Request::CreateRootKeyBootstrapAttempt => "create_root_key_bootstrap_attempt",
             Request::WrapRootKey { .. } => "wrap_root_key",
+            Request::InstallRootKeyFromVerifiedBootstrapResponse { .. } => {
+                "install_root_key_from_verified_bootstrap_response"
+            }
         }
     }
 }
 
-/// One response; variants mirror [`Request`] plus two failure variants,
-/// split by which layer failed the request: [`Response::Denied`] is minted
-/// only by the transport's ACL loop, [`Response::Error`] only by the host's
-/// dispatch handler.
+/// One response over the custodian socket. Method-specific results are joined
+/// by explicit root-key state outcomes plus two failures split by layer:
+/// [`Response::Denied`] is minted only by the transport's ACL loop, while
+/// [`Response::Error`] is minted only by the host's dispatch handler.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Response {
     Pong,
     TxIoKeypair(TxIoKeypairBytes),
+    TxIoPublicKey(TxIoPublicKeyBytes),
     RngKeypair(RngKeypairBytes),
     SnapshotKey(SnapshotKeyBytes),
+    RootKeyBootstrapAttemptCreated(RootKeyBootstrapAttemptBytes),
     WrappedRootKey(WrappedRootKeyBytes),
+    RootKeyInstalled,
+    /// A create/install request arrived while the root key was already
+    /// present. Kept distinct from an internal error so a restarted
+    /// attestation service can proceed without a state-query RPC.
+    RootKeyAlreadyPresent,
+    /// The requested derivation/wrap needs `root_key`, but none is present in
+    /// the custodian's memory.
+    RootKeyAbsent,
     /// The ACL refused this peer the method; the handler never saw the
     /// request. Retrying cannot succeed until the node's ACL changes.
     Denied {
         message: String,
     },
     /// The handler accepted the request but the operation failed (bad
-    /// argument or internal error); no partial output is returned.
+    /// argument or internal error); no partial output is returned. Hosts must
+    /// put only stable, sanitized text here; detailed errors stay in their
+    /// local logs.
     Error {
         message: String,
     },
+}
+
+impl Response {
+    /// Stable, payload-free variant label for protocol diagnostics. This is
+    /// safe to include in client errors even when the response variant carries
+    /// secret key material.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Response::Pong => "pong",
+            Response::TxIoKeypair(_) => "tx_io_keypair",
+            Response::TxIoPublicKey(_) => "tx_io_public_key",
+            Response::RngKeypair(_) => "rng_keypair",
+            Response::SnapshotKey(_) => "snapshot_key",
+            Response::RootKeyBootstrapAttemptCreated(_) => "root_key_bootstrap_attempt_created",
+            Response::WrappedRootKey(_) => "wrapped_root_key",
+            Response::RootKeyInstalled => "root_key_installed",
+            Response::RootKeyAlreadyPresent => "root_key_already_present",
+            Response::RootKeyAbsent => "root_key_absent",
+            Response::Denied { .. } => "denied",
+            Response::Error { .. } => "error",
+        }
+    }
 }
 
 /// secp256k1 tx-io keypair as raw bytes. Zeroized on drop: `sk` is a secret.
@@ -98,6 +180,26 @@ impl fmt::Debug for TxIoKeypairBytes {
             .field("pk", &self.pk)
             .finish()
     }
+}
+
+/// Public half of a tx-io keypair, returned to the attestation service.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TxIoPublicKeyBytes {
+    /// 33-byte compressed SEC1 public key.
+    #[serde(with = "serde_bytes")]
+    pub pk: [u8; 33],
+}
+
+/// One pending requester-side root-key bootstrap attempt. The matching
+/// ephemeral secret remains in the custodian process.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RootKeyBootstrapAttemptBytes {
+    /// Opaque correlation token used to select the retained ephemeral secret.
+    #[serde(with = "serde_bytes")]
+    pub attempt_id: [u8; 32],
+    /// Requester ephemeral ECDH public key, 33-byte compressed SEC1.
+    #[serde(with = "serde_bytes")]
+    pub requester_eph_pk: [u8; 33],
 }
 
 /// schnorrkel RNG keypair as raw bytes (`Keypair::to_bytes()`, 96 bytes,
@@ -163,11 +265,19 @@ mod tests {
         let requests = [
             Request::Ping,
             Request::GetTxIoKeypair { epoch: 7 },
+            Request::GetTxIoPublicKey { epoch: 7 },
             Request::GetRngKeypair { epoch: 8 },
             Request::GetSnapshotKey { epoch: 9 },
+            Request::CreateRootKeyBootstrapAttempt,
             Request::WrapRootKey {
                 root_key_request_binding: [0xAB; 32],
                 peer_eph_pk: [0xCD; 33],
+            },
+            Request::InstallRootKeyFromVerifiedBootstrapResponse {
+                attempt_id: [0x11; 32],
+                root_key_request_binding: [0xAB; 32],
+                responder_eph_pk: [0xCD; 33],
+                wrapped_root_key: vec![0xEF; 60],
             },
         ];
         for request in requests {
@@ -202,6 +312,33 @@ mod tests {
         };
         assert_eq!(rng.keypair, vec![4; 96]);
 
+        let response = Response::TxIoPublicKey(TxIoPublicKeyBytes { pk: [5; 33] });
+        let Response::TxIoPublicKey(tx_io) = from_cbor(&to_cbor(&response)) else {
+            panic!("wrong variant");
+        };
+        assert_eq!(tx_io.pk, [5; 33]);
+
+        let response = Response::RootKeyBootstrapAttemptCreated(RootKeyBootstrapAttemptBytes {
+            attempt_id: [6; 32],
+            requester_eph_pk: [7; 33],
+        });
+        let Response::RootKeyBootstrapAttemptCreated(attempt) = from_cbor(&to_cbor(&response))
+        else {
+            panic!("wrong variant");
+        };
+        assert_eq!(attempt.attempt_id, [6; 32]);
+        assert_eq!(attempt.requester_eph_pk, [7; 33]);
+
+        for response in [
+            Response::RootKeyInstalled,
+            Response::RootKeyAlreadyPresent,
+            Response::RootKeyAbsent,
+        ] {
+            let expected_kind = response.kind();
+            let decoded: Response = from_cbor(&to_cbor(&response));
+            assert_eq!(decoded.kind(), expected_kind);
+        }
+
         // The two failure variants must stay distinct across the wire.
         let response = Response::Denied {
             message: "not authorized".into(),
@@ -226,6 +363,22 @@ mod tests {
             encoded.windows(marker.len()).any(|w| w == marker),
             "expected 32-byte byte-string header in {encoded:02x?}"
         );
+    }
+
+    #[test]
+    fn response_kind_is_payload_free() {
+        let response = Response::TxIoKeypair(TxIoKeypairBytes {
+            sk: [0xA5; 32],
+            pk: [2; 33],
+        });
+        assert_eq!(response.kind(), "tx_io_keypair");
+        assert!(!response.kind().contains("a5"));
+
+        let response = Response::Error {
+            message: "private implementation detail".into(),
+        };
+        assert_eq!(response.kind(), "error");
+        assert!(!response.kind().contains("private"));
     }
 
     #[test]
