@@ -37,23 +37,35 @@ async fn test_get_wrapped_root_key_bootstrap() {
     }
 
     // Start first enclave as genesis node
-    let args1 = get_args(0, true, Default::default());
+    let node1_runtime = tempfile::tempdir().expect("create genesis runtime directory");
+    let args1 = get_args(
+        0,
+        true,
+        Default::default(),
+        node1_runtime.path().join("custodian.sock"),
+    );
     let enclave_one_url = format!("http://localhost:{}", args1.port);
-    let node1_handle = tokio::spawn(args1.start());
+    let mut node1_handle = tokio::spawn(args1.start());
     let client1 = HttpClientBuilder::default()
         .build(enclave_one_url.clone())
         .expect("Unable to create enclave 1 client");
-    wait_for_health(&client1, "genesis enclave").await;
+    wait_for_health(&client1, "genesis enclave", &mut node1_handle).await;
 
     // Start the second enclave with node 1 as its peer. Its RPC listener comes
     // up after the attested root-key exchange completes.
-    let args2 = get_args(1, false, vec![enclave_one_url]);
+    let node2_runtime = tempfile::tempdir().expect("create joining runtime directory");
+    let args2 = get_args(
+        1,
+        false,
+        vec![enclave_one_url],
+        node2_runtime.path().join("custodian.sock"),
+    );
     let enclave_two_url = format!("http://localhost:{}", args2.port);
-    let node2_handle = tokio::spawn(args2.start());
+    let mut node2_handle = tokio::spawn(args2.start());
     let client2 = HttpClientBuilder::default()
         .build(enclave_two_url)
         .expect("Unable to create enclave 2 client");
-    wait_for_health(&client2, "joining enclave").await;
+    wait_for_health(&client2, "joining enclave", &mut node2_handle).await;
 
     // Get keys from both and make sure they match
 
@@ -143,7 +155,11 @@ fn test_measurement_policy() -> SeismicMeasurementPolicy {
 ///
 /// The joining server binds its RPC listener after fetching and installing the
 /// root key, so readiness also confirms that its bootstrap exchange completed.
-async fn wait_for_health(client: &HttpClient, service: &str) {
+async fn wait_for_health(
+    client: &HttpClient,
+    service: &str,
+    server_handle: &mut tokio::task::JoinHandle<anyhow::Result<()>>,
+) {
     let deadline = tokio::time::Instant::now() + NODE_STARTUP_TIMEOUT;
 
     loop {
@@ -157,7 +173,12 @@ async fn wait_for_health(client: &HttpClient, service: &str) {
             tokio::time::Instant::now() < deadline,
             "{service} did not become healthy within {NODE_STARTUP_TIMEOUT:?}: {last_error}"
         );
-        tokio::time::sleep(RETRY_INTERVAL).await;
+        tokio::select! {
+            result = &mut *server_handle => {
+                panic!("{service} exited before becoming healthy: {result:?}")
+            }
+            () = tokio::time::sleep(RETRY_INTERVAL) => {}
+        }
     }
 }
 

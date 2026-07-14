@@ -11,8 +11,9 @@ pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 use anyhow::Result;
 use clap::Parser;
+use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use seismic_enclave::mock::start_mock_server;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
 
 /// Command line arguments for the enclave server
@@ -35,6 +36,10 @@ pub struct Args {
     /// Required when `genesis_node` is false.
     #[arg(long, env = "SEISMIC_ENCLAVE_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
+
+    /// Filesystem path for the custodian IPC socket.
+    #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
+    pub custodian_socket: PathBuf,
 
     /// Run the dev-only mock server instead of the real enclave.
     ///

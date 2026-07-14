@@ -24,10 +24,9 @@ use seismic_attestation::{
 use seismic_attestation_rpc::{
     AttestationRpcClient as _, AttestationRpcServer, TxIoAttestationResponse,
 };
-use seismic_custodian_ipc::CUSTODIAN_SOCKET_PATH;
 use seismic_enclave::{GetPurposeKeysResponse, LuksProvisioningStatus, api::TdxQuoteRpcServer};
 use seismic_key_custodian::Custodian;
-use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tracing::{info, warn};
 
 /// Attestation type this build mints and verifies evidence for. Azure TDX +
@@ -128,6 +127,8 @@ impl AttestationRpcServer for TdxQuoteServer {
 }
 
 pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
+    let custodian_socket = args.custodian_socket;
+
     // Derive this node's network identity from the manifest tdx-init dropped on
     // tmpfs. Fatal if absent/malformed: without it every attestation binding is
     // unscoped, so we refuse to serve rather than fall back to an unbound quote.
@@ -169,12 +170,11 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // production caller connects yet: in-process users call `Custodian`
     // directly and reth still fetches keys over HTTP `getPurposeKeys`, so
     // until the split moves them onto the socket, only the debug CLI (and
-    // tests) exercise it. Bind failure is fatal anyway: a
-    // node that can't serve the socket should fail this boot, not at the
-    // split, and /run/seismic already had to exist for the manifest read.
+    // tests) exercise it. The local key interface is part of node readiness,
+    // so bind failure is fatal.
     let custodian = Arc::new(custodian);
-    let ipc_listener = seismic_custodian_ipc::server::bind(Path::new(CUSTODIAN_SOCKET_PATH))
-        .with_context(|| format!("binding custodian socket {CUSTODIAN_SOCKET_PATH}"))?;
+    let ipc_listener = seismic_custodian_ipc::server::bind(&custodian_socket)
+        .with_context(|| format!("binding custodian socket {}", custodian_socket.display()))?;
     let ipc_custodian = custodian.clone();
     std::thread::spawn(move || {
         seismic_custodian_ipc::server::serve(
