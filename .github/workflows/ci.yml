@@ -24,7 +24,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
-  check_and_test:
+  tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -42,8 +42,6 @@ jobs:
       # since it forces every tx through the encrypted Seismic path.
       - name: Install foundry (forge + anvil)
         uses: foundry-rs/foundry-toolchain@v1
-      - name: cargo check warnings
-        run: RUSTFLAGS="-D warnings" cargo check
       # The workspace pass builds seismic-custodian-ipc with default features
       # only, which compiles out the `server` module (and its ACL tests) and
       # skips the `cli` binary entirely (required-features). Cover them here.
@@ -65,8 +63,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install TPM build dependencies
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
-      - name: Build workspace binaries
-        run: cargo build --workspace
+      - name: Build workspace and deny warnings
+        run: RUSTFLAGS="-D warnings" cargo build --workspace
 
   integration_tests:
     runs-on: [self-hosted, linux, x64, azure-tdx-v6]
