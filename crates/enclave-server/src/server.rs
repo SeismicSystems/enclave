@@ -1,40 +1,41 @@
 use crate::{
     Args,
-    attestation::AttestationAgent,
     bootstrap::{
         RootKeyRequest, RootKeyResponse, answer_root_key_request, build_root_key_request,
         unwrap_root_key_from_response,
     },
     luks_keys,
     network::{NETWORK_MANIFEST_PATH, load_network_id},
-    utils::anyhow_to_rpc_error,
+    utils::{
+        internal_rpc_error, invalid_root_key_request_rpc_error, root_key_request_denied_rpc_error,
+    },
 };
 use anyhow::Context as _;
-use dcap_rs::types::quotes::version_4::QuoteV4;
 use jsonrpsee::{
     core::{RpcResult, async_trait},
     http_client::HttpClientBuilder,
     server::ServerBuilder,
 };
-use seismic_attestation::{AttestationType, NetworkId, SeismicMeasurementPolicy};
-use seismic_custodian_ipc::CUSTODIAN_SOCKET_PATH;
-use seismic_enclave::{
-    AttestationGetEvidenceResponse, GetPurposeKeysResponse, LuksProvisioningStatus,
-    TdxQuoteRpcClient as _, api::TdxQuoteRpcServer,
+use seismic_attestation::{
+    AttestationType, NetworkId, SeismicMeasurementPolicy,
+    bindings::{binding64_from_digest32, tx_io_binding},
+    generate_evidence,
 };
+use seismic_attestation_rpc::{
+    AttestationRpcClient as _, AttestationRpcServer, TxIoAttestationResponse,
+};
+use seismic_custodian_ipc::CUSTODIAN_SOCKET_PATH;
+use seismic_enclave::{GetPurposeKeysResponse, LuksProvisioningStatus, api::TdxQuoteRpcServer};
 use seismic_key_custodian::Custodian;
 use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
 use tracing::{info, warn};
 
 /// Attestation type this build mints and verifies evidence for. Azure TDX +
-/// vTPM is the only supported surface today (see `attestation::AttestationAgent`).
+/// vTPM is the only supported surface today.
 const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
 
-/// Epoch used for the standalone `getAttestationEvidence` tx_io binding.
-const TX_IO_BINDING_EPOCH: u64 = 0;
-
+#[derive(Clone)]
 pub struct TdxQuoteServer {
-    attestation_agent: AttestationAgent,
     /// `Arc` because the one `Custodian` per process (it is deliberately not
     /// `Clone`) is shared with the IPC socket thread spawned in
     /// [`start_server`]; every method on it is `&self`, so no lock.
@@ -47,13 +48,8 @@ pub struct TdxQuoteServer {
 }
 
 impl TdxQuoteServer {
-    pub fn new(
-        attestation_agent: AttestationAgent,
-        custodian: Arc<Custodian>,
-        network_id: NetworkId,
-    ) -> Self {
+    pub fn new(custodian: Arc<Custodian>, network_id: NetworkId) -> Self {
         Self {
-            attestation_agent,
             custodian,
             network_id,
         }
@@ -67,7 +63,9 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
         Ok("OK".to_string())
     }
 
-    /// Get the secp256k1 public key
+    /// Serve reth's purpose-key startup fetch.
+    ///
+    /// TODO: move this operation to the custodian's local IPC API.
     async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse> {
         Ok(GetPurposeKeysResponse {
             tx_io_sk: self.custodian.get_tx_io_sk(epoch),
@@ -75,57 +73,6 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
             snapshot_key_bytes: self.custodian.get_snapshot_key(epoch).into(),
             rng_keypair: self.custodian.get_rng_keypair(epoch),
         })
-    }
-
-    /// Generates attestation evidence bound to this node's tx_io public key.
-    ///
-    /// The quote commits to `tx_io_binding(network_id, tx_io_pk, epoch)`, so a
-    /// verifier learns the attested node holds this tx_io key on this network.
-    async fn get_attestation_evidence(&self) -> RpcResult<AttestationGetEvidenceResponse> {
-        let tx_io_pk = self.custodian.get_tx_io_pk(TX_IO_BINDING_EPOCH).serialize();
-        let binding = seismic_attestation::bindings::tx_io_binding(
-            &self.network_id,
-            &tx_io_pk,
-            TX_IO_BINDING_EPOCH,
-        );
-        self.attestation_agent
-            .get_attestation_evidence(binding)
-            .map_err(anyhow_to_rpc_error)
-    }
-
-    /// Evaluates provided attestation evidence
-    async fn eval_attestation_evidence(
-        &self,
-        _hcl_report: Vec<u8>,
-        quote: Vec<u8>,
-    ) -> RpcResult<()> {
-        let quote = QuoteV4::from_bytes(&quote); // todo(dalton): This will panic if invalid quote bytes are sent find a way to catch or alternative
-        self.attestation_agent
-            .verify_attestation_report(quote)
-            .await
-            .map_err(anyhow_to_rpc_error)
-    }
-
-    /// Get the network root key for a booting peer, AEAD-wrapped.
-    ///
-    /// Verifies the requester's attestation, ECDHs to its attested ephemeral
-    /// key, and returns the root key sealed under the derived key plus our own
-    /// quote over the response transcript. See [`crate::bootstrap`].
-    async fn get_wrapped_root_key(&self, request: Vec<u8>) -> RpcResult<Vec<u8>> {
-        let request: RootKeyRequest =
-            serde_json::from_slice(&request).map_err(|e| anyhow_to_rpc_error(e.into()))?;
-
-        let response = answer_root_key_request(
-            &request,
-            &self.network_id,
-            &self.custodian,
-            bootstrap_measurement_policy(),
-            ATTESTATION_TYPE,
-        )
-        .await
-        .map_err(anyhow_to_rpc_error)?;
-
-        serde_json::to_vec(&response).map_err(|e| anyhow_to_rpc_error(e.into()))
     }
 
     /// Serve the first-boot LUKS-wipe progress the setup-persistent-luks
@@ -136,9 +83,51 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
     }
 }
 
-pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
-    let attestation_agent = AttestationAgent::new().unwrap();
+#[async_trait]
+impl AttestationRpcServer for TdxQuoteServer {
+    /// Get the network root key for a booting peer, AEAD-wrapped.
+    ///
+    /// Verifies the requester's attestation, ECDHs to its attested ephemeral
+    /// key, and returns the root key sealed under the derived key plus our own
+    /// quote over the response transcript. See [`crate::bootstrap`].
+    async fn get_wrapped_root_key(&self, request: Vec<u8>) -> RpcResult<Vec<u8>> {
+        let request: RootKeyRequest =
+            serde_json::from_slice(&request).map_err(invalid_root_key_request_rpc_error)?;
 
+        let response = answer_root_key_request(
+            &request,
+            &self.network_id,
+            &self.custodian,
+            bootstrap_measurement_policy(),
+            ATTESTATION_TYPE,
+        )
+        .await
+        .map_err(root_key_request_denied_rpc_error)?;
+
+        serde_json::to_vec(&response)
+            .map_err(|error| internal_rpc_error("serializing root-key response", error))
+    }
+
+    /// Generate complete evidence bound to this service's tx-io public key,
+    /// network identity, and the requested key epoch.
+    async fn get_tx_io_attestation_evidence(
+        &self,
+        epoch: u64,
+    ) -> RpcResult<TxIoAttestationResponse> {
+        let tx_io_pk = self.custodian.get_tx_io_pk(epoch);
+        let binding = tx_io_binding(&self.network_id, &tx_io_pk.serialize(), epoch);
+        let evidence = generate_evidence(ATTESTATION_TYPE, binding64_from_digest32(binding))
+            .map_err(|error| internal_rpc_error("generating tx-io evidence", error))?;
+
+        Ok(TxIoAttestationResponse {
+            tx_io_pk,
+            epoch,
+            evidence,
+        })
+    }
+}
+
+pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // Derive this node's network identity from the manifest tdx-init dropped on
     // tmpfs. Fatal if absent/malformed: without it every attestation binding is
     // unscoped, so we refuse to serve rather than fall back to an unbound quote.
@@ -197,8 +186,10 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
 
     let server = ServerBuilder::default().build(addr).await?;
 
-    let handle =
-        server.start(TdxQuoteServer::new(attestation_agent, custodian, network_id).into_rpc());
+    let quote_server = TdxQuoteServer::new(custodian, network_id);
+    let mut rpc = TdxQuoteRpcServer::into_rpc(quote_server.clone());
+    rpc.merge(AttestationRpcServer::into_rpc(quote_server))?;
+    let handle = server.start(rpc);
 
     info!("TDX Quote JSON-RPC Server started at {}", addr);
 

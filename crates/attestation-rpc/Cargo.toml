@@ -1,0 +1,16 @@
+[package]
+name = "seismic-attestation-rpc"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Purpose-specific Seismic attestation JSON-RPC types"
+
+[dependencies]
+jsonrpsee.workspace = true
+secp256k1.workspace = true
+seismic-attestation.workspace = true
+serde.workspace = true

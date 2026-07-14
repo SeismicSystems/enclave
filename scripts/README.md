@@ -1,74 +1,42 @@
 # Integration Tests
 
-This directory contains scripts for running integration tests for the Seismic enclave system.
+`run_integration_tests.sh` runs the live-TEE enclave-server integration test on
+the self-hosted Azure TDX runner.
 
-## Integration Test Runner
+## Covered flow
 
-The `run_integration_tests.sh` script runs three integration tests in the correct order:
+`test_get_wrapped_root_key_bootstrap` starts two enclave-server instances and
+checks that:
 
-1. **test_multisig_upgrade_operator_workflow** - Sets up the upgrade operator contract and multisig workflow
-2. **test_get_wrapped_root_key_bootstrap** - Tests the boot process for fetching the wrapped root key (requires setup from test 1)
-3. **test_snapshot_integration_handlers** - Tests snapshot creation and restoration functionality
+1. the joining instance completes the mutually attested wrapped-root-key
+   bootstrap;
+2. both instances derive the same purpose keys;
+3. a relying client fetches `getTxIoAttestationEvidence`, independently derives
+   the expected network/key/epoch binding, and verifies the complete evidence
+   envelope through `seismic-attestation`;
+4. wrong bindings and malformed evidence are rejected.
 
-## Prerequisites
+TODO: add contract-backed bootstrap-admission coverage as a distinct
+reth-backed integration test with PCR policy seeded in genesis.
 
-The integration tests require:
+## Requirements
 
-- **Supervisor** - Process management for the reth and enclave-server services
-- **Rust toolchain** - For building and running the tests
-- **Sudo privileges** - For managing services and directories
+- An Azure TDX CVM with vTPM and IMDS access.
+- Network access for attestation collateral/certificate retrieval.
+- Root privileges for the TEE devices and `/run/seismic` runtime files.
+- The resident enclave-server stopped before the test takes over the TPM. On
+  the CI image, the script asks Supervisor to stop it if present.
+- A Rust toolchain.
 
-## Test Dependencies
+The script installs the checked-in network-manifest fixture under
+`/run/seismic/conf`, builds the integration-test binary as the runner user, and
+executes it with `sudo`.
 
-### test_multisig_upgrade_operator_workflow
-- **Location**: `crates/enclave-contract/tests/multisig_test.rs`
-- **Purpose**: Tests the complete multisig workflow for controlling the UpgradeOperator contract
-- **Dependencies**: Reth service running via supervisor
-
-### test_get_wrapped_root_key_bootstrap
-- **Location**: `crates/enclave-server/tests/integration/integration.rs`
-- **Purpose**: Tests the boot process for fetching the wrapped root key between enclave instances
-- **Dependencies**: 
-  - Reth service running via supervisor
-  - Enclave-server service NOT running
-  - Upgrade operator setup from test_multisig_upgrade_operator_workflow
-  - sudo privileges
-
-### test_snapshot_integration_handlers
-- **Location**: `crates/enclave-server/tests/integration/snapshot.rs`
-- **Purpose**: Tests encrypted snapshot creation and restoration functionality
-- **Dependencies**:
-  - Reth service running via supervisor
-  - Enclave server running on default endpoint
-  - sudo priviliges
-
-## Directory Structure
-
-The tests expect the following directory structure:
-
-```
-/home/azureuser/.reth/db/mdbx.dat  # Reth database file
-/mnt/datadisk/                     # Data disk for snapshots
-/tmp/snapshot/                     # Temporary snapshot directory
-```
-
-## Running the Tests
-
-### In CI
-The integration tests are automatically run in the CI pipeline via the `integration_tests` job in `.github/workflows/ci.yml`. The CI workflow:
-
-1. Downloads pre-built enclave binaries from artifacts
-2. Builds seismic-reth binary
-3. Sets up Rust environment and PATH
-4. Runs the integration test script
-
-### Locally
-To run the integration tests locally:
+## Running
 
 ```bash
-# Make the script executable
-chmod +x scripts/run_integration_tests.sh
-
-# Run the tests
 ./scripts/run_integration_tests.sh
 ```
+
+CI runs the same script in the `integration_tests` job in
+`.github/workflows/ci.yml`.

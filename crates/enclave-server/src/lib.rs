@@ -1,4 +1,3 @@
-mod attestation;
 mod bootstrap;
 pub mod ipc;
 mod luks_keys;
@@ -41,17 +40,16 @@ pub struct Args {
     ///
     /// When set, `Args::start` dispatches to
     /// `seismic_enclave::mock::start_mock_server` (in
-    /// `crates/enclave/src/mock.rs`) which serves the same JSON-RPC
-    /// surface but returns hardcoded test keys
-    /// (`311d54d3bf8359c70827122a44a7b4458733adce3c51c6b59d9acfce85e07505`
-    /// for tx_io_sk, zero-bytes for snapshot_key, etc.). Skips
-    /// attestation and peer fetch. Used by `sanvil` / `sreth` local
-    /// dev where TDX isn't available and clients know the dev pubkeys.
+    /// `crates/enclave/src/mock.rs`) which serves the key/health JSON-RPC
+    /// surface using fixed, publicly known development keys. It deliberately
+    /// does not serve `getTxIoAttestationEvidence`: mock evidence would not be
+    /// verifiable. Skips attestation and peer fetch. Used by `sanvil` / `sreth`
+    /// local dev where TDX isn't available and clients know the dev pubkeys.
     ///
     /// **Never set this flag in a TDX deployment** — it disables every
-    /// confidentiality property the chain depends on (anyone can
-    /// decrypt any TxSeismic calldata, snapshots are unencrypted, RNG
-    /// is predictable).
+    /// confidentiality property the chain depends on (anyone can decrypt
+    /// TxSeismic calldata, the snapshot key is publicly known, and RNG is
+    /// predictable).
     #[arg(long, default_value_t = false)]
     pub mock: bool,
 }

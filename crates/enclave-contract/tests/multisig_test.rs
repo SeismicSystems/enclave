@@ -103,11 +103,11 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     //   - Default (hosted `check_and_test`): spin up a throwaway anvil and seed
     //     the two upgrade contracts at their fixed addresses. Self-contained logic
     //     coverage — no reth, enclave-server, or TPM.
-    //   - `MULTISIG_RPC=<url>` set (self-hosted `run_integration_tests.sh`): run
-    //     against that node instead. There the contracts already exist at genesis
-    //     (seismic-reth's dev alloc), so we skip the spawn + `anvil_setCode`. This
-    //     run is the on-chain allowlist *setup* that `test_get_wrapped_root_key_bootstrap`
-    //     later reads from reth at :8545.
+    //   - `MULTISIG_RPC=<url>` set: optionally run against an external node
+    //     where the contracts already exist at their fixed addresses, skipping
+    //     the spawn + `anvil_setCode`. CI no longer uses this as bootstrap-test
+    //     setup; future chain-backed admission coverage will seed PCR policy in
+    //     genesis instead.
     let _anvil; // keep the spawned node alive for the whole test in default mode
     let endpoint;
     let reth_rpc = if let Ok(rpc) = std::env::var("MULTISIG_RPC") {

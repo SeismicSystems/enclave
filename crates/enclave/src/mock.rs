@@ -6,10 +6,7 @@ use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::server::ServerBuilder;
 use tracing::info;
 
-use crate::api::{
-    AttestationGetEvidenceResponse, GetPurposeKeysResponse, LuksProvisioningStatus,
-    TdxQuoteRpcServer,
-};
+use crate::api::{GetPurposeKeysResponse, LuksProvisioningStatus, TdxQuoteRpcServer};
 use crate::{
     get_unsecure_sample_schnorrkel_keypair, get_unsecure_sample_secp256k1_pk,
     get_unsecure_sample_secp256k1_sk,
@@ -41,26 +38,6 @@ impl TdxQuoteRpcServer for MockServer {
             snapshot_key_bytes: [0u8; 32],
             rng_keypair: get_unsecure_sample_schnorrkel_keypair(),
         })
-    }
-
-    async fn get_attestation_evidence(&self) -> RpcResult<AttestationGetEvidenceResponse> {
-        unimplemented!("get_attestation_evidence not implemented for mock server")
-    }
-
-    async fn eval_attestation_evidence(
-        &self,
-        _hcl_report: Vec<u8>,
-        _quote: Vec<u8>,
-    ) -> RpcResult<()> {
-        unimplemented!("eval_attestation_evidence not implemented for mock server")
-    }
-
-    async fn get_wrapped_root_key(&self, _request: Vec<u8>) -> RpcResult<Vec<u8>> {
-        // The v2 wrapped bootstrap needs the attestation stack (quote
-        // generation + verification) the mock deliberately omits. Dev/`sanvil`
-        // nodes start with `genesis_node=true` and never fetch a peer root key,
-        // so this path is unreachable in mock deployments.
-        unimplemented!("get_wrapped_root_key not implemented for mock server")
     }
 
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
