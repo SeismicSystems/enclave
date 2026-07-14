@@ -24,6 +24,18 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install TPM build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libtss2-dev
+      - name: Build workspace and deny warnings
+        run: RUSTFLAGS="-D warnings" cargo build --workspace
+
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -53,18 +65,6 @@ jobs:
         run: cargo test --workspace --exclude seismic-enclave-server
       - name: Run enclave-server unit tests
         run: cargo test -p seismic-enclave-server --lib --bins
-
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install TPM build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libtss2-dev
-      - name: Build workspace and deny warnings
-        run: RUSTFLAGS="-D warnings" cargo build --workspace
 
   integration_tests:
     runs-on: [self-hosted, linux, x64, azure-tdx-v6]
