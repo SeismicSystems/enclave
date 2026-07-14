@@ -18,8 +18,14 @@ sudo install -m 0644 \
     crates/network-manifest/fixtures/network-manifest-v1.json \
     /run/seismic/conf/network-manifest.json
 
-# Free the TPM before the test starts two enclave-server instances.
-sudo supervisorctl stop enclave-server || true
+# Free the TPM before the test starts two enclave-server instances. Seismic
+# images may have a Supervisor-managed server; stock CI runners do not.
+if command -v supervisorctl >/dev/null 2>&1 && \
+    sudo supervisorctl status enclave-server >/dev/null 2>&1; then
+    sudo supervisorctl stop enclave-server
+else
+    echo "ℹ️ No running Supervisor-managed enclave-server to stop."
+fi
 sleep 2
 
 cd crates/enclave-server
