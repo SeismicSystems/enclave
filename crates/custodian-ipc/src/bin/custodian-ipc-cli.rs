@@ -7,14 +7,14 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use seismic_custodian_ipc::{CUSTODIAN_SOCKET_PATH, CustodianClient};
+use seismic_custodian_ipc::{CustodianClient, DEFAULT_CUSTODIAN_SOCKET_PATH};
 use sha2::{Digest as _, Sha256};
 
 #[derive(Parser)]
 #[command(about = "Debug client for the Seismic key-custodian Unix socket")]
 struct Cli {
     /// Path to the custodian socket.
-    #[arg(long, default_value = CUSTODIAN_SOCKET_PATH)]
+    #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
     socket: std::path::PathBuf,
 
     #[command(subcommand)]
