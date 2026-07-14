@@ -45,6 +45,6 @@ pub use messages::{
     TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
 
-/// Where enclave-server hosts the custodian socket on a node. `/run/seismic`
-/// is tmpfs, created by tdx-init before enclave-server starts.
-pub const CUSTODIAN_SOCKET_PATH: &str = "/run/seismic/custodian.sock";
+/// Default path for the custodian IPC socket. seismic-images creates the
+/// dedicated tmpfs directory before enclave-server starts.
+pub const DEFAULT_CUSTODIAN_SOCKET_PATH: &str = "/run/seismic/custodian/custodian.sock";
