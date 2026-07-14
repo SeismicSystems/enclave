@@ -8,9 +8,11 @@
 
 use anyhow::Context as _;
 use seismic_custodian_ipc::{
-    Request, Response, RngKeypairBytes, SnapshotKeyBytes, TxIoKeypairBytes, WrappedRootKeyBytes,
+    Request, Response, RngKeypairBytes, SnapshotKeyBytes, TxIoKeypairBytes, TxIoPublicKeyBytes,
+    WrappedRootKeyBytes,
 };
 use seismic_key_custodian::{Custodian, VerifiedPeerAuthorization};
+use tracing::warn;
 
 /// Map one ACL-authorized socket request onto the custodian.
 ///
@@ -25,21 +27,39 @@ pub fn dispatch(custodian: &Custodian, request: Request) -> Response {
             sk: custodian.get_tx_io_sk(epoch).secret_bytes(),
             pk: custodian.get_tx_io_pk(epoch).serialize(),
         }),
+        Request::GetTxIoPublicKey { epoch } => Response::TxIoPublicKey(TxIoPublicKeyBytes {
+            pk: custodian.get_tx_io_pk(epoch).serialize(),
+        }),
         Request::GetRngKeypair { epoch } => Response::RngKeypair(RngKeypairBytes {
             keypair: custodian.get_rng_keypair(epoch).to_bytes().to_vec(),
         }),
         Request::GetSnapshotKey { epoch } => Response::SnapshotKey(SnapshotKeyBytes {
             key: custodian.get_snapshot_key(epoch).into(),
         }),
+        // Transitional monolithic host: it binds the socket only after its
+        // root key is present, so creating a requester-side attempt cannot be
+        // meaningful here. The standalone custodian will implement this state
+        // transition while preserving the wire contract.
+        Request::CreateRootKeyBootstrapAttempt => Response::RootKeyAlreadyPresent,
         Request::WrapRootKey {
             root_key_request_binding,
             peer_eph_pk,
         } => match wrap_root_key(custodian, root_key_request_binding, &peer_eph_pk) {
             Ok(wrapped) => Response::WrappedRootKey(wrapped),
-            Err(e) => Response::Error {
-                message: format!("wrap_root_key: {e:#}"),
-            },
+            Err(error) => {
+                // Detailed failures stay local to the key-holding process.
+                // The wire response is stable and cannot accidentally include
+                // key bytes from a future lower-level error implementation.
+                warn!(?error, "custodian root-key wrap failed");
+                Response::Error {
+                    message: "root-key wrap failed".to_string(),
+                }
+            }
         },
+        // As above, the root key is already present in this transitional host.
+        Request::InstallRootKeyFromVerifiedBootstrapResponse { .. } => {
+            Response::RootKeyAlreadyPresent
+        }
     }
 }
 
@@ -90,6 +110,13 @@ mod tests {
         assert_eq!(tx_io.sk, custodian.get_tx_io_sk(0).secret_bytes());
         assert_eq!(tx_io.pk, custodian.get_tx_io_pk(0).serialize());
 
+        let Response::TxIoPublicKey(tx_io_public) =
+            dispatch(&custodian, Request::GetTxIoPublicKey { epoch: 0 })
+        else {
+            panic!("expected tx-io public key");
+        };
+        assert_eq!(tx_io_public.pk, tx_io.pk);
+
         let Response::RngKeypair(rng) = dispatch(&custodian, Request::GetRngKeypair { epoch: 0 })
         else {
             panic!("expected rng keypair");
@@ -113,6 +140,27 @@ mod tests {
             panic!("expected tx-io keypair");
         };
         assert_ne!(tx_io.sk, tx_io_epoch1.sk, "epochs must differ");
+    }
+
+    #[test]
+    fn transitional_host_reports_root_key_already_present() {
+        let custodian = Custodian::new(ROOT_KEY);
+        assert!(matches!(
+            dispatch(&custodian, Request::CreateRootKeyBootstrapAttempt),
+            Response::RootKeyAlreadyPresent
+        ));
+        assert!(matches!(
+            dispatch(
+                &custodian,
+                Request::InstallRootKeyFromVerifiedBootstrapResponse {
+                    attempt_id: [1; 32],
+                    root_key_request_binding: [2; 32],
+                    responder_eph_pk: [3; 33],
+                    wrapped_root_key: vec![4; 60],
+                }
+            ),
+            Response::RootKeyAlreadyPresent
+        ));
     }
 
     #[test]
@@ -147,7 +195,11 @@ mod tests {
                 peer_eph_pk: [0u8; 33],
             },
         );
-        assert!(matches!(response, Response::Error { .. }));
+        let Response::Error { message } = response else {
+            panic!("expected sanitized custodian error");
+        };
+        assert_eq!(message, "root-key wrap failed");
+        assert!(!message.contains("secp256k1"));
     }
 
     /// Coverage over a real `UnixListener`: bind semantics, `SO_PEERCRED`

@@ -18,8 +18,16 @@ pub enum IpcError {
     /// ([`crate::Response::Error`]).
     #[error("custodian: {0}")]
     Custodian(String),
+    /// The custodian received a root-key-dependent request while no root key
+    /// was present in its memory.
+    #[error("custodian root key is absent")]
+    RootKeyAbsent,
     /// The custodian answered, but with a variant that doesn't match the
     /// request — a protocol bug on one side or the other.
-    #[error("unexpected response variant to {method}")]
-    UnexpectedResponse { method: &'static str },
+    #[error("unexpected response variant to {method}: received {received}")]
+    UnexpectedResponse {
+        method: &'static str,
+        /// Payload-free [`crate::Response::kind`] label; never key material.
+        received: &'static str,
+    },
 }

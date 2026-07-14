@@ -28,7 +28,10 @@ mod messages;
 pub mod server;
 
 #[cfg(feature = "client")]
-pub use client::CustodianClient;
+pub use client::{
+    CreateRootKeyBootstrapAttemptResult, CustodianClient,
+    InstallRootKeyFromVerifiedBootstrapResponseResult,
+};
 pub use error::IpcError;
 // The pure encode/decode internals stay crate-private; consumers frame
 // messages through these I/O functions (or the client/server above them).
@@ -38,7 +41,8 @@ pub use framing::{MAX_FRAME_BODY_LEN, read_frame_blocking, write_frame_blocking}
 #[cfg(feature = "client")]
 pub use framing::{read_frame, write_frame};
 pub use messages::{
-    Request, Response, RngKeypairBytes, SnapshotKeyBytes, TxIoKeypairBytes, WrappedRootKeyBytes,
+    Request, Response, RngKeypairBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
+    TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
 
 /// Where enclave-server hosts the custodian socket on a node. `/run/seismic`
