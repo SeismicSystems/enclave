@@ -5214,6 +5214,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
+ "hex",
  "hkdf",
  "rand 0.9.2",
  "schnorrkel",

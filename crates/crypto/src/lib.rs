@@ -188,23 +188,60 @@ pub fn aes_decrypt_aead(
         .map_err(|_| anyhow!("AES-AEAD decryption failed. Authentication tag does not match the given ciphertext/nonce/aad"))
 }
 
-/// Derives an AES key from a shared secret using HKDF and SHA-256.
+/// Domain-separation registry for every AES key derived from an ECDH shared
+/// secret. One variant per protocol context; [`derive_aes_key`] is the only
+/// HKDF-expand over this input-keying-material class, so this enum is the
+/// exhaustive list of its labels.
 ///
-/// This function takes a `SharedSecret` and derives a 256-bit AES key using
-/// the HKDF (HMAC-based Extract-and-Expand Key Derivation Function) with SHA-256.
-///
-/// # Arguments
-/// * `shared_secret` - The shared secret from which the AES key will be derived.
-///
-/// # Returns
-/// A `Result` containing the derived AES key, or an error if key derivation fails.
-pub fn derive_aes_key(shared_secret: &SharedSecret) -> Result<Key<Aes256Gcm>, hkdf::InvalidLength> {
-    // Initialize HKDF with SHA-256
-    let hk = Hkdf::<Sha256>::new(None, &shared_secret.secret_bytes());
+/// Two derived keys are independent unless both the shared secret AND the
+/// label match. Keeping labels distinct per context makes key independence a
+/// structural property rather than an assumption about which keypairs are
+/// (re)used where — including adversarially, via the on-chain ECDH precompile,
+/// which lets any contract evaluate the [`EcdhPrecompile`](Self::EcdhPrecompile)
+/// derivation on caller-chosen keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AesKeyDomain {
+    /// Client-to-TEE transaction I/O: encrypted calldata and signed-read
+    /// requests. Clients encrypt, TEEs decrypt.
+    TxRequest,
+    /// TEE-to-client transaction I/O: signed-read return data. TEEs encrypt,
+    /// clients decrypt. Independent from [`TxRequest`](Self::TxRequest) so a
+    /// request/response pair can carry one public nonce without repeating an
+    /// AES-GCM `(key, nonce)` pair.
+    TxResponse,
+    /// The ECDH precompile's on-chain key derivation. Consensus-frozen: its
+    /// output is observable by contracts, so this label can never change, and
+    /// no other domain may ever reuse it.
+    EcdhPrecompile,
+    /// The enclave-to-enclave root-key bootstrap handshake. Both sides ship
+    /// in the same release and nothing wrapped is persisted, so this label
+    /// (unlike the precompile's) can rotate with a coordinated upgrade.
+    RootKeyWrap,
+}
 
-    // Output a 32-byte key for AES-256
+impl AesKeyDomain {
+    const fn hkdf_info(self) -> &'static [u8] {
+        match self {
+            Self::TxRequest => b"seismic/request/aes-256-gcm/v1",
+            Self::TxResponse => b"seismic/response/aes-256-gcm/v1",
+            // Cannot change: live on testnet. Contracts observe (and may
+            // persist data keyed by) this precompile's output, and no fork
+            // can make data derived under an old label reachable again.
+            Self::EcdhPrecompile => b"aes-gcm key",
+            Self::RootKeyWrap => b"seismic/root-key-wrap/aes-256-gcm/v1",
+        }
+    }
+}
+
+/// Derives a domain-separated AES-256 key from an ECDH shared secret using
+/// HKDF-SHA256. See [`AesKeyDomain`] for the label registry.
+pub fn derive_aes_key(
+    shared_secret: &SharedSecret,
+    domain: AesKeyDomain,
+) -> Result<Key<Aes256Gcm>, hkdf::InvalidLength> {
+    let hk = Hkdf::<Sha256>::new(None, &shared_secret.secret_bytes());
     let mut okm = [0u8; 32];
-    hk.expand(b"aes-gcm key", &mut okm)?;
+    hk.expand(domain.hkdf_info(), &mut okm)?;
     Ok(*Key::<Aes256Gcm>::from_slice(&okm))
 }
 
@@ -318,59 +355,63 @@ pub fn get_unsecure_sample_aesgcm_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
 pub fn ecdh_encrypt(
     pk: &PublicKey,
     sk: &SecretKey,
+    domain: AesKeyDomain,
     data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let shared_secret = SharedSecret::new(pk, sk);
-    let aes_key =
-        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let aes_key = derive_aes_key(&shared_secret, domain)
+        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let encrypted_data = aes_encrypt(&aes_key, data, nonce)?;
     Ok(encrypted_data)
 }
 
-/// Decrypts the provided data using an AES key derived from
-/// the provided public key and the provided private key
+/// Decrypts the provided data using a domain-separated AES key derived from
+/// the provided public key and the provided private key.
 pub fn ecdh_decrypt(
     pk: &PublicKey,
     sk: &SecretKey,
+    domain: AesKeyDomain,
     data: &[u8],
     nonce: impl Into<Nonce>,
 ) -> Result<Vec<u8>, anyhow::Error> {
     let shared_secret = SharedSecret::new(pk, sk);
-    let aes_key =
-        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let aes_key = derive_aes_key(&shared_secret, domain)
+        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let decrypted_data = aes_decrypt(&aes_key, data, nonce)?;
     Ok(decrypted_data)
 }
 
-/// Encrypts the provided data using AEAD with an AES key derived from
-/// the provided public key and the provided private key
+/// Encrypts the provided data using AEAD with a domain-separated AES key
+/// derived from the provided public key and the provided private key.
 pub fn ecdh_encrypt_aead(
     pk: &PublicKey,
     sk: &SecretKey,
+    domain: AesKeyDomain,
     data: &[u8],
     nonce: impl Into<Nonce>,
     aad: &[u8],
 ) -> Result<Vec<u8>, anyhow::Error> {
     let shared_secret = SharedSecret::new(pk, sk);
-    let aes_key =
-        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let aes_key = derive_aes_key(&shared_secret, domain)
+        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let encrypted_data = aes_encrypt_aead(&aes_key, data, nonce, aad)?;
     Ok(encrypted_data)
 }
 
-/// Decrypts the provided data using AEAD with an AES key derived from
-/// the provided public key and the provided private key
+/// Decrypts the provided data using AEAD with a domain-separated AES key
+/// derived from the provided public key and the provided private key.
 pub fn ecdh_decrypt_aead(
     pk: &PublicKey,
     sk: &SecretKey,
+    domain: AesKeyDomain,
     data: &[u8],
     nonce: impl Into<Nonce>,
     aad: &[u8],
 ) -> Result<Vec<u8>, anyhow::Error> {
     let shared_secret = SharedSecret::new(pk, sk);
-    let aes_key =
-        derive_aes_key(&shared_secret).map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
+    let aes_key = derive_aes_key(&shared_secret, domain)
+        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let decrypted_data = aes_decrypt_aead(&aes_key, data, nonce, aad)?;
     Ok(decrypted_data)
 }
@@ -457,4 +498,86 @@ pub fn decrypt_file(
     fs::write(output_path, decrypted_data)
         .map_err(|e| anyhow::anyhow!("Failed to write output file {:?}: {:?}", output_path, e))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Known-answer test shared with the TypeScript (aesKeygen.ts) and Python
+    /// (test_crypto.py) client suites. All three languages must derive these
+    /// exact keys from the same ECDH inputs; a label edit in any one of them
+    /// fails its copy of this test.
+    #[test]
+    fn domain_key_derivation_matches_cross_language_vectors() {
+        let client_sk =
+            SecretKey::from_str("a30363336e1bb949185292a2a302de86e447d98f3a43d823c8c234d9e3e5ad77")
+                .unwrap();
+        let tee_pk = PublicKey::from_str(
+            "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
+        )
+        .unwrap();
+        let shared_secret = SharedSecret::new(&tee_pk, &client_sk);
+        assert_eq!(
+            hex::encode(shared_secret.secret_bytes()),
+            "46a4d6fce8eca748ba8362e726de51a5c62202c887d6bb81fa6f4df1fb360999"
+        );
+
+        let vectors = [
+            (
+                AesKeyDomain::TxRequest,
+                "d958b910e65af59475e767c5fdcb8b2e3388b5d8aa2fbfaa01c08c422be6fd07",
+            ),
+            (
+                AesKeyDomain::TxResponse,
+                "974b310e3990d555da33e2b0c1dc6036a9709400ec992dbfc9330cc00e673144",
+            ),
+            (
+                AesKeyDomain::EcdhPrecompile,
+                "bf0dd6556618d1bf8d1602bf80be3a0f7cc729973829bb9acb75bd77770d5b90",
+            ),
+            (
+                AesKeyDomain::RootKeyWrap,
+                "f48820f0d247f5841a1d91fe1c48f590e0172cac4bec879d2dcdf04e9d1f7647",
+            ),
+        ];
+        for (domain, expected) in vectors {
+            let key = derive_aes_key(&shared_secret, domain).unwrap();
+            assert_eq!(hex::encode(key.as_slice()), expected, "{domain:?}");
+        }
+    }
+
+    #[test]
+    fn request_and_response_keys_are_distinct() {
+        let shared_secret = SharedSecret::new(
+            &get_unsecure_sample_secp256k1_pk(),
+            &get_unsecure_sample_secp256k1_sk(),
+        );
+
+        let request_key = derive_aes_key(&shared_secret, AesKeyDomain::TxRequest).unwrap();
+        let response_key = derive_aes_key(&shared_secret, AesKeyDomain::TxResponse).unwrap();
+
+        assert_ne!(request_key.as_slice(), response_key.as_slice());
+    }
+
+    #[test]
+    fn ciphertext_cannot_be_opened_in_the_other_direction() {
+        let shared_secret = SharedSecret::new(
+            &get_unsecure_sample_secp256k1_pk(),
+            &get_unsecure_sample_secp256k1_sk(),
+        );
+        let request_key = derive_aes_key(&shared_secret, AesKeyDomain::TxRequest).unwrap();
+        let response_key = derive_aes_key(&shared_secret, AesKeyDomain::TxResponse).unwrap();
+        let nonce = [0x42; AESGCM_NONCE_SIZE];
+        let aad = b"transaction metadata";
+        let plaintext = b"request payload";
+
+        let ciphertext = aes_encrypt_aead(&request_key, plaintext, nonce, aad).unwrap();
+
+        assert!(aes_decrypt_aead(&response_key, &ciphertext, nonce, aad).is_err());
+        assert_eq!(
+            aes_decrypt_aead(&request_key, &ciphertext, nonce, aad).unwrap(),
+            plaintext
+        );
+    }
 }
