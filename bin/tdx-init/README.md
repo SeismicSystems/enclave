@@ -36,7 +36,7 @@ Unknown top-level sections or fields are rejected — see
 name = "<your.public.dns.name>"     # FQDN clients reach this VM at
 email = "<contact@example.com>"     # ACME registration / renewal email
 
-[enclave]                           # optional; defaults applied if absent
+[root_key]                           # optional; defaults applied if absent
 genesis_node = false                # true on exactly one VM per network
 peers = ["http://10.0.0.1:7878"]    # required when genesis_node = false
 
@@ -71,7 +71,8 @@ After validation, tdx-init writes:
 | File | Schema | Consumer |
 |---|---|---|
 | `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
-| `/run/seismic/conf/enclave.env` | `SEISMIC_ENCLAVE_GENESIS_NODE=...`, `SEISMIC_ENCLAVE_PEERS=...` | `enclave.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=`, and the genesis flag maps to `seismic-custodian-service --genesis-node` |
+| `/run/seismic/conf/custodian.env` | `SEISMIC_CUSTODIAN_GENESIS_NODE=...` | `custodian.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-custodian-service`](../custodian-service) reads the genesis flag through clap `env=` |
+| `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | `attestation.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=` |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
 

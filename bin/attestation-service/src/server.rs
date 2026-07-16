@@ -241,7 +241,7 @@ async fn ensure_root_key_present(
     if peers.is_empty() {
         anyhow::bail!(
             "The custodian holds no root key and no peers are configured. Either:\n  \
-             - set SEISMIC_ENCLAVE_PEERS to a comma-separated list of \
+             - set SEISMIC_ROOT_KEY_PEERS to a comma-separated list of \
              peer enclave URLs (e.g. http://10.0.0.1:7878) to fetch \
              the root_key from an existing peer, OR\n  \
              - run seismic-custodian-service with --genesis-node to bootstrap a new \
