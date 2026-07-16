@@ -12,7 +12,6 @@ const DEFAULT_ENDPOINT_PORT: u16 = 7878;
 use anyhow::Result;
 use clap::Parser;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
-use seismic_enclave::mock::start_mock_server;
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
 
@@ -28,6 +27,10 @@ pub struct Args {
     #[arg(long, default_value_t = DEFAULT_ENDPOINT_PORT)]
     pub port: u16,
 
+    /// Filesystem path for the custodian IPC socket.
+    #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
+    pub custodian_socket: PathBuf,
+
     /// Comma-separated list of peer URLs (e.g. `http://10.0.0.1:7878`) to
     /// fetch the root key from when the local custodian starts without one.
     /// Required on every node whose custodian does not run with
@@ -35,27 +38,6 @@ pub struct Args {
     /// way to obtain the root key, so startup fails immediately.
     #[arg(long, env = "SEISMIC_ROOT_KEY_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
-
-    /// Filesystem path for the custodian IPC socket.
-    #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
-    pub custodian_socket: PathBuf,
-
-    /// Run the dev-only mock server instead of the real enclave.
-    ///
-    /// When set, `Args::start` dispatches to
-    /// `seismic_enclave::mock::start_mock_server` (in
-    /// `crates/enclave/src/mock.rs`) which serves the key/health JSON-RPC
-    /// surface using fixed, publicly known development keys. It deliberately
-    /// does not serve `getTxIoAttestationEvidence`: mock evidence would not be
-    /// verifiable. Skips attestation and peer fetch. Used by `sanvil` / `sreth`
-    /// local dev where TDX isn't available and clients know the dev pubkeys.
-    ///
-    /// **Never set this flag in a TDX deployment** — it disables every
-    /// confidentiality property the chain depends on (anyone can decrypt
-    /// TxSeismic calldata, the snapshot key is publicly known, and RNG is
-    /// predictable).
-    #[arg(long, default_value_t = false)]
-    pub mock: bool,
 }
 
 impl Args {
@@ -64,10 +46,6 @@ impl Args {
 
         info!("Starting attestation-service JSON-RPC server on {addr}...");
 
-        if self.mock {
-            start_mock_server(addr).await
-        } else {
-            server::start_server(addr, self).await
-        }
+        server::start_server(addr, self).await
     }
 }

@@ -1,5 +1,4 @@
 pub mod api;
-pub mod mock;
 
 pub use api::*;
 pub use secp256k1;
@@ -9,6 +8,6 @@ pub use secp256k1;
 //
 // TODO: This facade is temporary. The plan is to split this crate and
 // the attestation service into small single-purpose crates (RPC types, crypto helpers,
-// mock server, custodian client) that seismic-reth imports individually;
+// sample keys, custodian client) that seismic-reth imports individually;
 // once reth is updated to do so, this re-export goes away.
 pub use seismic_crypto::*;
