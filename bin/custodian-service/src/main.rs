@@ -49,7 +49,7 @@ struct Args {
              Purposes: {}.\n\n\
              The two intended callers and their grants:\n  \
              --allow reth:tx-io,rng\n  \
-             --allow enclave-attest:tx-io-public,create-root-key-bootstrap-attempt,\
+             --allow attestation:tx-io-public,create-root-key-bootstrap-attempt,\
              wrap-root-key,install-root-key-from-verified-bootstrap-response",
             acl::VALID_PURPOSES
         )
