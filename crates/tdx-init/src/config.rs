@@ -9,7 +9,7 @@ pub struct InitConfig {
     pub domain: DomainConfig,
     #[serde(default)]
     pub enclave: EnclaveConfig,
-    /// Required: enclave-server reads `network-manifest.json` at startup to
+    /// Required: the attestation service reads `network-manifest.json` at startup to
     /// derive `network_id` and bind every attestation to it, and is fatal
     /// without it. A POST that omits `[network]` therefore 400s here rather
     /// than booting a node that crash-loops on the missing file. The deploy

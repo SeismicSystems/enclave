@@ -4,10 +4,10 @@
 //!
 //! First boot wipes the whole persistent disk to seed dm-integrity tags — an
 //! hour-plus, otherwise-silent operation. The script writes progress to a
-//! tmpfs file (atomically) and removes it when done; enclave-server is the
-//! only node service alive for the entire wipe, so it serves the latest
-//! snapshot via the `getLuksProvisioningStatus` RPC for the operator's CLI
-//! progress bar.
+//! tmpfs file (atomically) and removes it when done; the attestation service
+//! is the only HTTP-serving process alive for the entire wipe, so it serves
+//! the latest snapshot via the `getLuksProvisioningStatus` RPC for the
+//! operator's CLI progress bar.
 //!
 //! Strictly read-only and decoupled: we read the file on demand and never
 //! write it, so a status read can never affect the wipe (and vice versa).

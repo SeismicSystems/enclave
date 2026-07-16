@@ -14,7 +14,7 @@ use seismic_enclave::mock::start_mock_server;
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
 
-/// Command line arguments for the enclave server
+/// Command line arguments for the attestation service
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -60,7 +60,7 @@ impl Args {
     pub async fn start(self) -> Result<()> {
         let addr: SocketAddr = format!("{}:{}", self.ip, self.port).parse()?;
 
-        info!("Starting TDX Quote JSON-RPC Server on {addr}...");
+        info!("Starting attestation-service JSON-RPC server on {addr}...");
 
         if self.mock {
             start_mock_server(addr).await

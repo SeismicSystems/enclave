@@ -47,7 +47,7 @@ const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
 const CUSTODIAN_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
-pub struct TdxQuoteServer {
+pub struct AttestationService {
     /// Unix-socket path of the key custodian, the separate local process that
     /// owns `root_key`. This service holds no key material: each method opens
     /// a connection here for its key operations (a handful of requests per
@@ -58,7 +58,7 @@ pub struct TdxQuoteServer {
     network_id: NetworkId,
 }
 
-impl TdxQuoteServer {
+impl AttestationService {
     pub fn new(custodian_socket: PathBuf, network_id: NetworkId) -> Self {
         Self {
             custodian_socket,
@@ -72,7 +72,7 @@ impl TdxQuoteServer {
 }
 
 #[async_trait]
-impl NodeStatusRpcServer for TdxQuoteServer {
+impl NodeStatusRpcServer for AttestationService {
     /// Health check endpoint that returns "OK" if service is running
     async fn health_check(&self) -> RpcResult<String> {
         Ok("OK".to_string())
@@ -87,7 +87,7 @@ impl NodeStatusRpcServer for TdxQuoteServer {
 }
 
 #[async_trait]
-impl PurposeKeysRpcServer for TdxQuoteServer {
+impl PurposeKeysRpcServer for AttestationService {
     /// Serve reth's purpose-key startup fetch from the custodian socket.
     async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse> {
         let mut custodian = self
@@ -113,7 +113,7 @@ impl PurposeKeysRpcServer for TdxQuoteServer {
 }
 
 #[async_trait]
-impl AttestationRpcServer for TdxQuoteServer {
+impl AttestationRpcServer for AttestationService {
     /// Get the network root key for a booting peer, AEAD-wrapped.
     ///
     /// Verifies the requester's attestation, has the custodian wrap the root
@@ -202,13 +202,13 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
 
     let server = ServerBuilder::default().build(addr).await?;
 
-    let quote_server = TdxQuoteServer::new(args.custodian_socket, network_id);
-    let mut rpc = NodeStatusRpcServer::into_rpc(quote_server.clone());
-    rpc.merge(PurposeKeysRpcServer::into_rpc(quote_server.clone()))?;
-    rpc.merge(AttestationRpcServer::into_rpc(quote_server))?;
+    let service = AttestationService::new(args.custodian_socket, network_id);
+    let mut rpc = NodeStatusRpcServer::into_rpc(service.clone());
+    rpc.merge(PurposeKeysRpcServer::into_rpc(service.clone()))?;
+    rpc.merge(AttestationRpcServer::into_rpc(service))?;
     let handle = server.start(rpc);
 
-    info!("TDX Quote JSON-RPC Server started at {}", addr);
+    info!("Attestation-service JSON-RPC server started at {}", addr);
 
     handle.stopped().await;
 

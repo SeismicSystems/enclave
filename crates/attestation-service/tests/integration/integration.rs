@@ -13,14 +13,14 @@ use seismic_attestation::{
     verify_evidence,
 };
 use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
+use seismic_attestation_service::utils::{init_tracing, is_sudo};
 use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
-use seismic_enclave_server::utils::{init_tracing, is_sudo};
 use seismic_key_custodian::Custodian;
 use seismic_key_custodian_host::state::CustodianState;
 
 // The server reads its manifest through the same fixed `/run/seismic` handoff
 // used in production, which keeps this test covering the tdx-init →
-// enclave-server startup contract. This fixture is the manifest trusted by the
+// attestation-service startup contract. This fixture is the manifest trusted by the
 // relying client; the test script installs the same fixture for the server, and
 // evidence verification confirms that both sides use the same network ID.
 const EXPECTED_NETWORK_MANIFEST: &[u8] =

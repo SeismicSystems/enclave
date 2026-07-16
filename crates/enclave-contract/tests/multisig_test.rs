@@ -102,7 +102,7 @@ pub async fn test_multisig_upgrade_operator_workflow() -> Result<(), anyhow::Err
     // Two modes, one binary:
     //   - Default (hosted `check_and_test`): spin up a throwaway anvil and seed
     //     the two upgrade contracts at their fixed addresses. Self-contained logic
-    //     coverage — no reth, enclave-server, or TPM.
+    //     coverage — no reth, attestation service, or TPM.
     //   - `MULTISIG_RPC=<url>` set: optionally run against an external node
     //     where the contracts already exist at their fixed addresses, skipping
     //     the spawn + `anvil_setCode`. CI no longer uses this as bootstrap-test

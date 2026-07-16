@@ -1,5 +1,5 @@
 [package]
-name = "seismic-enclave-server"
+name = "seismic-attestation-service"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -7,14 +7,14 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Seismic enclave backend"
+description = "Seismic network-facing attestation service"
 
 [lib]
-name = "seismic_enclave_server"
+name = "seismic_attestation_service"
 path = "src/lib.rs"
 
 [[bin]]
-name = "seismic-enclave-server"
+name = "seismic-attestation-service"
 path = "src/main.rs"
 
 [dependencies]

@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
     "crates/attestation-rpc",
+    "crates/attestation-service",
     "crates/custodian-ipc",
-    "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
     "crates/enclave-crypto",
     "crates/key-custodian",

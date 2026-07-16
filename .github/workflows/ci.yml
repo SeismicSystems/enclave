@@ -59,12 +59,12 @@ jobs:
       # skips the `cli` binary entirely (required-features). Cover them here.
       - name: Run seismic-custodian-ipc tests (all features)
         run: cargo test -p seismic-custodian-ipc --all-features
-      # The one live enclave-server integration target needs a TDX CVM and is
-      # run separately below. Everything else can run on the hosted runner.
+      # The one live attestation-service integration target needs a TDX CVM and
+      # is run separately below. Everything else can run on the hosted runner.
       - name: Run workspace tests
-        run: cargo test --workspace --exclude seismic-enclave-server
-      - name: Run enclave-server unit tests
-        run: cargo test -p seismic-enclave-server --lib --bins
+        run: cargo test --workspace --exclude seismic-attestation-service
+      - name: Run attestation-service unit tests
+        run: cargo test -p seismic-attestation-service --lib --bins
 
   integration_tests:
     runs-on: [self-hosted, linux, x64, azure-tdx-v6]

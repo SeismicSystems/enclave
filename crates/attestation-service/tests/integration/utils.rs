@@ -1,5 +1,5 @@
+use seismic_attestation_service::Args;
 use seismic_custodian_ipc::server::{MethodAcl, bind, serve};
-use seismic_enclave_server::Args;
 use seismic_key_custodian_host::{dispatch::dispatch, state::CustodianState};
 use std::path::{Path, PathBuf};
 
