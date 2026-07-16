@@ -244,7 +244,7 @@ async fn ensure_root_key_present(
              - set SEISMIC_ENCLAVE_PEERS to a comma-separated list of \
              peer enclave URLs (e.g. http://10.0.0.1:7878) to fetch \
              the root_key from an existing peer, OR\n  \
-             - run seismic-key-custodian with --genesis-node to bootstrap a new \
+             - run seismic-custodian-service with --genesis-node to bootstrap a new \
              chain (set this on exactly one node in the deployment; \
              setting it on multiple nodes causes a silent network split)."
         );
@@ -379,7 +379,7 @@ fn bootstrap_measurement_policy() -> SeismicMeasurementPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seismic_key_custodian::Custodian;
+    use seismic_custodian::Custodian;
 
     const ROOT_KEY: [u8; 32] = [7u8; 32];
 

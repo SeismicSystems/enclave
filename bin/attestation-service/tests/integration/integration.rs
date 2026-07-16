@@ -15,8 +15,8 @@ use seismic_attestation::{
 use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
 use seismic_attestation_service::utils::{init_tracing, is_sudo};
 use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
-use seismic_key_custodian::Custodian;
-use seismic_key_custodian_host::state::CustodianState;
+use seismic_custodian::Custodian;
+use seismic_custodian_service::state::CustodianState;
 
 // The server reads its manifest through the same fixed `/run/seismic` handoff
 // used in production, which keeps this test covering the tdx-init →
@@ -24,7 +24,7 @@ use seismic_key_custodian_host::state::CustodianState;
 // relying client; the test script installs the same fixture for the server, and
 // evidence verification confirms that both sides use the same network ID.
 const EXPECTED_NETWORK_MANIFEST: &[u8] =
-    include_bytes!("../../../network-manifest/fixtures/network-manifest-v1.json");
+    include_bytes!("../../../../crates/network-manifest/fixtures/network-manifest-v1.json");
 const NODE_STARTUP_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const EVIDENCE_RPC_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(2);

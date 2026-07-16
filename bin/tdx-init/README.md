@@ -52,7 +52,7 @@ deploy with `400`, not a later boot — and writes the decoded bytes
 verbatim to `network-manifest.json`, never parse-and-re-serialize. The
 deploy tool's manifest-assembly step produces the value; the schema's
 authoritative parser is the sibling
-[`seismic-attestation`](../seismic-attestation) crate, kept in lockstep
+[`seismic-attestation`](../../crates/attestation) crate, kept in lockstep
 with this crate via its shared fixture.
 
 `reth_genesis_base64` carries the reth genesis JSON (chain spec) every
@@ -71,7 +71,7 @@ After validation, tdx-init writes:
 | File | Schema | Consumer |
 |---|---|---|
 | `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
-| `/run/seismic/conf/enclave.env` | `SEISMIC_ENCLAVE_GENESIS_NODE=...`, `SEISMIC_ENCLAVE_PEERS=...` | `enclave.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=`, and the genesis flag maps to `seismic-key-custodian --genesis-node` |
+| `/run/seismic/conf/enclave.env` | `SEISMIC_ENCLAVE_GENESIS_NODE=...`, `SEISMIC_ENCLAVE_PEERS=...` | `enclave.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=`, and the genesis flag maps to `seismic-custodian-service --genesis-node` |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
 

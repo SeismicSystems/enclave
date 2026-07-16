@@ -1,18 +1,18 @@
-//! `seismic-key-custodian` — the standalone host for the network root key.
+//! `seismic-custodian-service` — the standalone service for the network root key.
 //!
 //! Owns the [`Custodian`]'s root key in process memory and serves derivation
 //! and wrapping to local callers over a Unix socket, each authenticated by
 //! kernel-reported UID (`SO_PEERCRED`) against the `--allow` grants. The
 //! process is kept explicitly minimal — a synchronous socket server with a
 //! tiny dependency footprint — to reduce the attack surface around the root
-//! key; see the `seismic-key-custodian` crate docs for the boundary rule.
+//! key; see the `seismic-custodian` crate docs for the boundary rule.
 
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use seismic_custodian_ipc::server::{bind, serve};
-use seismic_key_custodian::Custodian;
-use seismic_key_custodian_host::{acl, dispatch, state::CustodianState};
+use seismic_custodian::Custodian;
+use seismic_custodian_service::{acl, dispatch, state::CustodianState};
 use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::EnvFilter;

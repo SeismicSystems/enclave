@@ -1,16 +1,20 @@
 [workspace]
 resolver = "2"
+# The three deployed binaries live under bin/; every crates/ member is a library.
+# The dir name is the crate; the arrow is the binary target it builds.
 members = [
+    "bin/tdx-init",              # -> tdx-init
+    "bin/attestation-service",   # -> seismic-attestation-service
+    "bin/custodian-service",     # -> seismic-custodian-service
+
+    "crates/attestation",
     "crates/attestation-rpc",
-    "crates/attestation-service",
+    "crates/crypto",
+    "crates/custodian",
     "crates/custodian-ipc",
-    "crates/enclave-contract", "crates/enclave",
-    "crates/enclave-crypto",
-    "crates/key-custodian",
-    "crates/key-custodian-host",
+    "crates/enclave",
+    "crates/enclave-contract",
     "crates/network-manifest",
-    "crates/seismic-attestation",
-    "crates/tdx-init",
 ]
 
 [workspace.package]
@@ -25,13 +29,13 @@ readme = "README.md"
 [workspace.dependencies]
 # workspace libs
 enclave-contract = { path = "crates/enclave-contract" }
-seismic-attestation = { path = "crates/seismic-attestation" }
+seismic-attestation = { path = "crates/attestation" }
 seismic-attestation-rpc = { path = "crates/attestation-rpc" }
+seismic-crypto = { path = "crates/crypto" }
+seismic-custodian = { path = "crates/custodian" }
 seismic-custodian-ipc = { path = "crates/custodian-ipc" }
+seismic-custodian-service = { path = "bin/custodian-service" }
 seismic-enclave = {path = "crates/enclave" }
-seismic-enclave-crypto = { path = "crates/enclave-crypto" }
-seismic-key-custodian = { path = "crates/key-custodian" }
-seismic-key-custodian-host = { path = "crates/key-custodian-host" }
 seismic-network-manifest = { path = "crates/network-manifest" }
 
 # Other deps
