@@ -1,0 +1,39 @@
+[package]
+name = "seismic-key-custodian-host"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Standalone host process for the Seismic key custodian"
+
+[[bin]]
+name = "seismic-key-custodian"
+path = "src/main.rs"
+
+[dependencies]
+seismic-key-custodian.workspace = true
+# default-features = false is this binary's no-async-runtime guarantee: only
+# the wire types plus the synchronous `server` transport are linked. CAUTION:
+# under cargo feature unification the guarantee holds only when this binary is
+# built in its own cargo invocation — see the feature note in
+# crates/custodian-ipc/Cargo.toml. A path dependency rather than `workspace =
+# true` because workspace inheritance cannot turn default features off.
+seismic-custodian-ipc = { path = "../custodian-ipc", default-features = false, features = ["server"] }
+
+anyhow.workspace = true
+clap.workspace = true
+libc.workspace = true
+rand.workspace = true
+secp256k1.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Tests drive the served socket with the async client. Dev-only: resolver v2
+# keeps dev-dep features out of `cargo build`, so the binary stays tokio-free.
+seismic-custodian-ipc = { workspace = true, features = ["client"] }
+tempfile = "3.17.1"
+tokio.workspace = true

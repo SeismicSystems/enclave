@@ -7,6 +7,7 @@ members = [
     "crates/enclave-contract", "crates/enclave",
     "crates/enclave-crypto",
     "crates/key-custodian",
+    "crates/key-custodian-host",
     "crates/network-manifest",
     "crates/seismic-attestation",
     "crates/tdx-init",
