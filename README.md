@@ -21,7 +21,7 @@ library they share.
 
 | Crate | What it is |
 |---|---|
-| `enclave` | Shared enclave API types (JSON-RPC surface) and mock server; imported by seismic-reth. |
+| `enclave` | Shared enclave API types (JSON-RPC surface); imported by seismic-reth. |
 | `crypto` | AES-GCM / ECDH / HKDF helpers shared across the Seismic stack. |
 | `custodian` | RAM-only custodian of the network root key. |
 | `custodian-ipc` | Wire protocol, client, and server for the custodian Unix socket (plus a debug CLI behind the `cli` feature). |
