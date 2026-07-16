@@ -4,11 +4,6 @@ The processes that run inside a Seismic node's TEE: they custody the network
 root key, attest the node to peers and clients, and hand the node its runtime
 configuration at boot.
 
-This stack is under active development. Threat model and key-derivation detail
-live in the design docs, not here — see
-[`../seismic/docs/architecture.md`](../seismic/docs/architecture.md) and
-[`../seismic/docs/key-schedule.md`](../seismic/docs/key-schedule.md).
-
 ## Layout
 
 `bin/` holds the three deployed binaries; every crate under `crates/` is a
