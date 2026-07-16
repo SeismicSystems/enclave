@@ -1,18 +1,18 @@
+use enclave_contract::Measurements;
+use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
+use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 use enclave_contract::can_execute_multisig_proposal;
 use enclave_contract::check_proposal_status;
 use enclave_contract::create_multisig_proposal;
 use enclave_contract::execute_multisig_proposal;
 use enclave_contract::get_multisig_vote_count;
 use enclave_contract::vote_on_multisig_proposal;
-use enclave_contract::Measurements;
-use enclave_contract::UPGRADE_MULTISIG_ADDRESS;
-use enclave_contract::UPGRADE_OPERATOR_ADDRESS;
 
 use enclave_contract::{ANVIL_ALICE_SK, ANVIL_BOB_SK};
 
 use alloy::node_bindings::Anvil;
 use alloy::primitives::{Address, Bytes};
-use alloy::providers::{ext::AnvilApi, ProviderBuilder};
+use alloy::providers::{ProviderBuilder, ext::AnvilApi};
 use std::path::PathBuf;
 use std::process::Command;
 use std::thread::sleep;

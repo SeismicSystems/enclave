@@ -30,7 +30,7 @@ else
 fi
 sleep 2
 
-cd crates/attestation-service
+cd bin/attestation-service
 OUTPUT=$(CARGO_TERM_COLOR=never cargo test --test integration --no-run 2>&1)
 echo "$OUTPUT"
 mapfile -t binaries < <(echo "$OUTPUT" | sed -nE 's/^[[:space:]]*Executable .*\((.+)\)$/\1/p')

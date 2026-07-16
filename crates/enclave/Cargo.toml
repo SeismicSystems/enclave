@@ -9,7 +9,7 @@ license.workspace = true
 readme.workspace = true
 
 [dependencies]
-seismic-enclave-crypto.workspace = true
+seismic-crypto.workspace = true
 
 anyhow.workspace = true
 jsonrpsee.workspace = true

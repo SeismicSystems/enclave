@@ -1,5 +1,5 @@
 [package]
-name = "seismic-key-custodian-host"
+name = "seismic-custodian-service"
 edition.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -7,21 +7,21 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Standalone host process for the Seismic key custodian"
+description = "Standalone service process for the Seismic key custodian"
 
-[[bin]]
-name = "seismic-key-custodian"
-path = "src/main.rs"
+# Binary target defaults to the package name (seismic-custodian-service),
+# built from src/main.rs; the crate also exposes a lib (src/lib.rs) that the
+# attestation-service integration tests drive directly.
 
 [dependencies]
-seismic-key-custodian.workspace = true
+seismic-custodian.workspace = true
 # default-features = false is this binary's no-async-runtime guarantee: only
 # the wire types plus the synchronous `server` transport are linked. CAUTION:
 # under cargo feature unification the guarantee holds only when this binary is
 # built in its own cargo invocation — see the feature note in
 # crates/custodian-ipc/Cargo.toml. A path dependency rather than `workspace =
 # true` because workspace inheritance cannot turn default features off.
-seismic-custodian-ipc = { path = "../custodian-ipc", default-features = false, features = ["server"] }
+seismic-custodian-ipc = { path = "../../crates/custodian-ipc", default-features = false, features = ["server"] }
 
 anyhow.workspace = true
 clap.workspace = true

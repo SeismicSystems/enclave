@@ -5,7 +5,7 @@ test on the self-hosted Azure TDX runner.
 
 ## Covered flow
 
-`test_get_wrapped_root_key_bootstrap` starts two key-custodian +
+`test_get_wrapped_root_key_bootstrap` starts two custodian +
 attestation-service pairs over real custodian sockets and checks that:
 
 1. the joining pair completes the mutually attested wrapped-root-key

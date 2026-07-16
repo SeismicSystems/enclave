@@ -233,7 +233,7 @@ impl fmt::Debug for SnapshotKeyBytes {
     }
 }
 
-/// One wrap operation's output — `WrappedRootKey` from seismic-key-custodian
+/// One wrap operation's output — `WrappedRootKey` from seismic-custodian
 /// as raw bytes. Not secret: the payload is AEAD-sealed to the peer's
 /// ephemeral key and the pubkey is public by definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]

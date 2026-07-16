@@ -108,7 +108,7 @@ mod tests {
             },
             network: NetworkConfig {
                 manifest_base64: base64::engine::general_purpose::STANDARD.encode(include_bytes!(
-                    "../../network-manifest/fixtures/network-manifest-v1.json"
+                    "../../../crates/network-manifest/fixtures/network-manifest-v1.json"
                 )),
                 // A genesis whose chainId matches the fixture manifest's.
                 reth_genesis_base64: base64::engine::general_purpose::STANDARD.encode(
@@ -162,7 +162,8 @@ mod tests {
         // A valid manifest with a non-canonical byte (trailing newline): the
         // written file must be the decoded bytes exactly, not a re-rendering.
         let raw = [
-            include_bytes!("../../network-manifest/fixtures/network-manifest-v1.json").as_slice(),
+            include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json")
+                .as_slice(),
             b"\n",
         ]
         .concat();

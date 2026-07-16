@@ -1,6 +1,6 @@
 use seismic_attestation_service::Args;
 use seismic_custodian_ipc::server::{MethodAcl, bind, serve};
-use seismic_key_custodian_host::{dispatch::dispatch, state::CustodianState};
+use seismic_custodian_service::{dispatch::dispatch, state::CustodianState};
 use std::path::{Path, PathBuf};
 
 pub fn get_args(n: u16, peers: Vec<String>, custodian_socket: PathBuf) -> Args {
@@ -15,7 +15,7 @@ pub fn get_args(n: u16, peers: Vec<String>, custodian_socket: PathBuf) -> Args {
 }
 
 /// Serve `state` over a custodian socket from a dedicated thread — the same
-/// transport and dispatch the standalone `seismic-key-custodian` binary runs.
+/// transport and dispatch the standalone `seismic-custodian-service` binary runs.
 pub fn spawn_custodian(state: CustodianState, socket: &Path) {
     let listener = bind(socket).expect("bind custodian socket");
     std::thread::spawn(move || {

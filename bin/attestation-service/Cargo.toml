@@ -36,9 +36,9 @@ rand.workspace = true
 
 [dev-dependencies]
 # Integration tests pair each served instance with a real key custodian:
-# the host crate's state/dispatch served over the ipc crate's socket server.
+# the service crate's state/dispatch served over the ipc crate's socket server.
 seismic-custodian-ipc = { workspace = true, features = ["server"] }
-seismic-key-custodian.workspace = true
-seismic-key-custodian-host.workspace = true
+seismic-custodian.workspace = true
+seismic-custodian-service.workspace = true
 serial_test = "3.2.0"
 tempfile = "3.17.1"

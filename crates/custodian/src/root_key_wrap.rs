@@ -11,7 +11,7 @@ use crate::custodian::Custodian;
 use anyhow::{Context, Result, anyhow};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::{PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret};
-use seismic_enclave_crypto::{
+use seismic_crypto::{
     AESGCM_NONCE_SIZE, Nonce, aes_decrypt_aead, aes_encrypt_aead, derive_aes_key,
 };
 

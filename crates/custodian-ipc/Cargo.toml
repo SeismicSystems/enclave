@@ -7,7 +7,7 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Wire protocol, client, and server for the Seismic key-custodian Unix socket"
+description = "Wire protocol, client, and server for the Seismic custodian Unix socket"
 
 [dependencies]
 # Core (wire protocol + blocking framing): kept minimal on purpose — this is

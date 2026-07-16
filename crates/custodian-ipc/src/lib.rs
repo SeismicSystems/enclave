@@ -1,4 +1,4 @@
-//! Wire protocol, client, and server for the key-custodian Unix socket.
+//! Wire protocol, client, and server for the custodian Unix socket.
 //!
 //! Framing is a 4-byte big-endian length prefix followed by a CBOR body
 //! ([`framing`]); messages are the byte-oriented [`Request`]/[`Response`]

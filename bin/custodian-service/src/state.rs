@@ -1,4 +1,4 @@
-//! Root-key lifecycle for the standalone custodian host.
+//! Root-key lifecycle for the standalone custodian service.
 //!
 //! A genesis node starts with a freshly generated root key present. A joining
 //! node binds the socket before it holds a root key and acquires it *through*
@@ -16,7 +16,7 @@
 use anyhow::{Context as _, Result, anyhow};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
-use seismic_key_custodian::{Custodian, EphemeralKeypair, unwrap_root_key};
+use seismic_custodian::{Custodian, EphemeralKeypair, unwrap_root_key};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tracing::info;
@@ -197,7 +197,7 @@ fn write_luks_keyfile(custodian: &Custodian, path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seismic_key_custodian::VerifiedPeerAuthorization;
+    use seismic_custodian::VerifiedPeerAuthorization;
     use std::os::unix::fs::PermissionsExt as _;
 
     const ROOT_KEY: [u8; 32] = [7u8; 32];

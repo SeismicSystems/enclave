@@ -71,7 +71,7 @@ mod tests {
     /// asserted by that crate (and by the deploy tool's tests), pinning all
     /// stacks to the same bytes.
     const FIXTURE: &[u8] =
-        include_bytes!("../../network-manifest/fixtures/network-manifest-v1.json");
+        include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
         "0xc4d4721b2e287df26022e6d27c8cf772841a872b6be08b1938cbc76d88703747";
 

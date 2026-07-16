@@ -11,7 +11,7 @@ use seismic_custodian_ipc::{CustodianClient, DEFAULT_CUSTODIAN_SOCKET_PATH};
 use sha2::{Digest as _, Sha256};
 
 #[derive(Parser)]
-#[command(about = "Debug client for the Seismic key-custodian Unix socket")]
+#[command(about = "Debug client for the Seismic custodian Unix socket")]
 struct Cli {
     /// Path to the custodian socket.
     #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
