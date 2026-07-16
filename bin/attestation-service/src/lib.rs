@@ -4,8 +4,10 @@ mod network;
 mod server;
 pub mod utils;
 
-const ENCLAVE_DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
-pub const ENCLAVE_DEFAULT_ENDPOINT_PORT: u16 = 7878;
+/// Loopback as a safe default but production should listen on `0.0.0.0` instead:
+/// joining peers fetch the wrapped root key from here and deploy tooling polls node status.
+const DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
+const DEFAULT_ENDPOINT_PORT: u16 = 7878;
 
 use anyhow::Result;
 use clap::Parser;
@@ -19,11 +21,11 @@ use tracing::info;
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     /// The ip to bind the JSON-RPC server to.
-    #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_IP.to_string())]
+    #[arg(long, default_value_t = DEFAULT_ENDPOINT_IP.to_string())]
     pub ip: String,
 
     /// The port to bind the server to
-    #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_PORT)]
+    #[arg(long, default_value_t = DEFAULT_ENDPOINT_PORT)]
     pub port: u16,
 
     /// Comma-separated list of peer URLs (e.g. `http://10.0.0.1:7878`) to
@@ -31,7 +33,7 @@ pub struct Args {
     /// Required on every node whose custodian does not run with
     /// `--genesis-node`: with a keyless custodian and no peers there is no
     /// way to obtain the root key, so startup fails immediately.
-    #[arg(long, env = "SEISMIC_ENCLAVE_PEERS", value_delimiter = ',')]
+    #[arg(long, env = "SEISMIC_ROOT_KEY_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
 
     /// Filesystem path for the custodian IPC socket.

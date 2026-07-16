@@ -21,7 +21,8 @@ pub const DEFAULT_FILE_MODE: u32 = 0o644;
 pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     fs::create_dir_all(conf_dir).await?;
     write_domain_env(conf_dir, config).await?;
-    write_enclave_env(conf_dir, config).await?;
+    write_custodian_env(conf_dir, config).await?;
+    write_attestation_env(conf_dir, config).await?;
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
     let genesis = crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,
@@ -69,12 +70,28 @@ async fn write_domain_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     Ok(())
 }
 
-async fn write_enclave_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
-    let path = conf_dir.join("enclave.env");
+/// The custodian's unit loads this via `EnvironmentFile=`; the binary reads
+/// `SEISMIC_CUSTODIAN_GENESIS_NODE` (whether to generate a fresh root key)
+/// through clap `env=`.
+async fn write_custodian_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
+    let path = conf_dir.join("custodian.env");
     let content = format!(
-        "SEISMIC_ENCLAVE_GENESIS_NODE={}\nSEISMIC_ENCLAVE_PEERS={}\n",
-        config.enclave.genesis_node,
-        config.enclave.peers.join(","),
+        "SEISMIC_CUSTODIAN_GENESIS_NODE={}\n",
+        config.root_key.genesis_node,
+    );
+    write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
+    info!("wrote {}", path.display());
+    Ok(())
+}
+
+/// The attestation service's unit loads this via `EnvironmentFile=`; the
+/// binary reads `SEISMIC_ROOT_KEY_PEERS` (where to fetch the root key when the
+/// local custodian starts without one) through clap `env=`.
+async fn write_attestation_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
+    let path = conf_dir.join("attestation.env");
+    let content = format!(
+        "SEISMIC_ROOT_KEY_PEERS={}\n",
+        config.root_key.peers.join(",")
     );
     write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
     info!("wrote {}", path.display());
@@ -92,7 +109,7 @@ async fn write_with_mode(path: &Path, content: impl AsRef<[u8]>, mode: u32) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DomainConfig, EnclaveConfig, NetworkConfig};
+    use crate::config::{DomainConfig, NetworkConfig, RootKeyConfig};
     use base64::Engine as _;
     use tempfile::TempDir;
 
@@ -102,7 +119,7 @@ mod tests {
                 email: "ops@example.com".to_string(),
                 name: "node1.example.com".to_string(),
             },
-            enclave: EnclaveConfig {
+            root_key: RootKeyConfig {
                 genesis_node,
                 peers: peers.into_iter().map(String::from).collect(),
             },
@@ -121,7 +138,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn writes_both_files_with_expected_contents() {
+    async fn writes_env_files_with_expected_contents() {
         let tmp = TempDir::new().unwrap();
         let cfg = sample_config(true, vec!["http://10.0.0.1:7878", "http://10.0.0.2:7878"]);
 
@@ -133,11 +150,13 @@ mod tests {
             "DOMAIN_NAME=node1.example.com\nDOMAIN_EMAIL=ops@example.com\n"
         );
 
-        let enclave = std::fs::read_to_string(tmp.path().join("enclave.env")).unwrap();
+        let custodian = std::fs::read_to_string(tmp.path().join("custodian.env")).unwrap();
+        assert_eq!(custodian, "SEISMIC_CUSTODIAN_GENESIS_NODE=true\n");
+
+        let attestation = std::fs::read_to_string(tmp.path().join("attestation.env")).unwrap();
         assert_eq!(
-            enclave,
-            "SEISMIC_ENCLAVE_GENESIS_NODE=true\n\
-             SEISMIC_ENCLAVE_PEERS=http://10.0.0.1:7878,http://10.0.0.2:7878\n"
+            attestation,
+            "SEISMIC_ROOT_KEY_PEERS=http://10.0.0.1:7878,http://10.0.0.2:7878\n"
         );
     }
 
@@ -148,11 +167,8 @@ mod tests {
 
         write_service_configs(tmp.path(), &cfg).await.unwrap();
 
-        let enclave = std::fs::read_to_string(tmp.path().join("enclave.env")).unwrap();
-        assert_eq!(
-            enclave,
-            "SEISMIC_ENCLAVE_GENESIS_NODE=false\nSEISMIC_ENCLAVE_PEERS=\n"
-        );
+        let attestation = std::fs::read_to_string(tmp.path().join("attestation.env")).unwrap();
+        assert_eq!(attestation, "SEISMIC_ROOT_KEY_PEERS=\n");
     }
 
     #[tokio::test]
@@ -198,7 +214,7 @@ mod tests {
 
         write_service_configs(tmp.path(), &cfg).await.unwrap();
 
-        for name in ["domain.env", "enclave.env"] {
+        for name in ["domain.env", "custodian.env", "attestation.env"] {
             let meta = std::fs::metadata(tmp.path().join(name)).unwrap();
             let mode = meta.permissions().mode() & 0o777;
             assert_eq!(mode, DEFAULT_FILE_MODE);
