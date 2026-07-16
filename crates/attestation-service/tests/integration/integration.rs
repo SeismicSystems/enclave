@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use crate::utils::get_args;
+use crate::utils::{get_args, spawn_custodian};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy,
@@ -13,12 +13,14 @@ use seismic_attestation::{
     verify_evidence,
 };
 use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
-use seismic_enclave::TdxQuoteRpcClient as _;
-use seismic_enclave_server::utils::{init_tracing, is_sudo};
+use seismic_attestation_service::utils::{init_tracing, is_sudo};
+use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
+use seismic_key_custodian::Custodian;
+use seismic_key_custodian_host::state::CustodianState;
 
 // The server reads its manifest through the same fixed `/run/seismic` handoff
 // used in production, which keeps this test covering the tdx-init →
-// enclave-server startup contract. This fixture is the manifest trusted by the
+// attestation-service startup contract. This fixture is the manifest trusted by the
 // relying client; the test script installs the same fixture for the server, and
 // evidence verification confirms that both sides use the same network ID.
 const EXPECTED_NETWORK_MANIFEST: &[u8] =
@@ -36,14 +38,19 @@ async fn test_get_wrapped_root_key_bootstrap() {
         panic!("test_get_wrapped_root_key_bootstrap: skipped (requires sudo privileges)");
     }
 
-    // Start first enclave as genesis node
+    // Start the genesis node's process pair: a key custodian holding a fresh
+    // root key, served over its own socket, plus the attestation service.
     let node1_runtime = tempfile::tempdir().expect("create genesis runtime directory");
-    let args1 = get_args(
-        0,
-        true,
-        Default::default(),
-        node1_runtime.path().join("custodian.sock"),
+    let node1_socket = node1_runtime.path().join("custodian.sock");
+    spawn_custodian(
+        CustodianState::new_with_root_key(
+            Custodian::new_as_genesis().expect("generate genesis root key"),
+            node1_runtime.path().join("luks-keys"),
+        )
+        .expect("construct genesis custodian"),
+        &node1_socket,
     );
+    let args1 = get_args(0, Default::default(), node1_socket);
     let enclave_one_url = format!("http://localhost:{}", args1.port);
     let mut node1_handle = tokio::spawn(args1.start());
     let client1 = HttpClientBuilder::default()
@@ -51,21 +58,29 @@ async fn test_get_wrapped_root_key_bootstrap() {
         .expect("Unable to create enclave 1 client");
     wait_for_health(&client1, "genesis enclave", &mut node1_handle).await;
 
-    // Start the second enclave with node 1 as its peer. Its RPC listener comes
-    // up after the attested root-key exchange completes.
+    // Start the joining node's pair with node 1 as its peer: a custodian that
+    // awaits its root key through the bootstrap methods, plus the attestation
+    // service. The service's RPC listener comes up after the attested
+    // root-key exchange completes.
     let node2_runtime = tempfile::tempdir().expect("create joining runtime directory");
-    let args2 = get_args(
-        1,
-        false,
-        vec![enclave_one_url],
-        node2_runtime.path().join("custodian.sock"),
+    let node2_socket = node2_runtime.path().join("custodian.sock");
+    spawn_custodian(
+        CustodianState::new_awaiting_root_key(node2_runtime.path().join("luks-keys")),
+        &node2_socket,
     );
+    let args2 = get_args(1, vec![enclave_one_url], node2_socket);
     let enclave_two_url = format!("http://localhost:{}", args2.port);
     let mut node2_handle = tokio::spawn(args2.start());
     let client2 = HttpClientBuilder::default()
         .build(enclave_two_url)
         .expect("Unable to create enclave 2 client");
     wait_for_health(&client2, "joining enclave", &mut node2_handle).await;
+
+    // The bootstrap installed the root key in the joiner's custodian, which
+    // wrote the LUKS keyfile handoff as part of that transition.
+    let luks_metadata = std::fs::metadata(node2_runtime.path().join("luks-keys"))
+        .expect("joining custodian wrote its LUKS keyfile");
+    assert_eq!(luks_metadata.len(), 64);
 
     // Get keys from both and make sure they match
 

@@ -67,7 +67,7 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
 
     // Validate the network artifacts while the operator's POST is still
     // waiting on a response: a bad (or absent) manifest or reth genesis must
-    // 400 the deploy, not fail at boot when enclave-server/reth try to use them.
+    // 400 the deploy, not fail at boot when the attestation service/reth try to use them.
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
     crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,

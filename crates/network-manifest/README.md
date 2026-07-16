@@ -8,7 +8,7 @@ Deliberately dependency-light — serde + sha2, no attestation stack — so ever
 manifest consumer parses it with the same code:
 
 - `seismic-attestation` re-exports these types for node-side callers
-  (enclave-server, transcript bindings);
+  (the attestation service, transcript bindings);
 - `tdx-init` validates the manifest embed at boot-config POST time;
 - the deploy tool emits the manifest and pins the same golden vector as
   `fixtures/network-manifest-v1.json`.

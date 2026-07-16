@@ -25,14 +25,14 @@ struct Measurements {
 }
 ```
 
-and `enclave-server` currently fills it from raw TDX quote fields (`MRTD`, `MRSEAM`, `RTMR0..3`). That is not sufficient as a cross-cloud or Azure production guest-image policy.
+and the attestation service currently fills it from raw TDX quote fields (`MRTD`, `MRSEAM`, `RTMR0..3`). That is not sufficient as a cross-cloud or Azure production guest-image policy.
 
 Required direction:
 
 - **Azure TDX CVMs:** Azure uses Microsoft OpenHCL/OpenVMM/paravisor plus nested virtualization. Raw TDX `MRTD`/`RTMR*` primarily identify the Azure paravisor/platform layer, not the Seismic guest image. The guest image policy should be based on Azure vTPM PCR measurements, expected to be PCR 4, PCR 9, and PCR 11 from `seismic-images make measure`, verified through vTPM quote + AK certificate/HCL/TDX binding or equivalent MAA claims.
 - **GCP TDX CVMs:** GCP exposes native TDX-style measurements. `seismic-images make measure-gcp` currently emits a policy containing `mrtd`, `rtmr0`, `rtmr1`, `rtmr2`, `rtmr3`, `mrconfigid`, `xfam`, and `tdattributes`. Some fields can be arrays because multiple firmware / RTMR0 values may be accepted for one image and machine configuration.
 - **Contract/API redesign:** replace or version `Measurements` so policy records carry an attestation kind, e.g. `azure-vtpm` vs `gcp-tdx`, and store the appropriate register namespace for each kind. Do not overload `registrar_slots` to mean both Azure PCRs and TDX RTMRs without an explicit kind/version.
-- **Upgrade flow:** update `MultisigUpgradeOperator` proposals, Rust bindings, `enclave-server` verification, tests, and genesis initial measurements once the new policy type is chosen.
+- **Upgrade flow:** update `MultisigUpgradeOperator` proposals, Rust bindings, attestation-service verification, tests, and genesis initial measurements once the new policy type is chosen.
 
 Possible shape:
 

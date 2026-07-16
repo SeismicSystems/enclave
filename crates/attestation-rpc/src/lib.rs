@@ -30,7 +30,7 @@ pub trait AttestationRpc {
     /// The bodies remain opaque until `RootKeyRequest` and `RootKeyResponse`
     /// move into the planned bootstrap protocol crate. Keeping them opaque
     /// here preserves the existing wire format without creating a dependency
-    /// on the enclave-server implementation.
+    /// on the attestation-service implementation.
     #[method(name = "getWrappedRootKey")]
     async fn get_wrapped_root_key(&self, request: Vec<u8>) -> RpcResult<Vec<u8>>;
 }

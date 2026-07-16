@@ -5186,6 +5186,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "seismic-attestation-service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "jsonrpsee",
+ "rand 0.9.2",
+ "secp256k1",
+ "seismic-attestation",
+ "seismic-attestation-rpc",
+ "seismic-custodian-ipc",
+ "seismic-enclave",
+ "seismic-key-custodian",
+ "seismic-key-custodian-host",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "seismic-custodian-ipc"
 version = "0.1.0"
 dependencies = [
@@ -5228,29 +5252,6 @@ dependencies = [
  "secp256k1",
  "serde",
  "sha2",
-]
-
-[[package]]
-name = "seismic-enclave-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "jsonrpsee",
- "rand 0.9.2",
- "secp256k1",
- "seismic-attestation",
- "seismic-attestation-rpc",
- "seismic-custodian-ipc",
- "seismic-enclave",
- "seismic-key-custodian",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
