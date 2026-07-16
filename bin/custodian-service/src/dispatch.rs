@@ -9,11 +9,11 @@
 
 use crate::state::{CreateAttemptOutcome, CustodianState, InstallOutcome};
 use anyhow::Context as _;
+use seismic_custodian::{Custodian, VerifiedPeerAuthorization};
 use seismic_custodian_ipc::{
     Request, Response, RngKeypairBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
     TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
-use seismic_custodian::{Custodian, VerifiedPeerAuthorization};
 use tracing::{error, info, warn};
 
 /// Map one ACL-authorized socket request onto the custodian state.

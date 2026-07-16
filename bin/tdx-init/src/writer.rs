@@ -162,7 +162,8 @@ mod tests {
         // A valid manifest with a non-canonical byte (trailing newline): the
         // written file must be the decoded bytes exactly, not a re-rendering.
         let raw = [
-            include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json").as_slice(),
+            include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json")
+                .as_slice(),
             b"\n",
         ]
         .concat();

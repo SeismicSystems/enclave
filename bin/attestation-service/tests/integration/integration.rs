@@ -14,9 +14,9 @@ use seismic_attestation::{
 };
 use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
 use seismic_attestation_service::utils::{init_tracing, is_sudo};
-use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
 use seismic_custodian::Custodian;
 use seismic_custodian_service::state::CustodianState;
+use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
 
 // The server reads its manifest through the same fixed `/run/seismic` handoff
 // used in production, which keeps this test covering the tdx-init →

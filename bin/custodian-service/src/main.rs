@@ -9,9 +9,9 @@
 
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use seismic_custodian::Custodian;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use seismic_custodian_ipc::server::{bind, serve};
-use seismic_custodian::Custodian;
 use seismic_custodian_service::{acl, dispatch, state::CustodianState};
 use std::path::PathBuf;
 use tracing::info;
