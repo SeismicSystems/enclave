@@ -9,8 +9,8 @@ pub trait TdxQuoteRpc {
 
     /// Temporary HTTP endpoint for reth's purpose-key startup fetch.
     ///
-    /// TODO: move this operation to the custodian's local IPC API and remove
-    /// it from the network-facing RPC surface.
+    /// TODO: remove from the network-facing RPC surface once reth fetches its
+    /// keys from the custodian socket directly.
     #[method(name = "getPurposeKeys")]
     async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse>;
 

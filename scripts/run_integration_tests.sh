@@ -13,7 +13,7 @@ echo "🚀 Starting enclave-server integration tests..."
 
 # The image service normally creates these runtime directories. Ensure they
 # also exist when the test job starts from a clean runner boot.
-sudo install -d -m 0755 /run/seismic/conf /run/seismic/enclave
+sudo install -d -m 0755 /run/seismic/conf
 sudo install -m 0644 \
     crates/network-manifest/fixtures/network-manifest-v1.json \
     /run/seismic/conf/network-manifest.json

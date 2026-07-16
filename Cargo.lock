@@ -5244,6 +5244,7 @@ dependencies = [
  "seismic-custodian-ipc",
  "seismic-enclave",
  "seismic-key-custodian",
+ "seismic-key-custodian-host",
  "serde",
  "serde_json",
  "serial_test",

@@ -21,8 +21,7 @@ path = "src/main.rs"
 seismic-enclave.workspace = true
 seismic-attestation.workspace = true
 seismic-attestation-rpc.workspace = true
-seismic-custodian-ipc = { workspace = true, features = ["server"] }
-seismic-key-custodian.workspace = true
+seismic-custodian-ipc.workspace = true
 
 jsonrpsee.workspace = true
 tokio.workspace = true
@@ -36,9 +35,10 @@ tracing-subscriber.workspace = true
 rand.workspace = true
 
 [dev-dependencies]
+# Integration tests pair each served instance with a real key custodian:
+# the host crate's state/dispatch served over the ipc crate's socket server.
+seismic-custodian-ipc = { workspace = true, features = ["server"] }
+seismic-key-custodian.workspace = true
+seismic-key-custodian-host.workspace = true
 serial_test = "3.2.0"
 tempfile = "3.17.1"
-
-[features]
-default = []
-systemctl = []
