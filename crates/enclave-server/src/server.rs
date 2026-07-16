@@ -29,7 +29,8 @@ use seismic_custodian_ipc::{
     SnapshotKeyBytes, TxIoKeypairBytes,
 };
 use seismic_enclave::{
-    GetPurposeKeysResponse, LuksProvisioningStatus, SchnorrkelKeypair, api::TdxQuoteRpcServer,
+    GetPurposeKeysResponse, LuksProvisioningStatus, SchnorrkelKeypair,
+    api::{NodeStatusRpcServer, PurposeKeysRpcServer},
 };
 use std::{
     net::SocketAddr,
@@ -71,16 +72,23 @@ impl TdxQuoteServer {
 }
 
 #[async_trait]
-impl TdxQuoteRpcServer for TdxQuoteServer {
+impl NodeStatusRpcServer for TdxQuoteServer {
     /// Health check endpoint that returns "OK" if service is running
     async fn health_check(&self) -> RpcResult<String> {
         Ok("OK".to_string())
     }
 
+    /// Serve the first-boot LUKS-wipe progress the setup-persistent-luks
+    /// script publishes (read-only; `Idle` when no wipe is in flight). See
+    /// [`crate::luks_status`].
+    async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
+        Ok(crate::luks_status::read())
+    }
+}
+
+#[async_trait]
+impl PurposeKeysRpcServer for TdxQuoteServer {
     /// Serve reth's purpose-key startup fetch from the custodian socket.
-    ///
-    /// TODO: retire this method once reth fetches its keys from the custodian
-    /// socket itself (its grant then replaces this service's key access).
     async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse> {
         let mut custodian = self
             .connect_custodian()
@@ -101,13 +109,6 @@ impl TdxQuoteRpcServer for TdxQuoteServer {
 
         purpose_keys_response(&tx_io, &rng, &snapshot)
             .map_err(|error| internal_rpc_error("decoding custodian key bytes", error))
-    }
-
-    /// Serve the first-boot LUKS-wipe progress the setup-persistent-luks
-    /// script publishes (read-only; `Idle` when no wipe is in flight). See
-    /// [`crate::luks_status`].
-    async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
-        Ok(crate::luks_status::read())
     }
 }
 
@@ -202,7 +203,8 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     let server = ServerBuilder::default().build(addr).await?;
 
     let quote_server = TdxQuoteServer::new(args.custodian_socket, network_id);
-    let mut rpc = TdxQuoteRpcServer::into_rpc(quote_server.clone());
+    let mut rpc = NodeStatusRpcServer::into_rpc(quote_server.clone());
+    rpc.merge(PurposeKeysRpcServer::into_rpc(quote_server.clone()))?;
     rpc.merge(AttestationRpcServer::into_rpc(quote_server))?;
     let handle = server.start(rpc);
 

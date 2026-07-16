@@ -13,7 +13,7 @@ use seismic_attestation::{
     verify_evidence,
 };
 use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
-use seismic_enclave::TdxQuoteRpcClient as _;
+use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
 use seismic_enclave_server::utils::{init_tracing, is_sudo};
 use seismic_key_custodian::Custodian;
 use seismic_key_custodian_host::state::CustodianState;

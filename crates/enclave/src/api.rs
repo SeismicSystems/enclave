@@ -1,18 +1,14 @@
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};
 
+/// Operator-facing status surface of the attestation service: liveness plus
+/// first-boot progress. Consumers speak raw JSON-RPC over HTTP (the deploy
+/// CLI, health probes); the generated Rust client exists for tests.
 #[rpc(client, server)]
-pub trait TdxQuoteRpc {
+pub trait NodeStatusRpc {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
     async fn health_check(&self) -> RpcResult<String>;
-
-    /// Temporary HTTP endpoint for reth's purpose-key startup fetch.
-    ///
-    /// TODO: remove from the network-facing RPC surface once reth fetches its
-    /// keys from the custodian socket directly.
-    #[method(name = "getPurposeKeys")]
-    async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse>;
 
     /// Report first-boot LUKS provisioning progress.
     ///
@@ -24,6 +20,17 @@ pub trait TdxQuoteRpc {
     /// alive for the whole wipe, which is why it hosts this.
     #[method(name = "getLuksProvisioningStatus")]
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus>;
+}
+
+/// Temporary HTTP surface for reth's purpose-key startup fetch — reth is its
+/// only consumer.
+///
+/// TODO: delete the whole trait once reth fetches its keys from the custodian
+/// socket directly (its socket grant replaces this).
+#[rpc(client, server)]
+pub trait PurposeKeysRpc {
+    #[method(name = "getPurposeKeys")]
+    async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
