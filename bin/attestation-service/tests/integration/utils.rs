@@ -10,7 +10,6 @@ pub fn get_args(n: u16, peers: Vec<String>, custodian_socket: PathBuf) -> Args {
         port,
         peers,
         custodian_socket,
-        mock: false,
     }
 }
 

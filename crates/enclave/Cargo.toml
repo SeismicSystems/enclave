@@ -11,9 +11,7 @@ readme.workspace = true
 [dependencies]
 seismic-crypto.workspace = true
 
-anyhow.workspace = true
 jsonrpsee.workspace = true
 schnorrkel.workspace = true
 secp256k1.workspace = true
 serde.workspace = true
-tracing.workspace = true
