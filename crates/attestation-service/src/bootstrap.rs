@@ -42,18 +42,24 @@
 //! The root key itself only ever crosses the wire AEAD-wrapped under the
 //! ECDH-derived key; the AEAD tag plus the responder quote let the requester
 //! reject anything not produced by a genuine peer enclave for this request.
+//!
+//! This module runs in the network-facing attestation service and owns only
+//! the *evidence* side of the exchange: minting and verifying quotes over the
+//! transcript bindings. Every key operation happens in the key custodian,
+//! reached over its Unix socket: the requester's ephemeral secret never
+//! leaves it (`CreateRootKeyBootstrapAttempt` retains it there), the
+//! responder wraps there (`WrapRootKey`), and the requester unwraps and
+//! installs there (`InstallRootKeyFromVerifiedBootstrapResponse`).
 
 use anyhow::{Context, Result};
 use rand::{TryRngCore as _, rngs::OsRng};
-use secp256k1::{PublicKey, SecretKey};
+use secp256k1::PublicKey;
 use seismic_attestation::{
     AttestationExchangeMessage, AttestationType, NetworkId, SeismicMeasurementPolicy,
     bindings::{binding64_from_digest32, root_key_request_binding, root_key_response_binding},
     generate_evidence, verify_evidence,
 };
-use seismic_key_custodian::{
-    Custodian, EphemeralKeypair, VerifiedPeerAuthorization, unwrap_root_key,
-};
+use seismic_custodian_ipc::CustodianClient;
 use serde::{Deserialize, Serialize};
 
 /// The requester's half of the handshake: a fresh nonce + ephemeral pubkey,
@@ -65,7 +71,8 @@ use serde::{Deserialize, Serialize};
 pub struct RootKeyRequest {
     /// Requester-fresh replay protection, bound into both quotes.
     pub nonce_b: [u8; 32],
-    /// Requester ephemeral ECDH pubkey.
+    /// Requester ephemeral ECDH pubkey; the matching secret stays in the
+    /// requester's custodian.
     pub eph_pk_b: PublicKey,
     /// Requester attestation over `root_key_request_binding(network_id,
     /// nonce_b, eph_pk_b)`.
@@ -88,29 +95,29 @@ pub struct RootKeyResponse {
 
 /// Requester step 1: build the request the booting node POSTs to a peer.
 ///
-/// Returns the wire request plus the ephemeral secret the caller must keep to
-/// unwrap the response (see [`unwrap_root_key_from_response`]).
+/// `requester_eph_pk` is the public half of the ephemeral key the local
+/// custodian retained for this bootstrap attempt
+/// (`CreateRootKeyBootstrapAttempt`); the matching secret never enters this
+/// process.
 pub fn build_root_key_request(
     network_id: &NetworkId,
+    requester_eph_pk: &PublicKey,
     attestation_type: AttestationType,
-) -> Result<(RootKeyRequest, SecretKey)> {
-    let eph = EphemeralKeypair::generate();
-
+) -> Result<RootKeyRequest> {
     let mut nonce_b = [0u8; 32];
     OsRng
         .try_fill_bytes(&mut nonce_b)
         .expect("OS RNG must produce a handshake nonce");
 
-    let binding = root_key_request_binding(network_id, &nonce_b, &eph.pk_compressed());
+    let binding = root_key_request_binding(network_id, &nonce_b, &requester_eph_pk.serialize());
     let evidence = generate_evidence(attestation_type, binding64_from_digest32(binding))
         .context("generating requester attestation evidence")?;
 
-    let request = RootKeyRequest {
+    Ok(RootKeyRequest {
         nonce_b,
-        eph_pk_b: eph.pk,
+        eph_pk_b: *requester_eph_pk,
         evidence,
-    };
-    Ok((request, eph.sk))
+    })
 }
 
 /// Responder step: verify the requester's evidence, have the custodian wrap
@@ -125,7 +132,7 @@ pub fn build_root_key_request(
 pub async fn answer_root_key_request(
     request: &RootKeyRequest,
     network_id: &NetworkId,
-    custodian: &Custodian,
+    custodian: &mut CustodianClient,
     policy: SeismicMeasurementPolicy,
     attestation_type: AttestationType,
 ) -> Result<RootKeyResponse> {
@@ -143,48 +150,51 @@ pub async fn answer_root_key_request(
 
     // 2. Verification succeeded: authorize the custodian to wrap the root key
     //    to the requester's attested ephemeral key, with the verified request
-    //    binding as the AEAD AAD.
-    let auth = VerifiedPeerAuthorization {
-        root_key_request_binding: expected,
-    };
+    //    binding as the AEAD AAD. Calling `WrapRootKey` *is* the authorization
+    //    assertion — the custodian's ACL confines it to this service.
     let wrap = custodian
-        .wrap_root_key_for_peer(&auth, &request.eph_pk_b)
+        .wrap_root_key(expected, request.eph_pk_b.serialize())
+        .await
         .context("wrapping root key for peer")?;
+    let eph_pk_a = PublicKey::from_slice(&wrap.responder_eph_pk)
+        .context("custodian returned an invalid responder ephemeral key")?;
 
     // 3. Attest over the response transcript, committing to the ciphertext.
     let binding = root_key_response_binding(
         network_id,
         &request.nonce_b,
-        &wrap.responder_eph_pk.serialize(),
+        &wrap.responder_eph_pk,
         &wrap.wrapped,
     );
     let evidence = generate_evidence(attestation_type, binding64_from_digest32(binding))
         .context("generating responder attestation evidence")?;
 
     Ok(RootKeyResponse {
-        eph_pk_a: wrap.responder_eph_pk,
+        eph_pk_a,
         wrapped: wrap.wrapped,
         evidence,
     })
 }
 
-/// Requester step 2: verify the responder's evidence and unwrap the root key.
+/// Requester step 2: verify the responder's evidence over the response
+/// transcript.
 ///
-/// `eph_sk_b` is the secret returned by [`build_root_key_request`]; `request`
-/// is the matching request (we re-derive bindings from it rather than trusting
-/// the response to echo them). `policy` is the requester's allowlist for the
-/// responder. The wrapped root key is opened only after the responder quote
-/// verifies and the AEAD tag validates under the requester's ephemeral key.
-pub async fn unwrap_root_key_from_response(
+/// `request` is the matching request (we re-derive bindings from it rather
+/// than trusting the response to echo them). `policy` is the requester's
+/// allowlist for the responder. Returns the request-transcript binding,
+/// recomputed from our own copies of the request fields — the AEAD AAD the
+/// custodian needs to open the wrapped key on install. The wrapped key stays
+/// sealed through this function: only the custodian, holding the attempt's
+/// ephemeral secret, can open it.
+pub async fn verify_root_key_response(
     response: &RootKeyResponse,
     request: &RootKeyRequest,
-    eph_sk_b: &SecretKey,
     network_id: &NetworkId,
     policy: SeismicMeasurementPolicy,
 ) -> Result<[u8; 32]> {
-    // 1. Verify the responder's quote: recompute the response binding from our
-    //    own network_id + the nonce we chose + the responder's ephemeral key +
-    //    the exact ciphertext. A tampered field or a foreign network fails here.
+    // Verify the responder's quote: recompute the response binding from our
+    // own network_id + the nonce we chose + the responder's ephemeral key +
+    // the exact ciphertext. A tampered field or a foreign network fails here.
     let expected = root_key_response_binding(
         network_id,
         &request.nonce_b,
@@ -199,14 +209,9 @@ pub async fn unwrap_root_key_from_response(
     .await
     .context("verifying responder attestation evidence")?;
 
-    // 2. ECDH to the responder's ephemeral key, then AEAD-open, with the
-    //    request-binding AAD recomputed from our own copies of the fields.
-    let request_binding =
-        root_key_request_binding(network_id, &request.nonce_b, &request.eph_pk_b.serialize());
-    unwrap_root_key(
-        eph_sk_b,
-        &response.eph_pk_a,
-        &response.wrapped,
-        &request_binding,
-    )
+    Ok(root_key_request_binding(
+        network_id,
+        &request.nonce_b,
+        &request.eph_pk_b.serialize(),
+    ))
 }

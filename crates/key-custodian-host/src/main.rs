@@ -12,14 +12,10 @@ use clap::Parser;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use seismic_custodian_ipc::server::{bind, serve};
 use seismic_key_custodian::Custodian;
-use state::CustodianState;
+use seismic_key_custodian_host::{acl, dispatch, state::CustodianState};
 use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-
-mod acl;
-mod dispatch;
-mod state;
 
 /// Default drop-zone for the LUKS keyfile, in this service's runtime
 /// directory. The path is a deployment contract with `setup-persistent-luks`

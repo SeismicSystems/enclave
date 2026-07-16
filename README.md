@@ -10,7 +10,7 @@ You can only run the server on a machine where various Intel SGX & TDX libraries
 
 The command to run the server is:
 
-`cargo build && sudo target/debug/seismic-enclave-server`
+`cargo build && sudo target/debug/seismic-attestation-service`
 
 You should see something like `Listening on http://127.0.0.1:7878`
 

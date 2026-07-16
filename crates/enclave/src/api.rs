@@ -1,18 +1,14 @@
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};
 
+/// Operator-facing status surface of the attestation service: liveness plus
+/// first-boot progress. Consumers speak raw JSON-RPC over HTTP (the deploy
+/// CLI, health probes); the generated Rust client exists for tests.
 #[rpc(client, server)]
-pub trait TdxQuoteRpc {
+pub trait NodeStatusRpc {
     /// Health check endpoint that returns "OK" if service is running
     #[method(name = "healthCheck")]
     async fn health_check(&self) -> RpcResult<String>;
-
-    /// Temporary HTTP endpoint for reth's purpose-key startup fetch.
-    ///
-    /// TODO: move this operation to the custodian's local IPC API and remove
-    /// it from the network-facing RPC surface.
-    #[method(name = "getPurposeKeys")]
-    async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse>;
 
     /// Report first-boot LUKS provisioning progress.
     ///
@@ -20,10 +16,22 @@ pub trait TdxQuoteRpc {
     /// which can take 1h+ and is otherwise opaque to the operator. The deploy
     /// CLI polls this to render a progress bar; it returns
     /// [`LuksProvisioningStatus::Idle`] whenever no wipe is in flight (not
-    /// started, or already finished). enclave-server is the only node service
-    /// alive for the whole wipe, which is why it hosts this.
+    /// started, or already finished). The attestation service is the only
+    /// HTTP-serving process alive for the whole wipe, which is why it hosts
+    /// this.
     #[method(name = "getLuksProvisioningStatus")]
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus>;
+}
+
+/// Temporary HTTP surface for reth's purpose-key startup fetch — reth is its
+/// only consumer.
+///
+/// TODO: delete the whole trait once reth fetches its keys from the custodian
+/// socket directly (its socket grant replaces this).
+#[rpc(client, server)]
+pub trait PurposeKeysRpc {
+    #[method(name = "getPurposeKeys")]
+    async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -41,7 +49,7 @@ pub struct GetPurposeKeysResponse {
 // phases (root_key fetch / LUKS unlock / summit keygen / ready). Kept minimal
 // for now; revisit if the CLI needs more than "is the disk still being wiped?".
 /// First-boot LUKS-wipe progress, published by the `setup-persistent-luks`
-/// script to a tmpfs file and served by enclave-server.
+/// script to a tmpfs file and served by the attestation service.
 /// <https://github.com/SeismicSystems/seismic-images/blob/seismic/modules/seismic/mkosi.extra/usr/bin/setup-persistent-luks>
 ///
 /// Internally tagged by `state` so the JSON matches what the script

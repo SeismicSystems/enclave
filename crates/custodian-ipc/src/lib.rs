@@ -46,5 +46,5 @@ pub use messages::{
 };
 
 /// Default path for the custodian IPC socket. seismic-images creates the
-/// dedicated tmpfs directory before enclave-server starts.
+/// dedicated tmpfs directory before the key custodian starts.
 pub const DEFAULT_CUSTODIAN_SOCKET_PATH: &str = "/run/seismic/custodian/custodian.sock";

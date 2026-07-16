@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
     "crates/attestation-rpc",
+    "crates/attestation-service",
     "crates/custodian-ipc",
-    "crates/enclave-server",
     "crates/enclave-contract", "crates/enclave",
     "crates/enclave-crypto",
     "crates/key-custodian",
@@ -31,6 +31,7 @@ seismic-custodian-ipc = { path = "crates/custodian-ipc" }
 seismic-enclave = {path = "crates/enclave" }
 seismic-enclave-crypto = { path = "crates/enclave-crypto" }
 seismic-key-custodian = { path = "crates/key-custodian" }
+seismic-key-custodian-host = { path = "crates/key-custodian-host" }
 seismic-network-manifest = { path = "crates/network-manifest" }
 
 # Other deps

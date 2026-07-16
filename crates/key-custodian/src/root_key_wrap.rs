@@ -1,7 +1,7 @@
 //! Wrapping `root_key` to an authorized peer's ephemeral ECDH key.
 //!
 //! This is the custody half of the root-key bootstrap handshake: the caller
-//! (today `seismic-enclave-server`) runs the attested protocol — verifying
+//! (the attestation service) runs the attested protocol — verifying
 //! the requester's quote and minting the responder's — while this module only
 //! turns "authorized peer + its ephemeral key" into an AEAD-wrapped root key.
 //! The transcript digest the caller verified rides along as the AEAD AAD, so

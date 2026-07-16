@@ -16,7 +16,7 @@ use std::ffi::CString;
 /// populates. `ping` is not grantable — it is open to anyone who can connect.
 /// Single source for both the `--allow` help text and the grant-parse error,
 /// so the two stay in lockstep.
-pub(crate) const VALID_PURPOSES: &str = "tx-io, tx-io-public, rng, snapshot, \
+pub const VALID_PURPOSES: &str = "tx-io, tx-io-public, rng, snapshot, \
      create-root-key-bootstrap-attempt, wrap-root-key, \
      install-root-key-from-verified-bootstrap-response";
 

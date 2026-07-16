@@ -57,7 +57,7 @@ pub fn init_tracing() {
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 
-    info!("Enclave server tracing initialized");
+    info!("Attestation service tracing initialized");
 }
 
 #[cfg(test)]

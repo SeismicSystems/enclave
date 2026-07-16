@@ -1,6 +1,4 @@
 mod bootstrap;
-pub mod ipc;
-mod luks_keys;
 mod luks_status;
 mod network;
 mod server;
@@ -16,7 +14,7 @@ use seismic_enclave::mock::start_mock_server;
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
 
-/// Command line arguments for the enclave server
+/// Command line arguments for the attestation service
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -28,12 +26,11 @@ pub struct Args {
     #[arg(long, default_value_t = ENCLAVE_DEFAULT_ENDPOINT_PORT)]
     pub port: u16,
 
-    /// Flag if this is the genesis node that needs to generate the keys
-    #[arg(long, env = "SEISMIC_ENCLAVE_GENESIS_NODE", default_value_t = false)]
-    pub genesis_node: bool,
-
-    /// Comma-separated list of peer URLs to fetch root key from (e.g. `http://10.0.0.1:7878`).
-    /// Required when `genesis_node` is false.
+    /// Comma-separated list of peer URLs (e.g. `http://10.0.0.1:7878`) to
+    /// fetch the root key from when the local custodian starts without one.
+    /// Required on every node whose custodian does not run with
+    /// `--genesis-node`: with a keyless custodian and no peers there is no
+    /// way to obtain the root key, so startup fails immediately.
     #[arg(long, env = "SEISMIC_ENCLAVE_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
 
@@ -63,7 +60,7 @@ impl Args {
     pub async fn start(self) -> Result<()> {
         let addr: SocketAddr = format!("{}:{}", self.ip, self.port).parse()?;
 
-        info!("Starting TDX Quote JSON-RPC Server on {addr}...");
+        info!("Starting attestation-service JSON-RPC server on {addr}...");
 
         if self.mock {
             start_mock_server(addr).await

@@ -18,7 +18,7 @@ serde_bytes.workspace = true
 thiserror.workspace = true
 zeroize = { workspace = true, features = ["derive"] }
 
-# `client` feature: async client for tokio hosts (reth, enclave-server).
+# `client` feature: async client for tokio hosts (reth, the attestation service).
 tokio = { workspace = true, optional = true }
 
 # `server` feature: synchronous socket server (peer creds via libc).
