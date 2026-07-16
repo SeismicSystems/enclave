@@ -1,5 +1,5 @@
 [package]
-name = "seismic-key-custodian"
+name = "seismic-custodian"
 edition.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -10,7 +10,7 @@ readme.workspace = true
 description = "RAM-only custodian of the Seismic network root key"
 
 [dependencies]
-seismic-enclave-crypto.workspace = true
+seismic-crypto.workspace = true
 
 aes-gcm.workspace = true
 anyhow.workspace = true

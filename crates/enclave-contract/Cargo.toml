@@ -1,7 +1,13 @@
 [package]
 name = "enclave-contract"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Rust interface to the enclave's on-chain contract"
 
 [dependencies]
 alloy.workspace = true
