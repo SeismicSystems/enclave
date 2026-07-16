@@ -116,7 +116,7 @@ mod tests {
     fn fake_resolve(user: &str) -> Result<u32> {
         match user {
             "reth" => Ok(1001),
-            "enclave-attest" => Ok(1002),
+            "attestation" => Ok(1002),
             other => bail!("user '{other}' does not exist"),
         }
     }
@@ -128,7 +128,7 @@ mod tests {
         let acl = build_acl(
             &[
                 "reth:tx-io,rng".to_string(),
-                "enclave-attest:tx-io-public,create-root-key-bootstrap-attempt,\
+                "attestation:tx-io-public,create-root-key-bootstrap-attempt,\
                  wrap-root-key,install-root-key-from-verified-bootstrap-response"
                     .to_string(),
             ],
