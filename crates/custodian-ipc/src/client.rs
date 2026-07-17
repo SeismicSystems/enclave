@@ -8,7 +8,7 @@
 use crate::error::IpcError;
 use crate::framing::{read_frame, write_frame};
 use crate::messages::{
-    Request, Response, RngKeypairBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
+    Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
     TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
 use std::path::Path;
@@ -67,10 +67,10 @@ impl CustodianClient {
         }
     }
 
-    pub async fn get_rng_keypair(&mut self, epoch: u64) -> Result<RngKeypairBytes, IpcError> {
-        match self.call(&Request::GetRngKeypair { epoch }).await? {
-            Response::RngKeypair(keys) => Ok(keys),
-            response => Err(unexpected_response("get_rng_keypair", &response)),
+    pub async fn get_rng_ikm(&mut self, epoch: u64) -> Result<RngIkmBytes, IpcError> {
+        match self.call(&Request::GetRngIkm { epoch }).await? {
+            Response::RngIkm(ikm) => Ok(ikm),
+            response => Err(unexpected_response("get_rng_ikm", &response)),
         }
     }
 
@@ -260,7 +260,7 @@ mod tests {
     #[tokio::test]
     async fn state_and_handler_failures_remain_typed() {
         let (mut client, server) = scripted_client(Response::RootKeyAbsent);
-        let error = client.get_rng_keypair(0).await.expect_err("must fail");
+        let error = client.get_rng_ikm(0).await.expect_err("must fail");
         assert!(matches!(error, IpcError::RootKeyAbsent));
         server.await.expect("server task");
 

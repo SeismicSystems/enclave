@@ -137,7 +137,7 @@ mod tests {
         .expect("valid specs");
 
         assert!(acl.allows(1001, &Request::GetTxIoKeypair { epoch: 0 }));
-        assert!(acl.allows(1001, &Request::GetRngKeypair { epoch: 0 }));
+        assert!(acl.allows(1001, &Request::GetRngIkm { epoch: 0 }));
         assert!(!acl.allows(1001, &Request::GetSnapshotKey { epoch: 0 }));
         assert!(!acl.allows(1001, &Request::CreateRootKeyBootstrapAttempt));
 

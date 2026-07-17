@@ -11,7 +11,7 @@ use crate::state::{CreateAttemptOutcome, CustodianState, InstallOutcome};
 use anyhow::Context as _;
 use seismic_custodian::{Custodian, VerifiedPeerAuthorization};
 use seismic_custodian_ipc::{
-    Request, Response, RngKeypairBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
+    Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
     TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
 use tracing::{error, info, warn};
@@ -38,10 +38,10 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
                 })
             })
             .unwrap_or(Response::RootKeyAbsent),
-        Request::GetRngKeypair { epoch } => state
+        Request::GetRngIkm { epoch } => state
             .with_custodian(|custodian| {
-                Response::RngKeypair(RngKeypairBytes {
-                    keypair: custodian.get_rng_keypair(epoch).to_bytes().to_vec(),
+                Response::RngIkm(RngIkmBytes {
+                    ikm: custodian.get_rng_ikm(epoch),
                 })
             })
             .unwrap_or(Response::RootKeyAbsent),
@@ -185,14 +185,10 @@ mod tests {
         };
         assert_eq!(tx_io_public.pk, tx_io.pk);
 
-        let Response::RngKeypair(rng) = dispatch(&state, Request::GetRngKeypair { epoch: 0 })
-        else {
-            panic!("expected rng keypair");
+        let Response::RngIkm(rng) = dispatch(&state, Request::GetRngIkm { epoch: 0 }) else {
+            panic!("expected rng ikm");
         };
-        assert_eq!(
-            rng.keypair,
-            custodian.get_rng_keypair(0).to_bytes().to_vec()
-        );
+        assert_eq!(rng.ikm, custodian.get_rng_ikm(0));
 
         let Response::SnapshotKey(snapshot) =
             dispatch(&state, Request::GetSnapshotKey { epoch: 0 })
@@ -210,7 +206,7 @@ mod tests {
         for request in [
             Request::GetTxIoKeypair { epoch: 0 },
             Request::GetTxIoPublicKey { epoch: 0 },
-            Request::GetRngKeypair { epoch: 0 },
+            Request::GetRngIkm { epoch: 0 },
             Request::GetSnapshotKey { epoch: 0 },
             Request::WrapRootKey {
                 root_key_request_binding: BINDING,

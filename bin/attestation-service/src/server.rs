@@ -24,14 +24,8 @@ use seismic_attestation::{
 use seismic_attestation_rpc::{
     AttestationRpcClient as _, AttestationRpcServer, TxIoAttestationResponse,
 };
-use seismic_custodian_ipc::{
-    CreateRootKeyBootstrapAttemptResult, CustodianClient, IpcError, RngKeypairBytes,
-    SnapshotKeyBytes, TxIoKeypairBytes,
-};
-use seismic_enclave::{
-    GetPurposeKeysResponse, LuksProvisioningStatus, SchnorrkelKeypair,
-    api::{NodeStatusRpcServer, PurposeKeysRpcServer},
-};
+use seismic_custodian_ipc::{CreateRootKeyBootstrapAttemptResult, CustodianClient, IpcError};
+use seismic_enclave::{LuksProvisioningStatus, api::NodeStatusRpcServer};
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
@@ -83,32 +77,6 @@ impl NodeStatusRpcServer for AttestationService {
     /// [`crate::luks_status`].
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
         Ok(crate::luks_status::read())
-    }
-}
-
-#[async_trait]
-impl PurposeKeysRpcServer for AttestationService {
-    /// Serve reth's purpose-key startup fetch from the custodian socket.
-    async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse> {
-        let mut custodian = self
-            .connect_custodian()
-            .await
-            .map_err(|error| internal_rpc_error("connecting to custodian", error))?;
-        let tx_io = custodian
-            .get_tx_io_keypair(epoch)
-            .await
-            .map_err(|error| internal_rpc_error("fetching tx-io keypair", error))?;
-        let rng = custodian
-            .get_rng_keypair(epoch)
-            .await
-            .map_err(|error| internal_rpc_error("fetching rng keypair", error))?;
-        let snapshot = custodian
-            .get_snapshot_key(epoch)
-            .await
-            .map_err(|error| internal_rpc_error("fetching snapshot key", error))?;
-
-        purpose_keys_response(&tx_io, &rng, &snapshot)
-            .map_err(|error| internal_rpc_error("decoding custodian key bytes", error))
     }
 }
 
@@ -170,23 +138,6 @@ impl AttestationRpcServer for AttestationService {
     }
 }
 
-/// Convert the custodian's raw key bytes into the typed purpose-key DTO.
-fn purpose_keys_response(
-    tx_io: &TxIoKeypairBytes,
-    rng: &RngKeypairBytes,
-    snapshot: &SnapshotKeyBytes,
-) -> anyhow::Result<GetPurposeKeysResponse> {
-    Ok(GetPurposeKeysResponse {
-        tx_io_sk: secp256k1::SecretKey::from_byte_array(&tx_io.sk)
-            .context("tx-io secret bytes are not a valid secp256k1 scalar")?,
-        tx_io_pk: PublicKey::from_slice(&tx_io.pk)
-            .context("tx-io public bytes are not a valid secp256k1 point")?,
-        snapshot_key_bytes: snapshot.key,
-        rng_keypair: SchnorrkelKeypair::from_bytes(&rng.keypair)
-            .map_err(|error| anyhow::anyhow!("rng bytes are not a schnorrkel keypair: {error}"))?,
-    })
-}
-
 pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // Derive this node's network identity from the manifest tdx-init dropped on
     // tmpfs. Fatal if absent/malformed: without it every attestation binding is
@@ -204,7 +155,6 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
 
     let service = AttestationService::new(args.custodian_socket, network_id);
     let mut rpc = NodeStatusRpcServer::into_rpc(service.clone());
-    rpc.merge(PurposeKeysRpcServer::into_rpc(service.clone()))?;
     rpc.merge(AttestationRpcServer::into_rpc(service))?;
     let handle = server.start(rpc);
 
@@ -374,73 +324,4 @@ fn bootstrap_measurement_policy() -> SeismicMeasurementPolicy {
          peer image measurements are NOT being checked against an allowlist"
     );
     SeismicMeasurementPolicy::dangerously_accept_any_for_testing(ATTESTATION_TYPE)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use seismic_custodian::Custodian;
-
-    const ROOT_KEY: [u8; 32] = [7u8; 32];
-
-    // Parity with the pre-split in-process handler: the custodian's socket
-    // bytes decode to exactly the keys it derives.
-    #[test]
-    fn purpose_keys_response_matches_custodian_derivation() {
-        let custodian = Custodian::new(ROOT_KEY);
-        let response = purpose_keys_response(
-            &TxIoKeypairBytes {
-                sk: custodian.get_tx_io_sk(0).secret_bytes(),
-                pk: custodian.get_tx_io_pk(0).serialize(),
-            },
-            &RngKeypairBytes {
-                keypair: custodian.get_rng_keypair(0).to_bytes().to_vec(),
-            },
-            &SnapshotKeyBytes {
-                key: custodian.get_snapshot_key(0).into(),
-            },
-        )
-        .expect("decode purpose keys");
-
-        assert_eq!(response.tx_io_sk, custodian.get_tx_io_sk(0));
-        assert_eq!(response.tx_io_pk, custodian.get_tx_io_pk(0));
-        assert_eq!(
-            response.rng_keypair.secret,
-            custodian.get_rng_keypair(0).secret
-        );
-        let expected_snapshot: [u8; 32] = custodian.get_snapshot_key(0).into();
-        assert_eq!(response.snapshot_key_bytes, expected_snapshot);
-    }
-
-    #[test]
-    fn purpose_keys_response_rejects_invalid_bytes() {
-        let custodian = Custodian::new(ROOT_KEY);
-        let tx_io = TxIoKeypairBytes {
-            sk: custodian.get_tx_io_sk(0).secret_bytes(),
-            pk: custodian.get_tx_io_pk(0).serialize(),
-        };
-        let rng = RngKeypairBytes {
-            keypair: custodian.get_rng_keypair(0).to_bytes().to_vec(),
-        };
-        let snapshot = SnapshotKeyBytes { key: [3; 32] };
-
-        // Zero is not a secp256k1 scalar; an all-zero prefix byte is not a
-        // valid compressed point; 4 bytes are not a schnorrkel keypair.
-        let bad_sk = TxIoKeypairBytes {
-            sk: [0; 32],
-            pk: tx_io.pk,
-        };
-        assert!(purpose_keys_response(&bad_sk, &rng, &snapshot).is_err());
-
-        let bad_pk = TxIoKeypairBytes {
-            sk: tx_io.sk,
-            pk: [0; 33],
-        };
-        assert!(purpose_keys_response(&bad_pk, &rng, &snapshot).is_err());
-
-        let bad_rng = RngKeypairBytes {
-            keypair: vec![0; 4],
-        };
-        assert!(purpose_keys_response(&tx_io, &bad_rng, &snapshot).is_err());
-    }
 }

@@ -41,7 +41,7 @@ pub use framing::{MAX_FRAME_BODY_LEN, read_frame_blocking, write_frame_blocking}
 #[cfg(feature = "client")]
 pub use framing::{read_frame, write_frame};
 pub use messages::{
-    Request, Response, RngKeypairBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
+    Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
     TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
 

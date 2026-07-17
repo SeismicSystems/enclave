@@ -114,8 +114,16 @@ impl Custodian {
         secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk)
     }
 
-    /// Retrieves the Schnorrkel keypair used for randomness generation.
-    pub fn get_rng_keypair(&self, epoch: u64) -> schnorrkel::keys::Keypair {
+    /// Derives the 64 bytes of HKDF input key material that seed the RNG
+    /// precompile: the secret half of a schnorrkel keypair expanded from the
+    /// purpose-derived mini secret.
+    // TODO: the schnorrkel mini-secret expansion is kept only for backward
+    // compatibility with the running testnet — the expansion determines the
+    // derived bytes, and the RNG precompile's outputs are consensus. On the
+    // next network reset, drop it and take the ikm straight from the purpose
+    // derivation: have `derive_purpose_key` expand 64 bytes here instead of
+    // 32, removing schnorrkel from the custodian.
+    pub fn get_rng_ikm(&self, epoch: u64) -> [u8; 64] {
         let mini_key = self
             .derive_purpose_key(KeyPurpose::RngPrecompile, epoch)
             .expect("purpose key derivation must succeed");
@@ -124,7 +132,7 @@ impl Custodian {
             .expect("mini_secret_key should be valid");
         mini_secret_key
             .expand(schnorrkel::ExpansionMode::Uniform)
-            .into()
+            .to_bytes()
     }
 
     /// Retrieves the AES-256-GCM encryption key used for snapshot operations.
