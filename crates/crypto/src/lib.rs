@@ -6,6 +6,10 @@ use anyhow::anyhow;
 use hkdf::Hkdf;
 pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
 use schnorrkel::{ExpansionMode, MiniSecretKey};
+// Re-exported so consumers version-match the secp256k1 this crate's API
+// exposes (`derive_aes_key` takes its `SharedSecret`; the sample-key fns
+// return its key types).
+pub use secp256k1;
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret, ecdsa::Signature};
 use sha2::{Digest, Sha256};
 use std::{fs, io::Read, io::Write};
