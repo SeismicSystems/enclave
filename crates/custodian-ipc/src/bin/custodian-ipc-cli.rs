@@ -52,11 +52,11 @@ async fn main() -> Result<()> {
                 }
                 Err(e) => println!("tx_io:               {e}"),
             }
-            match client.get_rng_keypair(epoch).await {
+            match client.get_rng_ikm(epoch).await {
                 Ok(keys) => {
-                    println!("rng_keypair sha256:  {}", fingerprint(&keys.keypair));
+                    println!("rng_ikm sha256:      {}", fingerprint(&keys.ikm));
                 }
-                Err(e) => println!("rng_keypair:         {e}"),
+                Err(e) => println!("rng_ikm:             {e}"),
             }
             match client.get_snapshot_key(epoch).await {
                 Ok(key) => {

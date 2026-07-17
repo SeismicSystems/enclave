@@ -77,7 +77,7 @@ impl MethodAcl {
             Request::Ping => true,
             Request::GetTxIoKeypair { .. } => self.tx_io.contains(&uid),
             Request::GetTxIoPublicKey { .. } => self.tx_io_public.contains(&uid),
-            Request::GetRngKeypair { .. } => self.rng.contains(&uid),
+            Request::GetRngIkm { .. } => self.rng.contains(&uid),
             Request::GetSnapshotKey { .. } => self.snapshot.contains(&uid),
             Request::CreateRootKeyBootstrapAttempt => {
                 self.create_root_key_bootstrap_attempt.contains(&uid)
@@ -362,7 +362,7 @@ mod tests {
             ..MethodAcl::default()
         };
         assert!(reth_like.allows(UID, &Request::GetTxIoKeypair { epoch: 0 }));
-        assert!(reth_like.allows(UID, &Request::GetRngKeypair { epoch: 0 }));
+        assert!(reth_like.allows(UID, &Request::GetRngIkm { epoch: 0 }));
         assert!(!reth_like.allows(UID, &Request::GetTxIoPublicKey { epoch: 0 }));
         assert!(!reth_like.allows(UID, &Request::GetSnapshotKey { epoch: 0 }));
         assert!(!reth_like.allows(UID, &Request::CreateRootKeyBootstrapAttempt));
@@ -381,7 +381,7 @@ mod tests {
         assert!(attestation_like.allows(UID, &wrap_request()));
         assert!(attestation_like.allows(UID, &install_request()));
         assert!(!attestation_like.allows(UID, &Request::GetTxIoKeypair { epoch: 0 }));
-        assert!(!attestation_like.allows(UID, &Request::GetRngKeypair { epoch: 0 }));
+        assert!(!attestation_like.allows(UID, &Request::GetRngIkm { epoch: 0 }));
         assert!(!attestation_like.allows(UID, &Request::GetSnapshotKey { epoch: 0 }));
 
         assert!(!reth_like.allows(UID + 1, &Request::GetTxIoKeypair { epoch: 0 }));

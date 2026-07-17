@@ -23,25 +23,6 @@ pub trait NodeStatusRpc {
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus>;
 }
 
-/// Temporary HTTP surface for reth's purpose-key startup fetch — reth is its
-/// only consumer.
-///
-/// TODO: delete the whole trait once reth fetches its keys from the custodian
-/// socket directly (its socket grant replaces this).
-#[rpc(client, server)]
-pub trait PurposeKeysRpc {
-    #[method(name = "getPurposeKeys")]
-    async fn get_purpose_keys(&self, epoch: u64) -> RpcResult<GetPurposeKeysResponse>;
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetPurposeKeysResponse {
-    pub tx_io_sk: secp256k1::SecretKey,
-    pub tx_io_pk: secp256k1::PublicKey,
-    pub snapshot_key_bytes: [u8; 32],
-    pub rng_keypair: schnorrkel::keys::Keypair,
-}
-
 // TODO: this is intentionally scoped to just the first-boot LUKS wipe — the one
 // long, opaque phase the operator CLI needs a progress bar for. If we later want
 // a full node boot-status surface, this would grow into a richer enum covering

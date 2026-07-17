@@ -31,8 +31,8 @@ pub enum Request {
     /// attestation service uses this to mint tx-io evidence without gaining
     /// access to `tx_io_sk`.
     GetTxIoPublicKey { epoch: u64 },
-    /// Derive this epoch's RNG-precompile keypair.
-    GetRngKeypair { epoch: u64 },
+    /// Derive this epoch's RNG-precompile input key material.
+    GetRngIkm { epoch: u64 },
     /// Derive this epoch's snapshot encryption key.
     GetSnapshotKey { epoch: u64 },
 
@@ -94,7 +94,7 @@ impl Request {
             Request::Ping => "ping",
             Request::GetTxIoKeypair { .. } => "get_tx_io_keypair",
             Request::GetTxIoPublicKey { .. } => "get_tx_io_public_key",
-            Request::GetRngKeypair { .. } => "get_rng_keypair",
+            Request::GetRngIkm { .. } => "get_rng_ikm",
             Request::GetSnapshotKey { .. } => "get_snapshot_key",
             Request::CreateRootKeyBootstrapAttempt => "create_root_key_bootstrap_attempt",
             Request::WrapRootKey { .. } => "wrap_root_key",
@@ -114,7 +114,7 @@ pub enum Response {
     Pong,
     TxIoKeypair(TxIoKeypairBytes),
     TxIoPublicKey(TxIoPublicKeyBytes),
-    RngKeypair(RngKeypairBytes),
+    RngIkm(RngIkmBytes),
     SnapshotKey(SnapshotKeyBytes),
     RootKeyBootstrapAttemptCreated(RootKeyBootstrapAttemptBytes),
     WrappedRootKey(WrappedRootKeyBytes),
@@ -149,7 +149,7 @@ impl Response {
             Response::Pong => "pong",
             Response::TxIoKeypair(_) => "tx_io_keypair",
             Response::TxIoPublicKey(_) => "tx_io_public_key",
-            Response::RngKeypair(_) => "rng_keypair",
+            Response::RngIkm(_) => "rng_ikm",
             Response::SnapshotKey(_) => "snapshot_key",
             Response::RootKeyBootstrapAttemptCreated(_) => "root_key_bootstrap_attempt_created",
             Response::WrappedRootKey(_) => "wrapped_root_key",
@@ -202,18 +202,18 @@ pub struct RootKeyBootstrapAttemptBytes {
     pub requester_eph_pk: [u8; 33],
 }
 
-/// schnorrkel RNG keypair as raw bytes (`Keypair::to_bytes()`, 96 bytes,
-/// secret half included). Zeroized on drop.
+/// HKDF input key material for the RNG precompile (64 bytes: the secret half
+/// of the derived rng key, `SecretKey::to_bytes()`). Zeroized on drop.
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-pub struct RngKeypairBytes {
+pub struct RngIkmBytes {
     #[serde(with = "serde_bytes")]
-    pub keypair: Vec<u8>,
+    pub ikm: [u8; 64],
 }
 
-impl fmt::Debug for RngKeypairBytes {
+impl fmt::Debug for RngIkmBytes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RngKeypairBytes")
-            .field("keypair", &"<redacted>")
+        f.debug_struct("RngIkmBytes")
+            .field("ikm", &"<redacted>")
             .finish()
     }
 }
@@ -266,7 +266,7 @@ mod tests {
             Request::Ping,
             Request::GetTxIoKeypair { epoch: 7 },
             Request::GetTxIoPublicKey { epoch: 7 },
-            Request::GetRngKeypair { epoch: 8 },
+            Request::GetRngIkm { epoch: 8 },
             Request::GetSnapshotKey { epoch: 9 },
             Request::CreateRootKeyBootstrapAttempt,
             Request::WrapRootKey {
@@ -304,13 +304,11 @@ mod tests {
         };
         assert_eq!(snapshot.key, [3; 32]);
 
-        let response = Response::RngKeypair(RngKeypairBytes {
-            keypair: vec![4; 96],
-        });
-        let Response::RngKeypair(rng) = from_cbor(&to_cbor(&response)) else {
+        let response = Response::RngIkm(RngIkmBytes { ikm: [4; 64] });
+        let Response::RngIkm(rng) = from_cbor(&to_cbor(&response)) else {
             panic!("wrong variant");
         };
-        assert_eq!(rng.keypair, vec![4; 96]);
+        assert_eq!(rng.ikm, [4; 64]);
 
         let response = Response::TxIoPublicKey(TxIoPublicKeyBytes { pk: [5; 33] });
         let Response::TxIoPublicKey(tx_io) = from_cbor(&to_cbor(&response)) else {
@@ -391,9 +389,7 @@ mod tests {
         assert!(debug.contains("<redacted>"));
         assert!(!debug.contains("1, 1"), "sk leaked: {debug}");
 
-        let rng = RngKeypairBytes {
-            keypair: vec![4; 96],
-        };
+        let rng = RngIkmBytes { ikm: [4; 64] };
         assert!(format!("{rng:?}").contains("<redacted>"));
 
         let snapshot = SnapshotKeyBytes { key: [3; 32] };
