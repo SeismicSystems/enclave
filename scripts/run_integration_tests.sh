@@ -18,10 +18,12 @@ sudo install -m 0644 \
     crates/network-manifest/fixtures/network-manifest-v1.json \
     /run/seismic/conf/network-manifest.json
 
-# Free the TPM before the test starts its two node pairs. Seismic images may
-# have a Supervisor-managed server; stock CI runners do not. The Supervisor
-# program keeps its deployed name (enclave-server) until the runner image is
-# regenerated with the split services.
+# Free the TPM before the tests start their node pairs: quote generation
+# opens the raw TPM device (/dev/tpm0), which the kernel hands to one process
+# at a time (tpmrm0 support is kinvolk/azure-cvm-tooling#92). Seismic images
+# may have a Supervisor-managed server; stock CI runners do not. The
+# Supervisor program keeps its deployed name (enclave-server) until the
+# runner image is regenerated with the split services.
 if command -v supervisorctl >/dev/null 2>&1 && \
     sudo supervisorctl status enclave-server >/dev/null 2>&1; then
     sudo supervisorctl stop enclave-server
@@ -39,9 +41,14 @@ if [ ${#binaries[@]} -eq 0 ]; then
     exit 1
 fi
 
+# The target compiles to one test binary that runs every test in a single
+# process, serialized around the runner's single vTPM by serial_test — no
+# filtering or thread capping needed. The loop only covers cargo ever listing
+# more executables. sudo strips the environment, so pass the log/backtrace
+# config through explicitly.
 for binary in "${binaries[@]}"; do
-    echo "🚀 Executing: sudo $binary test_get_wrapped_root_key_bootstrap"
-    sudo "$binary" test_get_wrapped_root_key_bootstrap
+    echo "🚀 Executing: sudo $binary"
+    sudo env RUST_LOG="$RUST_LOG" RUST_BACKTRACE="$RUST_BACKTRACE" "$binary"
 done
 
 echo "🎉 All attestation-service integration tests passed!"
