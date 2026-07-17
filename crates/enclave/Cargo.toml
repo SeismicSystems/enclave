@@ -12,6 +12,5 @@ readme.workspace = true
 seismic-crypto.workspace = true
 
 jsonrpsee.workspace = true
-schnorrkel.workspace = true
 secp256k1.workspace = true
 serde.workspace = true

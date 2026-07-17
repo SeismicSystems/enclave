@@ -14,7 +14,10 @@
 //! upstream (kinvolk/azure-cvm-tooling#92/#93, flashbots/attested-tls#72/#73);
 //! `seismic_attestation::generate_evidence`'s docs carry the cost model.
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use crate::utils::{get_args, spawn_custodian};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -28,7 +31,7 @@ use seismic_attestation_service::utils::{init_tracing, is_sudo};
 use seismic_custodian::Custodian;
 use seismic_custodian_ipc::CustodianClient;
 use seismic_custodian_service::state::CustodianState;
-use seismic_enclave::{NodeStatusRpcClient as _, PurposeKeysRpcClient as _};
+use seismic_enclave::NodeStatusRpcClient as _;
 
 // The server reads its manifest through the same fixed `/run/seismic` handoff
 // used in production, which keeps these tests covering the tdx-init →
@@ -46,7 +49,7 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 /// verification. The joiner's health wait spans the attested wrapped-root-key
 /// exchange, so its return is the join completing; asserts the join's
 /// observable effects — the LUKS keyfile handoff and identical purpose keys
-/// over HTTP `getPurposeKeys`.
+/// read from each custodian's socket.
 #[serial_test::serial(attestation_evidence)]
 #[tokio::test]
 async fn test_two_node_root_key_bootstrap() {
@@ -64,20 +67,12 @@ async fn test_two_node_root_key_bootstrap() {
         .expect("joining custodian wrote its LUKS keyfile");
     assert_eq!(luks_metadata.len(), 64);
 
-    // Both nodes serve identical purpose keys over HTTP `getPurposeKeys`.
-    let keys1 = genesis
-        .client
-        .get_purpose_keys(0)
-        .await
-        .expect("Unable to get purpose keys");
-    let keys2 = joiner
-        .client
-        .get_purpose_keys(0)
-        .await
-        .expect("Unable to get purpose keys");
-    assert_eq!(keys1.rng_keypair.secret, keys2.rng_keypair.secret);
-    assert_eq!(keys1.snapshot_key_bytes, keys2.snapshot_key_bytes);
-    assert_eq!(keys1.tx_io_sk, keys2.tx_io_sk);
+    // Both custodians hold the same root key now, so every purpose key they
+    // derive matches. Asked straight over each custodian's own socket — the
+    // key-holding boundary reth itself fetches from.
+    let keys1 = purpose_keys(&genesis.socket, 0).await;
+    let keys2 = purpose_keys(&joiner.socket, 0).await;
+    assert_eq!(keys1, keys2);
 
     genesis.handle.abort();
     joiner.handle.abort();
@@ -225,6 +220,38 @@ async fn test_four_node_root_key_distribution() {
 /// measurement admission is covered by the separately tracked on-chain policy.
 fn test_measurement_policy() -> SeismicMeasurementPolicy {
     SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx)
+}
+
+/// A node's derived purpose keys as raw bytes, for cross-node equality
+/// assertions. Test-only: production callers never hold all three at once.
+#[derive(Debug, PartialEq)]
+struct PurposeKeyBytes {
+    tx_io_sk: [u8; 32],
+    tx_io_pk: [u8; 33],
+    rng_ikm: [u8; 64],
+    snapshot_key: [u8; 32],
+}
+
+/// Fetch a node's purpose keys at `epoch` straight from its custodian socket.
+async fn purpose_keys(socket: &Path, epoch: u64) -> PurposeKeyBytes {
+    let mut custodian = CustodianClient::connect(socket)
+        .await
+        .expect("connect to custodian socket");
+    let tx_io = custodian
+        .get_tx_io_keypair(epoch)
+        .await
+        .expect("fetch tx-io keypair");
+    let rng = custodian.get_rng_ikm(epoch).await.expect("fetch rng ikm");
+    let snapshot = custodian
+        .get_snapshot_key(epoch)
+        .await
+        .expect("fetch snapshot key");
+    PurposeKeyBytes {
+        tx_io_sk: tx_io.sk,
+        tx_io_pk: tx_io.pk,
+        rng_ikm: rng.ikm,
+        snapshot_key: snapshot.key,
+    }
 }
 
 /// Wait until the server's `healthCheck` RPC returns `OK`.
