@@ -2,6 +2,15 @@
 //! `scripts/run_integration_tests.sh`. The script prepares the runtime
 //! manifest, frees the TPM, and executes these tests with the required
 //! privileges.
+//!
+//! Quote generation opens the raw TPM device, which the kernel hands to one
+//! process at a time (az-cvm-vtpm hardcodes tss-esapi's default TCTI,
+//! `/dev/tpm0`; only `/dev/tpmrm0` multiplexes). Evidence operations must
+//! therefore never overlap, and each level of concurrency has its own guard:
+//! the script keeps other processes off the device, the shared
+//! `serial(attestation_evidence)` key runs these tests one at a time within
+//! this binary, and each test starts its nodes sequentially so a single test
+//! never has two quote operations in flight.
 
 use std::{path::PathBuf, time::Duration};
 
