@@ -39,9 +39,11 @@ if [ ${#binaries[@]} -eq 0 ]; then
     exit 1
 fi
 
+# Run every test in the target. The tests serialize themselves around the
+# runner's single vTPM (serial_test), so no filtering or thread capping here.
 for binary in "${binaries[@]}"; do
-    echo "🚀 Executing: sudo $binary test_get_wrapped_root_key_bootstrap"
-    sudo "$binary" test_get_wrapped_root_key_bootstrap
+    echo "🚀 Executing: sudo $binary"
+    sudo "$binary"
 done
 
 echo "🎉 All attestation-service integration tests passed!"
