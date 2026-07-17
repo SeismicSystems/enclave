@@ -50,19 +50,30 @@ pub fn is_sudo() -> bool {
 }
 
 pub fn init_tracing() {
-    // Read log level from RUST_LOG, default to "debug" if unset.
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
+    // Read log level from RUST_LOG, default to "info" if unset — the same
+    // default as the custodian service and the production unit files.
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let subscriber = FmtSubscriber::builder().with_env_filter(filter).finish();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
-
-    info!("Attestation service tracing initialized");
+    // Keep the first subscriber on repeat calls: every integration test in
+    // the shared test process initializes tracing.
+    if tracing::subscriber::set_global_default(subscriber).is_ok() {
+        info!("Attestation service tracing initialized");
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Every integration test in one process initializes tracing; a repeat
+    // call must keep the first subscriber rather than panic.
+    #[test]
+    fn init_tracing_is_idempotent() {
+        init_tracing();
+        init_tracing();
+    }
 
     #[test]
     fn rpc_errors_expose_only_stable_messages() {

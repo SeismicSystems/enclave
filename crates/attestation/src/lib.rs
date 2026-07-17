@@ -43,6 +43,21 @@ use thiserror::Error;
 ///
 /// This is generic over the backend [`AttestationType`] and delegates evidence
 /// creation directly to Flashbots `attestation`.
+///
+/// Operational note (AzureTdx): the backend opens the raw TPM device
+/// (`/dev/tpm0`, exclusive-open) and binds `binding` through the vTPM's
+/// shared report-data NV index — a write, a fixed 3-second wait, and an IMDS
+/// round-trip per call. Each call therefore costs seconds, and evidence
+/// generation must be serialized machine-wide: a concurrent TPM client fails
+/// the device open, and a concurrent report-data writer yields a report that
+/// fails verification. Upstream RFEs: TCTI configurability
+/// ([azure-cvm-tooling#92], [attested-tls#72]) and report-readiness polling
+/// ([azure-cvm-tooling#93], [attested-tls#73]).
+///
+/// [azure-cvm-tooling#92]: https://github.com/kinvolk/azure-cvm-tooling/issues/92
+/// [azure-cvm-tooling#93]: https://github.com/kinvolk/azure-cvm-tooling/issues/93
+/// [attested-tls#72]: https://github.com/flashbots/attested-tls/issues/72
+/// [attested-tls#73]: https://github.com/flashbots/attested-tls/issues/73
 pub fn generate_evidence(
     attestation_type: AttestationType,
     binding: [u8; 64],

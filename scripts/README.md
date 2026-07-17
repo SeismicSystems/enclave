@@ -1,21 +1,27 @@
 # Integration Tests
 
 `run_integration_tests.sh` runs the live-TEE attestation-service integration
-test on the self-hosted Azure TDX runner.
+tests on the self-hosted Azure TDX runner.
 
-## Covered flow
+## Covered flows
 
-`test_get_wrapped_root_key_bootstrap` starts two custodian +
-attestation-service pairs over real custodian sockets and checks that:
+`test_two_node_root_key_bootstrap` starts two custodian + attestation-service
+pairs over real custodian sockets and checks that the joining pair completes
+the mutually attested wrapped-root-key bootstrap, with its custodian
+installing the key and writing the LUKS keyfile handoff, and that both pairs
+then serve the same purpose keys.
 
-1. the joining pair completes the mutually attested wrapped-root-key
-   bootstrap, with its custodian installing the key and writing the LUKS
-   keyfile handoff;
-2. both pairs derive the same purpose keys;
-3. a relying client fetches `getTxIoAttestationEvidence`, independently derives
-   the expected network/key/epoch binding, and verifies the complete evidence
-   envelope through `seismic-attestation`;
-4. wrong bindings and malformed evidence are rejected.
+`test_tx_io_evidence_relying_party` runs the client side of the network's
+tx-io key advertisement against a single genesis pair: a relying client
+fetches `getTxIoAttestationEvidence`, independently derives the expected
+network/key/epoch binding, and verifies the complete evidence envelope
+through `seismic-attestation`; wrong bindings and malformed evidence are
+rejected.
+
+`test_four_node_root_key_distribution` starts one genesis pair plus three
+joining pairs — two bootstrapping from the genesis node, one from an
+already-bootstrapped joiner — and checks that every join completes and all
+four custodians derive the same `tx_io_pk`.
 
 TODO: add contract-backed bootstrap-admission coverage as a distinct
 reth-backed integration test with PCR policy seeded in genesis.
