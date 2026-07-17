@@ -10,7 +10,9 @@
 //! the script keeps other processes off the device, the shared
 //! `serial(attestation_evidence)` key runs these tests one at a time within
 //! this binary, and each test starts its nodes sequentially so a single test
-//! never has two quote operations in flight.
+//! never has two quote operations in flight. Relaxations are tracked
+//! upstream (kinvolk/azure-cvm-tooling#92/#93, flashbots/attested-tls#72/#73);
+//! `seismic_attestation::generate_evidence`'s docs carry the cost model.
 
 use std::{path::PathBuf, time::Duration};
 

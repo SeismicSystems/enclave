@@ -20,10 +20,10 @@ sudo install -m 0644 \
 
 # Free the TPM before the tests start their node pairs: quote generation
 # opens the raw TPM device (/dev/tpm0), which the kernel hands to one process
-# at a time. Seismic images may have a Supervisor-managed server; stock CI
-# runners do not. The Supervisor program keeps its deployed name
-# (enclave-server) until the runner image is regenerated with the split
-# services.
+# at a time (tpmrm0 support is kinvolk/azure-cvm-tooling#92). Seismic images
+# may have a Supervisor-managed server; stock CI runners do not. The
+# Supervisor program keeps its deployed name (enclave-server) until the
+# runner image is regenerated with the split services.
 if command -v supervisorctl >/dev/null 2>&1 && \
     sudo supervisorctl status enclave-server >/dev/null 2>&1; then
     sudo supervisorctl stop enclave-server
