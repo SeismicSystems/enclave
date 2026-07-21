@@ -12,7 +12,6 @@ members = [
     "crates/crypto",
     "crates/custodian",
     "crates/custodian-ipc",
-    "crates/enclave",
     "crates/enclave-contract",
     "crates/network-manifest",
 ]
@@ -35,7 +34,6 @@ seismic-crypto = { path = "crates/crypto" }
 seismic-custodian = { path = "crates/custodian" }
 seismic-custodian-ipc = { path = "crates/custodian-ipc" }
 seismic-custodian-service = { path = "bin/custodian-service" }
-seismic-enclave = {path = "crates/enclave" }
 seismic-network-manifest = { path = "crates/network-manifest" }
 
 # Other deps

@@ -1,5 +1,6 @@
 use crate::{
     Args,
+    api::{LuksProvisioningStatus, NodeStatusRpcServer},
     bootstrap::{
         RootKeyRequest, RootKeyResponse, answer_root_key_request, build_root_key_request,
         verify_root_key_response,
@@ -25,7 +26,6 @@ use seismic_attestation_rpc::{
     AttestationRpcClient as _, AttestationRpcServer, TxIoAttestationResponse,
 };
 use seismic_custodian_ipc::{CreateRootKeyBootstrapAttemptResult, CustodianClient, IpcError};
-use seismic_enclave::{LuksProvisioningStatus, api::NodeStatusRpcServer};
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
