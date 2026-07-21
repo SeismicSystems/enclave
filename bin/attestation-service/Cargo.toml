@@ -18,7 +18,6 @@ name = "seismic-attestation-service"
 path = "src/main.rs"
 
 [dependencies]
-seismic-enclave.workspace = true
 seismic-attestation.workspace = true
 seismic-attestation-rpc.workspace = true
 seismic-custodian-ipc.workspace = true

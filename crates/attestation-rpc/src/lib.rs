@@ -1,8 +1,8 @@
 //! Purpose-specific JSON-RPC APIs for Seismic attestation evidence.
 //!
-//! This crate keeps attestation RPC types separate from the general
-//! `seismic-enclave` key-operation facade, so consumers such as reth can build
-//! the key APIs without platform-attestation dependencies.
+//! This crate keeps attestation RPC types separate from the key-operation
+//! crates, so consumers such as reth can build the key APIs without
+//! platform-attestation dependencies.
 
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};

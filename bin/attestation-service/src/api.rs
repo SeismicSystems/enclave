@@ -23,12 +23,12 @@ pub trait NodeStatusRpc {
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus>;
 }
 
-// TODO: this is intentionally scoped to just the first-boot LUKS wipe — the one
+// TODO: this is intentionally scoped to just the first-boot LUKS wipe - the one
 // long, opaque phase the operator CLI needs a progress bar for. If we later want
 // a full node boot-status surface, this would grow into a richer enum covering
 // all states: distinguishing wipe-done from never-started, plus the other boot
 // phases (root_key fetch / LUKS unlock / summit keygen / ready). Kept minimal
-// for now; revisit if the CLI needs more than "is the disk still being wiped?".
+// for now; revisit if the CLI needs more than "is the disk still being wiped?"
 /// First-boot LUKS-wipe progress, published by the `setup-persistent-luks`
 /// script to a tmpfs file and served by the attestation service.
 /// <https://github.com/SeismicSystems/seismic-images/blob/seismic/modules/seismic/mkosi.extra/usr/bin/setup-persistent-luks>
@@ -42,7 +42,7 @@ pub trait NodeStatusRpc {
 pub enum LuksProvisioningStatus {
     /// No wipe in flight: the status file is absent. Deliberately conflates
     /// "finished" (the script removes the file when done) with "never started"
-    /// (a later boot that takes the fast unlock path) — the consumer reacts to
+    /// (a later boot that takes the fast unlock path) - the consumer reacts to
     /// both the same way: no bar, poll the node's real endpoints for readiness.
     Idle,
     /// The wipe is running. `bytes_done`/`bytes_total` drive the progress bar;
@@ -56,7 +56,7 @@ pub enum LuksProvisioningStatus {
     },
     /// The wipe failed; systemd is retrying `persistent-luks-setup.service`.
     Error { error: String },
-    /// The status file exists but couldn't be read or parsed — a producer bug
+    /// The status file exists but couldn't be read or parsed - a producer bug
     /// or a perms/IO issue, NOT evidence the wipe finished. The consumer should
     /// surface a warning and keep polling, never treat this as "done".
     Unknown,
