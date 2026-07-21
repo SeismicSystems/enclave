@@ -15,6 +15,9 @@ pub enum TdxInitError {
     #[error("invalid reth genesis: {0}")]
     InvalidRethGenesis(String),
 
+    #[error("invalid peer config: {0}")]
+    InvalidPeers(String),
+
     #[error("Server error: {0}")]
     ServerError(String),
 }
@@ -34,6 +37,10 @@ impl IntoResponse for TdxInitError {
             TdxInitError::InvalidRethGenesis(msg) => (
                 StatusCode::BAD_REQUEST,
                 format!("invalid reth genesis: {msg}"),
+            ),
+            TdxInitError::InvalidPeers(msg) => (
+                StatusCode::BAD_REQUEST,
+                format!("invalid peer config: {msg}"),
             ),
             TdxInitError::Io(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,

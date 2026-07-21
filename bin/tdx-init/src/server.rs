@@ -66,13 +66,15 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
     let config: InitConfig = toml::from_str(&body)?;
 
     // Validate the network artifacts while the operator's POST is still
-    // waiting on a response: a bad (or absent) manifest or reth genesis must
-    // 400 the deploy, not fail at boot when the attestation service/reth try to use them.
+    // waiting on a response: a bad (or absent) manifest, reth genesis, or peer
+    // config must 400 the deploy, not fail at boot when the attestation
+    // service/reth try to use them.
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
     crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,
         manifest.chain_id,
     )?;
+    crate::peers::validate_and_derive_peers(&config.node, &config.network.bootnodes)?;
 
     let mut sender_guard = state.config_sender.lock().await;
     match sender_guard.take() {
