@@ -32,17 +32,18 @@ Unknown top-level sections or fields are rejected — see
 [`src/config.rs`](src/config.rs).
 
 ```toml
-[domain]
-name = "<your.public.dns.name>"     # FQDN clients reach this VM at
-email = "<contact@example.com>"     # ACME registration / renewal email
-
-[root_key]                           # optional; defaults applied if absent
-genesis_node = false                # true on exactly one VM per network
-peers = ["http://10.0.0.1:7878"]    # required when genesis_node = false
-
-[network]
+[network]                            # coordinator-produced; a function of the network, not of this node
 manifest_base64 = "eyJib290c3RyYXBfbWVhc3VyZW1lbn..."
 reth_genesis_base64 = "eyJjb25maWciOnsiY2hhaW5JZCI..."
+bootnodes = ["enode://<128 hex pubkey>@host:port"]  # the cohort's peers; [] only on the genesis node
+
+[node]                               # this node only
+external_ip = "203.0.113.7"          # this VM's public IP (reth --nat extip:)
+genesis_node = false                 # optional (default false); true on exactly one VM per network
+
+[node.domain]
+name = "<your.public.dns.name>"      # FQDN clients reach this VM at
+email = "<contact@example.com>"      # ACME registration / renewal email
 ```
 
 `manifest_base64` carries the network's `network-manifest.json` as opaque
@@ -64,6 +65,23 @@ matches the manifest's `eth.chain_id`. The block-hash commitment is
 enforced deploy-side and at ceremony time; see `src/reth_genesis.rs`.
 Written verbatim to `reth-genesis.json`.
 
+`[network].bootnodes` is the network-wide devp2p bootnode list — the single
+source for the cohort's peer machines. It feeds reth verbatim (rendered into
+`reth-p2p.env`, see below) and, derived, the root-key fetch list the
+attestation service uses (`attestation.env`): `http://<bootnode host>:7878`
+per bootnode, with this node's own entry dropped. Deriving the peers instead
+of delivering a second list makes skew between the two unrepresentable — the
+bootnodes and the root-key peers are the same machines by construction.
+
+`[node].external_ip` is this VM's public IP — Azure NICs hold private
+addresses, so reth's NAT autodetection can't be trusted; it is also what
+identifies the node's own enode in the bootnode set. Both fields are
+validated structurally at POST time (`src/peers.rs`): each bootnode must be
+`enode://<128 hex pubkey>@host:port`, `external_ip` must parse as an IP address, and
+a node with `genesis_node = false` must end up with at least one root-key
+peer; a bad value fails the deploy with `400`. `bootnodes = []` is valid only
+on the genesis node (nothing to dial; it mints `root_key` itself).
+
 ## Per-service outputs
 
 After validation, tdx-init writes:
@@ -72,9 +90,10 @@ After validation, tdx-init writes:
 |---|---|---|
 | `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
 | `/run/seismic/conf/custodian.env` | `SEISMIC_CUSTODIAN_GENESIS_NODE=...` | `custodian.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-custodian-service`](../custodian-service) reads the genesis flag through clap `env=` |
-| `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | `attestation.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=` |
+| `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | `attestation.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=`. Derived from `[network].bootnodes`, not a config field |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
+| `/run/seismic/conf/reth-p2p.env` | `RETH_BOOTNODES_FLAG=...`, `RETH_NAT_FLAG=...` | `reth.service` (seismic-images) — loaded via `EnvironmentFile=`; each var holds a whole flag (`--bootnodes <csv>` / `--nat extip:<ip>`) or is empty, and the unit places the unquoted `$RETH_BOOTNODES_FLAG $RETH_NAT_FLAG` on the command line so empty vars drop out |
 
 Each downstream service reads its own native format (env-var pairs,
 either via systemd `EnvironmentFile=` or shell `source`); tdx-init is
