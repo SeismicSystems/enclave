@@ -1,3 +1,4 @@
+pub mod api;
 mod bootstrap;
 mod luks_status;
 mod network;

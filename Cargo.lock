@@ -5199,7 +5199,6 @@ dependencies = [
  "seismic-custodian",
  "seismic-custodian-ipc",
  "seismic-custodian-service",
- "seismic-enclave",
  "serde",
  "serde_json",
  "serial_test",
@@ -5271,16 +5270,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "seismic-enclave"
-version = "0.1.0"
-dependencies = [
- "jsonrpsee",
- "secp256k1",
- "seismic-crypto",
- "serde",
 ]
 
 [[package]]

@@ -12,7 +12,7 @@
 //! Strictly read-only and decoupled: we read the file on demand and never
 //! write it, so a status read can never affect the wipe (and vice versa).
 
-use seismic_enclave::LuksProvisioningStatus;
+use crate::api::LuksProvisioningStatus;
 
 /// tmpfs file the wipe producer writes (and removes on completion). Absent
 /// whenever no first-boot provisioning is in flight.
