@@ -188,45 +188,47 @@ pub fn aes_decrypt_aead(
         .map_err(|_| anyhow!("AES-AEAD decryption failed. Authentication tag does not match the given ciphertext/nonce/aad"))
 }
 
-/// Domain-separation registry for every AES key derived from an ECDH shared
+/// Domain-separation labels for every AES key derived from an ECDH shared
 /// secret. One variant per protocol context; [`derive_aes_key`] is the only
 /// HKDF-expand over this input-keying-material class, so this enum is the
 /// exhaustive list of its labels.
 ///
 /// Two derived keys are independent unless both the shared secret AND the
-/// label match. Keeping labels distinct per context makes key independence a
-/// structural property rather than an assumption about which keypairs are
-/// (re)used where — including adversarially, via the on-chain ECDH precompile,
-/// which lets any contract evaluate the [`EcdhPrecompile`](Self::EcdhPrecompile)
-/// derivation on caller-chosen keys.
+/// label match.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AesKeyDomain {
-    /// Client-to-TEE transaction I/O: encrypted calldata and signed-read
-    /// requests. Clients encrypt, TEEs decrypt.
+    /// Client-to-TEE transaction I/O: Clients encrypts calldata, TEEs decrypt.
+    /// Use for both seismic txs and for signed-reads (eth_calls).
+    /// Signed reads request and response share the same nonce (sent as part of the tx)
+    /// and so must use a different domain.
     TxRequest,
     /// TEE-to-client transaction I/O: signed-read return data. TEEs encrypt,
-    /// clients decrypt. Independent from [`TxRequest`](Self::TxRequest) so a
-    /// request/response pair can carry one public nonce without repeating an
-    /// AES-GCM `(key, nonce)` pair.
+    /// clients decrypt. Distinct from [`TxRequest`](Self::TxRequest) so a
+    /// request/response pair sharing one public nonce never repeats an
+    /// AES-GCM `(key, nonce)` pair — the separation the nonce-reuse fix needs.
     TxResponse,
-    /// The ECDH precompile's on-chain key derivation. Consensus-frozen: its
-    /// output is observable by contracts, so this label can never change, and
-    /// no other domain may ever reuse it.
+    /// The ECDH precompile's on-chain key derivation. Also on the original
+    /// `"aes-gcm key"` label, and consensus-frozen: its output is observable
+    /// by contracts, so it can never change.
     EcdhPrecompile,
     /// The enclave-to-enclave root-key bootstrap handshake. Both sides ship
     /// in the same release and nothing wrapped is persisted, so this label
-    /// (unlike the precompile's) can rotate with a coordinated upgrade.
+    /// can rotate with a coordinated upgrade.
     RootKeyWrap,
 }
 
 impl AesKeyDomain {
     const fn hkdf_info(self) -> &'static [u8] {
         match self {
-            Self::TxRequest => b"seismic/request/aes-256-gcm/v1",
+            // Original pre domain-separation label, kept for backward compat and to
+            // prevent a consensus breaking change (request path is decrypted in the block executor).
+            // TxRequest and TxResponse MUST be different since they share the same key and nonce,
+            // but its fine for TxRequest to share a label with the unrelated EcdhPrecompile with
+            // which it doesn't share a key.
+            Self::TxRequest => b"aes-gcm key",
             Self::TxResponse => b"seismic/response/aes-256-gcm/v1",
-            // Cannot change: live on testnet. Contracts observe (and may
-            // persist data keyed by) this precompile's output, and no fork
-            // can make data derived under an old label reachable again.
+            // Same pre domain-separation label, kept for backward compatibility.
+            // Shared with TxRequest; see above.
             Self::EcdhPrecompile => b"aes-gcm key",
             Self::RootKeyWrap => b"seismic/root-key-wrap/aes-256-gcm/v1",
         }
@@ -525,8 +527,10 @@ mod tests {
 
         let vectors = [
             (
+                // Same as `EcdhPrecompile` below: both keep the original
+                // `"aes-gcm key"` label (see `AesKeyDomain::TxRequest`).
                 AesKeyDomain::TxRequest,
-                "d958b910e65af59475e767c5fdcb8b2e3388b5d8aa2fbfaa01c08c422be6fd07",
+                "bf0dd6556618d1bf8d1602bf80be3a0f7cc729973829bb9acb75bd77770d5b90",
             ),
             (
                 AesKeyDomain::TxResponse,
@@ -558,6 +562,14 @@ mod tests {
         let response_key = derive_aes_key(&shared_secret, AesKeyDomain::TxResponse).unwrap();
 
         assert_ne!(request_key.as_slice(), response_key.as_slice());
+    }
+
+    /// The request path must keep the original `"aes-gcm key"` label: it is
+    /// decrypted in the block executor, so a new label would be a consensus
+    /// break. Pin it so it can't change without a deliberate, reviewed edit.
+    #[test]
+    fn request_keeps_the_original_label() {
+        assert_eq!(AesKeyDomain::TxRequest.hkdf_info(), b"aes-gcm key");
     }
 
     #[test]
