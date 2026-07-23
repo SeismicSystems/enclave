@@ -12,7 +12,7 @@ use anyhow::{Context, Result, anyhow};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::{PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret};
 use seismic_crypto::{
-    AESGCM_NONCE_SIZE, Nonce, aes_decrypt_aead, aes_encrypt_aead, derive_aes_key,
+    AESGCM_NONCE_SIZE, AesKeyDomain, Nonce, aes_decrypt_aead, aes_encrypt_aead, derive_aes_key,
 };
 
 /// A freshly minted ephemeral secp256k1 ECDH keypair for one handshake.
@@ -140,14 +140,16 @@ pub fn unwrap_root_key(
 
 /// Derive the symmetric handshake key from an ECDH shared secret.
 ///
-/// Reuses [`derive_aes_key`] so wrap and unwrap stay in lockstep with the rest
-/// of the enclave's ECDH-AES key schedule.
+/// Uses [`AesKeyDomain::RootKeyWrap`], the handshake's own domain-separation
+/// label: a key derived here is unusable in any other protocol context, and
+/// vice versa. Both custodian sides must run the same release.
 fn derive_handshake_key(
     sk: &SecretKey,
     pk: &PublicKey,
 ) -> Result<aes_gcm::Key<aes_gcm::Aes256Gcm>> {
     let shared = SharedSecret::new(pk, sk);
-    derive_aes_key(&shared).map_err(|e| anyhow!("deriving handshake AES key: {e}"))
+    derive_aes_key(&shared, AesKeyDomain::RootKeyWrap)
+        .map_err(|e| anyhow!("deriving handshake AES key: {e}"))
 }
 
 #[cfg(test)]
