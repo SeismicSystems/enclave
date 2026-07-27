@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
-# The three deployed binaries live under bin/; every crates/ member is a library.
-# The dir name is the crate; the arrow is the binary target it builds.
+# The three deployed binaries live under bin/; every crates/ member is a
+# library (some also build a tooling CLI behind their `cli` feature). The dir
+# name is the crate; the arrow is the binary target it builds.
 members = [
     "bin/tdx-init",              # -> tdx-init
     "bin/attestation-service",   # -> seismic-attestation-service
@@ -11,8 +12,9 @@ members = [
     "crates/attestation-rpc",
     "crates/crypto",
     "crates/custodian",
-    "crates/custodian-ipc",
+    "crates/custodian-ipc",          # -> custodian-ipc-cli (CLI)
     "crates/enclave-contract",
+    "crates/measurement-admission",  # -> seismic-measurement-admission (CLI)
     "crates/network-manifest",
 ]
 
@@ -34,10 +36,12 @@ seismic-crypto = { path = "crates/crypto" }
 seismic-custodian = { path = "crates/custodian" }
 seismic-custodian-ipc = { path = "crates/custodian-ipc" }
 seismic-custodian-service = { path = "bin/custodian-service" }
+seismic-measurement-admission = { path = "crates/measurement-admission" }
 seismic-network-manifest = { path = "crates/network-manifest" }
 
 # Other deps
 alloy = "1.0"
+alloy-primitives = { version = "1.0", default-features = false, features = ["std", "serde"] }
 aes-gcm = "0.10"
 anyhow = "1.0"
 attestation = { git = "https://github.com/flashbots/attested-tls", rev = "05a79a3f16a6d074bc10ce7aa29a3cd804fdc613" }

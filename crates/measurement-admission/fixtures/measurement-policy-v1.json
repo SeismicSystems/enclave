@@ -1,0 +1,44 @@
+[
+  {
+    "attestation_type": "azure-tdx",
+    "measurement_id": "seismic-dev_2026-07-02.5c3b5e.vhd",
+    "measurements": {
+      "pcr4": {
+        "expected_any": [
+          "d57063c0669599b885c43a0683436a3463ad49513ddb3996e6fc96040508fd8e"
+        ]
+      },
+      "pcr9": {
+        "expected_any": [
+          "3f761a6383e09d62ac10ecfea95c27e30de69176337243e7e594714d27f6ac45"
+        ]
+      },
+      "pcr11": {
+        "expected_any": [
+          "73f2825b7985f9d04eccb3c538793e51617d0d4560c63517d09233114fdd6b18"
+        ]
+      }
+    }
+  },
+  {
+    "attestation_type": "azure-tdx",
+    "measurement_id": "seismic-example_second-image.vhd",
+    "measurements": {
+      "pcr4": {
+        "expected_any": [
+          "4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a"
+        ]
+      },
+      "pcr9": {
+        "expected_any": [
+          "9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a"
+        ]
+      },
+      "pcr11": {
+        "expected_any": [
+          "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ]
+      }
+    }
+  }
+]
