@@ -27,7 +27,15 @@
 //! ```
 //!
 //! For debugging without enforcing PCR values, use `--accept-any` on `roundtrip`
-//! or `verify`.
+//! or `verify`. Both print every quoted PCR as sorted hex, so an actual boot can
+//! be compared against a `make measure` prediction, or against another
+//! node/boot/build.
+//!
+//! This example needs local vTPM access, so it only runs on the node itself. To
+//! collect the same measurements from a *remote* node over its attestation RPC —
+//! including a production node with no shell — use the `capture_measurements`
+//! example in `seismic-attestation-service`, which also emits a
+//! measurements-file policy record for direct diffing.
 
 #[cfg(target_os = "linux")]
 use clap::{Args as ClapArgs, Parser, Subcommand};
@@ -191,6 +199,36 @@ async fn verify(args: VerifyArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Azure PCRs as a `BTreeMap`, so output is ordered and diffable across nodes,
+/// boots, and builds. The backend hands back a `HashMap`, whose iteration order
+/// is not stable.
+#[cfg(target_os = "linux")]
+fn sorted_azure_pcrs(
+    verified: &VerifiedSeismicAttestation,
+) -> Option<std::collections::BTreeMap<u32, [u8; 32]>> {
+    match verified {
+        VerifiedSeismicAttestation::AzureTdx(azure) => Some(
+            azure
+                .guest_measurements
+                .pcrs
+                .iter()
+                .map(|(index, value)| (*index, *value))
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn print_pcrs(pcrs: &std::collections::BTreeMap<u32, [u8; 32]>) {
+    println!("\nQuoted PCRs (SHA-256), {} registers:", pcrs.len());
+    for (index, value) in pcrs {
+        let marker = if value == &[0u8; 32] { "  (zero)" } else { "" };
+        println!("  pcr{index:<2} = {}{marker}", hex::encode(value));
+    }
+    println!();
+}
+
 #[cfg(target_os = "linux")]
 fn generate_azure_exchange_message(
     binding: [u8; 64],
@@ -269,7 +307,16 @@ async fn read_exchange_message(
 
 #[cfg(target_os = "linux")]
 fn print_verified(verified: &VerifiedSeismicAttestation) {
-    println!("Verified Seismic attestation: {verified:#?}");
+    // Azure PCRs get a sorted hex table: the derived `HashMap` Debug prints
+    // decimal byte arrays in nondeterministic order, which is unreadable and
+    // impossible to diff between two captures.
+    match sorted_azure_pcrs(verified) {
+        Some(pcrs) => {
+            println!("Verified Azure TDX attestation.");
+            print_pcrs(&pcrs);
+        }
+        None => println!("Verified Seismic attestation: {verified:#?}"),
+    }
 }
 
 #[cfg(target_os = "linux")]
