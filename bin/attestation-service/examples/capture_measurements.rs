@@ -10,8 +10,13 @@
 //! cargo run -p seismic-attestation-service --example capture_measurements -- \
 //!   --url http://<node>:7878 \
 //!   --manifest /path/to/network-manifest.json \
-//!   --out-policy /tmp/observed.json --pcrs 4,9,11
+//!   --out-policy /tmp/observed.json
 //! ```
+//!
+//! All 24 registers are always printed. `--out-policy` writes only the
+//! admission-schema registers (Azure v1: pcr4, pcr9, pcr11), because a policy
+//! file enforces every register it lists and must therefore match what the
+//! admission ID covers. `--pcrs` overrides the set for experiments.
 //!
 //! The manifest is only read to derive `network_id`, which is its SHA-256. When
 //! the manifest isn't on this host, pass the hash instead — verification is
@@ -80,7 +85,10 @@ struct Cli {
     measurements: Option<std::path::PathBuf>,
 
     /// Restrict the emitted policy to these registers, e.g. `4,9,11`. Defaults
-    /// to every non-zero register.
+    /// to the Azure v1 schema set.
+    ///
+    /// Do not add pcr6 or pcr10: both carry per-VM-instance data, so a policy
+    /// containing either matches exactly one node.
     #[arg(long, value_name = "LIST")]
     pcrs: Option<String>,
 
@@ -213,32 +221,49 @@ fn print_pcrs(pcrs: &BTreeMap<u32, [u8; 32]>) {
     println!();
 }
 
-/// Pick the registers to emit: an explicit `4,9,11`-style list, or every
-/// non-zero register when no list is given.
+/// Registers bound by admission schema `seismic.azure-tdx.pcr4-pcr9-pcr11.v1`.
+const AZURE_V1_SCHEMA_PCRS: [u32; 3] = [4, 9, 11];
+
+/// Pick the registers to emit: an explicit `4,9,11`-style list, or the Azure
+/// v1 schema set by default.
+///
+/// The default is the *schema*, deliberately not a "whatever is non-zero"
+/// heuristic. A policy file enforces every register it lists, so it must
+/// contain exactly the registers the admission ID covers, or the joiner and
+/// the responder end up checking different things. Selecting by observed
+/// value would also sweep in registers that cannot appear in a policy at all:
+/// pcr6 and pcr10 differ per VM instance, and pcr17-22 read all-ones rather
+/// than zero because they are uninitialised DRTM registers.
 fn select_pcrs(
     pcrs: &BTreeMap<u32, [u8; 32]>,
     requested: Option<&str>,
 ) -> anyhow::Result<BTreeMap<u32, [u8; 32]>> {
-    let Some(requested) = requested else {
-        return Ok(pcrs
-            .iter()
-            .filter(|(_, value)| *value != &[0u8; 32])
-            .map(|(index, value)| (*index, *value))
-            .collect());
+    let indices: Vec<u32> = match requested {
+        Some(list) => {
+            list.split(',')
+                .map(|entry| {
+                    let entry = entry.trim();
+                    entry.trim_start_matches("pcr").parse::<u32>().map_err(|_| {
+                        anyhow::anyhow!("--pcrs entry is not a register index: {entry}")
+                    })
+                })
+                .collect::<anyhow::Result<Vec<u32>>>()?
+        }
+        None => AZURE_V1_SCHEMA_PCRS.to_vec(),
     };
 
-    requested
-        .split(',')
-        .map(|entry| {
-            let entry = entry.trim();
-            let index: u32 = entry
-                .trim_start_matches("pcr")
-                .parse()
-                .map_err(|_| anyhow::anyhow!("--pcrs entry is not a register index: {entry}"))?;
-            let value = pcrs
+    indices
+        .into_iter()
+        .map(|index| {
+            let value = *pcrs
                 .get(&index)
                 .ok_or_else(|| anyhow::anyhow!("pcr{index} is not present in the quote"))?;
-            Ok((index, *value))
+            if value == [0u8; 32] {
+                eprintln!("warning: pcr{index} is all-zero — nothing extended it");
+            } else if value == [0xffu8; 32] {
+                eprintln!("warning: pcr{index} is all-ones — uninitialised, not a measurement");
+            }
+            Ok((index, value))
         })
         .collect()
 }
