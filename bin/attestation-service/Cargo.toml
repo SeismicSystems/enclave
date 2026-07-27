@@ -34,6 +34,8 @@ tracing-subscriber.workspace = true
 rand.workspace = true
 
 [dev-dependencies]
+# Used by the `capture_measurements` example to render guest measurements.
+hex.workspace = true
 # Integration tests pair each served instance with a real key custodian:
 # the service crate's state/dispatch served over the ipc crate's socket server.
 seismic-custodian-ipc = { workspace = true, features = ["server"] }
