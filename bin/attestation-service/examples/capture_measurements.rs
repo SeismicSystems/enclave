@@ -114,6 +114,10 @@ struct Cli {
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
+    // Resolve everything that can fail on bad input before touching the
+    // network: fetching evidence costs a round-trip plus DCAP verification, so
+    // a typo in --pcrs should not be discovered on the far side of it.
+    let requested_pcrs = parse_pcr_list(args.pcrs.as_deref())?;
     let network_id = resolve_network_id(&args).await?;
     println!("Expecting network_id {network_id}");
 
@@ -165,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
     print_pcrs(&pcrs);
 
     if let Some(path) = &args.out_policy {
-        let selected = select_pcrs(&pcrs, args.pcrs.as_deref())?;
+        let selected = select_pcrs(&pcrs, &requested_pcrs)?;
         write_policy_record(path, &args.measurement_id, &selected).await?;
     }
 
@@ -224,8 +228,8 @@ fn print_pcrs(pcrs: &BTreeMap<u32, [u8; 32]>) {
 /// Registers bound by admission schema `seismic.azure-tdx.pcr4-pcr9-pcr11.v1`.
 const AZURE_V1_SCHEMA_PCRS: [u32; 3] = [4, 9, 11];
 
-/// Pick the registers to emit: an explicit `4,9,11`-style list, or the Azure
-/// v1 schema set by default.
+/// Which registers to emit: an explicit `4,9,11`-style list, or the Azure v1
+/// schema set by default.
 ///
 /// The default is the *schema*, deliberately not a "whatever is non-zero"
 /// heuristic. A policy file enforces every register it lists, so it must
@@ -234,26 +238,34 @@ const AZURE_V1_SCHEMA_PCRS: [u32; 3] = [4, 9, 11];
 /// value would also sweep in registers that cannot appear in a policy at all:
 /// pcr6 and pcr10 differ per VM instance, and pcr17-22 read all-ones rather
 /// than zero because they are uninitialised DRTM registers.
-fn select_pcrs(
-    pcrs: &BTreeMap<u32, [u8; 32]>,
-    requested: Option<&str>,
-) -> anyhow::Result<BTreeMap<u32, [u8; 32]>> {
-    let indices: Vec<u32> = match requested {
-        Some(list) => {
-            list.split(',')
-                .map(|entry| {
-                    let entry = entry.trim();
-                    entry.trim_start_matches("pcr").parse::<u32>().map_err(|_| {
-                        anyhow::anyhow!("--pcrs entry is not a register index: {entry}")
-                    })
-                })
-                .collect::<anyhow::Result<Vec<u32>>>()?
-        }
-        None => AZURE_V1_SCHEMA_PCRS.to_vec(),
+///
+/// Pure, so it can run before any network work.
+fn parse_pcr_list(requested: Option<&str>) -> anyhow::Result<Vec<u32>> {
+    let Some(list) = requested else {
+        return Ok(AZURE_V1_SCHEMA_PCRS.to_vec());
     };
 
+    list.split(',')
+        .map(|entry| {
+            let entry = entry.trim();
+            let index: u32 = entry
+                .trim_start_matches("pcr")
+                .parse()
+                .map_err(|_| anyhow::anyhow!("--pcrs entry is not a register index: {entry}"))?;
+            anyhow::ensure!(index <= 23, "--pcrs entry is out of range: pcr{index}");
+            Ok(index)
+        })
+        .collect()
+}
+
+/// Look up the selected registers in a verified quote.
+fn select_pcrs(
+    pcrs: &BTreeMap<u32, [u8; 32]>,
+    indices: &[u32],
+) -> anyhow::Result<BTreeMap<u32, [u8; 32]>> {
     indices
-        .into_iter()
+        .iter()
+        .copied()
         .map(|index| {
             let value = *pcrs
                 .get(&index)
