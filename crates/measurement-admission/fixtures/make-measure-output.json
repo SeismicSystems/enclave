@@ -1,0 +1,45 @@
+{
+    "measurement_id": "seismic-dev_2026-07-02.5c3b5e.vhd",
+    "measurements": {
+        "11": {
+            "expected": "73f2825b7985f9d04eccb3c538793e51617d0d4560c63517d09233114fdd6b18"
+        },
+        "12": {
+            "expected": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "13": {
+            "expected": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "15": {
+            "expected": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "4": {
+            "expected": "d57063c0669599b885c43a0683436a3463ad49513ddb3996e6fc96040508fd8e"
+        },
+        "8": {
+            "expected": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "9": {
+            "expected": "3f761a6383e09d62ac10ecfea95c27e30de69176337243e7e594714d27f6ac45"
+        }
+    },
+    "EventLog": {
+        "Events": [
+            {
+                "PCRIndex": 4,
+                "Digest": "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
+                "Description": "EV_EFI_ACTION: Calling EFI Application from Boot Option"
+            },
+            {
+                "PCRIndex": 9,
+                "Digest": "170cf31e16408267552ca7fd676134b9444778506b1e63f961cd607b6180d39f",
+                "Description": "EV_EVENT_TAG: Linux LOAD_FILE2 protocol: initrd (digest 170cf31e16408267552ca7fd676134b9444778506b1e63f961cd607b6180d39f)"
+            },
+            {
+                "PCRIndex": 11,
+                "Digest": "19a1a18d5ffbb0871f58ea35ca563b64a71a7eb959050a6fa801125b545c6678",
+                "Description": "EV_IPL: UKI section 1 data: 19a1a18d5ffbb0871f58ea35ca563b64a71a7eb959050a6fa801125b545c6678"
+            }
+        ]
+    }
+}

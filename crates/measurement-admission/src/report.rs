@@ -28,6 +28,9 @@ pub struct CompileReport {
     pub admission_ids: Vec<B256>,
     /// Per-record expansions, in document order.
     pub records: Vec<RecordReport>,
+    /// keccak256 of the canonical registry runtime bytecode the genesis
+    /// storage below pairs with ([`genesis::REGISTRY_RUNTIME_CODE_HASH`]).
+    pub registry_runtime_code_hash: B256,
     /// Complete registry genesis storage (slot -> value).
     pub registry_genesis_storage: BTreeMap<B256, B256>,
 }
@@ -56,6 +59,7 @@ impl CompileReport {
                     admission_id: record.admission_id(),
                 })
                 .collect(),
+            registry_runtime_code_hash: genesis::REGISTRY_RUNTIME_CODE_HASH,
             registry_genesis_storage: genesis::registry_genesis_storage(policy),
         }
     }

@@ -112,7 +112,7 @@ pub struct EthManifest {
     /// cross-artifact validation; not checked here).
     pub chain_id: u64,
     /// `keccak(rlp(header(reth-genesis.json)))`; commits to the full genesis
-    /// alloc including `UpgradeOperator` initial measurements.
+    /// alloc including `MeasurementRegistry` initial measurements.
     #[serde(deserialize_with = "hex_32")]
     pub genesis_hash: [u8; 32],
 }
@@ -133,7 +133,7 @@ pub struct SummitManifest {
 ///
 /// The same measurement set exists in two representations: the bootstrap
 /// artifact pinned by `bootstrap_policy_hash` (the joiner's source — readable
-/// before it can read any chain state) and `UpgradeOperator` genesis storage
+/// before it can read any chain state) and `MeasurementRegistry` genesis storage
 /// (the responder's source). Their consistency at genesis is a deploy-time
 /// validation; afterwards the contract carries the live policy while the
 /// artifact stays frozen.
@@ -158,20 +158,20 @@ pub struct MeasurementsManifest {
 /// alloc for verifiers that don't hold the genesis file.
 ///
 /// Fields are named by role, not by contract class name, so the hashed
-/// artifact schema survives contract renames. Both contracts exist in this
-/// repo's `enclave-contract` crate and have well-known addresses there
+/// artifact schema survives contract renames. The well-known addresses are
+/// defined in this repo's `enclave-contract` crate
 /// (`UPGRADE_OPERATOR_ADDRESS`, `UPGRADE_MULTISIG_ADDRESS`).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContractsManifest {
-    /// The measurement registry (today `UpgradeOperator.sol`): the allowlist
+    /// The measurement registry (`MeasurementRegistry.sol`): the allowlist
     /// new Seismic nodes are checked against (`isAccepted()`). This is the
     /// *live* policy, updated on-chain over the network's lifetime —
     /// `bootstrap_policy_hash` freezes only the genesis-time set.
     #[serde(deserialize_with = "hex_20")]
     pub registry: [u8; 20],
     /// The authority allowed to mutate the registry (today
-    /// `MultisigUpgradeOperator.sol`).
+    /// `MeasurementAuthorityDev.sol`).
     #[serde(deserialize_with = "hex_20")]
     pub authority: [u8; 20],
 }
