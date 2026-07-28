@@ -41,6 +41,18 @@ pub const ACCEPTED_COUNT_SLOT: B256 =
 /// registry seeded from a compiled policy always starts at 1.
 pub const GENESIS_POLICY_REVISION: u64 = 1;
 
+/// keccak256 of the canonical `MeasurementRegistry` deployed (runtime)
+/// bytecode — `deployedBytecode.object` in the committed
+/// `contracts/artifacts/MeasurementRegistry.json` of the Seismic repo (the
+/// artifact the reth genesis builder installs at the registry predeploy).
+/// The slot formulas in this module are meaningful only for the contract
+/// build they were frozen against, so deploy validation pairs the compiled
+/// genesis storage with exactly this runtime code in the chain spec's
+/// registry account. A rebuilt contract is a deliberate re-pin here plus a
+/// regenerated compiled fixture.
+pub const REGISTRY_RUNTIME_CODE_HASH: B256 =
+    b256!("0xd6408a266c8582a56d8583bb56e19fde931f318402f7092a01c6dadf24ae4fe4");
+
 /// `Status.Accepted` as a stored word.
 const STATUS_ACCEPTED: B256 =
     b256!("0x0000000000000000000000000000000000000000000000000000000000000001");

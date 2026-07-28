@@ -29,9 +29,11 @@ use std::collections::HashMap;
 
 pub mod genesis;
 pub mod policy;
+pub mod promote;
 pub mod report;
 
 pub use policy::{CompiledPolicy, CompiledRecord, PolicyError, compile_policy};
+pub use promote::{PromoteError, promote_measurements};
 pub use report::CompileReport;
 
 /// Azure TDX v1 admission schema: a Seismic guest image on Azure is
