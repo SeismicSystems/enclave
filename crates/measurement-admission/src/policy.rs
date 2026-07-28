@@ -117,7 +117,7 @@ struct RawRecord {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawEntry {
+pub(crate) struct RawEntry {
     #[serde(default)]
     expected: Option<String>,
     #[serde(default)]
@@ -197,7 +197,7 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
 /// Normalize a register key: a bare index (`"4"`) or a case-insensitive
 /// `pcr` prefix (`"pcr4"`, `"PCR4"`), 0-23 — the spellings attested-tls's
 /// `parse_azure_pcr_index` accepts.
-fn parse_pcr_key(key: &str) -> Option<u32> {
+pub(crate) fn parse_pcr_key(key: &str) -> Option<u32> {
     let digits = if key.get(..3).is_some_and(|p| p.eq_ignore_ascii_case("pcr")) {
         &key[3..]
     } else {
@@ -211,7 +211,7 @@ fn parse_pcr_key(key: &str) -> Option<u32> {
 
 /// Resolve one register entry to its single accepted value: exactly one of
 /// `expected` / `expected_any`, binding exactly one 32-byte bare-hex value.
-fn entry_value(record: &str, index: u32, entry: &RawEntry) -> Result<B256, PolicyError> {
+pub(crate) fn entry_value(record: &str, index: u32, entry: &RawEntry) -> Result<B256, PolicyError> {
     let value = match (&entry.expected, &entry.expected_any) {
         (Some(_), Some(_)) => {
             return Err(PolicyError::BothExpectedForms {
