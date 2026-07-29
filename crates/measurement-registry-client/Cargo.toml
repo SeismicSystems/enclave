@@ -1,0 +1,18 @@
+[package]
+name = "seismic-measurement-registry-client"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Read-only Alloy client for the on-chain MeasurementRegistry"
+
+[dependencies]
+alloy-contract.workspace = true
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }
