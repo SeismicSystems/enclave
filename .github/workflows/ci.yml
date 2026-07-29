@@ -76,29 +76,19 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      # The reth_registry integration test boots a real seismic-reth dev node,
-      # so this job builds one from source with a shared cache — the same
-      # arrangement as the monorepo's client-py.yml/client-ts.yml reth jobs,
-      # and covered by the same TODO there: replace the checkout+build with a
-      # setup-sreth action downloading a prebuilt nightly binary.
-      - uses: actions/checkout@v4
-        with:
-          repository: SeismicSystems/seismic-reth
-          path: seismic-reth
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            . -> target
-            seismic-reth -> target
       - name: Install TPM build dependencies
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
-      - name: Build seismic-reth
-        run: cargo build --bin seismic-reth
-        working-directory: seismic-reth
+      # The reth_registry integration test boots a real seismic-reth dev
+      # node from a prebuilt nightly release binary.
+      - id: sreth
+        uses: SeismicSystems/seismic/.github/actions/setup-sreth@main
+        with:
+          version: nightly
       - name: Run measurement-admission tests
         env:
-          SEISMIC_RETH_BIN: ${{ github.workspace }}/seismic-reth/target/debug/seismic-reth
+          SEISMIC_RETH_BIN: ${{ steps.sreth.outputs.seismic-reth-path }}
         run: cargo test -p seismic-measurement-admission
 
   attestation_service_tdx_tests:
