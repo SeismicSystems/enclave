@@ -45,7 +45,8 @@ list passes through byte-verbatim), and compiles its own output before
 returning. `compile` prints a JSON report: policy hash, admission IDs (total
 and per-record), the canonical registry runtime-code hash, and the complete
 registry genesis storage map. Both read stdin for `-`. The committed fixture
-pairs under `fixtures/` are the golden vectors for the whole pipeline.
+pairs under `fixtures/golden/` are the golden vectors for the whole pipeline;
+the rest of `fixtures/` is test-harness input, not byte-pinned.
 
 ## Policy review and updates
 

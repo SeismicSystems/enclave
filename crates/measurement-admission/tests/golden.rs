@@ -7,10 +7,10 @@
 
 use seismic_measurement_admission::{CompileReport, compile_policy, promote_measurements};
 
-const POLICY: &[u8] = include_bytes!("../fixtures/measurement-policy-v1.json");
-const COMPILED: &str = include_str!("../fixtures/measurement-policy-v1.compiled.json");
-const RAW_MEASUREMENTS: &[u8] = include_bytes!("../fixtures/make-measure-output.json");
-const PROMOTED: &[u8] = include_bytes!("../fixtures/make-measure-output.promoted.json");
+const POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.json");
+const COMPILED: &str = include_str!("../fixtures/golden/measurement-policy-v1.compiled.json");
+const RAW_MEASUREMENTS: &[u8] = include_bytes!("../fixtures/golden/make-measure-output.json");
+const PROMOTED: &[u8] = include_bytes!("../fixtures/golden/make-measure-output.promoted.json");
 
 #[test]
 fn fixture_compiles_to_committed_report() {

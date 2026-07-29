@@ -11,7 +11,7 @@ use attestation::measurements::{MeasurementPolicy, MultiMeasurements};
 use seismic_measurement_admission::{AzureTdxV1Measurements, compile_policy};
 use std::collections::HashMap;
 
-const POLICY: &[u8] = include_bytes!("../fixtures/measurement-policy-v1.json");
+const POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.json");
 
 /// Present a tuple the way verified Azure evidence would surface it.
 fn as_azure_evidence(tuple: &AzureTdxV1Measurements) -> MultiMeasurements {

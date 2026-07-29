@@ -1,6 +1,6 @@
 # Integration Tests
 
-`run_integration_tests.sh` runs the live-TEE attestation-service integration
+`run_attestation_service_tdx_tests.sh` runs the live-TEE attestation-service integration
 tests on the self-hosted Azure TDX runner.
 
 ## Covered flows
@@ -42,8 +42,8 @@ executes it with `sudo`.
 ## Running
 
 ```bash
-./scripts/run_integration_tests.sh
+./scripts/run_attestation_service_tdx_tests.sh
 ```
 
-CI runs the same script in the `integration_tests` job in
+CI runs the same script in the `attestation_service_tdx_tests` job in
 `.github/workflows/ci.yml`.
