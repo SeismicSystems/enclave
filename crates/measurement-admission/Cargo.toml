@@ -19,7 +19,9 @@ sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+alloy.workspace = true
 attestation.workspace = true
+tokio.workspace = true
 
 [features]
 # The policy-compiler CLI shelled out to by non-Rust deploy tooling; Rust
