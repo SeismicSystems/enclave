@@ -47,13 +47,17 @@ jobs:
       # the native tpm2-tss libraries; GitHub-hosted runners don't ship them.
       - name: Install TPM build dependencies
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
-      # enclave-contract's multisig integration test spawns a local `anvil` and
-      # builds the (plain Solidity) upgrade contracts with `forge`. Vanilla
-      # foundry is enough: the contracts use no shielded types, so no Seismic
-      # toolchain (sforge/sanvil) is needed — and sanvil would in fact break it,
-      # since it forces every tx through the encrypted Seismic path.
-      - name: Install foundry (forge + anvil)
-        uses: foundry-rs/foundry-toolchain@v1
+      # Keep the registry client's one-method read interface tied to the
+      # canonical artifact that feeds reth genesis. The artifact remains owned
+      # by the seismic repo; this checkout prevents a second local ABI copy.
+      - name: Check out canonical MeasurementRegistry artifact
+        uses: actions/checkout@v4
+        with:
+          repository: SeismicSystems/seismic
+          ref: main
+          path: .context/seismic
+          sparse-checkout: contracts/artifacts/MeasurementRegistry.json
+          sparse-checkout-cone-mode: false
       # The workspace pass builds seismic-custodian-ipc with default features
       # only, which compiles out the `server` module (and its ACL tests) and
       # skips the `cli` binary entirely (required-features). Cover them here.
@@ -68,6 +72,10 @@ jobs:
           cargo test --workspace
           --exclude seismic-attestation-service
           --exclude seismic-measurement-admission
+      - name: Check MeasurementRegistry ABI parity
+        env:
+          MEASUREMENT_REGISTRY_ARTIFACT: ${{ github.workspace }}/.context/seismic/contracts/artifacts/MeasurementRegistry.json
+        run: cargo test -p seismic-measurement-registry-client --test abi_parity -- --ignored
       - name: Run attestation-service unit tests
         run: cargo test -p seismic-attestation-service --lib --bins
 

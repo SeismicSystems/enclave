@@ -29,7 +29,7 @@ library they share.
 | `attestation-rpc` | Purpose-specific attestation JSON-RPC types. |
 | `measurement-admission` | Admission-ID derivation and measurement-policy compiler for the on-chain `MeasurementRegistry` (plus the policy-compiler CLI behind the `cli` feature). |
 | `network-manifest` | Network-manifest schema (`NetworkManifestV1`) and `network_id` derivation. |
-| `enclave-contract` | Rust interface to the enclave's on-chain contract. |
+| `measurement-registry-client` | Read-only Alloy client for the on-chain `MeasurementRegistry`. |
 
 ## Building
 

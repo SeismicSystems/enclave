@@ -158,9 +158,9 @@ pub struct MeasurementsManifest {
 /// alloc for verifiers that don't hold the genesis file.
 ///
 /// Fields are named by role, not by contract class name, so the hashed
-/// artifact schema survives contract renames. The well-known addresses are
-/// defined in this repo's `enclave-contract` crate
-/// (`UPGRADE_OPERATOR_ADDRESS`, `UPGRADE_MULTISIG_ADDRESS`).
+/// artifact schema survives contract renames. The registry's well-known
+/// genesis-predeploy address is also exposed as
+/// `seismic_measurement_registry_client::MEASUREMENT_REGISTRY_ADDRESS`.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContractsManifest {
