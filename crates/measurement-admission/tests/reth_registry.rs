@@ -29,33 +29,14 @@ use alloy::{
     primitives::{Address, B256, U256, address, keccak256},
     providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
-    sol,
 };
 use seismic_measurement_admission::{
     compile_policy,
     genesis::{REGISTRY_RUNTIME_CODE_HASH, registry_genesis_storage},
 };
 
-sol! {
-    #[sol(rpc)]
-    interface IMeasurementRegistry {
-        function isAccepted(bytes32 admissionId) external view returns (bool);
-        function statusOf(bytes32 admissionId) external view returns (uint8);
-        function bootstrapPolicyHash() external view returns (bytes32);
-        function activePolicyHash() external view returns (bytes32);
-        function policyRevision() external view returns (uint64);
-        function acceptedCount() external view returns (uint256);
-    }
-
-    #[sol(rpc)]
-    interface IMeasurementAuthorityDev {
-        function applyPolicyUpdate(
-            bytes32[] calldata accept,
-            bytes32[] calldata deprecate,
-            bytes32 newActivePolicyHash
-        ) external;
-    }
-}
+mod common;
+use common::{IMeasurementAuthorityDev, IMeasurementRegistry};
 
 const REGISTRY: Address = address!("0x1000000000000000000000000000000000000001");
 const AUTHORITY: Address = address!("0x1000000000000000000000000000000000000002");
