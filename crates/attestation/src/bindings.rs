@@ -1,13 +1,15 @@
 //! Helpers for deriving Seismic protocol-binding digests.
 //!
 //! Every binding is `SHA256(domain || network_id || fixed-length fields ||
-//! optional variable tail)`. The layout rule: domain string first, then only
-//! fixed-length fields (`network_id` 32, nonces 32, compressed secp256k1
-//! points 33, epochs 8 BE), at most one variable-length field and only in tail
-//! position — this keeps plain concatenation injective without length
-//! prefixes. The fixed sizes are enforced by the signatures. Both sides of the
-//! root-key handshake verify the peer's binding against *their own*
-//! [`NetworkId`]; mismatch is a hard reject.
+//! optional variable tail)`; [`founding_summit_keys_binding`] is the one
+//! exception, predating the manifest and so omitting `network_id`. The layout
+//! rule: domain string first, then only fixed-length fields (`network_id` 32,
+//! nonces 32, compressed secp256k1 points 33, ed25519 32, BLS12-381 MinPk 48,
+//! epochs 8 BE), at most one variable-length field and only in tail position —
+//! this keeps plain concatenation injective without length prefixes. The fixed
+//! sizes are enforced by the signatures. Both sides of the root-key handshake
+//! verify the peer's binding against *their own* [`NetworkId`]; mismatch is a
+//! hard reject.
 //!
 //! These helpers return 32-byte SHA-256 digests. Attestation evidence generation
 //! takes a 64-byte input, so use [`binding64_from_digest32`] before calling
@@ -64,8 +66,7 @@ pub fn root_key_response_binding(
 /// deploy tool recomputes the binding from its own copies of all three fields.
 /// A passing quote proves the node holds the expected manifest (right network,
 /// not a clone or wrong fork) and minted the evidence for this exact request
-/// (`deployment_nonce` is per-request — distinct from the manifest's
-/// `genesis_nonce` — so captured quotes can't be replayed).
+/// (`deployment_nonce` is per-request, so captured quotes can't be replayed).
 ///
 /// `context` identifies what is being preflighted, so an answer to one
 /// question can't be repurposed for another — e.g. a hash of the exact
@@ -81,6 +82,39 @@ pub fn deploy_preflight_binding(
     hasher.update(network_id.as_bytes());
     hasher.update(deployment_nonce);
     hasher.update(context);
+    hasher.finalize().into()
+}
+
+/// Binding for one founding node's summit keys, harvested before the manifest
+/// exists.
+///
+/// Per node, not per cohort: each founding node generates its own keys and
+/// quotes over its own binding, so an N-node ceremony yields N distinct digests
+/// and deploy harvests each node separately.
+///
+/// The pre-manifest `summit-key-holder` generates both keys in RAM and quotes
+/// over this binding; deploy's harvest recomputes it from the nonce it sent and
+/// the pubkeys it got back, then re-checks it at assemble time against that
+/// node's pinned pubkeys. `harvest_nonce` is fresh per request, so an earlier
+/// harvest's quote can't be replayed.
+///
+/// No `network_id`: it doesn't exist yet, since these pubkeys are inputs to the
+/// manifest that defines it. Pinning them into the manifest is what supplies the
+/// intent binding `network_id` carries elsewhere.
+///
+/// A passing quote proves measured code generated the keys and holds the
+/// corresponding private keys, so possession, TEE custody, and honest generation
+/// (no rogue-key choice) all follow from the measurement.
+pub fn founding_summit_keys_binding(
+    harvest_nonce: &[u8; 32],
+    summit_node_pk: &[u8; 32],      // ed25519 node identity
+    summit_consensus_pk: &[u8; 48], // BLS12-381 MinPk
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"seismic-founding-keys-v1:");
+    hasher.update(harvest_nonce);
+    hasher.update(summit_node_pk);
+    hasher.update(summit_consensus_pk);
     hasher.finalize().into()
 }
 
@@ -136,6 +170,14 @@ mod tests {
             )),
             "780975fd8a3e5a2730261c967db281fc639360ecbc2f166fed1465f5dfae81d7"
         );
+        assert_eq!(
+            hex::encode(founding_summit_keys_binding(
+                &[0x77; 32],
+                &[0x88; 32],
+                &[0x99; 48]
+            )),
+            "8973b984dc10f809ebfaacdcad64b8cc5a647cf24e4bc27b3833cc234a9290e5"
+        );
     }
 
     #[test]
@@ -149,6 +191,19 @@ mod tests {
         let binding_net_b =
             root_key_request_binding(&NetworkId::from_bytes([0xBB; 32]), &nonce, &eph_pk_b);
         assert_ne!(binding_net_a, binding_net_b);
+    }
+
+    // The harvest nonce plays the anti-replay role `network_id` plays in the
+    // post-founding bindings: one node's keys harvested twice must produce two
+    // different bindings, so an earlier harvest's quote can't be replayed.
+    #[test]
+    fn bindings_diverge_across_harvests() {
+        let node_pk = [0x88; 32];
+        let consensus_pk = [0x99; 48];
+
+        let harvest_a = founding_summit_keys_binding(&[0xAA; 32], &node_pk, &consensus_pk);
+        let harvest_b = founding_summit_keys_binding(&[0xBB; 32], &node_pk, &consensus_pk);
+        assert_ne!(harvest_a, harvest_b);
     }
 
     #[test]
