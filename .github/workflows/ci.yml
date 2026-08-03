@@ -47,9 +47,9 @@ jobs:
       # the native tpm2-tss libraries; GitHub-hosted runners don't ship them.
       - name: Install TPM build dependencies
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
-      # Keep the registry client's one-method read interface tied to the
-      # canonical artifact that feeds reth genesis. The artifact remains owned
-      # by the seismic repo; this checkout prevents a second local ABI copy.
+      # Keep the Rust registry interfaces and the registry runtime-code pin tied
+      # to the canonical artifact that feeds reth genesis. The artifact remains
+      # owned by the seismic repo; this checkout prevents a local ABI copy.
       - name: Check out canonical MeasurementRegistry artifact
         uses: actions/checkout@v4
         with:
@@ -72,10 +72,16 @@ jobs:
           cargo test --workspace
           --exclude seismic-attestation-service
           --exclude seismic-measurement-admission
+      # Both parity targets read the same artifact and need no seismic-reth
+      # binary, so they run here rather than in measurement_admission_tests:
+      # the client's runtime read binding, and the admission crate's full
+      # protocol interface plus its registry runtime-code pin.
       - name: Check MeasurementRegistry ABI parity
         env:
           MEASUREMENT_REGISTRY_ARTIFACT: ${{ github.workspace }}/.context/seismic/contracts/artifacts/MeasurementRegistry.json
-        run: cargo test -p seismic-measurement-registry-client --test abi_parity -- --ignored
+        run: >-
+          cargo test -p seismic-measurement-registry-client --test abi_parity -- --ignored
+          && cargo test -p seismic-measurement-admission --test registry_abi -- --ignored
       - name: Run attestation-service unit tests
         run: cargo test -p seismic-attestation-service --lib --bins
 
