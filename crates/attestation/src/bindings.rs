@@ -107,7 +107,7 @@ pub fn deploy_preflight_binding(
 /// (no rogue-key choice) all follow from the measurement.
 pub fn founding_summit_keys_binding(
     harvest_nonce: &[u8; 32],
-    summit_node_pk: &[u8; 32], // ed25519 node identity
+    summit_node_pk: &[u8; 32],      // ed25519 node identity
     summit_consensus_pk: &[u8; 48], // BLS12-381 MinPk
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();
