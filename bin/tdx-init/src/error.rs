@@ -15,6 +15,9 @@ pub enum TdxInitError {
     #[error("invalid reth genesis: {0}")]
     InvalidRethGenesis(String),
 
+    #[error("invalid summit genesis: {0}")]
+    InvalidSummitGenesis(String),
+
     #[error("invalid peer config: {0}")]
     InvalidPeers(String),
 
@@ -37,6 +40,10 @@ impl IntoResponse for TdxInitError {
             TdxInitError::InvalidRethGenesis(msg) => (
                 StatusCode::BAD_REQUEST,
                 format!("invalid reth genesis: {msg}"),
+            ),
+            TdxInitError::InvalidSummitGenesis(msg) => (
+                StatusCode::BAD_REQUEST,
+                format!("invalid summit genesis: {msg}"),
             ),
             TdxInitError::InvalidPeers(msg) => (
                 StatusCode::BAD_REQUEST,
