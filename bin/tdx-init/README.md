@@ -35,6 +35,7 @@ Unknown top-level sections or fields are rejected — see
 [network]                            # coordinator-produced; a function of the network, not of this node
 manifest_base64 = "eyJib290c3RyYXBfbWVhc3VyZW1lbn..."
 reth_genesis_base64 = "eyJjb25maWciOnsiY2hhaW5JZCI..."
+summit_genesis_base64 = "bmFtZXNwYWNlID0gInNlaXNtaWM..."
 bootnodes = ["enode://<128 hex pubkey>@host:port"]  # the cohort's peers; [] only on the genesis node
 
 [node]                               # this node only
@@ -54,7 +55,12 @@ verbatim to `network-manifest.json`, never parse-and-re-serialize. The
 deploy tool's manifest-assembly step produces the value; the schema's
 authoritative parser is the sibling
 [`seismic-attestation`](../../crates/attestation) crate, kept in lockstep
-with this crate via its shared fixture.
+with this crate via its shared fixture. It is also the document that pins the
+other two `[network]` artifacts — `eth.genesis_hash` commits to
+`reth_genesis_base64`'s bytes and `summit.genesis_config_digest` to
+`summit_genesis_base64`'s — so the three are one assembled set: pairing a
+manifest with a genesis it doesn't pin produces a node that can't join the
+cohort it claims to belong to.
 
 `reth_genesis_base64` carries the reth genesis JSON (chain spec) every
 node's reth boots from. It is network-wide like the manifest, whose
@@ -64,6 +70,21 @@ so POST-time validation is structural: valid JSON whose `config.chainId`
 matches the manifest's `eth.chain_id`. The block-hash commitment is
 enforced deploy-side and at ceremony time; see `src/reth_genesis.rs`.
 Written verbatim to `reth-genesis.json`.
+
+`summit_genesis_base64` carries the summit genesis TOML — the consensus-layer
+genesis every node's summit boots from. It is complete at delivery (the
+founding ceremony harvests the validator set into it before the POST), and the
+manifest's `summit.genesis_config_digest` pins it: summit's own SHA-256 over a
+domain-prefixed SSZ serialization of the genesis, covering the consensus
+parameters and every validator's node/consensus pubkeys and withdrawal
+credentials, but not `ip_address`. tdx-init cannot recompute that digest
+without reimplementing summit's SSZ layout, and doesn't need to — deploy
+verifies it against the manifest pin before POSTing, and summit derives its
+P2P and signing domains from `chain_domain(config_digest)`, so a node fed a
+divergent genesis can't complete a handshake. POST-time validation is
+therefore structural, like the reth half: valid TOML whose `namespace` matches
+the manifest's `summit.namespace` (`src/summit_genesis.rs`). Written verbatim
+to `summit-genesis.toml`.
 
 `[network].bootnodes` is the network-wide devp2p bootnode list — the single
 source for the cohort's peer machines. It feeds reth verbatim (rendered into
@@ -93,6 +114,7 @@ After validation, tdx-init writes:
 | `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | `attestation.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=`. Derived from `[network].bootnodes`, not a config field |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
+| `/run/seismic/conf/summit-genesis.toml` | verbatim summit genesis bytes | `summit.service` (seismic-images) — passed to `summit --genesis-path` |
 | `/run/seismic/conf/reth-p2p.env` | `RETH_BOOTNODES_FLAG=...`, `RETH_NAT_FLAG=...` | `reth.service` (seismic-images) — loaded via `EnvironmentFile=`; each var holds a whole flag (`--bootnodes <csv>` / `--nat extip:<ip>`) or is empty, and the unit places the unquoted `$RETH_BOOTNODES_FLAG $RETH_NAT_FLAG` on the command line so empty vars drop out |
 
 Each downstream service reads its own native format (env-var pairs,

@@ -31,8 +31,13 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
         &config.network.reth_genesis_base64,
         manifest.chain_id,
     )?;
+    let summit_genesis = crate::summit_genesis::decode_and_validate(
+        &config.network.summit_genesis_base64,
+        &manifest.namespace,
+    )?;
     write_network_manifest(conf_dir, &manifest).await?;
     write_reth_genesis(conf_dir, &genesis).await?;
+    write_summit_genesis(conf_dir, &summit_genesis).await?;
     Ok(())
 }
 
@@ -57,6 +62,15 @@ async fn write_network_manifest(
 /// itself (`--chain`), so tdx-init never re-renders it.
 async fn write_reth_genesis(conf_dir: &Path, genesis_bytes: &[u8]) -> Result<()> {
     let path = conf_dir.join("reth-genesis.json");
+    write_with_mode(&path, genesis_bytes, DEFAULT_FILE_MODE).await?;
+    info!("wrote {}", path.display());
+    Ok(())
+}
+
+/// Write the validated summit genesis bytes verbatim: summit parses the file
+/// itself (`--genesis-path`), so tdx-init never re-renders it.
+async fn write_summit_genesis(conf_dir: &Path, genesis_bytes: &[u8]) -> Result<()> {
+    let path = conf_dir.join("summit-genesis.toml");
     write_with_mode(&path, genesis_bytes, DEFAULT_FILE_MODE).await?;
     info!("wrote {}", path.display());
     Ok(())
@@ -156,6 +170,12 @@ mod tests {
                 reth_genesis_base64: base64::engine::general_purpose::STANDARD.encode(
                     crate::reth_genesis::tests::genesis_json(
                         crate::reth_genesis::tests::FIXTURE_CHAIN_ID,
+                    ),
+                ),
+                // A summit genesis whose namespace matches the fixture manifest's.
+                summit_genesis_base64: base64::engine::general_purpose::STANDARD.encode(
+                    crate::summit_genesis::tests::genesis_toml(
+                        crate::summit_genesis::tests::FIXTURE_NAMESPACE,
                     ),
                 ),
                 bootnodes: vec![],
@@ -303,6 +323,20 @@ mod tests {
         let written = std::fs::read(tmp.path().join("reth-genesis.json")).unwrap();
         let expected =
             crate::reth_genesis::tests::genesis_json(crate::reth_genesis::tests::FIXTURE_CHAIN_ID);
+        assert_eq!(written, expected);
+    }
+
+    #[tokio::test]
+    async fn writes_summit_genesis_verbatim() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = sample_config(true);
+
+        write_service_configs(tmp.path(), &cfg).await.unwrap();
+
+        let written = std::fs::read(tmp.path().join("summit-genesis.toml")).unwrap();
+        let expected = crate::summit_genesis::tests::genesis_toml(
+            crate::summit_genesis::tests::FIXTURE_NAMESPACE,
+        );
         assert_eq!(written, expected);
     }
 

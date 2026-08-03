@@ -69,16 +69,19 @@ impl fmt::Debug for NetworkId {
 ///
 /// - `eth.chain_id` — kills transaction replay (EIP-155): a tx signed for one
 ///   network is invalid on another.
-/// - `genesis_nonce` (via `network_id`) — kills attestation-transcript
-///   replay: quotes and root-key handshake bindings from one network can't
-///   verify on a clone deployment.
+/// - `summit.genesis_config_digest` (via `network_id`) — kills
+///   attestation-transcript replay: quotes and root-key handshake bindings
+///   from one network can't verify on a clone deployment. The digest covers
+///   the validator pubkeys harvested during that founding, so two foundings
+///   cannot share one — distinct deployments get distinct `network_id`s by
+///   construction, with no authored nonce needed.
 /// - `summit.namespace` — kills BLS consensus-signature replay: without a
 ///   distinct signing domain, a validator key active on two chains (cloned
 ///   devnets, a fork) produces votes valid on both — manufactured
 ///   equivocation.
 ///
-/// Only `genesis_nonce` is guaranteed to differ between clone deployments;
-/// operators must vary `eth.chain_id` and `summit.namespace` too for the
+/// Only `summit.genesis_config_digest` differs between clone deployments for
+/// free; operators must vary `eth.chain_id` and `summit.namespace` too for the
 /// other two layers to hold.
 ///
 /// Parsing is strict: unknown keys are rejected, so two verifiers can never
@@ -92,9 +95,6 @@ pub struct NetworkManifestV1 {
     pub manifest_version: u64,
     /// Human label; intentionally part of the hash (intent is identity).
     pub name: String,
-    /// Fresh per deployment ceremony; the clone-deployment uniquifier.
-    #[serde(deserialize_with = "hex_32")]
-    pub genesis_nonce: [u8; 32],
     pub eth: EthManifest,
     pub summit: SummitManifest,
     pub measurements: MeasurementsManifest,
@@ -120,11 +120,18 @@ pub struct EthManifest {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SummitManifest {
-    /// SHA-256 of the summit network-params template file bytes (the
-    /// pre-`fill-genesis-template` artifact, no `[[validators]]`).
+    /// Summit's own `config_digest` of the complete founding `genesis.toml`:
+    /// SHA-256 over summit's domain-prefixed SSZ serialization, computed by
+    /// `summit genesis digest <file>`. Covers the consensus parameters plus
+    /// every validator's ed25519 node pubkey, BLS consensus pubkey, and
+    /// withdrawal credentials; excludes `ip_address` (summit annotates it
+    /// "network topology, not consensus identity"), so refreshing a
+    /// delivered IP never changes `network_id`. It is also the value summit
+    /// derives `chain_domain` from, so live nodes already enforce agreement
+    /// on everything it covers.
     #[serde(deserialize_with = "hex_32")]
-    pub genesis_template_hash: [u8; 32],
-    /// BLS signature domain separator; duplicated from the template so
+    pub genesis_config_digest: [u8; 32],
+    /// BLS signature domain separator; duplicated from the genesis so
     /// verifiers don't need to parse TOML.
     pub namespace: String,
 }
@@ -256,13 +263,12 @@ mod tests {
 
         assert_eq!(manifest.manifest_version, 1);
         assert_eq!(manifest.name, "seismic-devnet-3");
-        assert_eq!(manifest.genesis_nonce, [0xAA; 32]);
         assert_eq!(manifest.eth.chain_id, 5124);
         assert_eq!(
             hex::encode(manifest.eth.genesis_hash),
             "78ab9057bb67f95a6182969c5d755ac02802c98c0d2f0d8daeb52f4bddc60be5"
         );
-        assert_eq!(manifest.summit.genesis_template_hash, [0xBB; 32]);
+        assert_eq!(manifest.summit.genesis_config_digest, [0xBB; 32]);
         assert_eq!(manifest.summit.namespace, "seismic-devnet-3");
         assert_eq!(manifest.measurements.bootstrap_policy_hash, [0xCC; 32]);
         assert_eq!(
@@ -279,7 +285,7 @@ mod tests {
         let network_id = NetworkId::from_manifest_bytes(FIXTURE);
         assert_eq!(
             network_id.to_string(),
-            "0xc4d4721b2e287df26022e6d27c8cf772841a872b6be08b1938cbc76d88703747"
+            "0x8ef142e3f2bf15f8b201c4d8cda7848a9e846222c62b5615d4d36c7fccd98a24"
         );
     }
 
@@ -331,8 +337,9 @@ mod tests {
     #[test]
     fn rejects_malformed_hex_fields() {
         // wrong length for a 32-byte field
-        let result =
-            parse_mutated(|v| v["genesis_nonce"] = format!("0x{}", "aa".repeat(31)).into());
+        let result = parse_mutated(|v| {
+            v["summit"]["genesis_config_digest"] = format!("0x{}", "bb".repeat(31)).into()
+        });
         assert!(matches!(result, Err(ManifestError::Json(_))));
 
         // missing 0x prefix

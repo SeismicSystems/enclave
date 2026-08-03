@@ -6,8 +6,8 @@
 //! network. The manifest's `eth.genesis_hash = keccak(rlp(header))` pins the
 //! file's genesis *block* — the header and, through the state root, the
 //! alloc — but not its `config` section (fork schedule), which lies outside
-//! the header. tdx-init also cannot recompute that hash (it would need
-//! reth's own chain-spec parse path), so POST-time validation here is
+//! the header. tdx-init also does not recompute that hash in-process (it
+//! would need reth's own chain-spec parse path), so POST-time validation here is
 //! structural: valid JSON whose `config.chainId` matches the manifest's
 //! `eth.chain_id`. The block-hash commitment is enforced deploy-side
 //! (`manifest assemble` shells out to `seismic-reth genesis-hash`) and again
@@ -37,6 +37,12 @@ struct GenesisConfigProbe {
 /// Decode the `[network].reth_genesis_base64` embed and validate it against
 /// the validated manifest's `eth.chain_id`. Returns the exact genesis bytes
 /// to write — callers must not transform them further.
+///
+/// Deliberately unchecked: `eth.genesis_hash`. Verifying it here is possible —
+/// shell out to `seismic-reth genesis-hash`, or link reth's chain-spec stack —
+/// but both add a dependency this boot-time translator doesn't otherwise carry
+/// (the image's binary layout, or reth's crates). The module docs cover why the
+/// structural check suffices.
 pub fn decode_and_validate(reth_genesis_base64: &str, manifest_chain_id: u64) -> Result<Vec<u8>> {
     // Be forgiving about transport-layer line wrapping (PEM-style); this
     // changes nothing about the decoded bytes.

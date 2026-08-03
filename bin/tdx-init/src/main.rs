@@ -10,6 +10,7 @@ mod manifest;
 mod peers;
 mod reth_genesis;
 mod server;
+mod summit_genesis;
 mod writer;
 
 /// Per-service env file drop-zone. Lives on tmpfs (cleared each boot),

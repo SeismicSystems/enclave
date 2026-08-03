@@ -24,6 +24,7 @@ use tracing::info;
 pub struct ValidatedManifest {
     pub bytes: Vec<u8>,
     pub chain_id: u64,
+    pub namespace: String,
 }
 
 /// Decode the `[network].manifest_base64` embed and strictly validate it.
@@ -53,6 +54,7 @@ pub fn decode_and_validate(manifest_base64: &str) -> Result<ValidatedManifest> {
     Ok(ValidatedManifest {
         bytes,
         chain_id: manifest.eth.chain_id,
+        namespace: manifest.summit.namespace,
     })
 }
 
@@ -73,7 +75,7 @@ mod tests {
     const FIXTURE: &[u8] =
         include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
-        "0xc4d4721b2e287df26022e6d27c8cf772841a872b6be08b1938cbc76d88703747";
+        "0x8ef142e3f2bf15f8b201c4d8cda7848a9e846222c62b5615d4d36c7fccd98a24";
 
     fn b64(bytes: &[u8]) -> String {
         base64::engine::general_purpose::STANDARD.encode(bytes)
@@ -85,6 +87,7 @@ mod tests {
         assert_eq!(manifest.bytes, FIXTURE, "decoded bytes must be verbatim");
         assert_eq!(network_id_hex(&manifest.bytes), FIXTURE_NETWORK_ID);
         assert_eq!(manifest.chain_id, 5124);
+        assert_eq!(manifest.namespace, "seismic-devnet-3");
     }
 
     #[test]

@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 /// while `[node]` is this node only. Network-indexed is weaker than
 /// cohort-identical: the bootnode set evolves as the network does (empty at
 /// greenfield stage 1), so nodes configured at different times hold
-/// different snapshots; only the manifest and reth genesis must truly match
-/// across the cohort — differing bytes there mean a different network.
+/// different snapshots; only the manifest and the two genesis files must truly
+/// match across the cohort — differing bytes there mean a different network.
 /// Anything derivable from these is derived rather than delivered twice —
 /// e.g. the root-key fetch peers come from `[network].bootnodes`
 /// (`src/peers.rs`), so there is no second list that could skew from it.
@@ -53,6 +53,20 @@ pub struct DomainConfig {
 pub struct NetworkConfig {
     /// base64 (standard alphabet) of the network-manifest.json bytes, as
     /// emitted by the deploy tool's manifest assembly step.
+    ///
+    /// This document is also what pins the other two `[network]` artifacts:
+    /// `eth.genesis_hash` commits to the reth genesis carried in
+    /// `reth_genesis_base64`, and `summit.genesis_config_digest` to the summit
+    /// genesis in `summit_genesis_base64`. The three fields are therefore one
+    /// assembled set rather than three independent values — pairing a manifest
+    /// with a genesis it doesn't pin yields a node that can't join the cohort
+    /// it claims to belong to (a reth genesis block hash its peers reject, or a
+    /// summit `chain_domain` no handshake matches). tdx-init doesn't recompute
+    /// either commitment in-process — that would need reth's own chain-spec
+    /// parse path and summit's SSZ implementation — so it enforces the cheap
+    /// fields the manifest duplicates for exactly this purpose (`eth.chain_id`,
+    /// `summit.namespace`) and leaves the hashes to deploy, which verifies both
+    /// before POSTing.
     pub manifest_base64: String,
 
     /// base64 encoding of the reth genesis JSON — the chain spec
@@ -64,6 +78,19 @@ pub struct NetworkConfig {
     /// (`src/reth_genesis.rs`) and written verbatim to `reth-genesis.json`
     /// under [`crate::CONF_DIR`].
     pub reth_genesis_base64: String,
+
+    /// base64 encoding of the summit genesis TOML — the consensus-layer
+    /// genesis every node's summit boots from
+    /// (`--genesis-path /run/seismic/conf/summit-genesis.toml`). Network-wide
+    /// like the reth genesis, and complete at delivery: the founding ceremony
+    /// harvests the validator set into it before the POST, and the manifest's
+    /// `summit.genesis_config_digest` pins the result. Required because a node
+    /// booted without it has no consensus genesis and its summit blocks
+    /// forever — late joiners need it just as much as the founders do.
+    /// Validated structurally at POST time against the manifest's
+    /// `summit.namespace` (`src/summit_genesis.rs`) and written verbatim to
+    /// `summit-genesis.toml` under [`crate::CONF_DIR`].
+    pub summit_genesis_base64: String,
 
     /// Network-wide devp2p bootnodes, as `enode://<128 hex pubkey>@host:port`
     /// URLs — the single source for the cohort's peer machines. Feeds reth
@@ -116,6 +143,7 @@ mod tests {
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = ["enode://abc@10.0.0.1:30303", "enode://def@10.0.0.2:30303"]
 
 [node]
@@ -146,6 +174,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -167,6 +196,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -187,6 +217,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 
 [node]
 external_ip = "203.0.113.7"
@@ -206,6 +237,7 @@ email = "ops@example.com"
         let toml_input = r#"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -217,6 +249,28 @@ email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("reth_genesis_base64"));
+    }
+
+    #[test]
+    fn requires_summit_genesis_field() {
+        // Same rule as the reth half: without the consensus genesis the POST
+        // must 400, not produce a node whose summit blocks forever waiting
+        // for a genesis file that never arrives.
+        let toml_input = r#"
+[network]
+manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+bootnodes = []
+
+[node]
+external_ip = "203.0.113.7"
+
+[node.domain]
+name = "node1.example.com"
+email = "ops@example.com"
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().contains("summit_genesis_base64"));
     }
 
     #[test]
@@ -240,6 +294,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
@@ -252,6 +307,7 @@ bootnodes = []
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -269,6 +325,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -284,6 +341,7 @@ external_ip = "203.0.113.7"
 [network]
 manifest_base64 = "eyJ9"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 network_id = "0xabcd"
 
@@ -304,6 +362,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJ9"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -330,6 +389,7 @@ genesis_node = true
 [network]
 manifest_base64 = "eyJ9"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
@@ -349,6 +409,7 @@ email = "ops@example.com"
 [network]
 manifest_base64 = "eyJ9"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
