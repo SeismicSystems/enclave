@@ -20,7 +20,7 @@ path = "src/main.rs"
 [dependencies]
 seismic-attestation.workspace = true
 seismic-attestation-rpc.workspace = true
-seismic-custodian-ipc.workspace = true
+seismic-custodian-ipc = { workspace = true, features = ["client"] }
 
 jsonrpsee.workspace = true
 tokio.workspace = true
@@ -41,5 +41,5 @@ hex.workspace = true
 seismic-custodian-ipc = { workspace = true, features = ["server"] }
 seismic-custodian.workspace = true
 seismic-custodian-service.workspace = true
-serial_test = "3.2.0"
-tempfile = "3.17.1"
+serial_test.workspace = true
+tempfile.workspace = true
