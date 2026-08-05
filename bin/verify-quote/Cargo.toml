@@ -25,4 +25,4 @@ tokio.workspace = true
 [dev-dependencies]
 # The error-path tests hand `run` real files, since the failures under test are
 # file-reading and file-parsing failures.
-tempfile = "3.17.1"
+tempfile.workspace = true
