@@ -1,0 +1,58 @@
+[package]
+name = "seismic-summit-key-holder"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Pre-manifest holder of a node's summit consensus keys: RAM keygen at boot, {pubkeys, quote} over HTTP, keystore persist at LUKS-open"
+
+[lib]
+name = "seismic_summit_key_holder"
+path = "src/lib.rs"
+
+[[bin]]
+name = "summit-key-holder"
+path = "src/main.rs"
+
+[dependencies]
+seismic-attestation.workspace = true
+
+# Summit's exact commonware pin (summit Cargo.toml, plain crates.io, no
+# [patch]): the keystore this binary writes is read back by summit's
+# `KeyPaths`, so the key encoding must be commonware's, at summit's version.
+# `=` because commonware's calendar versioning makes 2026.5.0 "compatible"
+# to cargo while moving APIs. When summit bumps commonware, bump these with
+# it; the golden-vector test in keys.rs is what actually catches drift.
+#
+# TODO(summit-keystore): we should extract a small keystore crate in summit
+# (filenames + read/write + re-exported key types), and depend on that instead.
+# Caveat: a git dep does not inherit summit's Cargo.lock, so exact commonware pins (there or
+# here) and the golden-vector test stay necessary either way.
+#
+# The `rand` 0.8 line exists only because commonware's keygen takes a
+# rand_core 0.6 `CryptoRngCore`; the workspace `rand` is 0.9.
+commonware-codec = "=2026.4.0"
+commonware-cryptography = "=2026.4.0"
+commonware-math = "=2026.4.0"
+commonware-utils = "=2026.4.0"
+rand_08 = { package = "rand", version = "0.8.5" }
+
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Router tests drive handlers through tower's `oneshot` without a socket.
+http-body-util = "0.1"
+tempfile = "3.17"
+tower = { version = "0.5", features = ["util"] }

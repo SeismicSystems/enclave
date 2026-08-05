@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-# The three deployed binaries live under bin/, next to `verify-quote`, which
+# The four deployed binaries live under bin/, next to `verify-quote`, which
 # runs off-node in deploy's hands; every crates/ member is a library (some also
 # build a tooling CLI behind their `cli` feature). The dir name is the crate;
 # the arrow is the binary target it builds.
@@ -8,6 +8,7 @@ members = [
     "bin/tdx-init",              # -> tdx-init
     "bin/attestation-service",   # -> seismic-attestation-service
     "bin/custodian-service",     # -> seismic-custodian-service
+    "bin/summit-key-holder",     # -> summit-key-holder
     "bin/verify-quote",          # -> verify-quote
 
     "crates/attestation",
@@ -51,6 +52,7 @@ anyhow = "1.0"
 attestation = { git = "https://github.com/flashbots/attested-tls", rev = "05a79a3f16a6d074bc10ce7aa29a3cd804fdc613" }
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
+axum = "0.8.6"
 bincode = "1.3.3"
 ciborium = "0.2"
 clap = { version = "4.5.51", features = ["derive", "env"] }
