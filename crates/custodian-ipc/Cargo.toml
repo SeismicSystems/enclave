@@ -32,9 +32,10 @@ hex = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 [features]
-# Default-on client keeps async consumers frictionless; the custodian binary
-# opts out with default-features = false, features = ["server"] and links no
-# tokio at all.
+# Default-on client keeps out-of-workspace async consumers (reth) frictionless.
+# Within the workspace, the root pins this crate with default-features = false,
+# so each consumer states its features explicitly; the custodian binary takes
+# only ["server"] and links no tokio at all.
 #
 # CAUTION — feature unification: that no-tokio guarantee only holds when the
 # server-only consumer is built in its own cargo invocation. Building it

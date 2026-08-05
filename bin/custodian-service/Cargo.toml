@@ -21,7 +21,7 @@ seismic-custodian.workspace = true
 # built in its own cargo invocation — see the feature note in
 # crates/custodian-ipc/Cargo.toml. A path dependency rather than `workspace =
 # true` because workspace inheritance cannot turn default features off.
-seismic-custodian-ipc = { path = "../../crates/custodian-ipc", default-features = false, features = ["server"] }
+seismic-custodian-ipc = { workspace = true, features = ["server"] }
 
 anyhow.workspace = true
 clap.workspace = true
@@ -35,5 +35,5 @@ tracing-subscriber.workspace = true
 # Tests drive the served socket with the async client. Dev-only: resolver v2
 # keeps dev-dep features out of `cargo build`, so the binary stays tokio-free.
 seismic-custodian-ipc = { workspace = true, features = ["client"] }
-tempfile = "3.17.1"
+tempfile.workspace = true
 tokio.workspace = true
