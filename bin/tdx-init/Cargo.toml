@@ -12,7 +12,7 @@ description = "Boot-time node initialization: receives node config over HTTP and
 [dependencies]
 seismic-network-manifest.workspace = true
 
-axum = { version = "0.8.6" }
+axum.workspace = true
 base64 = "0.22"
 clap = { version = "4.5.51", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
