@@ -14,7 +14,7 @@ as a library).
 
 ## The delivery protocol
 
-The council port (default `0.0.0.0:7879`) speaks length-prefixed CBOR — the
+The council port (default `0.0.0.0:7876`) speaks length-prefixed CBOR — the
 same framing as the custodian socket — with three methods: `Ping`,
 `GetStatus`, and `DeliverEpochKey`. Envelope construction, binding digests,
 and the message types live in `crates/council-delivery`, shared with off-node
@@ -77,7 +77,7 @@ the new key to recover.
 | `--genesis-node` | `SEISMIC_CUSTODIAN_GENESIS_NODE` | `false` |
 | `--luks-keyfile` | — | `/run/seismic/custodian/luks-keys` |
 | `--allow USER:PURPOSES` (repeatable) | — | deny-all |
-| `--council-listen` | `SEISMIC_COUNCIL_LISTEN_ADDR` | `0.0.0.0:7879` |
+| `--council-listen` | `SEISMIC_COUNCIL_LISTEN_ADDR` | `0.0.0.0:7876` |
 | `--council-pubkey` (required) | `SEISMIC_COUNCIL_PUBKEY` | — (`0x` + 33-byte compressed SEC1 hex) |
 | `--network-manifest` | — | `/run/seismic/conf/network-manifest.json` |
 | `--delivery-dir` | — | `/persistent/seismic/custodian/deliveries` |

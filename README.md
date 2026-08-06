@@ -17,7 +17,7 @@ share.
 | `tdx-init` | `tdx-init` | Boot-time init: receives node config over HTTP and writes the enclave/reth runtime env, then exits. |
 | `attestation-service` | `seismic-attestation-service` | Network-facing JSON-RPC service (`:7878`): serves attestation evidence and purpose keys. Holds no key material — reaches the custodian over a Unix socket. |
 | `custodian-service` | `seismic-custodian-service` | Standalone service for the RAM-only root-key custodian: no network listener, minimal Unix-socket API, owns the per-boot LUKS keyfile handoff. |
-| `centralized-custodian-service` | `seismic-centralized-custodian-service` | Custodian variant for centrally operated networks: epochs >= 1 are signed+encrypted security-council deliveries over a TCP port (`:7879`) instead of root-key derivations; same Unix-socket API otherwise. |
+| `centralized-custodian-service` | `seismic-centralized-custodian-service` | Custodian variant for centrally operated networks: epochs >= 1 are signed+encrypted security-council deliveries over a TCP port (`:7876`) instead of root-key derivations; same Unix-socket API otherwise. |
 | `verify-quote` | `verify-quote` | Not deployed to nodes: verification-only CLI that DCAP-verifies one founding node's summit-keys harvest quote against a measurement policy (JSON on stdout, exit 0 ⇔ verified). Shelled out to by deploy's harvest step. |
 
 ### Libraries (`crates/`)

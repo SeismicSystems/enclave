@@ -30,7 +30,7 @@ use tracing_subscriber::EnvFilter;
 /// `setup-persistent-luks` as the standalone custodian.
 const DEFAULT_LUKS_KEYFILE_PATH: &str = "/run/seismic/custodian/luks-keys";
 /// Default council listen address. 7878 is the attestation service.
-const DEFAULT_COUNCIL_LISTEN_ADDR: &str = "0.0.0.0:7879";
+const DEFAULT_COUNCIL_LISTEN_ADDR: &str = "0.0.0.0:7876";
 /// Where tdx-init drops the network manifest; its raw bytes define the
 /// network id that delivery envelopes must name.
 const DEFAULT_NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
