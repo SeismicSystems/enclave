@@ -5,13 +5,15 @@ resolver = "2"
 # build a tooling CLI behind their `cli` feature). The dir name is the crate;
 # the arrow is the binary target it builds.
 members = [
-    "bin/tdx-init",              # -> tdx-init
-    "bin/attestation-service",   # -> seismic-attestation-service
-    "bin/custodian-service",     # -> seismic-custodian-service
-    "bin/verify-quote",          # -> verify-quote
+    "bin/tdx-init",                       # -> tdx-init
+    "bin/attestation-service",            # -> seismic-attestation-service
+    "bin/centralized-custodian-service",  # -> seismic-centralized-custodian-service
+    "bin/custodian-service",              # -> seismic-custodian-service
+    "bin/verify-quote",                   # -> verify-quote
 
     "crates/attestation",
     "crates/attestation-rpc",
+    "crates/council-delivery",
     "crates/crypto",
     "crates/custodian",
     "crates/custodian-ipc",          # -> custodian-ipc-cli (CLI)
@@ -33,6 +35,7 @@ readme = "README.md"
 # workspace libs
 seismic-attestation = { path = "crates/attestation" }
 seismic-attestation-rpc = { path = "crates/attestation-rpc" }
+seismic-council-delivery = { path = "crates/council-delivery" }
 seismic-crypto = { path = "crates/crypto" }
 seismic-custodian = { path = "crates/custodian" }
 seismic-custodian-ipc = { path = "crates/custodian-ipc" }

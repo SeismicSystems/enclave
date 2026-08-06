@@ -126,6 +126,13 @@ pub enum Response {
     /// The requested derivation/wrap needs `root_key`, but none is present in
     /// the custodian's memory.
     RootKeyAbsent,
+    /// The custodian holds no key for this epoch. Emitted only by hosts whose
+    /// epoch keys arrive from outside (the centralized custodian, epochs >= 1
+    /// of which exist only once delivered); the deriving custodian never
+    /// answers this. Retriable: the key may be delivered later.
+    EpochKeyUnavailable {
+        epoch: u64,
+    },
     /// The ACL refused this peer the method; the handler never saw the
     /// request. Retrying cannot succeed until the node's ACL changes.
     Denied {
@@ -156,6 +163,7 @@ impl Response {
             Response::RootKeyInstalled => "root_key_installed",
             Response::RootKeyAlreadyPresent => "root_key_already_present",
             Response::RootKeyAbsent => "root_key_absent",
+            Response::EpochKeyUnavailable { .. } => "epoch_key_unavailable",
             Response::Denied { .. } => "denied",
             Response::Error { .. } => "error",
         }
@@ -336,6 +344,14 @@ mod tests {
             let decoded: Response = from_cbor(&to_cbor(&response));
             assert_eq!(decoded.kind(), expected_kind);
         }
+
+        // EpochKeyUnavailable carries its epoch across the wire intact.
+        let Response::EpochKeyUnavailable { epoch } =
+            from_cbor(&to_cbor(&Response::EpochKeyUnavailable { epoch: 5 }))
+        else {
+            panic!("wrong variant");
+        };
+        assert_eq!(epoch, 5);
 
         // The two failure variants must stay distinct across the wire.
         let response = Response::Denied {

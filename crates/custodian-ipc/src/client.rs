@@ -34,6 +34,9 @@ impl CustodianClient {
             Some(Response::Denied { message }) => Err(IpcError::Denied(message)),
             Some(Response::Error { message }) => Err(IpcError::Custodian(message)),
             Some(Response::RootKeyAbsent) => Err(IpcError::RootKeyAbsent),
+            Some(Response::EpochKeyUnavailable { epoch }) => {
+                Err(IpcError::EpochKeyUnavailable { epoch })
+            }
             Some(response) => Ok(response),
             None => Err(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
@@ -262,6 +265,11 @@ mod tests {
         let (mut client, server) = scripted_client(Response::RootKeyAbsent);
         let error = client.get_rng_ikm(0).await.expect_err("must fail");
         assert!(matches!(error, IpcError::RootKeyAbsent));
+        server.await.expect("server task");
+
+        let (mut client, server) = scripted_client(Response::EpochKeyUnavailable { epoch: 3 });
+        let error = client.get_tx_io_keypair(3).await.expect_err("must fail");
+        assert!(matches!(error, IpcError::EpochKeyUnavailable { epoch: 3 }));
         server.await.expect("server task");
 
         let (mut client, server) = scripted_client(Response::Error {

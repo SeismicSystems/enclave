@@ -4972,6 +4972,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "seismic-centralized-custodian-service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "hex",
+ "secp256k1",
+ "seismic-council-delivery",
+ "seismic-custodian",
+ "seismic-custodian-ipc",
+ "seismic-custodian-service",
+ "seismic-network-manifest",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "seismic-council-delivery"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ciborium",
+ "hex",
+ "rand 0.9.2",
+ "secp256k1",
+ "seismic-crypto",
+ "seismic-network-manifest",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "thiserror 2.0.18",
+ "zeroize",
+]
+
+[[package]]
 name = "seismic-crypto"
 version = "0.1.0"
 dependencies = [

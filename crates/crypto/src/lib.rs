@@ -215,6 +215,10 @@ pub enum AesKeyDomain {
     /// in the same release and nothing wrapped is persisted, so this label
     /// can rotate with a coordinated upgrade.
     RootKeyWrap,
+    /// Security-council epoch-key deliveries to the centralized custodian's
+    /// inbox keypair. Envelopes are persisted and re-decrypted across
+    /// restarts, so changing this label orphans stored deliveries.
+    CouncilKeyDelivery,
 }
 
 impl AesKeyDomain {
@@ -231,6 +235,7 @@ impl AesKeyDomain {
             // Shared with TxRequest; see above.
             Self::EcdhPrecompile => b"aes-gcm key",
             Self::RootKeyWrap => b"seismic/root-key-wrap/aes-256-gcm/v1",
+            Self::CouncilKeyDelivery => b"seismic/council-key-delivery/aes-256-gcm/v1",
         }
     }
 }
@@ -543,6 +548,10 @@ mod tests {
             (
                 AesKeyDomain::RootKeyWrap,
                 "f48820f0d247f5841a1d91fe1c48f590e0172cac4bec879d2dcdf04e9d1f7647",
+            ),
+            (
+                AesKeyDomain::CouncilKeyDelivery,
+                "c243c9065e94372b385704ac8346252cf5041ec516bec359b6c9aa8fa2f19f10",
             ),
         ];
         for (domain, expected) in vectors {

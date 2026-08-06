@@ -22,6 +22,10 @@ pub enum IpcError {
     /// was present in its memory.
     #[error("custodian root key is absent")]
     RootKeyAbsent,
+    /// The custodian holds no key for this epoch (centralized custodian:
+    /// the council has not delivered it yet). Retriable.
+    #[error("custodian holds no key for epoch {epoch}")]
+    EpochKeyUnavailable { epoch: u64 },
     /// The custodian answered, but with a variant that doesn't match the
     /// request — a protocol bug on one side or the other.
     #[error("unexpected response variant to {method}: received {received}")]

@@ -1,0 +1,43 @@
+[package]
+name = "seismic-centralized-custodian-service"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Centralized custodian: security-council-delivered epoch keys served over the custodian socket"
+
+# Binary target defaults to the package name, built from src/main.rs; the
+# crate also exposes a lib (src/lib.rs) so integration tests can drive the
+# state, dispatch, and council handler in-process.
+
+[dependencies]
+seismic-council-delivery.workspace = true
+seismic-custodian.workspace = true
+# The base custodian's root-key lifecycle, dispatch, and --allow parsing,
+# reused as a library; its custodian-ipc dependency is the no-tokio one below.
+seismic-custodian-service.workspace = true
+# default-features = false is this binary's no-async-runtime guarantee: only
+# the wire types plus the synchronous `server` transport are linked. CAUTION:
+# under cargo feature unification the guarantee holds only when this binary is
+# built in its own cargo invocation — see the feature note in
+# crates/custodian-ipc/Cargo.toml. A path dependency rather than `workspace =
+# true` because workspace inheritance cannot turn default features off.
+seismic-custodian-ipc = { path = "../../crates/custodian-ipc", default-features = false, features = ["server"] }
+seismic-network-manifest.workspace = true
+
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+secp256k1.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Tests drive the served socket with the async client. Dev-only: resolver v2
+# keeps dev-dep features out of `cargo build`, so the binary stays tokio-free.
+seismic-custodian-ipc = { workspace = true, features = ["client"] }
+tempfile = "3.17.1"
+tokio.workspace = true

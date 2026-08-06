@@ -1,0 +1,173 @@
+//! `seismic-centralized-custodian-service` — the custodian variant whose
+//! epoch keys (>= 1) arrive as signed, encrypted deliveries from a security
+//! council instead of being derived from the root key.
+//!
+//! Behaves exactly like `seismic-custodian-service` on the Unix socket for
+//! epoch 0 and the bootstrap methods; additionally listens on a TCP port for
+//! council delivery envelopes. Opening a network port in the key-holding
+//! process is a deliberate, council-scoped exception to the "no network
+//! listeners near keys" rule: the port speaks only the small framed council
+//! protocol (64 KiB frame cap, capped connections, I/O timeouts), every
+//! delivery is signature-checked before any state or disk is touched, and
+//! reachability should be confined by the image's firewall.
+
+use anyhow::{Context as _, Result, anyhow};
+use clap::Parser;
+use seismic_centralized_custodian_service::state::CentralizedCustodianState;
+use seismic_centralized_custodian_service::{council, dispatch};
+use seismic_custodian::Custodian;
+use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
+use seismic_custodian_ipc::server::{bind, serve};
+use seismic_custodian_service::{acl, state::CustodianState};
+use seismic_network_manifest::NetworkId;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
+
+/// Default drop-zone for the LUKS keyfile; same deployment contract with
+/// `setup-persistent-luks` as the standalone custodian.
+const DEFAULT_LUKS_KEYFILE_PATH: &str = "/run/seismic/custodian/luks-keys";
+/// Default council listen address. 7878 is the attestation service.
+const DEFAULT_COUNCIL_LISTEN_ADDR: &str = "0.0.0.0:7879";
+/// Where tdx-init drops the network manifest; its raw bytes define the
+/// network id that delivery envelopes must name.
+const DEFAULT_NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
+/// Delivery envelopes live on the LUKS-backed persistent disk — unlocked by
+/// this very process's keyfile handoff, hence the lazy store loading.
+const DEFAULT_DELIVERY_DIR: &str = "/persistent/seismic/custodian/deliveries";
+
+#[derive(Parser, Debug)]
+#[command(version, about)]
+struct Args {
+    /// Filesystem path for the custodian IPC socket.
+    #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
+    socket: PathBuf,
+
+    /// Generate a fresh root key at startup (the genesis node); all other
+    /// nodes await the bootstrap flow.
+    #[arg(long, env = "SEISMIC_CUSTODIAN_GENESIS_NODE", default_value_t = false)]
+    genesis_node: bool,
+
+    /// Drop-zone path for the LUKS keyfile.
+    #[arg(long, default_value = DEFAULT_LUKS_KEYFILE_PATH)]
+    luks_keyfile: PathBuf,
+
+    /// Grant a local user access to key purposes over the socket, as
+    /// USER:PURPOSE[,PURPOSE...]. Repeatable. Same grammar as
+    /// seismic-custodian-service.
+    #[arg(long, value_name = "USER:PURPOSES")]
+    allow: Vec<String>,
+
+    /// TCP address the council delivery port binds.
+    #[arg(long, env = "SEISMIC_COUNCIL_LISTEN_ADDR", default_value = DEFAULT_COUNCIL_LISTEN_ADDR)]
+    council_listen: SocketAddr,
+
+    /// The security council's secp256k1 public key (0x + 66 hex chars,
+    /// compressed SEC1). Every delivery envelope must be signed by it.
+    #[arg(long, env = "SEISMIC_COUNCIL_PUBKEY", value_parser = parse_council_pubkey)]
+    council_pubkey: secp256k1::PublicKey,
+
+    /// Path to the network manifest whose bytes define this network's id.
+    #[arg(long, default_value = DEFAULT_NETWORK_MANIFEST_PATH)]
+    network_manifest: PathBuf,
+
+    /// Directory where delivery envelopes persist (signed + encrypted; never
+    /// plaintext keys).
+    #[arg(long, default_value = DEFAULT_DELIVERY_DIR)]
+    delivery_dir: PathBuf,
+}
+
+fn main() -> Result<()> {
+    init_tracing();
+    let args = Args::parse();
+
+    // Everything that can be misconfigured fails here, before any key
+    // material exists.
+    let method_acl = acl::method_acl_from_allow_specs(&args.allow)
+        .context("resolving --allow grants (is the user missing?)")?;
+    let manifest_bytes = std::fs::read(&args.network_manifest)
+        .with_context(|| format!("reading {}", args.network_manifest.display()))?;
+    let network_id = NetworkId::from_manifest_bytes(&manifest_bytes);
+    info!(%network_id, "delivery envelopes must be bound to this network");
+
+    let base = if args.genesis_node {
+        info!("genesis node: generating a fresh root key");
+        CustodianState::new_with_root_key(
+            Custodian::new_as_genesis().context("generating genesis root key")?,
+            args.luks_keyfile,
+        )
+        .context("writing LUKS keyfile for genesis root key")?
+    } else {
+        info!("joining node: awaiting root key via attested bootstrap");
+        CustodianState::new_awaiting_root_key(args.luks_keyfile)
+    };
+    let state = Arc::new(CentralizedCustodianState::new(
+        base,
+        args.delivery_dir,
+        args.council_pubkey,
+        network_id,
+    ));
+
+    let unix_listener = bind(&args.socket)
+        .with_context(|| format!("binding custodian socket {}", args.socket.display()))?;
+    let tcp_listener = std::net::TcpListener::bind(args.council_listen)
+        .with_context(|| format!("binding council port {}", args.council_listen))?;
+
+    let council_state = state.clone();
+    std::thread::Builder::new()
+        .name("council-port".to_string())
+        .spawn(move || council::serve_council(tcp_listener, council_state))
+        .context("spawning council port thread")?;
+
+    serve(unix_listener, method_acl, move |request| {
+        dispatch::dispatch(&state, request)
+    });
+    unreachable!("custodian socket serve loop never returns");
+}
+
+/// `0x`-prefixed compressed SEC1 hex → a secp256k1 public key.
+fn parse_council_pubkey(value: &str) -> Result<secp256k1::PublicKey> {
+    let hex_str = value
+        .strip_prefix("0x")
+        .ok_or_else(|| anyhow!("council pubkey must start with 0x"))?;
+    let bytes = hex::decode(hex_str).context("council pubkey is not valid hex")?;
+    if bytes.len() != 33 {
+        return Err(anyhow!(
+            "council pubkey must be 33 bytes (compressed SEC1), got {}",
+            bytes.len()
+        ));
+    }
+    secp256k1::PublicKey::from_slice(&bytes).context("council pubkey is not a valid curve point")
+}
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt().with_env_filter(filter).init();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory as _;
+
+    #[test]
+    fn args_parse() {
+        Args::command().debug_assert();
+    }
+
+    #[test]
+    fn council_pubkey_parses_and_rejects() {
+        let sk = secp256k1::SecretKey::from_byte_array(&[0x77; 32]).unwrap();
+        let pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
+        let hex_pk = format!("0x{}", hex::encode(pk.serialize()));
+        assert_eq!(parse_council_pubkey(&hex_pk).unwrap(), pk);
+
+        assert!(parse_council_pubkey(hex_pk.trim_start_matches("0x")).is_err());
+        assert!(parse_council_pubkey("0xzz").is_err());
+        assert!(parse_council_pubkey("0x0011").is_err());
+        // 33 bytes that are not a curve point.
+        assert!(parse_council_pubkey(&format!("0x{}", hex::encode([0u8; 33]))).is_err());
+    }
+}

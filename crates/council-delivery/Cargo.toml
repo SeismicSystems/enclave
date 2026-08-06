@@ -1,0 +1,30 @@
+[package]
+name = "seismic-council-delivery"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Wire types, binding digests, and envelope crypto for security-council epoch-key deliveries"
+
+# Shared by the centralized custodian (opening envelopes) and off-node council
+# signer tooling (sealing them), so it stays a leaf: no custodian, attestation,
+# or async dependencies.
+
+[dependencies]
+anyhow.workspace = true
+ciborium.workspace = true
+rand.workspace = true
+secp256k1.workspace = true
+seismic-crypto.workspace = true
+seismic-network-manifest.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
