@@ -1133,11 +1133,12 @@ dependencies = [
 [[package]]
 name = "attestation"
 version = "0.0.1"
-source = "git+https://github.com/flashbots/attested-tls?rev=9224ae1cd48846202d1c4ce49c97441ea9da9b91#9224ae1cd48846202d1c4ce49c97441ea9da9b91"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=4fb3f4e06fd9d79cf31f145d13d148bbf11fe850#4fb3f4e06fd9d79cf31f145d13d148bbf11fe850"
 dependencies = [
  "anyhow",
  "attest-measure",
  "attest-types",
+ "az-cvm-vtpm",
  "az-tdx-vtpm",
  "base64 0.22.1",
  "dcap-qvl",
@@ -4358,7 +4359,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pccs"
 version = "0.0.1"
-source = "git+https://github.com/flashbots/attested-tls?rev=9224ae1cd48846202d1c4ce49c97441ea9da9b91#9224ae1cd48846202d1c4ce49c97441ea9da9b91"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=4fb3f4e06fd9d79cf31f145d13d148bbf11fe850#4fb3f4e06fd9d79cf31f145d13d148bbf11fe850"
 dependencies = [
  "anyhow",
  "dcap-qvl",

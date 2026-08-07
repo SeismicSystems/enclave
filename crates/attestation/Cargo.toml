@@ -16,13 +16,15 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-attestation.workspace = true # all platforms; the Linux block below adds the `azure` feature
+# All platforms: `azure-verifier` is pure computation over evidence bytes, so
+# Azure evidence *verification* (e.g. the verify-quote CLI) works on macOS too.
+attestation = { workspace = true, features = ["azure-verifier"] }
 
-# Linux-only: the `azure` feature turns on attestation *evidence generation*
+# Linux-only: `azure-attester` turns on attestation *evidence generation*
 # (Intel TDX quote + Azure vTPM quote), which depends on crates that only
 # compile on Linux — notably the `tss-esapi` TPM stack.
 [target.'cfg(target_os = "linux")'.dependencies]
-attestation = { workspace = true, features = ["azure"] }
+attestation = { workspace = true, features = ["azure-attester"] }
 
 # Linux-only for the same reason: the examples here (`azure_vtpm_roundtrip`,
 # `capture_azure_tdx_fixture`) produce real Azure TDX + vTPM evidence, pulling

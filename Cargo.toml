@@ -49,7 +49,9 @@ alloy-primitives = { version = "1.0", default-features = false, features = ["std
 alloy-sol-types = "1.0"
 aes-gcm = "0.10"
 anyhow = "1.0"
-attestation = { git = "https://github.com/flashbots/attested-tls", rev = "9224ae1cd48846202d1c4ce49c97441ea9da9b91" }
+# Pointing to https://github.com/SeismicSystems/attested-tls/pull/1
+# which is build on top of https://github.com/flashbots/attested-tls/pull/78
+attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "4fb3f4e06fd9d79cf31f145d13d148bbf11fe850" }
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
 axum = "0.8.6"
