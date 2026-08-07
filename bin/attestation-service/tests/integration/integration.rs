@@ -134,10 +134,15 @@ async fn test_tx_io_evidence_relying_party() {
     );
 
     let mut tampered_evidence = response.evidence;
-    assert!(!tampered_evidence.attestation.is_empty());
+    let quote = &mut tampered_evidence
+        .attestation_evidence
+        .as_mut()
+        .expect("evidence should carry an attestation")
+        .quote;
+    assert!(!quote.is_empty());
     // Azure evidence is a JSON document. Invalid UTF-8 gives us a
     // deterministic malformed-evidence case.
-    tampered_evidence.attestation[0] = 0xff;
+    quote[0] = 0xff;
     assert!(
         verify_evidence(
             tampered_evidence,

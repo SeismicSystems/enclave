@@ -49,7 +49,7 @@ alloy-primitives = { version = "1.0", default-features = false, features = ["std
 alloy-sol-types = "1.0"
 aes-gcm = "0.10"
 anyhow = "1.0"
-attestation = { git = "https://github.com/flashbots/attested-tls", rev = "05a79a3f16a6d074bc10ce7aa29a3cd804fdc613" }
+attestation = { git = "https://github.com/flashbots/attested-tls", rev = "9224ae1cd48846202d1c4ce49c97441ea9da9b91" }
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
 axum = "0.8.6"
