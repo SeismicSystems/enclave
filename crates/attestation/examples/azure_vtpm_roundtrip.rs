@@ -234,10 +234,14 @@ fn generate_azure_exchange_message(
     binding: [u8; 64],
 ) -> anyhow::Result<AttestationExchangeMessage> {
     let evidence = generate_evidence(AttestationType::AzureTdx, binding)?;
+    let quote_len = evidence
+        .attestation_evidence
+        .as_ref()
+        .map_or(0, |attested| attested.quote.len());
     println!(
-        "Generated {} evidence: {} bytes",
-        evidence.attestation_type,
-        evidence.attestation.len()
+        "Generated {} evidence: {} byte quote",
+        evidence.attestation_type(),
+        quote_len
     );
     Ok(evidence)
 }

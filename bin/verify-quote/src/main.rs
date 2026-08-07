@@ -21,11 +21,10 @@
 //! non-Azure evidence — is an error on stderr with a nonzero exit and nothing on
 //! stdout.
 //!
-//! Verification-only: this never touches a local TPM, so it runs anywhere Linux
-//! runs. It compiles everywhere, but the `azure` feature gating Azure TDX
-//! verification in the upstream `attestation` crate is enabled through a
-//! Linux-only target block in `crates/attestation/Cargo.toml`, so on macOS
-//! verification fails at runtime — run it in a Linux container there.
+//! Verification-only: this never touches a local TPM. Azure TDX verification
+//! is pure computation over the evidence bytes (the `azure-verifier` feature
+//! of the `attestation` backend), so it builds and runs anywhere, including
+//! macOS.
 
 use anyhow::Context as _;
 use clap::Parser;
@@ -61,10 +60,9 @@ use std::{
                   archive it as harvest provenance. Any failure — unreadable or malformed input, \
                   binding mismatch, measurement mismatch, DCAP failure, non-Azure evidence — \
                   prints an error to stderr and exits nonzero, with nothing on stdout.\n\n\
-                  Verification-only: this never touches a local TPM, so it runs anywhere Linux \
-                  runs. It compiles on macOS but Azure verification fails there at runtime (the \
-                  upstream `azure` feature is Linux-target-gated), so non-Linux callers run it in \
-                  a Linux container."
+                  Verification-only: this never touches a local TPM, and Azure TDX verification \
+                  is pure computation over the evidence bytes, so it builds and runs anywhere, \
+                  including macOS."
 )]
 struct Cli {
     /// JSON-serialized AttestationExchangeMessage the key holder served

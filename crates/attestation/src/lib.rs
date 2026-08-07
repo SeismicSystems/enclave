@@ -83,7 +83,7 @@ pub async fn verify_evidence_with_options(
     policy: SeismicMeasurementPolicy,
     options: VerifyOptions,
 ) -> Result<VerifiedSeismicAttestation, AttestationError> {
-    let attestation_type = evidence.attestation_type;
+    let attestation_type = evidence.attestation_type();
     let verifier = AttestationVerifier::new(
         policy.into_backend_policy(),
         options.pccs_url,
@@ -129,10 +129,10 @@ pub async fn verify_azure_evidence_with_options(
     policy: SeismicMeasurementPolicy,
     options: VerifyOptions,
 ) -> Result<VerifiedAzureAttestation, AttestationError> {
-    if evidence.attestation_type != AttestationType::AzureTdx {
+    if evidence.attestation_type() != AttestationType::AzureTdx {
         return Err(AttestationError::WrongAttestationType {
             expected: AttestationType::AzureTdx,
-            actual: evidence.attestation_type,
+            actual: evidence.attestation_type(),
         });
     }
 
@@ -212,7 +212,6 @@ pub enum VerifiedSeismicAttestation {
     AzureTdx(VerifiedAzureAttestation),
     DcapTdx(VerifiedTdxAttestation),
     GcpTdx(VerifiedTdxAttestation),
-    QemuTdx(VerifiedTdxAttestation),
     NoAttestation { binding: [u8; 64] },
 }
 
@@ -234,22 +233,16 @@ impl VerifiedSeismicAttestation {
                     },
                 }))
             }
-            (AttestationType::DcapTdx, Some(MultiMeasurements::Dcap(registers))) => {
+            (AttestationType::DcapTdx, Some(MultiMeasurements::Dcap(measurements))) => {
                 Ok(Self::DcapTdx(VerifiedTdxAttestation {
                     binding,
-                    measurements: TdxMeasurements { registers },
+                    measurements: measurements.into(),
                 }))
             }
-            (AttestationType::GcpTdx, Some(MultiMeasurements::Dcap(registers))) => {
+            (AttestationType::GcpTdx, Some(MultiMeasurements::Dcap(measurements))) => {
                 Ok(Self::GcpTdx(VerifiedTdxAttestation {
                     binding,
-                    measurements: TdxMeasurements { registers },
-                }))
-            }
-            (AttestationType::QemuTdx, Some(MultiMeasurements::Dcap(registers))) => {
-                Ok(Self::QemuTdx(VerifiedTdxAttestation {
-                    binding,
-                    measurements: TdxMeasurements { registers },
+                    measurements: measurements.into(),
                 }))
             }
             (attestation_type, None) => {
@@ -258,7 +251,7 @@ impl VerifiedSeismicAttestation {
             (attestation_type, Some(measurements)) => {
                 Err(AttestationError::MeasurementTypeMismatch {
                     attestation_type,
-                    measurements,
+                    measurements: Box::new(measurements),
                 })
             }
         }
@@ -269,7 +262,6 @@ impl VerifiedSeismicAttestation {
             Self::AzureTdx(_) => AttestationType::AzureTdx,
             Self::DcapTdx(_) => AttestationType::DcapTdx,
             Self::GcpTdx(_) => AttestationType::GcpTdx,
-            Self::QemuTdx(_) => AttestationType::QemuTdx,
             Self::NoAttestation { .. } => AttestationType::None,
         }
     }
@@ -277,9 +269,7 @@ impl VerifiedSeismicAttestation {
     pub fn binding(&self) -> &[u8; 64] {
         match self {
             Self::AzureTdx(verified) => &verified.binding,
-            Self::DcapTdx(verified) | Self::GcpTdx(verified) | Self::QemuTdx(verified) => {
-                &verified.binding
-            }
+            Self::DcapTdx(verified) | Self::GcpTdx(verified) => &verified.binding,
             Self::NoAttestation { binding } => binding,
         }
     }
@@ -312,10 +302,26 @@ pub struct VerifiedTdxAttestation {
     pub measurements: TdxMeasurements,
 }
 
-/// TDX measurements surfaced by DCAP/GCP/QEMU backend attestation types.
+/// TDX measurements surfaced by DCAP/GCP backend attestation types.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TdxMeasurements {
-    pub registers: HashMap<DcapMeasurementRegister, [u8; 48]>,
+    pub mrtd: [u8; 48],
+    pub rtmr0: [u8; 48],
+    pub rtmr1: [u8; 48],
+    pub rtmr2: [u8; 48],
+    pub rtmr3: [u8; 48],
+}
+
+impl From<attestation::measurements::DcapMeasurements> for TdxMeasurements {
+    fn from(measurements: attestation::measurements::DcapMeasurements) -> Self {
+        Self {
+            mrtd: measurements.mrtd,
+            rtmr0: measurements.rtmr0,
+            rtmr1: measurements.rtmr1,
+            rtmr2: measurements.rtmr2,
+            rtmr3: measurements.rtmr3,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -334,7 +340,7 @@ pub enum AttestationError {
     #[error("backend returned measurements inconsistent with {attestation_type}: {measurements:?}")]
     MeasurementTypeMismatch {
         attestation_type: AttestationType,
-        measurements: MultiMeasurements,
+        measurements: Box<MultiMeasurements>,
     },
 }
 
@@ -379,7 +385,7 @@ mod tests {
         assert!(
             policy
                 .backend_policy
-                .check_measurement(&cross_product_measurements)
+                .check_measurement(&cross_product_measurements, None)
                 .is_err()
         );
 
@@ -387,7 +393,7 @@ mod tests {
             MultiMeasurements::Azure(HashMap::from([(4, image_b_pcr4), (9, image_b_pcr9)]));
         policy
             .backend_policy
-            .check_measurement(&image_b_measurements)
+            .check_measurement(&image_b_measurements, None)
             .unwrap();
     }
 
@@ -398,12 +404,12 @@ mod tests {
 
         policy
             .backend_policy
-            .check_measurement(&MultiMeasurements::Azure(HashMap::new()))
+            .check_measurement(&MultiMeasurements::Azure(HashMap::new()), None)
             .unwrap();
         assert!(
             policy
                 .backend_policy
-                .check_measurement(&MultiMeasurements::NoAttestation)
+                .check_measurement(&MultiMeasurements::NoAttestation, None)
                 .is_err()
         );
     }
@@ -436,10 +442,11 @@ mod tests {
         let verified = VerifiedSeismicAttestation::from_backend(
             AttestationType::DcapTdx,
             binding,
-            Some(MultiMeasurements::Dcap(HashMap::from([(
-                DcapMeasurementRegister::MRTD,
-                mrtd,
-            )]))),
+            Some(MultiMeasurements::Dcap(
+                attestation::measurements::DcapMeasurements::new(
+                    mrtd, [0u8; 48], [1u8; 48], [2u8; 48], [3u8; 48],
+                ),
+            )),
         )
         .unwrap();
 
@@ -448,10 +455,14 @@ mod tests {
         match verified {
             VerifiedSeismicAttestation::DcapTdx(dcap) => {
                 assert_eq!(
-                    dcap.measurements
-                        .registers
-                        .get(&DcapMeasurementRegister::MRTD),
-                    Some(&mrtd),
+                    dcap.measurements,
+                    TdxMeasurements {
+                        mrtd,
+                        rtmr0: [0u8; 48],
+                        rtmr1: [1u8; 48],
+                        rtmr2: [2u8; 48],
+                        rtmr3: [3u8; 48],
+                    }
                 );
             }
             _ => panic!("expected DCAP output"),

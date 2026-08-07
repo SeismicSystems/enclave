@@ -28,7 +28,7 @@ fn every_compiled_tuple_is_accepted_by_attested_tls() {
     let policy = MeasurementPolicy::from_json_bytes(POLICY.to_vec()).unwrap();
     for record in &compiled.records {
         policy
-            .check_measurement(&as_azure_evidence(&record.tuple))
+            .check_measurement(&as_azure_evidence(&record.tuple), None)
             .unwrap_or_else(|e| {
                 panic!(
                     "attested-tls rejected the compiled tuple of {:?}: {e:?}",
@@ -53,7 +53,7 @@ fn cross_record_flattening_is_rejected_by_both() {
     assert!(!compiled.admission_ids.contains(&flattened.admission_id()));
     assert!(
         policy
-            .check_measurement(&as_azure_evidence(&flattened))
+            .check_measurement(&as_azure_evidence(&flattened), None)
             .is_err()
     );
 }
@@ -71,7 +71,11 @@ fn deprecated_expected_form_matches_on_both_sides() {
     let policy = MeasurementPolicy::from_json_bytes(doc.into_bytes()).unwrap();
     assert_eq!(compiled.admission_ids.len(), 1);
     let tuple = &compiled.records[0].tuple;
-    assert!(policy.check_measurement(&as_azure_evidence(tuple)).is_ok());
+    assert!(
+        policy
+            .check_measurement(&as_azure_evidence(tuple), None)
+            .is_ok()
+    );
 }
 
 #[test]
