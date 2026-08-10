@@ -13,10 +13,10 @@ use tracing_subscriber::EnvFilter;
 /// `operator_ip_cidr`, permanently (the quote window reopens every boot).
 const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:7879";
 
-/// Summit's keystore, on the LUKS-backed persistent volume
-/// (`/persistent/summit` is 0700 summit:summit per seismic-images'
-/// tmpfiles-persistent.conf). Does not exist until LUKS opens; the holder
-/// serves RAM keys until then.
+/// Summit's keystore, on the LUKS-backed persistent volume, which the
+/// deployment is expected to provide owned by and private to the summit
+/// user. Does not exist until LUKS opens; the holder serves RAM keys
+/// until then.
 const DEFAULT_KEYSTORE_DIR: &str = "/persistent/summit/keys";
 
 /// Where tdx-init drops the verbatim manifest. Mirrors tdx-init's

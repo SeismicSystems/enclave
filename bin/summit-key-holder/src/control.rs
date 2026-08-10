@@ -14,8 +14,7 @@
 //! connection. No secret ever crosses this socket (responses carry public
 //! keys only), so the custodian's length-prefixed-CBOR/zeroize transport
 //! discipline would buy nothing here; a debuggable text protocol wins.
-//! systemd-tmpfiles creates the socket directory; both ends run as the
-//! `summit` user, so the socket itself is 0600.
+//! Both ends run as the `summit` user, so the socket is 0600.
 
 use std::io::ErrorKind;
 use std::path::Path;
@@ -30,9 +29,10 @@ use tracing::{debug, info, warn};
 
 use crate::state::{Holder, PersistOutcome};
 
-/// Default control socket path. The `/run/summit-key-holder` tmpfs
-/// directory is created by systemd-tmpfiles from a snippet in
-/// seismic-images; `bind` also creates it as a fallback for local runs.
+/// Default control socket path. Under `/run`, so the socket is per-boot
+/// state like the RAM keys it persists. The deployment is expected to
+/// provide the parent directory private to the summit user; [`bind`]
+/// requires it to exist and sets 0600 on the socket itself.
 pub const DEFAULT_CONTROL_SOCKET_PATH: &str = "/run/summit-key-holder/control.sock";
 
 /// A request line must fit comfortably in one read; anything longer is not
@@ -93,11 +93,11 @@ impl From<Result<PersistOutcome, crate::error::HolderError>> for ControlResponse
 }
 
 /// Bind the control socket, clearing a previous run's stale inode (same
-/// rationale as the custodian socket's bind).
+/// rationale as the custodian socket's bind). The parent directory must
+/// already exist: it is the deployment's to provide, and creating it here
+/// would substitute a umask-moded directory for the private one the
+/// keystore's sole provisioner is supposed to run in.
 pub fn bind(path: &Path) -> std::io::Result<UnixListener> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
     match std::fs::remove_file(path) {
         Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::NotFound => {}
