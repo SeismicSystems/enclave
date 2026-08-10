@@ -22,6 +22,8 @@ use seismic_attestation::{
     bindings::{binding64_from_digest32, tx_io_binding},
     generate_evidence,
 };
+use seismic_network_manifest::NetworkManifestV1;
+use sha2::{Digest as _, Sha256};
 use seismic_attestation_rpc::{
     AttestationRpcClient as _, AttestationRpcServer, TxIoAttestationResponse,
 };
@@ -36,6 +38,11 @@ use tracing::{info, warn};
 /// Attestation type this build mints and verifies evidence for. Azure TDX +
 /// vTPM is the only supported surface today.
 const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
+
+/// Path to the measurement-policy artifact written by `tdx-init`.
+/// SHA-256 of this file's bytes must match the manifest's
+/// `measurements.bootstrap_policy_hash` before the policy is trusted.
+const BOOTSTRAP_POLICY_PATH: &str = "/run/seismic/conf/measurements.json";
 
 /// Poll interval while waiting for the custodian socket to come up.
 const CUSTODIAN_RETRY_INTERVAL: Duration = Duration::from_secs(1);
@@ -99,7 +106,8 @@ impl AttestationRpcServer for AttestationService {
             &request,
             &self.network_id,
             &mut custodian,
-            bootstrap_measurement_policy(),
+            bootstrap_measurement_policy().await
+                .map_err(|e| internal_rpc_error("loading bootstrap measurement policy", e))?,
             ATTESTATION_TYPE,
         )
         .await
@@ -292,7 +300,7 @@ async fn try_fetch_root_key_from_peer(
         &response,
         &request,
         network_id,
-        bootstrap_measurement_policy(),
+        bootstrap_measurement_policy().await?,
     )
     .await?;
 
@@ -311,17 +319,34 @@ async fn try_fetch_root_key_from_peer(
 
 /// Measurement policy for verifying the *other* side of the bootstrap handshake.
 ///
-/// TODO(bootstrap): load the policy pinned by the manifest's
-/// `measurements.bootstrap_policy_hash` (the seismic-images
-/// `build/measurements.json` artifact) once it is delivered to the node, and
-/// check the artifact bytes against that hash. Until that artifact is wired in,
-/// this accepts any measurements after the backend's cryptographic quote
-/// verification succeeds — adequate for bringing the encrypted transcript up,
-/// NOT a production allowlist.
-fn bootstrap_measurement_policy() -> SeismicMeasurementPolicy {
-    warn!(
-        "bootstrap: using dangerously-permissive measurement policy; \
-         peer image measurements are NOT being checked against an allowlist"
+/// Reads the measurement-policy artifact from [`BOOTSTRAP_POLICY_PATH`],
+/// verifies its SHA-256 digest matches `measurements.bootstrap_policy_hash`
+/// in the network manifest, and parses it into a [`SeismicMeasurementPolicy`].
+///
+/// Fails closed: any I/O error, digest mismatch, or parse failure is returned
+/// as an error and the bootstrap is aborted — the node never falls back to a
+/// permissive policy.
+async fn bootstrap_measurement_policy() -> anyhow::Result<SeismicMeasurementPolicy> {
+    // Load and parse the network manifest to get the pinned policy hash.
+    let manifest_bytes = tokio::fs::read(NETWORK_MANIFEST_PATH)
+        .await
+        .with_context(|| format!("reading network manifest from {NETWORK_MANIFEST_PATH}"))?;
+    let manifest = NetworkManifestV1::from_json_bytes(&manifest_bytes)
+        .with_context(|| "parsing network manifest")?;
+    let expected_hash = manifest.measurements.bootstrap_policy_hash;
+
+    // Load the policy artifact and verify its hash before trusting its contents.
+    let policy_bytes = tokio::fs::read(BOOTSTRAP_POLICY_PATH)
+        .await
+        .with_context(|| format!("reading bootstrap policy from {BOOTSTRAP_POLICY_PATH}"))?;
+    let actual_hash: [u8; 32] = Sha256::digest(&policy_bytes).into();
+    anyhow::ensure!(
+        actual_hash == expected_hash,
+        "bootstrap policy artifact hash mismatch: expected {}, got {}",
+        hex::encode(expected_hash),
+        hex::encode(actual_hash),
     );
-    SeismicMeasurementPolicy::dangerously_accept_any_for_testing(ATTESTATION_TYPE)
+
+    SeismicMeasurementPolicy::from_json_bytes(&policy_bytes)
+        .with_context(|| "parsing bootstrap measurement policy")
 }

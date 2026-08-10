@@ -20,6 +20,9 @@ path = "src/main.rs"
 [dependencies]
 seismic-attestation.workspace = true
 seismic-attestation-rpc.workspace = true
+seismic-network-manifest.workspace = true
+sha2.workspace = true
+hex.workspace = true
 seismic-custodian-ipc = { workspace = true, features = ["client"] }
 
 jsonrpsee.workspace = true
