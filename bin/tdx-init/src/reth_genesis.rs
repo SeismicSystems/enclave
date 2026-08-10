@@ -9,9 +9,10 @@
 //! the header. tdx-init also does not recompute that hash in-process (it
 //! would need reth's own chain-spec parse path), so POST-time validation here is
 //! structural: valid JSON whose `config.chainId` matches the manifest's
-//! `eth.chain_id`. The block-hash commitment is enforced deploy-side
-//! (`manifest assemble` shells out to `seismic-reth genesis-hash`) and again
-//! at ceremony time (every node's reth must serve the pinned hash as block 0).
+//! `eth.chain_id`. The block-hash commitment is enforced outside the node:
+//! the deploy tooling recomputes the hash with reth's own implementation
+//! when it assembles the manifest, and checks at launch that every node's
+//! reth serves the pinned hash as block 0.
 //!
 //! Like the manifest, the file travels base64-encoded and is written
 //! verbatim — reth parses it itself, so tdx-init must not re-render it.
