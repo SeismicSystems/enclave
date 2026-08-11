@@ -17,7 +17,7 @@
 //! binding a single 32-byte value. Parity tests hold the accepted semantics
 //! equal to `check_measurement` for every document this compiler accepts.
 
-use crate::{AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, AzureTdxV1Measurements};
+use crate::{AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, AdmissionId, AzureTdxV1Measurements};
 use alloy_primitives::B256;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -34,7 +34,7 @@ pub struct CompiledPolicy {
     pub records: Vec<CompiledRecord>,
     /// Unique admission IDs across all records, ascending. The length is the
     /// registry's `acceptedCount` at genesis.
-    pub admission_ids: Vec<B256>,
+    pub admission_ids: Vec<AdmissionId>,
 }
 
 /// One record's compiled form: the concrete guest identity it admits.
@@ -48,7 +48,7 @@ pub struct CompiledRecord {
 
 impl CompiledRecord {
     /// Admission ID of this record's tuple.
-    pub fn admission_id(&self) -> B256 {
+    pub fn admission_id(&self) -> AdmissionId {
         self.tuple.admission_id()
     }
 }
@@ -132,7 +132,7 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
     }
 
     let mut seen_measurement_ids: HashSet<&str> = HashSet::new();
-    let mut unique_ids: BTreeSet<B256> = BTreeSet::new();
+    let mut unique_ids: BTreeSet<AdmissionId> = BTreeSet::new();
     let mut records = Vec::with_capacity(raw_records.len());
 
     for (position, raw) in raw_records.iter().enumerate() {

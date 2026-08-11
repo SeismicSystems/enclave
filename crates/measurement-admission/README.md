@@ -19,6 +19,29 @@ comes from:
 - **deploy tooling**: promotes raw image measurements into the policy
   artifact and compiles it into registry genesis storage, via the CLI.
 
+```mermaid
+flowchart TD
+    subgraph identity ["guest identity (Azure TDX v1 schema)"]
+        pcrs["verified vTPM PCR bank<br/>(quote-backed, from evidence verification)"]
+        tuple["guest identity tuple (pcr4, pcr9, pcr11)<br/>a missing register fails closed"]
+        id(["admission ID = keccak256(abi.encode(<br/>schema_id, pcr4, pcr9, pcr11))"])
+        pcrs --> tuple --> id
+    end
+
+    subgraph set ["accepted set (authored, then on-chain)"]
+        raw["measurements.json<br/>(raw make-measure output)"]
+        doc["measurement-policy document<br/>(one record = one guest identity)"]
+        ids["accepted admission IDs"]
+        reg["MeasurementRegistry<br/>(live policy, authority-updated)"]
+        raw -- "promote" --> doc
+        doc -- "compile: the same derivation<br/>over each record's PCR values" --> ids
+        ids -- "genesis storage slots" --> reg
+    end
+
+    id -. "responder: eth_call isAccepted(id)" .-> reg
+    id -. "joiner: membership in the compiled<br/>manifest-pinned artifact" .-> ids
+```
+
 Policy documents are Flashbots-compatible record lists restricted to one
 value per register: one record admits one guest identity and compiles to one
 admission ID, so the reviewed document literally lists the accepted set.

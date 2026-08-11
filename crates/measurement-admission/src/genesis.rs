@@ -10,7 +10,7 @@
 //! here are pinned by golden tests on both sides (Rust here, Solidity in
 //! `MeasurementRegistry.t.sol`) and must never change.
 
-use crate::CompiledPolicy;
+use crate::{AdmissionId, CompiledPolicy};
 use alloy_primitives::{B256, U256, b256, keccak256};
 use std::collections::BTreeMap;
 
@@ -59,9 +59,9 @@ const STATUS_ACCEPTED: B256 =
 
 /// Storage slot of `statuses[admissionId]`:
 /// `keccak256(abi.encode(admissionId, REGISTRY_STORAGE_LOCATION))`.
-pub fn admission_status_slot(admission_id: B256) -> B256 {
+pub fn admission_status_slot(admission_id: AdmissionId) -> B256 {
     let mut preimage = [0u8; 64];
-    preimage[..32].copy_from_slice(admission_id.as_slice());
+    preimage[..32].copy_from_slice(admission_id.as_b256().as_slice());
     preimage[32..].copy_from_slice(REGISTRY_STORAGE_LOCATION.as_slice());
     keccak256(preimage)
 }
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn status_slot_golden_matches_solidity() {
         assert_eq!(
-            admission_status_slot(B256::from(U256::from(1))),
+            admission_status_slot(AdmissionId::from(B256::from(U256::from(1)))),
             b256!("0x375f13b0f395f58180c4440e3093a15026ebe690dc75ff0edddf4387bd26fae6")
         );
     }
