@@ -13,7 +13,7 @@
 //!
 //! These helpers return 32-byte SHA-256 digests. Attestation evidence generation
 //! takes a 64-byte input, so use [`binding64_from_digest32`] before calling
-//! [`crate::generate_evidence`] or [`crate::verify_evidence`].
+//! [`crate::generate_evidence`] or [`crate::verify_evidence_with_policy`].
 
 use crate::manifest::NetworkId;
 use sha2::{Digest, Sha256};

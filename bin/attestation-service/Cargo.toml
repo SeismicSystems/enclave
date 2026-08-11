@@ -21,7 +21,11 @@ path = "src/main.rs"
 seismic-attestation.workspace = true
 seismic-attestation-rpc.workspace = true
 seismic-custodian-ipc = { workspace = true, features = ["client"] }
+seismic-measurement-admission.workspace = true
+seismic-measurement-registry-client.workspace = true
 
+alloy.workspace = true
+alloy-primitives.workspace = true
 jsonrpsee.workspace = true
 tokio.workspace = true
 serde.workspace = true
@@ -29,9 +33,11 @@ serde_json.workspace = true
 anyhow.workspace = true
 secp256k1.workspace = true
 clap.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 # Used by the `capture_measurements` example to render guest measurements.

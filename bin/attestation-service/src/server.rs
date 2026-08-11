@@ -1,15 +1,17 @@
 use crate::{
     Args,
+    admission::{DangerouslyAdmitAnyAzureGuest, RegistryAdmission},
     api::{LuksProvisioningStatus, NodeStatusRpcServer},
     bootstrap::{
         RootKeyRequest, RootKeyResponse, answer_root_key_request, build_root_key_request,
         verify_root_key_response,
     },
-    network::{NETWORK_MANIFEST_PATH, load_network_id},
+    network::{NETWORK_MANIFEST_PATH, load_manifest},
     utils::{
         internal_rpc_error, invalid_root_key_request_rpc_error, root_key_request_denied_rpc_error,
     },
 };
+use alloy_primitives::Address;
 use anyhow::Context as _;
 use jsonrpsee::{
     core::{RpcResult, async_trait},
@@ -18,7 +20,7 @@ use jsonrpsee::{
 };
 use secp256k1::PublicKey;
 use seismic_attestation::{
-    AttestationType, NetworkId, SeismicMeasurementPolicy,
+    AttestationType, NetworkId,
     bindings::{binding64_from_digest32, tx_io_binding},
     generate_evidence,
 };
@@ -34,7 +36,7 @@ use std::{
 use tracing::{info, warn};
 
 /// Attestation type this build mints and verifies evidence for. Azure TDX +
-/// vTPM is the only supported surface today.
+/// vTPM is the only supported type today.
 const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
 
 /// Poll interval while waiting for the custodian socket to come up.
@@ -50,13 +52,21 @@ pub struct AttestationService {
     /// This node's network identity: `H(network-manifest.json)`. Every
     /// attestation binding this server mints or verifies is scoped to it.
     network_id: NetworkId,
+    /// Admission gate for joining peers: their verified measurements must be
+    /// accepted by the on-chain `MeasurementRegistry`. See [`crate::admission`].
+    admission: RegistryAdmission,
 }
 
 impl AttestationService {
-    pub fn new(custodian_socket: PathBuf, network_id: NetworkId) -> Self {
+    pub fn new(
+        custodian_socket: PathBuf,
+        network_id: NetworkId,
+        admission: RegistryAdmission,
+    ) -> Self {
         Self {
             custodian_socket,
             network_id,
+            admission,
         }
     }
 
@@ -99,7 +109,7 @@ impl AttestationRpcServer for AttestationService {
             &request,
             &self.network_id,
             &mut custodian,
-            bootstrap_measurement_policy(),
+            &self.admission,
             ATTESTATION_TYPE,
         )
         .await
@@ -142,8 +152,20 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // Derive this node's network identity from the manifest tdx-init dropped on
     // tmpfs. Fatal if absent/malformed: without it every attestation binding is
     // unscoped, so we refuse to serve rather than fall back to an unbound quote.
-    let network_id = load_network_id(NETWORK_MANIFEST_PATH)?;
+    let (manifest, network_id) = load_manifest(NETWORK_MANIFEST_PATH)?;
     info!("Derived network_id {network_id} from {NETWORK_MANIFEST_PATH}");
+
+    // Joining peers are admitted by the live on-chain policy: the manifest
+    // names the registry, our own reth answers for it. Construction is lazy —
+    // no connection until a join arrives — so serving never waits on reth;
+    // a join that beats reth's startup is denied (fail closed) and the
+    // requester retries.
+    let registry = Address::from(manifest.measurements.contracts.registry);
+    let admission = RegistryAdmission::new(args.reth_rpc_url.clone(), registry);
+    info!(
+        "Gating joining peers via MeasurementRegistry at {registry} over {}",
+        args.reth_rpc_url
+    );
 
     // The root key lives in the key custodian, a separate local process with
     // no network listener; every key operation goes through its Unix socket.
@@ -153,7 +175,7 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
 
     let server = ServerBuilder::default().build(addr).await?;
 
-    let service = AttestationService::new(args.custodian_socket, network_id);
+    let service = AttestationService::new(args.custodian_socket, network_id, admission);
     let mut rpc = NodeStatusRpcServer::into_rpc(service.clone());
     rpc.merge(AttestationRpcServer::into_rpc(service))?;
     let handle = server.start(rpc);
@@ -288,11 +310,13 @@ async fn try_fetch_root_key_from_peer(
     let response_bytes = client.get_wrapped_root_key(request_bytes).await?;
     let response: RootKeyResponse = serde_json::from_slice(&response_bytes)?;
 
+    // The joiner's appraisal of the responder is intentionally permissive for
+    // now; see [`DangerouslyAdmitAnyAzureGuest`].
     let request_binding = verify_root_key_response(
         &response,
         &request,
         network_id,
-        bootstrap_measurement_policy(),
+        &DangerouslyAdmitAnyAzureGuest,
     )
     .await?;
 
@@ -307,21 +331,4 @@ async fn try_fetch_root_key_from_peer(
         .await
         .context("installing root key in the custodian")?;
     Ok(())
-}
-
-/// Measurement policy for verifying the *other* side of the bootstrap handshake.
-///
-/// TODO(bootstrap): load the policy pinned by the manifest's
-/// `measurements.bootstrap_policy_hash` (the seismic-images
-/// `build/measurements.json` artifact) once it is delivered to the node, and
-/// check the artifact bytes against that hash. Until that artifact is wired in,
-/// this accepts any measurements after the backend's cryptographic quote
-/// verification succeeds — adequate for bringing the encrypted transcript up,
-/// NOT a production allowlist.
-fn bootstrap_measurement_policy() -> SeismicMeasurementPolicy {
-    warn!(
-        "bootstrap: using dangerously-permissive measurement policy; \
-         peer image measurements are NOT being checked against an allowlist"
-    );
-    SeismicMeasurementPolicy::dangerously_accept_any_for_testing(ATTESTATION_TYPE)
 }
