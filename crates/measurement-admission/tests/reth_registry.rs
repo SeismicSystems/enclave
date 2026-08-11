@@ -185,7 +185,9 @@ fn launch_seeded_node(reth: &PathBuf) -> (RethNode, Vec<B256>, B256) {
         dir,
         http_url: format!("http://127.0.0.1:{http_port}"),
     };
-    (node, compiled.admission_ids, compiled.policy_hash)
+    // The contract ABI speaks bytes32; cross the boundary once, here.
+    let admission_ids = compiled.admission_ids.into_iter().map(B256::from).collect();
+    (node, admission_ids, compiled.policy_hash)
 }
 
 async fn wait_for_rpc(node: &RethNode) -> impl Provider + Clone + use<> {
