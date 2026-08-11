@@ -29,9 +29,10 @@
 use anyhow::Context as _;
 use clap::Parser;
 use seismic_attestation::{
-    AttestationType, SeismicMeasurementPolicy, VerifiedAzureAttestation, VerifyOptions,
+    AttestationExchangeMessage, AttestationType, SeismicMeasurementPolicy,
+    VerifiedAzureAttestation, VerifiedSeismicAttestation, VerifyOptions,
     bindings::{binding64_from_digest32, founding_summit_keys_binding},
-    verify_azure_evidence_with_options,
+    verify_evidence_with_policy_and_options,
 };
 use std::{
     collections::BTreeMap,
@@ -120,14 +121,24 @@ async fn run(cli: Cli) -> anyhow::Result<String> {
     let binding = harvest_binding(&nonce, &node_pk, &consensus_pk);
 
     let evidence_bytes = read_evidence(&cli.evidence).await?;
-    let evidence = serde_json::from_slice(&evidence_bytes)
+    let evidence: AttestationExchangeMessage = serde_json::from_slice(&evidence_bytes)
         .context("--evidence is not a JSON-serialized AttestationExchangeMessage")?;
 
     let policy = SeismicMeasurementPolicy::from_file(cli.policy.clone())
         .await
         .with_context(|| format!("loading measurement policy {}", cli.policy.display()))?;
 
-    let verified = verify_azure_evidence_with_options(
+    // Wrong-platform evidence is rejected on the claimed type, before
+    // verification: DCAP verification costs collateral round-trips, and this
+    // policy format cannot pin a non-Azure platform's measurements anyway.
+    anyhow::ensure!(
+        evidence.attestation_type() == AttestationType::AzureTdx,
+        "expected {} evidence, got {}",
+        AttestationType::AzureTdx.as_str(),
+        evidence.attestation_type().as_str(),
+    );
+
+    let verified = verify_evidence_with_policy_and_options(
         evidence,
         binding,
         policy,
@@ -139,6 +150,9 @@ async fn run(cli: Cli) -> anyhow::Result<String> {
     )
     .await
     .context("verifying harvest evidence")?;
+    let VerifiedSeismicAttestation::AzureTdx(verified) = verified else {
+        anyhow::bail!("verified output is not azure-tdx despite azure-tdx evidence: {verified:?}");
+    };
 
     Ok(report(&verified))
 }

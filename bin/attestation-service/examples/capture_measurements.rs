@@ -51,7 +51,7 @@ use seismic_attestation::{
     AttestationType, NetworkId, SeismicMeasurementPolicy, VerifiedSeismicAttestation,
     VerifyOptions,
     bindings::{binding64_from_digest32, tx_io_binding},
-    verify_evidence_with_options,
+    verify_evidence_with_policy_and_options,
 };
 use seismic_attestation_rpc::AttestationRpcClient;
 use std::collections::BTreeMap;
@@ -151,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     println!("Verifying evidence...");
-    let verified = verify_evidence_with_options(
+    let verified = verify_evidence_with_policy_and_options(
         response.evidence,
         expected_binding,
         policy,

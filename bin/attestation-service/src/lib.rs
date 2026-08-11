@@ -1,3 +1,4 @@
+mod admission;
 pub mod api;
 mod bootstrap;
 mod luks_status;
@@ -9,6 +10,9 @@ pub mod utils;
 /// joining peers fetch the wrapped root key from here and deploy tooling polls node status.
 const DEFAULT_ENDPOINT_IP: &str = "127.0.0.1";
 const DEFAULT_ENDPOINT_PORT: u16 = 7878;
+/// The node's own reth, assumed to serve HTTP JSON-RPC on the conventional
+/// loopback endpoint.
+const DEFAULT_RETH_RPC_URL: &str = "http://127.0.0.1:8545";
 
 use anyhow::Result;
 use clap::Parser;
@@ -39,6 +43,13 @@ pub struct Args {
     /// way to obtain the root key, so startup fails immediately.
     #[arg(long, env = "SEISMIC_ROOT_KEY_PEERS", value_delimiter = ',')]
     pub peers: Vec<String>,
+
+    /// HTTP JSON-RPC endpoint of this node's own reth, queried to check each
+    /// joining peer's admission ID against the on-chain MeasurementRegistry.
+    /// An unreachable endpoint denies joins (fail closed) — it never blocks
+    /// this service's startup or its other RPCs.
+    #[arg(long, env = "SEISMIC_RETH_RPC_URL", default_value = DEFAULT_RETH_RPC_URL)]
+    pub reth_rpc_url: url::Url,
 }
 
 impl Args {

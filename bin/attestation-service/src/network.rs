@@ -1,4 +1,5 @@
-//! Startup derivation of this node's [`NetworkId`] from the network manifest.
+//! Startup load of the network manifest: this node's [`NetworkId`] plus the
+//! parsed manifest fields the service consumes (the registry address).
 //!
 //! tdx-init writes the network's `network-manifest.json` verbatim to
 //! [`NETWORK_MANIFEST_PATH`] (tmpfs, re-supplied every boot by deploy tooling).
@@ -8,9 +9,9 @@
 //!
 //! We hash the raw bytes we read rather than trusting any precomputed id, and
 //! deliberately never parse-and-re-serialize: re-rendering could change the
-//! bytes and therefore the id. We still parse once (strict v1) to fail fast
-//! with an actionable error on a malformed or wrong-version manifest, but the
-//! id always comes from [`NetworkId::from_manifest_bytes`] over the file bytes.
+//! bytes and therefore the id. The strict v1 parse also fails fast with an
+//! actionable error on a malformed or wrong-version manifest, but the id
+//! always comes from [`NetworkId::from_manifest_bytes`] over the file bytes.
 
 use anyhow::{Context, Result};
 use seismic_attestation::{NetworkId, NetworkManifestV1};
@@ -19,18 +20,16 @@ use seismic_attestation::{NetworkId, NetworkManifestV1};
 /// `CONF_DIR`/`network-manifest.json`; see that crate's README.
 pub const NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
 
-/// Read the manifest from `path`, validate it parses as v1, and derive the
+/// Read the manifest from `path`, strictly parse it as v1, and derive the
 /// [`NetworkId`] from the exact file bytes.
-pub fn load_network_id(path: &str) -> Result<NetworkId> {
+pub fn load_manifest(path: &str) -> Result<(NetworkManifestV1, NetworkId)> {
     let bytes =
         std::fs::read(path).with_context(|| format!("reading network manifest from {path}"))?;
 
-    // Strict parse for a fast, actionable error; the id is over the bytes, not
-    // the parsed value.
-    NetworkManifestV1::from_json_bytes(&bytes)
+    let manifest = NetworkManifestV1::from_json_bytes(&bytes)
         .with_context(|| format!("parsing network manifest at {path}"))?;
 
-    Ok(NetworkId::from_manifest_bytes(&bytes))
+    Ok((manifest, NetworkId::from_manifest_bytes(&bytes)))
 }
 
 #[cfg(test)]
@@ -42,25 +41,29 @@ mod tests {
         include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
 
     #[test]
-    fn derives_network_id_from_manifest_file() {
+    fn derives_network_id_and_manifest_from_file() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         tmp.write_all(FIXTURE).unwrap();
         let path = tmp.path().to_str().unwrap();
 
-        let network_id = load_network_id(path).unwrap();
+        let (manifest, network_id) = load_manifest(path).unwrap();
         // Same vector as seismic-attestation's manifest test over the fixture.
         assert_eq!(network_id, NetworkId::from_manifest_bytes(FIXTURE));
+        assert_eq!(
+            hex::encode(manifest.measurements.contracts.registry),
+            "1000000000000000000000000000000000000001"
+        );
     }
 
     #[test]
     fn rejects_malformed_manifest() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         tmp.write_all(b"{ not valid json").unwrap();
-        assert!(load_network_id(tmp.path().to_str().unwrap()).is_err());
+        assert!(load_manifest(tmp.path().to_str().unwrap()).is_err());
     }
 
     #[test]
     fn errors_when_manifest_missing() {
-        assert!(load_network_id("/nonexistent/network-manifest.json").is_err());
+        assert!(load_manifest("/nonexistent/network-manifest.json").is_err());
     }
 }

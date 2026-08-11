@@ -19,12 +19,12 @@ use std::{
     time::Duration,
 };
 
-use crate::utils::{get_args, spawn_custodian};
+use crate::utils::{get_args, spawn_accepting_registry, spawn_custodian};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy,
     bindings::{binding64_from_digest32, tx_io_binding},
-    verify_evidence,
+    verify_evidence_with_policy,
 };
 use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
 use seismic_attestation_service::{
@@ -109,7 +109,7 @@ async fn test_tx_io_evidence_relying_party() {
         tx_io_binding(&network_id, &response.tx_io_pk.serialize(), response.epoch);
     let expected_binding = binding64_from_digest32(expected_digest);
 
-    verify_evidence(
+    verify_evidence_with_policy(
         response.evidence.clone(),
         expected_binding,
         test_measurement_policy(),
@@ -123,7 +123,7 @@ async fn test_tx_io_evidence_relying_party() {
         response.epoch + 1,
     );
     assert!(
-        verify_evidence(
+        verify_evidence_with_policy(
             response.evidence.clone(),
             binding64_from_digest32(wrong_epoch_digest),
             test_measurement_policy(),
@@ -144,7 +144,7 @@ async fn test_tx_io_evidence_relying_party() {
     // deterministic malformed-evidence case.
     quote[0] = 0xff;
     assert!(
-        verify_evidence(
+        verify_evidence_with_policy(
             tampered_evidence,
             expected_binding,
             test_measurement_policy(),
@@ -222,9 +222,9 @@ async fn test_four_node_root_key_distribution() {
     }
 }
 
-/// The bootstrap path uses the same intentionally temporary permissive policy.
-/// This test is about verifier ownership and transcript integrity; production
-/// measurement admission is covered by the separately tracked on-chain policy.
+/// Deliberately permissive: this test is about verifier ownership and
+/// transcript integrity, not measurement admission — the bootstrap handshake's
+/// registry gate has its own unit coverage in the admission module.
 fn test_measurement_policy() -> SeismicMeasurementPolicy {
     SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx)
 }
@@ -325,7 +325,9 @@ async fn start_node(label: &'static str, n: u16, peers: Option<Vec<String>>) -> 
     };
     spawn_custodian(state, &socket);
 
-    let args = get_args(n, peers.unwrap_or_default(), socket.clone());
+    // Each node answers admission reads from its own accepting mock registry.
+    let registry_url = spawn_accepting_registry().await;
+    let args = get_args(n, peers.unwrap_or_default(), socket.clone(), &registry_url);
     let url = format!("http://localhost:{}", args.port);
     let mut handle = tokio::spawn(args.start());
     let client = HttpClientBuilder::default()

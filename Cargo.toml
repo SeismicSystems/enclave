@@ -81,4 +81,5 @@ toml = "0.8"
 tower = { version = "0.5", features = ["util"] }
 tracing = { version = "0.1.41"}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "json"] }
+url = "2.5"
 zeroize = "1.8.1"
