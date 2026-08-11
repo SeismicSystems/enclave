@@ -107,7 +107,7 @@ fn handle_council_connection<S: Read + Write>(stream: &mut S, state: &Centralize
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{PURPOSE_KEY, seal, state_with_root_key};
+    use crate::test_support::{PURPOSE_KEY, build_state, seal};
     use seismic_council_delivery::DeliveryPurpose;
     use std::io::Cursor;
 
@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn ping_status_and_delivery_over_one_connection() {
         let dir = tempfile::tempdir().unwrap();
-        let state = state_with_root_key(dir.path());
+        let state = build_state(dir.path());
         let responses = run_connection(
             &[
                 CouncilRequest::Ping,
@@ -173,7 +173,6 @@ mod tests {
         let CouncilResponse::Status(before) = &responses[1] else {
             panic!("expected status");
         };
-        assert!(before.accepting_deliveries);
         assert_eq!(before.tx_io_epoch, 0);
         assert!(matches!(
             responses[2],
@@ -188,7 +187,7 @@ mod tests {
     #[test]
     fn oversize_frame_drops_connection_without_reply() {
         let dir = tempfile::tempdir().unwrap();
-        let state = state_with_root_key(dir.path());
+        let state = build_state(dir.path());
         let mut stream = ScriptedStream {
             input: Cursor::new(u32::MAX.to_be_bytes().to_vec()),
             output: Vec::new(),
@@ -203,7 +202,7 @@ mod tests {
     #[test]
     fn garbage_frame_drops_connection_without_reply() {
         let dir = tempfile::tempdir().unwrap();
-        let state = state_with_root_key(dir.path());
+        let state = build_state(dir.path());
         let mut wire = 9u32.to_be_bytes().to_vec();
         wire.extend_from_slice(b"not cbor!");
         let mut stream = ScriptedStream {

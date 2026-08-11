@@ -1,24 +1,27 @@
-//! `seismic-centralized-custodian-service` — the custodian variant whose
-//! epoch keys (>= 1) arrive as signed, encrypted deliveries from a security
-//! council instead of being derived from the root key.
+//! `seismic-centralized-custodian-service` — the standalone custodian for
+//! the centralized phase, before the network moves to decentralized custody
+//! inside TEEs.
 //!
-//! Behaves exactly like `seismic-custodian-service` on the Unix socket for
-//! epoch 0 and the bootstrap methods; additionally listens on a TCP port for
-//! council delivery envelopes. Opening a network port in the key-holding
-//! process is a deliberate, council-scoped exception to the "no network
-//! listeners near keys" rule: the port speaks only the small framed council
-//! protocol (64 KiB frame cap, capped connections, I/O timeouts), every
-//! delivery is signature-checked before any state or disk is touched, and
-//! reachability should be confined by the image's firewall.
+//! Serves the same Unix-socket API as `seismic-custodian-service` for
+//! epoch 0, but epochs >= 1 arrive as signed, encrypted deliveries from a
+//! security council over a TCP port instead of being derived. Runs with no
+//! other Seismic binaries: the root key persists in a local keyfile (no
+//! attested bootstrap, no LUKS handoff), and the delivery store is a plain
+//! directory scanned at startup.
+//!
+//! The port speaks only the small framed council protocol (64 KiB frame
+//! cap, capped connections, I/O timeouts), every delivery is
+//! signature-checked before any state or disk is touched, and reachability
+//! should be confined by the deployment's firewall.
 
 use anyhow::{Context as _, Result, anyhow};
 use clap::Parser;
 use seismic_centralized_custodian_service::state::CentralizedCustodianState;
-use seismic_centralized_custodian_service::{council, dispatch};
+use seismic_centralized_custodian_service::{council, dispatch, root_key_file};
 use seismic_custodian::Custodian;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use seismic_custodian_ipc::server::{bind, serve};
-use seismic_custodian_service::{acl, state::CustodianState};
+use seismic_custodian_service::acl;
 use seismic_network_manifest::NetworkId;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -26,17 +29,13 @@ use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-/// Default drop-zone for the LUKS keyfile; same deployment contract with
-/// `setup-persistent-luks` as the standalone custodian.
-const DEFAULT_LUKS_KEYFILE_PATH: &str = "/run/seismic/custodian/luks-keys";
 /// Default council listen address. 7878 is the attestation service.
 const DEFAULT_COUNCIL_LISTEN_ADDR: &str = "0.0.0.0:7876";
-/// Where tdx-init drops the network manifest; its raw bytes define the
-/// network id that delivery envelopes must name.
-const DEFAULT_NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
-/// Delivery envelopes live on the LUKS-backed persistent disk — unlocked by
-/// this very process's keyfile handoff, hence the lazy store loading.
-const DEFAULT_DELIVERY_DIR: &str = "/persistent/seismic/custodian/deliveries";
+/// Default state directory: the root keyfile and delivery envelopes live
+/// here. The operator backs this up; nothing in it is plaintext except the
+/// root key itself.
+const DEFAULT_ROOT_KEY_PATH: &str = "/var/lib/seismic/custodian/root.key";
+const DEFAULT_DELIVERY_DIR: &str = "/var/lib/seismic/custodian/deliveries";
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -45,14 +44,11 @@ struct Args {
     #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
     socket: PathBuf,
 
-    /// Generate a fresh root key at startup (the genesis node); all other
-    /// nodes await the bootstrap flow.
-    #[arg(long, env = "SEISMIC_CUSTODIAN_GENESIS_NODE", default_value_t = false)]
-    genesis_node: bool,
-
-    /// Drop-zone path for the LUKS keyfile.
-    #[arg(long, default_value = DEFAULT_LUKS_KEYFILE_PATH)]
-    luks_keyfile: PathBuf,
+    /// Path of the 32-byte root keyfile; generated (mode 0600) on first
+    /// boot if absent. Back it up: epoch-0 keys and the council inbox key
+    /// derive from it.
+    #[arg(long, env = "SEISMIC_ROOT_KEY_FILE", default_value = DEFAULT_ROOT_KEY_PATH)]
+    root_key_file: PathBuf,
 
     /// Grant a local user access to key purposes over the socket, as
     /// USER:PURPOSE[,PURPOSE...]. Repeatable. Same grammar as
@@ -70,11 +66,11 @@ struct Args {
     council_pubkey: secp256k1::PublicKey,
 
     /// Path to the network manifest whose bytes define this network's id.
-    #[arg(long, default_value = DEFAULT_NETWORK_MANIFEST_PATH)]
+    #[arg(long, env = "SEISMIC_NETWORK_MANIFEST")]
     network_manifest: PathBuf,
 
-    /// Directory where delivery envelopes persist (signed + encrypted; never
-    /// plaintext keys).
+    /// Directory where delivery envelopes persist (signed + encrypted;
+    /// never plaintext keys).
     #[arg(long, default_value = DEFAULT_DELIVERY_DIR)]
     delivery_dir: PathBuf,
 }
@@ -83,8 +79,8 @@ fn main() -> Result<()> {
     init_tracing();
     let args = Args::parse();
 
-    // Everything that can be misconfigured fails here, before any key
-    // material exists.
+    // Everything that can be misconfigured fails here, before the sockets
+    // exist: ACL grants, the manifest, the delivery store, the keyfile.
     let method_acl = acl::method_acl_from_allow_specs(&args.allow)
         .context("resolving --allow grants (is the user missing?)")?;
     let manifest_bytes = std::fs::read(&args.network_manifest)
@@ -92,23 +88,16 @@ fn main() -> Result<()> {
     let network_id = NetworkId::from_manifest_bytes(&manifest_bytes);
     info!(%network_id, "delivery envelopes must be bound to this network");
 
-    let base = if args.genesis_node {
-        info!("genesis node: generating a fresh root key");
-        CustodianState::new_with_root_key(
-            Custodian::new_as_genesis().context("generating genesis root key")?,
-            args.luks_keyfile,
+    let root_key = root_key_file::load_or_generate(&args.root_key_file)?;
+    let state = Arc::new(
+        CentralizedCustodianState::new(
+            Custodian::new(root_key),
+            args.delivery_dir,
+            args.council_pubkey,
+            network_id,
         )
-        .context("writing LUKS keyfile for genesis root key")?
-    } else {
-        info!("joining node: awaiting root key via attested bootstrap");
-        CustodianState::new_awaiting_root_key(args.luks_keyfile)
-    };
-    let state = Arc::new(CentralizedCustodianState::new(
-        base,
-        args.delivery_dir,
-        args.council_pubkey,
-        network_id,
-    ));
+        .context("loading the delivery store")?,
+    );
 
     let unix_listener = bind(&args.socket)
         .with_context(|| format!("binding custodian socket {}", args.socket.display()))?;

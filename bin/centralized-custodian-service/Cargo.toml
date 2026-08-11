@@ -16,8 +16,10 @@ description = "Centralized custodian: security-council-delivered epoch keys serv
 [dependencies]
 seismic-council-delivery.workspace = true
 seismic-custodian.workspace = true
-# The base custodian's root-key lifecycle, dispatch, and --allow parsing,
-# reused as a library; its custodian-ipc dependency is the no-tokio one below.
+# Reused as a library only for its --allow grant parsing (`acl`); this
+# standalone service has no bootstrap flow or LUKS handoff, so the base
+# state/dispatch modules are not linked. Its custodian-ipc dependency is the
+# no-tokio one below.
 seismic-custodian-service.workspace = true
 # default-features = false is this binary's no-async-runtime guarantee: only
 # the wire types plus the synchronous `server` transport are linked. CAUTION:
@@ -31,6 +33,7 @@ seismic-network-manifest.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 hex.workspace = true
+rand.workspace = true
 secp256k1.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

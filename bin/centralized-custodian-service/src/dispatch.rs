@@ -1,25 +1,44 @@
 //! Unix-socket dispatch for the centralized custodian.
 //!
-//! Epoch 0 of every purpose — and everything that isn't an epoch-key fetch
-//! (ping, the bootstrap trio) — delegates verbatim to the base custodian's
-//! dispatch, so those behaviors stay byte-identical with the standalone
-//! service. Epochs >= 1 of tx-io/rng/snapshot are served only from
-//! council-delivered keys; a key not delivered yet answers the typed
+//! Epoch 0 of every purpose derives from the root key exactly like the TDX
+//! custodian, so consumers see identical bytes across the two services.
+//! Epochs >= 1 of tx-io/rng/snapshot are served only from council-delivered
+//! keys; a key not delivered yet answers the typed
 //! [`Response::EpochKeyUnavailable`] so callers can retry after delivery.
+//! The root-key bootstrap methods answer a stable error: this service runs
+//! standalone, holds its root key from a local keyfile, and never
+//! participates in the attested bootstrap exchange.
 
-use crate::state::{CentralizedCustodianState, EpochKeyLookup};
+use crate::state::CentralizedCustodianState;
 use anyhow::Result;
 use seismic_council_delivery::DeliveryPurpose;
 use seismic_custodian::Key;
 use seismic_custodian_ipc::{
     Request, Response, RngIkmBytes, SnapshotKeyBytes, TxIoKeypairBytes, TxIoPublicKeyBytes,
 };
-use tracing::error;
+use tracing::{error, warn};
 
 /// Map one ACL-authorized socket request onto the centralized state.
 pub fn dispatch(state: &CentralizedCustodianState, request: Request) -> Response {
     match request {
-        Request::GetTxIoKeypair { epoch } if epoch >= 1 => {
+        Request::Ping => Response::Pong,
+        Request::GetTxIoKeypair { epoch: 0 } => {
+            let custodian = state.custodian();
+            Response::TxIoKeypair(TxIoKeypairBytes {
+                sk: custodian.get_tx_io_sk(0).secret_bytes(),
+                pk: custodian.get_tx_io_pk(0).serialize(),
+            })
+        }
+        Request::GetTxIoPublicKey { epoch: 0 } => Response::TxIoPublicKey(TxIoPublicKeyBytes {
+            pk: state.custodian().get_tx_io_pk(0).serialize(),
+        }),
+        Request::GetRngIkm { epoch: 0 } => Response::RngIkm(RngIkmBytes {
+            ikm: state.custodian().get_rng_ikm(0),
+        }),
+        Request::GetSnapshotKey { epoch: 0 } => Response::SnapshotKey(SnapshotKeyBytes {
+            key: state.custodian().get_snapshot_key(0).into(),
+        }),
+        Request::GetTxIoKeypair { epoch } => {
             serve_epoch_key(state, DeliveryPurpose::TxIo, epoch, |key| {
                 let (sk, pk) = key.to_secp256k1_keypair()?;
                 Ok(Response::TxIoKeypair(TxIoKeypairBytes {
@@ -30,7 +49,7 @@ pub fn dispatch(state: &CentralizedCustodianState, request: Request) -> Response
         }
         // The public key exists only once the secret was delivered, so an
         // undelivered epoch is EpochKeyUnavailable here too.
-        Request::GetTxIoPublicKey { epoch } if epoch >= 1 => {
+        Request::GetTxIoPublicKey { epoch } => {
             serve_epoch_key(state, DeliveryPurpose::TxIo, epoch, |key| {
                 let (_, pk) = key.to_secp256k1_keypair()?;
                 Ok(Response::TxIoPublicKey(TxIoPublicKeyBytes {
@@ -38,21 +57,32 @@ pub fn dispatch(state: &CentralizedCustodianState, request: Request) -> Response
                 }))
             })
         }
-        Request::GetRngIkm { epoch } if epoch >= 1 => {
+        Request::GetRngIkm { epoch } => {
             serve_epoch_key(state, DeliveryPurpose::RngPrecompile, epoch, |key| {
                 Ok(Response::RngIkm(RngIkmBytes {
                     ikm: key.to_rng_ikm()?,
                 }))
             })
         }
-        Request::GetSnapshotKey { epoch } if epoch >= 1 => {
+        Request::GetSnapshotKey { epoch } => {
             serve_epoch_key(state, DeliveryPurpose::Snapshot, epoch, |key| {
                 Ok(Response::SnapshotKey(SnapshotKeyBytes {
                     key: key.to_snapshot_key().into(),
                 }))
             })
         }
-        other => seismic_custodian_service::dispatch::dispatch(state.base(), other),
+        Request::CreateRootKeyBootstrapAttempt
+        | Request::WrapRootKey { .. }
+        | Request::InstallRootKeyFromVerifiedBootstrapResponse { .. } => {
+            warn!(
+                method = request.method(),
+                "bootstrap method called on the standalone centralized custodian"
+            );
+            Response::Error {
+                message: "the centralized custodian does not participate in root-key bootstrap"
+                    .to_string(),
+            }
+        }
     }
 }
 
@@ -63,9 +93,9 @@ fn serve_epoch_key(
     f: impl FnOnce(&Key) -> Result<Response>,
 ) -> Response {
     match state.with_epoch_key(purpose, epoch, f) {
-        EpochKeyLookup::Ok(Ok(response)) => response,
+        Some(Ok(response)) => response,
         // Defensive only: keys are conversion-validated at delivery time.
-        EpochKeyLookup::Ok(Err(e)) => {
+        Some(Err(e)) => {
             error!(
                 ?e,
                 purpose = purpose.label(),
@@ -76,22 +106,21 @@ fn serve_epoch_key(
                 message: "delivered key conversion failed".to_string(),
             }
         }
-        EpochKeyLookup::RootKeyAbsent => Response::RootKeyAbsent,
-        EpochKeyLookup::Unavailable => Response::EpochKeyUnavailable { epoch },
+        None => Response::EpochKeyUnavailable { epoch },
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{PURPOSE_KEY, ROOT_KEY, seal, state_with_root_key};
+    use crate::test_support::{PURPOSE_KEY, ROOT_KEY, build_state, seal};
     use seismic_council_delivery::CouncilResponse;
     use seismic_custodian::Custodian;
 
     #[test]
-    fn epoch_zero_and_ping_delegate_to_the_base_custodian() {
+    fn epoch_zero_serves_root_key_derivations() {
         let dir = tempfile::tempdir().unwrap();
-        let state = state_with_root_key(dir.path());
+        let state = build_state(dir.path());
         let custodian = Custodian::new(ROOT_KEY);
 
         let Response::TxIoKeypair(keys) = dispatch(&state, Request::GetTxIoKeypair { epoch: 0 })
@@ -105,18 +134,49 @@ mod tests {
         };
         assert_eq!(rng.ikm, custodian.get_rng_ikm(0));
 
+        let Response::SnapshotKey(snapshot) =
+            dispatch(&state, Request::GetSnapshotKey { epoch: 0 })
+        else {
+            panic!("expected snapshot key");
+        };
+        let expected: [u8; 32] = custodian.get_snapshot_key(0).into();
+        assert_eq!(snapshot.key, expected);
+
         assert!(matches!(dispatch(&state, Request::Ping), Response::Pong));
-        // A bootstrap probe delegates too: the key is present.
-        assert!(matches!(
-            dispatch(&state, Request::CreateRootKeyBootstrapAttempt),
-            Response::RootKeyAlreadyPresent
-        ));
+    }
+
+    #[test]
+    fn bootstrap_methods_answer_a_stable_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        for request in [
+            Request::CreateRootKeyBootstrapAttempt,
+            Request::WrapRootKey {
+                root_key_request_binding: [0; 32],
+                peer_eph_pk: [0; 33],
+            },
+            Request::InstallRootKeyFromVerifiedBootstrapResponse {
+                attempt_id: [0; 32],
+                root_key_request_binding: [0; 32],
+                responder_eph_pk: [0; 33],
+                wrapped_root_key: Vec::new(),
+            },
+        ] {
+            let method = request.method();
+            let Response::Error { message } = dispatch(&state, request) else {
+                panic!("{method} must answer a stable error");
+            };
+            assert_eq!(
+                message,
+                "the centralized custodian does not participate in root-key bootstrap"
+            );
+        }
     }
 
     #[test]
     fn undelivered_epochs_answer_epoch_key_unavailable() {
         let dir = tempfile::tempdir().unwrap();
-        let state = state_with_root_key(dir.path());
+        let state = build_state(dir.path());
         for request in [
             Request::GetTxIoKeypair { epoch: 1 },
             Request::GetTxIoPublicKey { epoch: 1 },
@@ -136,7 +196,7 @@ mod tests {
     #[test]
     fn delivered_epochs_serve_the_delivered_key() {
         let dir = tempfile::tempdir().unwrap();
-        let state = state_with_root_key(dir.path());
+        let state = build_state(dir.path());
         assert!(matches!(
             state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
             CouncilResponse::Delivered { .. }
@@ -191,7 +251,7 @@ mod tests {
     mod real_socket {
         use super::*;
         use crate::council::serve_council;
-        use crate::test_support::state_with_root_key;
+        use crate::test_support::build_state;
         use seismic_council_delivery::{CouncilRequest, CouncilResponse};
         use seismic_custodian_ipc::server::{MethodAcl, bind};
         use seismic_custodian_ipc::{
@@ -210,7 +270,7 @@ mod tests {
         #[tokio::test]
         async fn delivery_over_tcp_serves_over_the_unix_socket() {
             let dir = tempfile::tempdir().expect("tempdir");
-            let state = Arc::new(state_with_root_key(dir.path()));
+            let state = Arc::new(build_state(dir.path()));
 
             let socket_path = dir.path().join("custodian.sock");
             let unix_listener = bind(&socket_path).expect("bind unix socket");
@@ -245,7 +305,6 @@ mod tests {
             else {
                 panic!("expected status");
             };
-            assert!(status.accepting_deliveries);
             assert_eq!(status.tx_io_epoch, 0);
             let response = council_call(
                 council_addr,

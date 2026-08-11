@@ -103,12 +103,6 @@ impl CouncilRequest {
 /// the custodian's local logs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RejectCode {
-    /// The inbox key is derived from the root key, which is not present yet;
-    /// retry after the node bootstraps.
-    RootKeyAbsent,
-    /// The persistent delivery store is not mountable yet; retry later. A
-    /// delivery that cannot be persisted is never accepted.
-    PersistenceUnavailable,
     WrongNetwork,
     /// `payload.inbox_pk` is not this custodian's inbox.
     WrongRecipient,
@@ -125,21 +119,19 @@ pub enum RejectCode {
     PersistFailed,
 }
 
-/// Public delivery state, answered even before the node is ready to accept.
+/// Public delivery state: everything the council needs before sealing the
+/// next envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CouncilStatus {
     #[serde(with = "serde_bytes")]
     pub network_id: [u8; 32],
-    /// `None` until the root key is present (the inbox key derives from it).
-    pub inbox_pk: Option<InboxPk>,
+    /// The inbox pubkey deliveries must be sealed to.
+    pub inbox_pk: InboxPk,
     /// Highest delivered epoch per purpose; 0 = only the derived epoch 0
     /// exists, so the next delivery is epoch 1.
     pub tx_io_epoch: u64,
     pub rng_epoch: u64,
     pub snapshot_epoch: u64,
-    /// True only when the root key is present AND the delivery store is
-    /// writable — the two preconditions for `DeliverEpochKey` to succeed.
-    pub accepting_deliveries: bool,
 }
 
 /// Wrapper so the optional inbox pubkey still encodes as a CBOR byte string.

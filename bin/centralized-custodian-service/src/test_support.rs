@@ -6,7 +6,6 @@ use crate::state::CentralizedCustodianState;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use seismic_council_delivery::{DeliveryPurpose, SignedDeliveryEnvelope, seal_delivery};
 use seismic_custodian::Custodian;
-use seismic_custodian_service::state::CustodianState;
 use seismic_network_manifest::NetworkId;
 use std::path::Path;
 
@@ -25,22 +24,16 @@ pub(crate) fn network_id() -> NetworkId {
     NetworkId::from_bytes(NETWORK)
 }
 
-/// Root-key-present state whose LUKS keyfile and delivery dir live under
-/// `dir`. Rebuilding over the same `dir` models a service restart.
-pub(crate) fn state_with_root_key(dir: &Path) -> CentralizedCustodianState {
-    let base = CustodianState::new_with_root_key(Custodian::new(ROOT_KEY), dir.join("luks-keys"))
-        .expect("write LUKS keyfile");
-    CentralizedCustodianState::new(base, dir.join("deliveries"), council_keys().1, network_id())
-}
-
-/// A joining node before bootstrap: no root key, so no inbox key either.
-pub(crate) fn awaiting_state(dir: &Path) -> CentralizedCustodianState {
+/// A full state whose delivery dir lives under `dir`. Rebuilding over the
+/// same `dir` models a service restart.
+pub(crate) fn build_state(dir: &Path) -> CentralizedCustodianState {
     CentralizedCustodianState::new(
-        CustodianState::new_awaiting_root_key(dir.join("luks-keys")),
+        Custodian::new(ROOT_KEY),
         dir.join("deliveries"),
         council_keys().1,
         network_id(),
     )
+    .expect("build state")
 }
 
 /// Seal one envelope exactly as council tooling would: to the inbox key that
