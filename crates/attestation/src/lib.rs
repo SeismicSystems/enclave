@@ -7,12 +7,21 @@
 //!
 //! # Main entry points
 //!
-//! Production callers usually only need these APIs:
+//! Production callers usually only need these APIs. The two verification
+//! flavors serve different callers, split by what the caller's trust anchor
+//! is:
 //!
 //! - [`generate_evidence`] to produce local attestation evidence for a
 //!   caller-supplied 64-byte protocol binding (see [`bindings`]).
-//! - [`verify_evidence`] to verify remote evidence against a
-//!   [`SeismicMeasurementPolicy`].
+//! - [`verify_evidence_with_policy`] to verify remote evidence against a
+//!   [`SeismicMeasurementPolicy`]. For relying parties anchored to a
+//!   measurement-policy document: clients/SDKs verifying the network's tx-io
+//!   key advertisement, and operator tooling such as `verify-quote`.
+//! - [`verify_evidence_with_predicate`] to verify remote evidence and appraise
+//!   the verified measurements with a caller-supplied [`AdmissionPredicate`]
+//!   (e.g. on-chain `MeasurementRegistry` membership). For nodes appraising
+//!   the peer in the root-key bootstrap handshake, where what is admissible
+//!   is a live decision owned by the caller, not a document.
 //! - [`SeismicMeasurementPolicy::from_json_bytes`] or
 //!   [`SeismicMeasurementPolicy::from_file`] to load measurement policies,
 //!   such as seismic-images' `build/measurements.json`.
@@ -68,24 +77,91 @@ pub fn generate_evidence(
 
 /// Verify remote attestation evidence with the backend, enforce the supplied
 /// measurement policy, and return typed Seismic output.
-pub async fn verify_evidence(
+///
+/// For relying parties whose trust anchor is a measurement-policy document
+/// (e.g. seismic-images' `build/measurements.json`): TxSeismic clients
+/// verifying the network's tx-io key advertisement, and operator tooling.
+/// Nodes appraising the peer in the root-key bootstrap handshake use
+/// [`verify_evidence_with_predicate`] instead.
+pub async fn verify_evidence_with_policy(
     evidence: AttestationExchangeMessage,
     expected_binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
 ) -> Result<VerifiedSeismicAttestation, AttestationError> {
-    verify_evidence_with_options(evidence, expected_binding, policy, VerifyOptions::default()).await
+    verify_evidence_with_policy_and_options(
+        evidence,
+        expected_binding,
+        policy,
+        VerifyOptions::default(),
+    )
+    .await
 }
 
-/// Same as [`verify_evidence`], with backend operational options.
-pub async fn verify_evidence_with_options(
+/// Same as [`verify_evidence_with_policy`], with backend operational options.
+pub async fn verify_evidence_with_policy_and_options(
     evidence: AttestationExchangeMessage,
     expected_binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
     options: VerifyOptions,
 ) -> Result<VerifiedSeismicAttestation, AttestationError> {
+    verify_with_backend_policy(
+        evidence,
+        expected_binding,
+        policy.into_backend_policy(),
+        options,
+    )
+    .await
+}
+
+/// Verify remote attestation evidence with the backend and appraise the
+/// resulting typed measurements with `admission`.
+///
+/// For nodes appraising the peer in the root-key bootstrap handshake, where
+/// admissibility is a live decision the caller owns (e.g. on-chain
+/// `MeasurementRegistry` membership) rather than a policy document. Relying
+/// parties that hold a policy document use [`verify_evidence_with_policy`]
+/// instead.
+///
+/// Verification and admission are one operation: the backend performs full
+/// cryptographic verification (quote chain, freshness, binding) for the
+/// evidence's attestation type, and the predicate then decides whether the
+/// verified guest is admitted. Evidence whose measurements the predicate
+/// denies fails with [`AttestationError::AdmissionDenied`]; there is no way to
+/// obtain the verified output without the predicate passing.
+pub async fn verify_evidence_with_predicate(
+    evidence: AttestationExchangeMessage,
+    expected_binding: [u8; 64],
+    admission: &impl AdmissionPredicate,
+) -> Result<VerifiedSeismicAttestation, AttestationError> {
+    // Backend appraisal pinned to the evidence's own attestation type is
+    // cryptographic verification only — admissibility (including which
+    // attestation types are acceptable at all) is the predicate's job.
+    let crypto_only =
+        BackendMeasurementPolicy::single_attestation_type(evidence.attestation_type());
+    let verified = verify_with_backend_policy(
+        evidence,
+        expected_binding,
+        crypto_only,
+        VerifyOptions::default(),
+    )
+    .await?;
+
+    admission
+        .admit(&verified)
+        .await
+        .map_err(AttestationError::AdmissionDenied)?;
+    Ok(verified)
+}
+
+async fn verify_with_backend_policy(
+    evidence: AttestationExchangeMessage,
+    expected_binding: [u8; 64],
+    backend_policy: BackendMeasurementPolicy,
+    options: VerifyOptions,
+) -> Result<VerifiedSeismicAttestation, AttestationError> {
     let attestation_type = evidence.attestation_type();
     let verifier = AttestationVerifier::new(
-        policy.into_backend_policy(),
+        backend_policy,
         options.pccs_url,
         options.dump_dcap_quotes,
         options.override_azure_outdated_tcb,
@@ -98,54 +174,26 @@ pub async fn verify_evidence_with_options(
     VerifiedSeismicAttestation::from_backend(attestation_type, expected_binding, measurements)
 }
 
-/// Generate local Azure TDX + vTPM evidence bound to `binding`.
-///
-/// Convenience wrapper around [`generate_evidence`] for the backend Seismic uses
-/// today.
-pub fn generate_azure_evidence(
-    binding: [u8; 64],
-) -> Result<AttestationExchangeMessage, AttestationError> {
-    generate_evidence(AttestationType::AzureTdx, binding)
-}
-
-/// Verify remote Azure TDX + vTPM evidence and return typed Azure output.
-///
-/// Measurement parsing and matching still use the backend policy format; this
-/// function only checks that the verified result is Azure and unwraps it for
-/// Azure-specific callers.
-pub async fn verify_azure_evidence(
-    evidence: AttestationExchangeMessage,
-    expected_binding: [u8; 64],
-    policy: SeismicMeasurementPolicy,
-) -> Result<VerifiedAzureAttestation, AttestationError> {
-    verify_azure_evidence_with_options(evidence, expected_binding, policy, VerifyOptions::default())
-        .await
-}
-
-/// Same as [`verify_azure_evidence`], with backend operational options.
-pub async fn verify_azure_evidence_with_options(
-    evidence: AttestationExchangeMessage,
-    expected_binding: [u8; 64],
-    policy: SeismicMeasurementPolicy,
-    options: VerifyOptions,
-) -> Result<VerifiedAzureAttestation, AttestationError> {
-    if evidence.attestation_type() != AttestationType::AzureTdx {
-        return Err(AttestationError::WrongAttestationType {
-            expected: AttestationType::AzureTdx,
-            actual: evidence.attestation_type(),
-        });
-    }
-
-    match verify_evidence_with_options(evidence, expected_binding, policy, options).await? {
-        VerifiedSeismicAttestation::AzureTdx(verified) => Ok(verified),
-        verified => Err(AttestationError::WrongAttestationType {
-            expected: AttestationType::AzureTdx,
-            actual: verified.attestation_type(),
-        }),
-    }
-}
-
 // === Public policy and output types ===
+
+/// Admission appraisal applied to typed verified measurements, the second
+/// phase of [`verify_evidence_with_predicate`].
+///
+/// Cryptographic verification establishes *which* guest produced the evidence
+/// (its verified measurements); an admission predicate decides whether that
+/// guest is *allowed* — for example, membership of its derived admission ID in
+/// the on-chain `MeasurementRegistry`. Predicates own the entire appraisal,
+/// including which attestation types they admit: a predicate must deny
+/// [`VerifiedSeismicAttestation`] variants it does not appraise, in particular
+/// [`VerifiedSeismicAttestation::NoAttestation`], whose cryptographic
+/// verification is vacuous.
+pub trait AdmissionPredicate {
+    /// Appraise verified measurements; any `Err` denies admission.
+    fn admit(
+        &self,
+        verified: &VerifiedSeismicAttestation,
+    ) -> impl Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send;
+}
 
 /// Seismic-safe wrapper around the attestation backend's measurement policy.
 ///
@@ -328,13 +376,10 @@ impl From<attestation::measurements::DcapMeasurements> for TdxMeasurements {
 pub enum AttestationError {
     #[error("attestation backend error: {0}")]
     Backend(#[from] attestation::AttestationError),
+    #[error("verified measurements denied admission: {0}")]
+    AdmissionDenied(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("measurement policy format error: {0}")]
     PolicyFormat(#[from] MeasurementFormatError),
-    #[error("expected {expected} attestation, got {actual}")]
-    WrongAttestationType {
-        expected: AttestationType,
-        actual: AttestationType,
-    },
     #[error("attestation backend returned no measurements for {attestation_type}")]
     MissingMeasurements { attestation_type: AttestationType },
     #[error("backend returned measurements inconsistent with {attestation_type}: {measurements:?}")]

@@ -14,7 +14,8 @@
 //!   q_b = quote over root_key_request_binding(
 //!             network_id, nonce_b, eph_pk_b)
 //!   ----  RootKeyRequest { nonce_b, eph_pk_b, q_b } --->
-//!                                          verify q_b against requester policy,
+//!                                          verify q_b, appraise the requester's
+//!                                          measurements (admission predicate),
 //!                                          recompute its binding from our own
 //!                                          network_id + the request fields
 //!                                          eph (sk_a, pk_a)
@@ -55,9 +56,9 @@ use anyhow::{Context, Result};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_attestation::{
-    AttestationExchangeMessage, AttestationType, NetworkId, SeismicMeasurementPolicy,
+    AdmissionPredicate, AttestationExchangeMessage, AttestationType, NetworkId,
     bindings::{binding64_from_digest32, root_key_request_binding, root_key_response_binding},
-    generate_evidence, verify_evidence,
+    generate_evidence, verify_evidence_with_predicate,
 };
 use seismic_custodian_ipc::CustodianClient;
 use serde::{Deserialize, Serialize};
@@ -124,26 +125,28 @@ pub fn build_root_key_request(
 /// the root key for it, and attest the response.
 ///
 /// The root key itself never appears here: only the custodian touches it, and
-/// only to wrap it once the requester's evidence has verified. `policy` is the
-/// responder's measurement allowlist (the requester must be running an
-/// admitted image). `network_id` is the responder's own — verification
-/// recomputes the requester's binding from it, so a quote for a different
-/// network fails the binding check.
+/// only to wrap it once the requester's evidence has verified. `admission` is
+/// the responder's appraisal of the requester's verified measurements (the
+/// requester must be running an admitted image — in production, registry
+/// membership; see [`crate::admission`]). `network_id` is the responder's own
+/// — verification recomputes the requester's binding from it, so a quote for a
+/// different network fails the binding check.
 pub async fn answer_root_key_request(
     request: &RootKeyRequest,
     network_id: &NetworkId,
     custodian: &mut CustodianClient,
-    policy: SeismicMeasurementPolicy,
+    admission: &impl AdmissionPredicate,
     attestation_type: AttestationType,
 ) -> Result<RootKeyResponse> {
-    // 1. Verify the requester's quote against our policy, recomputing the
-    //    expected binding from *our* network_id + the request's claimed fields.
+    // 1. Verify the requester's quote and appraise its measurements,
+    //    recomputing the expected binding from *our* network_id + the
+    //    request's claimed fields.
     let expected =
         root_key_request_binding(network_id, &request.nonce_b, &request.eph_pk_b.serialize());
-    verify_evidence(
+    verify_evidence_with_predicate(
         request.evidence.clone(),
         binding64_from_digest32(expected),
-        policy,
+        admission,
     )
     .await
     .context("verifying requester attestation evidence")?;
@@ -180,17 +183,17 @@ pub async fn answer_root_key_request(
 /// transcript.
 ///
 /// `request` is the matching request (we re-derive bindings from it rather
-/// than trusting the response to echo them). `policy` is the requester's
-/// allowlist for the responder. Returns the request-transcript binding,
-/// recomputed from our own copies of the request fields — the AEAD AAD the
-/// custodian needs to open the wrapped key on install. The wrapped key stays
-/// sealed through this function: only the custodian, holding the attempt's
-/// ephemeral secret, can open it.
+/// than trusting the response to echo them). `admission` is the requester's
+/// appraisal of the responder's verified measurements. Returns the
+/// request-transcript binding, recomputed from our own copies of the request
+/// fields — the AEAD AAD the custodian needs to open the wrapped key on
+/// install. The wrapped key stays sealed through this function: only the
+/// custodian, holding the attempt's ephemeral secret, can open it.
 pub async fn verify_root_key_response(
     response: &RootKeyResponse,
     request: &RootKeyRequest,
     network_id: &NetworkId,
-    policy: SeismicMeasurementPolicy,
+    admission: &impl AdmissionPredicate,
 ) -> Result<[u8; 32]> {
     // Verify the responder's quote: recompute the response binding from our
     // own network_id + the nonce we chose + the responder's ephemeral key +
@@ -201,10 +204,10 @@ pub async fn verify_root_key_response(
         &response.eph_pk_a.serialize(),
         &response.wrapped,
     );
-    verify_evidence(
+    verify_evidence_with_predicate(
         response.evidence.clone(),
         binding64_from_digest32(expected),
-        policy,
+        admission,
     )
     .await
     .context("verifying responder attestation evidence")?;

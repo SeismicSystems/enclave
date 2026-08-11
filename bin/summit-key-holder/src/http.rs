@@ -31,7 +31,7 @@ use crate::error::HolderError;
 use crate::state::Holder;
 
 /// Attestation type this build mints evidence for. Azure TDX + vTPM is the
-/// only supported surface today (mirrors attestation-service).
+/// only supported type today (mirrors attestation-service).
 const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
 
 #[derive(Serialize, Deserialize)]
