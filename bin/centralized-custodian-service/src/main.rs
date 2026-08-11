@@ -60,10 +60,11 @@ struct Args {
     #[arg(long, env = "SEISMIC_COUNCIL_LISTEN_ADDR", default_value = DEFAULT_COUNCIL_LISTEN_ADDR)]
     council_listen: SocketAddr,
 
-    /// The security council's secp256k1 public key (0x + 66 hex chars,
-    /// compressed SEC1). Every delivery envelope must be signed by it.
-    #[arg(long, env = "SEISMIC_COUNCIL_PUBKEY", value_parser = parse_council_pubkey)]
-    council_pubkey: secp256k1::PublicKey,
+    /// The security council's Ethereum address (0x + 40 hex chars). Every
+    /// delivery envelope must carry an EIP-712 signature that recovers to
+    /// it.
+    #[arg(long, env = "SEISMIC_COUNCIL_ADDRESS", value_parser = parse_council_address)]
+    council_address: CouncilAddress,
 
     /// Path to the network manifest whose bytes define this network's id.
     #[arg(long, env = "SEISMIC_NETWORK_MANIFEST")]
@@ -93,7 +94,7 @@ fn main() -> Result<()> {
         CentralizedCustodianState::new(
             Custodian::new(root_key),
             args.delivery_dir,
-            args.council_pubkey,
+            args.council_address.0,
             network_id,
         )
         .context("loading the delivery store")?,
@@ -116,19 +117,21 @@ fn main() -> Result<()> {
     unreachable!("custodian socket serve loop never returns");
 }
 
-/// `0x`-prefixed compressed SEC1 hex → a secp256k1 public key.
-fn parse_council_pubkey(value: &str) -> Result<secp256k1::PublicKey> {
+/// Newtype so clap's value_parser has a concrete Clone target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CouncilAddress([u8; 20]);
+
+/// `0x`-prefixed Ethereum address hex (checksum capitalization not
+/// enforced) → 20 bytes.
+fn parse_council_address(value: &str) -> Result<CouncilAddress> {
     let hex_str = value
         .strip_prefix("0x")
-        .ok_or_else(|| anyhow!("council pubkey must start with 0x"))?;
-    let bytes = hex::decode(hex_str).context("council pubkey is not valid hex")?;
-    if bytes.len() != 33 {
-        return Err(anyhow!(
-            "council pubkey must be 33 bytes (compressed SEC1), got {}",
-            bytes.len()
-        ));
-    }
-    secp256k1::PublicKey::from_slice(&bytes).context("council pubkey is not a valid curve point")
+        .ok_or_else(|| anyhow!("council address must start with 0x"))?;
+    let bytes = hex::decode(hex_str).context("council address is not valid hex")?;
+    let address: [u8; 20] = bytes
+        .try_into()
+        .map_err(|b: Vec<u8>| anyhow!("council address must be 20 bytes, got {}", b.len()))?;
+    Ok(CouncilAddress(address))
 }
 
 fn init_tracing() {
@@ -147,16 +150,16 @@ mod tests {
     }
 
     #[test]
-    fn council_pubkey_parses_and_rejects() {
-        let sk = secp256k1::SecretKey::from_byte_array(&[0x77; 32]).unwrap();
-        let pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
-        let hex_pk = format!("0x{}", hex::encode(pk.serialize()));
-        assert_eq!(parse_council_pubkey(&hex_pk).unwrap(), pk);
+    fn council_address_parses_and_rejects() {
+        // Mixed-case (EIP-55 style) input is accepted as plain hex.
+        let parsed = parse_council_address("0xAe72A48c1a36bd18Af168541c53037965d26e4A8").unwrap();
+        assert_eq!(
+            hex::encode(parsed.0),
+            "ae72a48c1a36bd18af168541c53037965d26e4a8"
+        );
 
-        assert!(parse_council_pubkey(hex_pk.trim_start_matches("0x")).is_err());
-        assert!(parse_council_pubkey("0xzz").is_err());
-        assert!(parse_council_pubkey("0x0011").is_err());
-        // 33 bytes that are not a curve point.
-        assert!(parse_council_pubkey(&format!("0x{}", hex::encode([0u8; 33]))).is_err());
+        assert!(parse_council_address("ae72a48c1a36bd18af168541c53037965d26e4a8").is_err());
+        assert!(parse_council_address("0xzz").is_err());
+        assert!(parse_council_address("0x0011").is_err());
     }
 }

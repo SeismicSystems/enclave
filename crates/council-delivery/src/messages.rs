@@ -66,13 +66,15 @@ pub struct DeliveryPayload {
     pub encrypted_key: Vec<u8>,
 }
 
-/// One council delivery: payload plus a compact ECDSA signature by the
-/// council key over `bindings::delivery_binding(&payload)`.
+/// One council delivery: payload plus an Ethereum-wallet signature —
+/// 65-byte `r || s || v` recoverable ECDSA over the EIP-712 typed-data
+/// digest [`crate::eip712::payload_digest`]. Verification recovers the
+/// signer and compares it to the configured council address.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedDeliveryEnvelope {
     pub payload: DeliveryPayload,
     #[serde(with = "serde_bytes")]
-    pub signature: [u8; 64],
+    pub signature: [u8; 65],
 }
 
 /// One request over the council delivery port.
@@ -189,7 +191,7 @@ mod tests {
                 inbox_pk: [0x33; 33],
                 encrypted_key: vec![0x44; 60],
             },
-            signature: [0x55; 64],
+            signature: [0x55; 65],
         };
         let mut wire = Vec::new();
         ciborium::into_writer(&envelope, &mut wire).unwrap();

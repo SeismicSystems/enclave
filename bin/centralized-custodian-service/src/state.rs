@@ -34,7 +34,7 @@ pub struct CentralizedCustodianState {
     custodian: Custodian,
     deliveries: Mutex<EpochKeyStore>,
     delivery_dir: PathBuf,
-    council_pk: PublicKey,
+    council_address: [u8; 20],
     network_id: NetworkId,
 }
 
@@ -82,7 +82,7 @@ impl CentralizedCustodianState {
     pub fn new(
         custodian: Custodian,
         delivery_dir: PathBuf,
-        council_pk: PublicKey,
+        council_address: [u8; 20],
         network_id: NetworkId,
     ) -> Result<Self> {
         fs::DirBuilder::new()
@@ -98,7 +98,7 @@ impl CentralizedCustodianState {
             *store.purpose_mut(purpose) = load_purpose(
                 &delivery_dir,
                 purpose,
-                &council_pk,
+                &council_address,
                 &network_id,
                 &inbox_sk,
                 &inbox_pk,
@@ -115,7 +115,7 @@ impl CentralizedCustodianState {
             custodian,
             deliveries: Mutex::new(store),
             delivery_dir,
-            council_pk,
+            council_address,
             network_id,
         })
     }
@@ -135,7 +135,7 @@ impl CentralizedCustodianState {
 
         let key_bytes = match open_delivery(
             envelope,
-            &self.council_pk,
+            &self.council_address,
             &self.network_id,
             &self.custodian.get_council_inbox_sk(),
             &self.custodian.get_council_inbox_pk(),
@@ -259,7 +259,7 @@ impl CentralizedCustodianState {
 fn load_purpose(
     delivery_dir: &Path,
     purpose: DeliveryPurpose,
-    council_pk: &PublicKey,
+    council_address: &[u8; 20],
     network_id: &NetworkId,
     inbox_sk: &SecretKey,
     inbox_pk: &PublicKey,
@@ -281,7 +281,7 @@ fn load_purpose(
                 if envelope.payload.purpose != purpose || envelope.payload.epoch != epoch {
                     return Err("purpose/epoch does not match its path".into());
                 }
-                open_delivery(&envelope, council_pk, network_id, inbox_sk, inbox_pk)
+                open_delivery(&envelope, council_address, network_id, inbox_sk, inbox_pk)
                     .map_err(|e| format!("verify: {e}"))
             })
             .and_then(|key_bytes| {

@@ -1,20 +1,28 @@
 //! Sealing and opening council delivery envelopes.
 //!
-//! A sealed envelope is independently authenticated and confidential:
-//! the council's compact ECDSA signature covers the full payload including
-//! the ciphertext (via [`bindings::delivery_binding`]), and the 32-byte
-//! purpose key is AEAD-encrypted to the custodian's inbox key with the
-//! context digest as AAD. Verification never requires the plaintext, so
-//! envelopes persist verbatim and are re-verified on every load.
+//! A sealed envelope is independently authenticated and confidential: the
+//! council's Ethereum-wallet signature (65-byte recoverable ECDSA over the
+//! EIP-712 digest in [`crate::eip712`]) covers the full payload including
+//! the ciphertext, and the 32-byte purpose key is AEAD-encrypted to the
+//! custodian's inbox key with the context digest as AAD. Verification never
+//! requires the plaintext, so envelopes persist verbatim and are re-verified
+//! on every load.
+//!
+//! [`seal_delivery`] signs with a locally held key (tests, script-driven
+//! councils). A wallet-driven council instead encrypts via the same path,
+//! has the wallet sign [`crate::eip712::typed_data_json`], and attaches the
+//! wallet's signature to the payload — the digest is identical.
 //!
 //! [`open_delivery`] is pure per-envelope validation; epoch sequencing and
 //! conflict rules live with the caller's state, not here.
 
-use crate::bindings::{payload_binding, payload_context_binding};
+use crate::bindings::payload_context_binding;
+use crate::eip712::{address_from_pubkey, payload_digest};
 use crate::messages::{DeliveryPurpose, SignedDeliveryEnvelope};
 use anyhow::{Context as _, Result, anyhow};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::ecdh::SharedSecret;
+use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use seismic_crypto::{
     AESGCM_NONCE_SIZE, AesKeyDomain, Nonce, aes_decrypt_aead, aes_encrypt_aead, derive_aes_key,
@@ -87,12 +95,41 @@ pub fn seal_delivery(
     encrypted_key.extend_from_slice(&ciphertext);
     payload.encrypted_key = encrypted_key;
 
-    let digest = payload_binding(&payload);
-    let signature = Secp256k1::signing_only()
-        .sign_ecdsa(&Message::from_digest(digest), council_sk)
-        .serialize_compact();
-
+    let signature = sign_payload(council_sk, &payload);
     Ok(SignedDeliveryEnvelope { payload, signature })
+}
+
+/// Ethereum-style recoverable signature over the payload's EIP-712 digest:
+/// `r(32) || s(32) || v` with `v` in {27, 28}, byte-compatible with what a
+/// wallet returns for [`crate::eip712::typed_data_json`].
+fn sign_payload(council_sk: &SecretKey, payload: &DeliveryPayload) -> [u8; 65] {
+    let digest = payload_digest(payload);
+    let (recovery_id, sig64) = Secp256k1::signing_only()
+        .sign_ecdsa_recoverable(&Message::from_digest(digest), council_sk)
+        .serialize_compact();
+    let mut signature = [0u8; 65];
+    signature[..64].copy_from_slice(&sig64);
+    signature[64] = 27 + i32::from(recovery_id) as u8;
+    signature
+}
+
+/// Recover the Ethereum address that signed the payload's EIP-712 digest.
+/// Accepts `v` as 27/28 (wallets) or 0/1 (raw recovery ids).
+fn recover_signer(envelope: &SignedDeliveryEnvelope) -> Option<[u8; 20]> {
+    let v = envelope.signature[64];
+    let recovery_id = RecoveryId::try_from(i32::from(match v {
+        27 | 28 => v - 27,
+        0 | 1 => v,
+        _ => return None,
+    }))
+    .ok()?;
+    let signature =
+        RecoverableSignature::from_compact(&envelope.signature[..64], recovery_id).ok()?;
+    let digest = payload_digest(&envelope.payload);
+    let recovered = Secp256k1::verification_only()
+        .recover_ecdsa(&Message::from_digest(digest), &signature)
+        .ok()?;
+    Some(address_from_pubkey(&recovered))
 }
 
 /// Why an envelope failed to open. Sanitized-by-construction: variants carry
@@ -103,18 +140,18 @@ pub enum OpenDeliveryError {
     WrongNetwork,
     #[error("delivery is sealed to a different inbox key")]
     WrongRecipient,
-    #[error("delivery signature is not by the council key")]
+    #[error("delivery signature does not recover to the council address")]
     BadSignature,
     #[error("delivery ciphertext failed to open")]
     DecryptFailed,
 }
 
-/// Verify one envelope against the council key and this custodian's identity,
-/// then decrypt the purpose key. Checks recipient and network before the
-/// signature so responses distinguish misdirection from forgery.
+/// Verify one envelope against the council address and this custodian's
+/// identity, then decrypt the purpose key. Checks recipient and network
+/// before the signature so responses distinguish misdirection from forgery.
 pub fn open_delivery(
     envelope: &SignedDeliveryEnvelope,
-    council_pk: &PublicKey,
+    council_address: &[u8; 20],
     network_id: &NetworkId,
     inbox_sk: &SecretKey,
     inbox_pk: &PublicKey,
@@ -127,12 +164,10 @@ pub fn open_delivery(
         return Err(OpenDeliveryError::WrongRecipient);
     }
 
-    let digest = payload_binding(payload);
-    let signature = secp256k1::ecdsa::Signature::from_compact(&envelope.signature)
-        .map_err(|_| OpenDeliveryError::BadSignature)?;
-    Secp256k1::verification_only()
-        .verify_ecdsa(&Message::from_digest(digest), &signature, council_pk)
-        .map_err(|_| OpenDeliveryError::BadSignature)?;
+    let signer = recover_signer(envelope).ok_or(OpenDeliveryError::BadSignature)?;
+    if &signer != council_address {
+        return Err(OpenDeliveryError::BadSignature);
+    }
 
     let sender_pk = PublicKey::from_slice(&payload.sender_eph_pk)
         .map_err(|_| OpenDeliveryError::DecryptFailed)?;
@@ -178,10 +213,10 @@ pub fn envelope_from_bytes(bytes: &[u8]) -> Result<SignedDeliveryEnvelope> {
 mod tests {
     use super::*;
 
-    fn council() -> (SecretKey, PublicKey) {
+    fn council() -> (SecretKey, [u8; 20]) {
         let sk = SecretKey::from_byte_array(&[0x77; 32]).unwrap();
         let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
-        (sk, pk)
+        (sk, address_from_pubkey(&pk))
     }
 
     fn inbox() -> (SecretKey, PublicKey) {
@@ -209,12 +244,12 @@ mod tests {
 
     #[test]
     fn seal_then_open_roundtrips() {
-        let (_, council_pk) = council();
+        let (_, council_address) = council();
         let (inbox_sk, inbox_pk) = inbox();
         let envelope = sealed(1);
         let key = open_delivery(
             &envelope,
-            &council_pk,
+            &council_address,
             &NetworkId::from_bytes(NETWORK),
             &inbox_sk,
             &inbox_pk,
@@ -225,11 +260,11 @@ mod tests {
 
     #[test]
     fn open_rejects_wrong_network() {
-        let (_, council_pk) = council();
+        let (_, council_address) = council();
         let (inbox_sk, inbox_pk) = inbox();
         let err = open_delivery(
             &sealed(1),
-            &council_pk,
+            &council_address,
             &NetworkId::from_bytes([0x99; 32]),
             &inbox_sk,
             &inbox_pk,
@@ -240,11 +275,11 @@ mod tests {
 
     #[test]
     fn open_rejects_wrong_recipient() {
-        let (_, council_pk) = council();
+        let (_, council_address) = council();
         let other = EphemeralKeypair::generate();
         let err = open_delivery(
             &sealed(1),
-            &council_pk,
+            &council_address,
             &NetworkId::from_bytes(NETWORK),
             &other.sk,
             &other.pk,
@@ -266,10 +301,10 @@ mod tests {
             &PURPOSE_KEY,
         )
         .unwrap();
-        let (_, council_pk) = council();
+        let (_, council_address) = council();
         let err = open_delivery(
             &envelope,
-            &council_pk,
+            &council_address,
             &NetworkId::from_bytes(NETWORK),
             &inbox_sk,
             &inbox_pk,
@@ -282,7 +317,7 @@ mod tests {
     /// including swapping the ciphertext, which the binding's tail covers.
     #[test]
     fn open_rejects_tampered_fields() {
-        let (_, council_pk) = council();
+        let (_, council_address) = council();
         let (inbox_sk, inbox_pk) = inbox();
         let network_id = NetworkId::from_bytes(NETWORK);
 
@@ -301,8 +336,14 @@ mod tests {
             ("purpose swap", purpose_swap),
             ("sender swap", sender_swap),
         ] {
-            let err = open_delivery(&tampered, &council_pk, &network_id, &inbox_sk, &inbox_pk)
-                .unwrap_err();
+            let err = open_delivery(
+                &tampered,
+                &council_address,
+                &network_id,
+                &inbox_sk,
+                &inbox_pk,
+            )
+            .unwrap_err();
             assert_eq!(err, OpenDeliveryError::BadSignature, "{label}");
         }
     }
@@ -311,18 +352,61 @@ mod tests {
     fn open_rejects_truncated_ciphertext_after_resign() {
         // A "council" that signs a garbage ciphertext: the signature is valid,
         // so the failure must surface as DecryptFailed, not a panic.
-        let (council_sk, council_pk) = council();
+        let (council_sk, council_address) = council();
         let (inbox_sk, inbox_pk) = inbox();
         let network_id = NetworkId::from_bytes(NETWORK);
         let mut envelope = sealed(1);
         envelope.payload.encrypted_key.truncate(8);
-        let digest = payload_binding(&envelope.payload);
-        envelope.signature = Secp256k1::signing_only()
-            .sign_ecdsa(&Message::from_digest(digest), &council_sk)
-            .serialize_compact();
-        let err =
-            open_delivery(&envelope, &council_pk, &network_id, &inbox_sk, &inbox_pk).unwrap_err();
+        envelope.signature = sign_payload(&council_sk, &envelope.payload);
+        let err = open_delivery(
+            &envelope,
+            &council_address,
+            &network_id,
+            &inbox_sk,
+            &inbox_pk,
+        )
+        .unwrap_err();
         assert_eq!(err, OpenDeliveryError::DecryptFailed);
+    }
+
+    /// End-to-end Ethereum-wallet compatibility: this signature was produced
+    /// by foundry (`cast wallet sign --data '<typed_data_json(payload)>'`
+    /// with private key 0x77..77, address
+    /// 0xAe72A48c1a36bd18Af168541c53037965d26e4A8), not by this crate. It
+    /// must recover to the council address — pinning that a stock wallet
+    /// signing [`crate::eip712::typed_data_json`] yields an envelope this
+    /// code accepts.
+    #[test]
+    fn wallet_produced_signature_recovers_to_the_council_address() {
+        let payload = DeliveryPayload {
+            network_id: [0x11; 32],
+            purpose: DeliveryPurpose::TxIo,
+            epoch: 7,
+            sender_eph_pk: [0x22; 33],
+            inbox_pk: [0x33; 33],
+            encrypted_key: vec![0x44; 60],
+        };
+        let cast_signature = hex::decode(
+            "b681ef563a3901fb7f7b6e946416cfc0f6b4764c8b697ee4a975a83d7d70bdca\
+             53636f06e0dd2057558716397bc00ad7e371c6659fe81aadf1158b78878272621b",
+        )
+        .unwrap();
+        let envelope = SignedDeliveryEnvelope {
+            payload,
+            signature: cast_signature.try_into().unwrap(),
+        };
+        let (_, council_address) = council();
+        assert_eq!(
+            hex::encode(council_address),
+            "ae72a48c1a36bd18af168541c53037965d26e4a8"
+        );
+        assert_eq!(recover_signer(&envelope), Some(council_address));
+        // And our locally signed envelopes recover identically.
+        let locally_signed = SignedDeliveryEnvelope {
+            signature: sign_payload(&council().0, &envelope.payload),
+            payload: envelope.payload,
+        };
+        assert_eq!(recover_signer(&locally_signed), Some(council_address));
     }
 
     #[test]

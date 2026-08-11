@@ -14,8 +14,10 @@ description = "Wire types, binding digests, and envelope crypto for security-cou
 # or async dependencies.
 
 [dependencies]
+alloy-primitives.workspace = true
 anyhow.workspace = true
 ciborium.workspace = true
+hex.workspace = true
 rand.workspace = true
 secp256k1.workspace = true
 seismic-crypto.workspace = true
@@ -27,4 +29,4 @@ thiserror.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
-hex.workspace = true
+serde_json.workspace = true
