@@ -7,7 +7,7 @@
 //! durable audit record of what a policy document compiled to and seeded
 //! at genesis.
 
-use crate::{AZURE_TDX_V1_SCHEMA, CompiledPolicy, azure_tdx_v1_schema_id, genesis};
+use crate::{AZURE_TDX_V1_SCHEMA, AdmissionId, CompiledPolicy, azure_tdx_v1_schema_id, genesis};
 use alloy_primitives::B256;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -25,7 +25,7 @@ pub struct CompileReport {
     /// Number of unique admission IDs (the registry's `acceptedCount`).
     pub accepted_count: usize,
     /// Unique admission IDs across all records, ascending.
-    pub admission_ids: Vec<B256>,
+    pub admission_ids: Vec<AdmissionId>,
     /// Per-record expansions, in document order.
     pub records: Vec<RecordReport>,
     /// keccak256 of the canonical registry runtime bytecode the genesis
@@ -40,7 +40,7 @@ pub struct CompileReport {
 pub struct RecordReport {
     pub measurement_id: String,
     /// The admission ID of this record's measurement tuple.
-    pub admission_id: B256,
+    pub admission_id: AdmissionId,
 }
 
 impl CompileReport {

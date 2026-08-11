@@ -27,6 +27,16 @@ use thiserror::Error;
 /// A network's identity: SHA-256 of the exact bytes of its
 /// `network-manifest.json`.
 ///
+/// Note that we don't serialize before hashing on purpose. We want the
+/// artifact itself to be the identity, not its values. This is similar to
+/// git objects, OCI digests, and other content-addressed objects. The manifest
+/// has a single emitter and travels verbatim, so any holder of the bytes
+/// derives the id with no schema and no canonical-JSON spec that every
+/// language must reimplement bit-identically, and there is no canonicalizer
+/// whose bugs could silently give two differing documents one id. The flip
+/// side is intended: any byte change, even a reformat, names a different
+/// network and fails loudly at the first binding check.
+///
 /// Transcript form is the raw 32 bytes ([`NetworkId::as_bytes`]).
 /// Presentation form is lowercase 0x-hex ([`fmt::Display`]).
 /// Equivalently: `sha256sum network-manifest.json`.
