@@ -43,10 +43,12 @@ pub async fn spawn_accepting_registry() -> String {
             }
             let mut block = alloy::rpc::types::Block::<alloy::rpc::types::Transaction>::default();
             block.header.inner.number = 1;
+            // Milliseconds, like real Seismic headers: the freshness gate
+            // reads the timestamp in that unit.
             block.header.inner.timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system clock after epoch")
-                .as_secs();
+                .as_millis() as u64;
             Ok(serde_json::to_value(block).expect("serialize mock block"))
         })
         .expect("register eth_getBlockByNumber");
