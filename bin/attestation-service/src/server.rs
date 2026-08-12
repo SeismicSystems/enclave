@@ -7,9 +7,7 @@ use crate::{
         verify_root_key_response,
     },
     network::{NETWORK_MANIFEST_PATH, load_manifest},
-    utils::{
-        internal_rpc_error, invalid_root_key_request_rpc_error, root_key_request_denied_rpc_error,
-    },
+    utils::{internal_rpc_error, invalid_root_key_request_rpc_error, root_key_answer_rpc_error},
 };
 use alloy_primitives::Address;
 use anyhow::Context as _;
@@ -113,7 +111,7 @@ impl AttestationRpcServer for AttestationService {
             ATTESTATION_TYPE,
         )
         .await
-        .map_err(root_key_request_denied_rpc_error)?;
+        .map_err(root_key_answer_rpc_error)?;
 
         serde_json::to_vec(&response)
             .map_err(|error| internal_rpc_error("serializing root-key response", error))
