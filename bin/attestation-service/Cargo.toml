@@ -37,6 +37,7 @@ thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rand.workspace = true
+rustls.workspace = true
 url.workspace = true
 
 [dev-dependencies]
