@@ -159,7 +159,13 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // a join that beats reth's startup is denied (fail closed) and the
     // requester retries.
     let registry = Address::from(manifest.measurements.contracts.registry);
-    let admission = RegistryAdmission::new(args.reth_rpc_url.clone(), registry);
+    let mut admission = RegistryAdmission::new(args.reth_rpc_url.clone(), registry);
+    if let Some(max_policy_age) = args.max_policy_age {
+        warn!(
+            "Admission accepts a finalized policy view no older than {max_policy_age:?} (test override)"
+        );
+        admission = admission.with_max_policy_age(max_policy_age);
+    }
     info!(
         "Gating joining peers via MeasurementRegistry at {registry} over {}",
         args.reth_rpc_url

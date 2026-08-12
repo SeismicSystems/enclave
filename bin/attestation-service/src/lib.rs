@@ -1,6 +1,6 @@
 mod admission;
 pub mod api;
-mod bootstrap;
+pub mod bootstrap;
 mod luks_status;
 mod network;
 mod server;
@@ -50,6 +50,13 @@ pub struct Args {
     /// this service's startup or its other RPCs.
     #[arg(long, env = "SEISMIC_RETH_RPC_URL", default_value = DEFAULT_RETH_RPC_URL)]
     pub reth_rpc_url: url::Url,
+
+    /// Bound on the finalized-block age admission decisions accept; `None`
+    /// keeps the production default. Deliberately not a CLI flag: only the
+    /// admission integration suite tightens it, to observe the staleness
+    /// denial without waiting out the production bound.
+    #[arg(skip)]
+    pub max_policy_age: Option<std::time::Duration>,
 }
 
 impl Args {

@@ -138,6 +138,9 @@ const MAX_POLICY_AGE: Duration = Duration::from_secs(60);
 #[derive(Clone)]
 pub struct RegistryAdmission {
     registry: MeasurementRegistryInstance<RootProvider>,
+    /// Bound on the finalized-block age this admission accepts; defaults to
+    /// [`MAX_POLICY_AGE`].
+    max_policy_age: Duration,
     /// Latched once any admission observes the chain past genesis. The
     /// genesis admission window (see `fresh_policy_block`) never reopens
     /// within this process: a reth back at block 0 after progress was
@@ -156,8 +159,17 @@ impl RegistryAdmission {
     fn with_provider(provider: RootProvider, registry: Address) -> Self {
         Self {
             registry: MeasurementRegistry::new(registry, provider),
+            max_policy_age: MAX_POLICY_AGE,
             chain_has_advanced: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// The same admission with a tighter policy-age bound. The admission
+    /// integration suite injects seconds here, so the staleness denial is
+    /// observable without waiting out the production bound.
+    pub fn with_max_policy_age(mut self, max_policy_age: Duration) -> Self {
+        self.max_policy_age = max_policy_age;
+        self
     }
 
     /// The block to answer `isAccepted` at: local reth's finalized block,
@@ -198,11 +210,11 @@ impl RegistryAdmission {
             .as_millis() as u64;
         let age =
             Duration::from_millis(now_millis.saturating_sub(finalized.header.inner.timestamp));
-        if age > MAX_POLICY_AGE {
+        if age > self.max_policy_age {
             return Err(AdmissionDenial::ChainStale {
                 number: finalized.header.inner.number,
                 age_secs: age.as_secs(),
-                max_age_secs: MAX_POLICY_AGE.as_secs(),
+                max_age_secs: self.max_policy_age.as_secs(),
             });
         }
         Ok(finalized.header.hash)
