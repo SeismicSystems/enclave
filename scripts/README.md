@@ -53,5 +53,6 @@ executes it with `sudo`.
 ./scripts/run_attestation_service_admission_tdx_tests.sh
 ```
 
-CI runs the same scripts in the `attestation_service_evidence_tdx_tests` and
-`attestation_service_admission_tdx_tests` jobs in `.github/workflows/ci.yml`.
+CI runs the same scripts as the two steps of the
+`attestation_service_tdx_tests` job in `.github/workflows/ci.yml` — one job,
+so the suites share a single dependency build on the TDX runner.

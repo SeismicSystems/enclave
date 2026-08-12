@@ -74,8 +74,8 @@ jobs:
         run: cargo test -p seismic-custodian-ipc --all-features
       # The live seismic-attestation-service test targets (evidence,
       # admission) need a TDX CVM, and seismic-measurement-admission's
-      # reth_registry test needs a seismic-reth binary; each runs in its own
-      # job. Everything else can run on the hosted runner.
+      # reth_registry test needs a seismic-reth binary; those run in their
+      # own jobs. Everything else can run on the hosted runner.
       - name: Run workspace tests
         run: >-
           cargo test --workspace
@@ -125,24 +125,14 @@ jobs:
           SEISMIC_RETH_BIN: ${{ steps.sreth.outputs.seismic-reth-path }}
         run: cargo test -p seismic-measurement-admission
 
-  attestation_service_evidence_tdx_tests:
-    runs-on: [self-hosted, linux, x64, azure-tdx-v6]
-    # This runner has passwordless sudo and must never execute fork PR code.
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Run evidence tests
-        run: ./scripts/run_attestation_service_evidence_tdx_tests.sh
-
-  attestation_service_admission_tdx_tests:
+  # Both live-TEE suites in one job: the single TDX box serializes these
+  # tests regardless (one runner, one vTPM), and the suites share most of
+  # one dependency graph, so one job pays compilation once — the second
+  # suite's cargo build is incremental in the same workspace. Test suites
+  # run as separate steps, evidence first: it has no reth dependency, so
+  # its results are in before the admission half touches the nightly
+  # release binary.
+  attestation_service_tdx_tests:
     runs-on: [self-hosted, linux, x64, azure-tdx-v6]
     # This runner has passwordless sudo and must never execute fork PR code.
     if: >-
@@ -155,6 +145,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Run evidence tests
+        run: ./scripts/run_attestation_service_evidence_tdx_tests.sh
+
       # The admission suite boots real seismic-reth dev nodes from a prebuilt
       # nightly release binary.
       - id: sreth
