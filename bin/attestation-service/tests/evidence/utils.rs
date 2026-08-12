@@ -12,6 +12,7 @@ pub fn get_args(n: u16, peers: Vec<String>, custodian_socket: PathBuf, reth_rpc_
         peers,
         custodian_socket,
         reth_rpc_url: reth_rpc_url.parse().expect("valid mock registry URL"),
+        max_policy_age: None,
     }
 }
 

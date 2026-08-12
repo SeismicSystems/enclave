@@ -1,7 +1,9 @@
 # Integration Tests
 
-`run_attestation_service_tdx_tests.sh` runs the live-TEE attestation-service integration
-tests on the self-hosted Azure TDX runner.
+`run_attestation_service_evidence_tdx_tests.sh` runs the live-TEE
+attestation-service evidence suite on the self-hosted Azure TDX runner.
+`run_attestation_service_admission_tdx_tests.sh` runs the service's
+reth-backed responder-admission suite on the same runner.
 
 ## Covered flows
 
@@ -23,8 +25,13 @@ joining pairs — two bootstrapping from the genesis node, one from an
 already-bootstrapped joiner — and checks that every join completes and all
 four custodians derive the same `tx_io_pk`.
 
-TODO: add contract-backed bootstrap-admission coverage as a distinct
-reth-backed integration test with PCR policy seeded in genesis.
+The admission suite (`bin/attestation-service/tests/admission.rs`) covers the
+responder's contract-backed bootstrap admission against real `seismic-reth`
+dev nodes seeded with a measurement policy compiled at runtime from the
+runner's own quoted PCRs: an accepted tuple authorizes exactly one root-key
+wrap, an on-chain deprecation denies the next handshake without a service
+restart, an unknown tuple is denied, and an unreachable or stale chain fails
+closed. It additionally needs a `seismic-reth` binary (`SEISMIC_RETH_BIN`).
 
 ## Requirements
 
@@ -35,15 +42,17 @@ reth-backed integration test with PCR policy seeded in genesis.
   TPM. On the CI image, the script asks Supervisor to stop it if present.
 - A Rust toolchain.
 
-The script installs the checked-in network-manifest fixture under
-`/run/seismic/conf`, builds the integration-test binary as the runner user, and
+Each script installs the checked-in network-manifest fixture under
+`/run/seismic/conf`, builds its test binary as the runner user, and
 executes it with `sudo`.
 
 ## Running
 
 ```bash
-./scripts/run_attestation_service_tdx_tests.sh
+./scripts/run_attestation_service_evidence_tdx_tests.sh
+./scripts/run_attestation_service_admission_tdx_tests.sh
 ```
 
-CI runs the same script in the `attestation_service_tdx_tests` job in
-`.github/workflows/ci.yml`.
+CI runs the same scripts as the two steps of the
+`attestation_service_tdx_tests` job in `.github/workflows/ci.yml` — one job,
+so the suites share a single dependency build on the TDX runner.
