@@ -190,15 +190,18 @@ impl RegistryAdmission {
         self.chain_has_advanced.store(true, Ordering::Relaxed);
 
         let finalized = self.block_by_tag(BlockNumberOrTag::Finalized).await?;
-        let now_secs = SystemTime::now()
+        // Seismic header timestamps are milliseconds: summit proposes payload
+        // timestamps in milliseconds and reth serves them verbatim.
+        let now_millis = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs();
-        let age_secs = now_secs.saturating_sub(finalized.header.inner.timestamp);
-        if age_secs > MAX_POLICY_AGE.as_secs() {
+            .as_millis() as u64;
+        let age =
+            Duration::from_millis(now_millis.saturating_sub(finalized.header.inner.timestamp));
+        if age > MAX_POLICY_AGE {
             return Err(AdmissionDenial::ChainStale {
                 number: finalized.header.inner.number,
-                age_secs,
+                age_secs: age.as_secs(),
                 max_age_secs: MAX_POLICY_AGE.as_secs(),
             });
         }
@@ -357,11 +360,14 @@ mod tests {
         block
     }
 
-    fn now_secs() -> u64 {
+    /// Fabricated headers carry millisecond timestamps, the unit real blocks
+    /// have. The stale test below is what holds the gate to that unit: a gate
+    /// reading these as seconds would see every one of them as age zero.
+    fn now_millis() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock after epoch")
-            .as_secs()
+            .as_millis() as u64
     }
 
     /// Queue responses for the two chain reads `admit` issues before the
@@ -371,8 +377,8 @@ mod tests {
     /// those tags (and pins the registry call to the finalized hash) is
     /// proven by `policy_read_is_pinned_to_the_fresh_finalized_block`.
     fn push_fresh_chain(asserter: &Asserter) {
-        asserter.push_success(&rpc_block(7, now_secs()));
-        asserter.push_success(&rpc_block(6, now_secs()));
+        asserter.push_success(&rpc_block(7, now_millis()));
+        asserter.push_success(&rpc_block(6, now_millis()));
     }
 
     /// A parameter-checking reth stand-in: serves `latest` and `finalized`
@@ -470,7 +476,8 @@ mod tests {
         // eth_call at exactly the finalized hash, so this admission succeeding
         // proves the gate reads the finalized tag and pins the registry query
         // to the block it freshness-checked.
-        let url = spawn_tag_checking_reth(rpc_block(7, now_secs()), rpc_block(6, now_secs())).await;
+        let url =
+            spawn_tag_checking_reth(rpc_block(7, now_millis()), rpc_block(6, now_millis())).await;
         let admission = RegistryAdmission::new(url.parse().expect("mock reth URL"), Address::ZERO);
 
         admission
@@ -549,8 +556,8 @@ mod tests {
     async fn stale_finalized_view_is_denied() {
         let asserter = Asserter::new();
         for _ in 0..DECIDE_ATTEMPTS {
-            asserter.push_success(&rpc_block(7, now_secs()));
-            asserter.push_success(&rpc_block(6, now_secs() - 3600));
+            asserter.push_success(&rpc_block(7, now_millis()));
+            asserter.push_success(&rpc_block(6, now_millis() - 3_600_000));
         }
         let admission = mocked_registry(&asserter);
 
@@ -567,7 +574,7 @@ mod tests {
         // forkchoice update; the mock's null response covers the same branch.
         let asserter = Asserter::new();
         for _ in 0..DECIDE_ATTEMPTS {
-            asserter.push_success(&rpc_block(7, now_secs()));
+            asserter.push_success(&rpc_block(7, now_millis()));
             asserter.push_success(&serde_json::Value::Null);
         }
         let admission = mocked_registry(&asserter);
@@ -622,7 +629,7 @@ mod tests {
             .expect("fresh chain past genesis must admit");
 
         for _ in 0..DECIDE_ATTEMPTS {
-            asserter.push_success(&rpc_block(0, now_secs()));
+            asserter.push_success(&rpc_block(0, now_millis()));
         }
         let error = admission
             .admit(&verified_azure(golden_pcr_bank()))
