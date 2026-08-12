@@ -61,6 +61,13 @@ pub struct Args {
 
 impl Args {
     pub async fn start(self) -> Result<()> {
+        // Quote verification's collateral fetching (attested-tls) builds
+        // rustls-backed HTTP clients, which need a process-level crypto
+        // provider that only the application can choose. Install it before
+        // anything verifies evidence; a provider installed even earlier by
+        // an embedding process wins, and any provider serves.
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         let addr: SocketAddr = format!("{}:{}", self.ip, self.port).parse()?;
 
         info!("Starting attestation-service JSON-RPC server on {addr}...");
