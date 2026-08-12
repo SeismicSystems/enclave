@@ -36,6 +36,10 @@ jobs:
       - name: Build workspace and deny warnings
         run: RUSTFLAGS="-D warnings" cargo build --workspace
 
+  # Everything hermetic given committed files: the hosted test suites plus
+  # the cross-repo parity gates, which read files checked out from the
+  # seismic repo's main branch — never a built artifact. Keeping built
+  # artifacts out is what lets this job serve as the required per-PR check.
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,10 +72,10 @@ jobs:
       # skips the `cli` binary entirely (required-features). Cover them here.
       - name: Run seismic-custodian-ipc tests (all features)
         run: cargo test -p seismic-custodian-ipc --all-features
-      # The one live seismic-attestation-service integration target needs a TDX CVM,
-      # and seismic-measurement-admission's reth_registry test needs a
-      # seismic-reth binary; both run in their own jobs. Everything else can
-      # run on the hosted runner.
+      # The live seismic-attestation-service test targets (evidence,
+      # admission) need a TDX CVM, and seismic-measurement-admission's
+      # reth_registry test needs a seismic-reth binary; those run in their
+      # own jobs. Everything else can run on the hosted runner.
       - name: Run workspace tests
         run: >-
           cargo test --workspace
@@ -97,6 +101,10 @@ jobs:
       - name: Run attestation-service unit tests
         run: cargo test -p seismic-attestation-service --lib --bins
 
+  # Hosted, but dependent on a prebuilt artifact from another repo: the
+  # reth_registry test boots a real seismic-reth dev node from the nightly
+  # release binary. Its own job — outside the required `tests` check — so a
+  # lagging or broken nightly surfaces here without blocking enclave merges.
   measurement_admission_tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -117,13 +125,20 @@ jobs:
           SEISMIC_RETH_BIN: ${{ steps.sreth.outputs.seismic-reth-path }}
         run: cargo test -p seismic-measurement-admission
 
+  # Both live-TEE suites in one job: the single TDX box serializes these
+  # tests regardless (one runner, one vTPM), and the suites share most of
+  # one dependency graph, so one job pays compilation once — the second
+  # suite's cargo build is incremental in the same workspace. Test suites
+  # run as separate steps, evidence first: it has no reth dependency, so
+  # its results are in before the admission half touches the nightly
+  # release binary.
   attestation_service_tdx_tests:
     runs-on: [self-hosted, linux, x64, azure-tdx-v6]
     # This runner has passwordless sudo and must never execute fork PR code.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -131,7 +146,16 @@ jobs:
         with:
           cache-on-failure: true
 
-      # TODO: add a separate reth-backed integration job for contract-backed
-      # bootstrap admission with PCR policy seeded in genesis.
-      - name: Run integration tests
-        run: ./scripts/run_attestation_service_tdx_tests.sh
+      - name: Run evidence tests
+        run: ./scripts/run_attestation_service_evidence_tdx_tests.sh
+
+      # The admission suite boots real seismic-reth dev nodes from a prebuilt
+      # nightly release binary.
+      - id: sreth
+        uses: SeismicSystems/seismic/.github/actions/setup-sreth@main
+        with:
+          version: nightly
+      - name: Run admission tests
+        env:
+          SEISMIC_RETH_BIN: ${{ steps.sreth.outputs.seismic-reth-path }}
+        run: ./scripts/run_attestation_service_admission_tdx_tests.sh

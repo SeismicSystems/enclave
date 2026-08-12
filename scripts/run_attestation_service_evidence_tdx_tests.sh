@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Self-hosted integration test runner. The test needs direct TPM access plus
-# the image's /run/seismic layout, so build as the runner user and execute the
-# resulting test binary with sudo.
+# Self-hosted runner for the attestation service's evidence test suite. The
+# tests need direct TPM access plus the image's /run/seismic layout, so build
+# as the runner user and execute the resulting test binary with sudo.
 
 set -e
 
 export RUST_BACKTRACE=1
 export RUST_LOG=info
 
-echo "🚀 Starting attestation-service integration tests..."
+echo "🚀 Starting attestation-service evidence tests..."
 
 # The image service normally creates these runtime directories. Ensure they
 # also exist when the test job starts from a clean runner boot.
@@ -33,11 +33,11 @@ fi
 sleep 2
 
 cd bin/attestation-service
-OUTPUT=$(CARGO_TERM_COLOR=never cargo test --test integration --no-run 2>&1)
+OUTPUT=$(CARGO_TERM_COLOR=never cargo test --test evidence --no-run 2>&1)
 echo "$OUTPUT"
 mapfile -t binaries < <(echo "$OUTPUT" | sed -nE 's/^[[:space:]]*Executable .*\((.+)\)$/\1/p')
 if [ ${#binaries[@]} -eq 0 ]; then
-    echo "❌ Could not find the attestation-service integration test binary"
+    echo "❌ Could not find the attestation-service evidence test binary"
     exit 1
 fi
 
@@ -51,4 +51,4 @@ for binary in "${binaries[@]}"; do
     sudo env RUST_LOG="$RUST_LOG" RUST_BACKTRACE="$RUST_BACKTRACE" "$binary"
 done
 
-echo "🎉 All attestation-service integration tests passed!"
+echo "🎉 All attestation-service evidence tests passed!"

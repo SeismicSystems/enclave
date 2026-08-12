@@ -1,7 +1,14 @@
-//! Live-TEE integration coverage run through
-//! `scripts/run_integration_tests.sh`. The script prepares the runtime
-//! manifest, frees the TPM, and executes these tests with the required
-//! privileges.
+//! Live-TEE coverage of the evidence layer — attested transcripts, quote
+//! verification, and the key flows built on them — run through
+//! `scripts/run_attestation_service_evidence_tdx_tests.sh`. The script
+//! prepares the runtime manifest, frees the TPM, and executes these tests
+//! with the required privileges.
+//!
+//! Each node here answers admission reads from a permissive mock registry
+//! (see `utils::spawn_accepting_registry`), isolating what evidence
+//! establishes — which guest is asking — from whether that guest is
+//! allowed. The complementary `admission` target holds this layer fixed
+//! and tests the registry verdict against a real seismic-reth.
 //!
 //! Quote generation opens the raw TPM device, which the kernel hands to one
 //! process at a time (az-cvm-vtpm hardcodes tss-esapi's default TCTI,
