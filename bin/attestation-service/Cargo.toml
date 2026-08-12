@@ -49,3 +49,5 @@ seismic-custodian.workspace = true
 seismic-custodian-service.workspace = true
 serial_test.workspace = true
 tempfile.workspace = true
+# Paused-clock tests: the admission retry sleeps must not cost wall time.
+tokio = { workspace = true, features = ["test-util"] }
