@@ -53,10 +53,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
       # Keep the Rust registry interfaces and the registry runtime-code pin tied
       # to the canonical artifact that feeds reth genesis, and the seismic
-      # repo's committed copy of the golden fixture pair tied to the goldens.
-      # The artifact remains owned by the seismic repo and the fixture pair by
-      # this one; each side checks out the other's committed file rather than
-      # trusting a local copy to stay current.
+      # repo's copies of the two-record policy document and its compiled report
+      # tied to the goldens. The artifact remains owned by the seismic repo and
+      # the copied fixtures by this one; each side checks out the other's
+      # committed file rather than trusting a local copy to stay current.
       - name: Check out seismic contracts artifact and fixture copies
         uses: actions/checkout@v4
         with:
@@ -92,7 +92,7 @@ jobs:
           cargo test -p seismic-measurement-registry-client --test abi_parity -- --ignored
           && cargo test -p seismic-measurement-admission --test registry_abi -- --ignored
       # The seismic repo's Solidity fixture tests run against a committed copy
-      # of this crate's golden fixture pair; regenerating the goldens must
+      # of two of this crate's golden fixtures; regenerating them must
       # fail here until that copy is updated in step.
       - name: Check measurement-policy fixture parity
         env:

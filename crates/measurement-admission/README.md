@@ -6,11 +6,13 @@ The shared implementation of Seismic's measurement-admission predicate:
 verified guest measurements -> canonical admission ID -> accepted-ID set
 ```
 
-One crate defines the versioned schema (`seismic.azure-tdx.pcr4-pcr9-pcr11.v1`),
+This crate defines the versioned schema (`seismic.azure-tdx.pcr4-pcr9-pcr11.v1`),
 the admission-ID derivation, the strict compiler from a measurement-policy
 document to the set of IDs it admits, and the `MeasurementRegistry` genesis
-storage that seeds them. Its consumers only differ in where the accepted set
-comes from:
+storage that seeds them. [SPEC.md](SPEC.md) is the normative rule set, with
+the golden fixtures traced through it end to end.
+
+The crate's consumers only differ in where the accepted set comes from:
 
 - **responder** (attestation service): derives the ID from verified evidence
   and asks `MeasurementRegistry.isAccepted(id)` on local reth;
@@ -67,9 +69,10 @@ document binding exactly the schema registers (an already-promoted record
 list passes through byte-verbatim), and compiles its own output before
 returning. `compile` prints a JSON report: policy hash, admission IDs (total
 and per-record), the canonical registry runtime-code hash, and the complete
-registry genesis storage map. Both read stdin for `-`. The committed fixture
-pairs under `fixtures/golden/` are the golden vectors for the whole pipeline;
-the rest of `fixtures/` is test-harness input, not byte-pinned.
+registry genesis storage map. Both read stdin for `-`. The committed
+documents under `fixtures/golden/` are the golden vectors for the whole
+pipeline, and their compiled reports are regenerated with `compile`; the rest
+of `fixtures/` is test-harness input, not byte-pinned.
 
 ## Policy review and updates
 
