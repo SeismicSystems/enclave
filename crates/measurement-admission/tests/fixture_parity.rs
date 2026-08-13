@@ -1,13 +1,14 @@
-//! Byte parity between the golden measurement-policy fixture pair and its
-//! committed copy in the seismic repo
+//! Byte parity between the two-record golden document
+//! (`measurement-policy-v1.json`), its compiled report, and their committed
+//! copies in the seismic repo
 //! (https://github.com/SeismicSystems/seismic/tree/main/contracts/test/fixtures).
 //!
-//! The golden pair stays owned by this crate — the policy compiler that
-//! produces the compiled report lives here — while the seismic repo commits a
-//! verbatim copy so its Solidity fixture tests run self-contained. A committed
-//! copy can only agree with the pair it last saw, so CI checks out the seismic
-//! copy and compares bytes: regenerating the golden pair fails here until the
-//! seismic copy is updated in step, instead of drifting silently.
+//! Both files stay owned by this crate — the policy compiler that produces
+//! the compiled report lives here — while the seismic repo commits a verbatim
+//! copy so its Solidity fixture tests run self-contained. A committed copy can
+//! only agree with the files it last saw, so CI checks out the seismic copy
+//! and compares bytes: regenerating either file fails here until the seismic
+//! copy is updated in step, instead of drifting silently.
 
 use std::{env, fs, path::PathBuf};
 
@@ -47,7 +48,7 @@ fn seismic_fixture_copies_match_golden_pair() {
         assert!(
             copy == golden,
             "seismic's contracts/test/fixtures/{name} is not byte-identical to \
-             fixtures/golden/{name}; copy the regenerated golden pair into the seismic repo"
+             fixtures/golden/{name}; copy the regenerated file into the seismic repo"
         );
     }
 }

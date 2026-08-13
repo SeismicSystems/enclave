@@ -1,0 +1,23 @@
+[
+  {
+    "attestation_type": "azure-tdx",
+    "measurement_id": "seismic-example_second-image.vhd",
+    "measurements": {
+      "pcr4": {
+        "expected_any": [
+          "4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a"
+        ]
+      },
+      "pcr9": {
+        "expected_any": [
+          "9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a"
+        ]
+      },
+      "pcr11": {
+        "expected_any": [
+          "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ]
+      }
+    }
+  }
+]
