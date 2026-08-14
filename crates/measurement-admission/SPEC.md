@@ -32,7 +32,7 @@ What conforms today, and where each requirement lands:
 | --- | --- | --- |
 | compiler, admission-ID derivation, genesis-storage derivation | this crate, as a library and as the `seismic-measurement-admission` CLI | 4-8 |
 | registry contract | [`MeasurementRegistry.sol`](https://github.com/SeismicSystems/seismic/blob/main/contracts/src/enclave/MeasurementRegistry.sol) in the Seismic repository | 8, 9 |
-| responder and joiner | [`bin/attestation-service`](../../bin/attestation-service/src/admission.rs) | 11 |
+| responder admission at join time | [`bin/attestation-service`](../../bin/attestation-service/src/admission.rs) | 11 |
 | registry read path | [`seismic-measurement-registry-client`](../measurement-registry-client/) | 9, 11 |
 | deploy tooling: genesis assembly and revision deltas | [`tee/cli`](https://github.com/SeismicSystems/deploy/tree/main/tee/cli) in the deploy repository | 8, 10 |
 
@@ -517,12 +517,10 @@ transactions.
 
 ## 11. Consumer obligations
 
-Both halves of a handshake MUST share one implementation of the predicate.
-Only the source of the accepted set differs:
+This specification governs the responder's appraisal of a joining node:
 
 ```text
 responder: measurements -> admissionId -> isAccepted() on local reth
-joiner:    measurements -> admissionId -> compiled bootstrap document
 ```
 
 A responder MUST:
@@ -541,18 +539,24 @@ A responder MUST:
   registry appraisal are one operation, and there is no public path that
   verifies evidence but skips policy.
 
-A joiner cannot read the chain before it holds the root key, so it appraises
-the responder against the bootstrap document the network manifest pins. Any
-implementation of that appraisal MUST compile the document with this same
-compiler and test membership of the responder's ID in the resulting set. It
-MUST NOT match registers one by one against the document, because a
-register-by-register matcher enforces whatever the document lists, and would
-disagree with the responder as soon as the two differ.
+The joiner's appraisal of the responder is outside this specification. A
+joiner cannot read the chain before it holds the root key, so it has no live
+accepted set to test against, and a manifest-pinned one would be frozen at
+founding. Its defense is provenance — verifying the responder against the
+network's pinned `tx_io_pk` commitment — rather than a measurement policy, so
+no admission ID is derived on that side.
 
-A promoted document therefore carries exactly the schema registers.
-Release tooling checks the remaining registers against the expected
-24-register inventory at image-build time, where a mismatch fails a build
-instead of a join.
+Should a joiner-side measurement appraisal ever be built, it MUST compile the
+bootstrap document with this same compiler and test membership of the
+responder's ID in the resulting set. It MUST NOT match registers one by one
+against the document: a register-by-register matcher enforces whatever the
+document lists, and would disagree with the responder as soon as the two
+differ.
+
+Because the ID is derived from exactly the schema registers, a promoted
+document carries exactly those. Release tooling checks the remaining
+registers against the expected 24-register inventory at image-build time,
+where a mismatch fails a build instead of a join.
 
 ## 12. Golden vectors and conformance
 
