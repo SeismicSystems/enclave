@@ -18,7 +18,7 @@ mod eip712;
 mod envelope;
 mod messages;
 
-pub use bindings::{delivery_context_binding, payload_context_binding};
+pub use bindings::{delivery_context_binding, network_id_from_chain_id, payload_context_binding};
 pub use eip712::{
     DOMAIN_NAME, DOMAIN_VERSION, address_from_pubkey, payload_digest, typed_data_json,
 };

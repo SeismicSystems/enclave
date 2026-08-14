@@ -15,6 +15,21 @@ use sha2::{Digest as _, Sha256};
 
 /// Domain for [`delivery_context_binding`], the AEAD AAD.
 const DELIVERY_CTX_DOMAIN: &[u8] = b"seismic-council-key-delivery-ctx-v1:";
+/// Domain for [`network_id_from_chain_id`].
+const CHAIN_ID_DOMAIN: &[u8] = b"seismic-council-chain-id-v1:";
+
+/// The centralized deployment's network identifier, derived from the EVM
+/// chain id instead of a network-manifest hash — the centralized phase has
+/// no manifest artifact. Domain-separated so it can never collide with a
+/// manifest-derived id, and reproducible by council tooling from the chain
+/// id alone. Scopes every delivery signature, payload, and ciphertext to
+/// one chain, exactly as the manifest id does for the TDX stack.
+pub fn network_id_from_chain_id(chain_id: u64) -> NetworkId {
+    let mut hasher = Sha256::new();
+    hasher.update(CHAIN_ID_DOMAIN);
+    hasher.update(chain_id.to_be_bytes());
+    NetworkId::from_bytes(hasher.finalize().into())
+}
 
 /// The AEAD AAD for one delivery: full context, no ciphertext (the
 /// ciphertext authenticates itself via its GCM tag; the AAD ties that tag to
@@ -50,6 +65,22 @@ pub fn payload_context_binding(payload: &DeliveryPayload) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Golden vector: the chain-id-derived network id scopes every
+    /// signature and ciphertext; it must never change, and council tooling
+    /// must derive the identical value.
+    #[test]
+    fn chain_id_network_id_matches_golden_vector() {
+        assert_eq!(
+            hex::encode(network_id_from_chain_id(5124).as_bytes()),
+            "cae8a2afaa2c48c2d13164b87f8b3ca8056902bad2cd32a8d457e385b50771a6",
+        );
+        assert_ne!(
+            network_id_from_chain_id(1),
+            network_id_from_chain_id(2),
+            "distinct chains must scope independently"
+        );
+    }
 
     /// Golden vector: this digest seals every persisted ciphertext (as its
     /// AAD) and must never change.

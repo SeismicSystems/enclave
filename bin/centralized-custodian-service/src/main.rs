@@ -18,11 +18,11 @@ use anyhow::{Context as _, Result, anyhow};
 use clap::Parser;
 use seismic_centralized_custodian_service::state::CentralizedCustodianState;
 use seismic_centralized_custodian_service::{council, dispatch, root_key_file};
+use seismic_council_delivery::network_id_from_chain_id;
 use seismic_custodian::Custodian;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use seismic_custodian_ipc::server::{bind, serve};
 use seismic_custodian_service::acl;
-use seismic_network_manifest::NetworkId;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -66,9 +66,11 @@ struct Args {
     #[arg(long, env = "SEISMIC_COUNCIL_ADDRESS", value_parser = parse_council_address)]
     council_address: CouncilAddress,
 
-    /// Path to the network manifest whose bytes define this network's id.
-    #[arg(long, env = "SEISMIC_NETWORK_MANIFEST")]
-    network_manifest: PathBuf,
+    /// The EVM chain id this custodian serves. Derives the network
+    /// identifier that scopes every council signature and ciphertext, so
+    /// the council tool must be run with the same value.
+    #[arg(long, env = "SEISMIC_CHAIN_ID")]
+    chain_id: u64,
 
     /// Directory where delivery envelopes persist (signed + encrypted;
     /// never plaintext keys).
@@ -81,13 +83,15 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     // Everything that can be misconfigured fails here, before the sockets
-    // exist: ACL grants, the manifest, the delivery store, the keyfile.
+    // exist: ACL grants, the delivery store, the keyfile.
     let method_acl = acl::method_acl_from_allow_specs(&args.allow)
         .context("resolving --allow grants (is the user missing?)")?;
-    let manifest_bytes = std::fs::read(&args.network_manifest)
-        .with_context(|| format!("reading {}", args.network_manifest.display()))?;
-    let network_id = NetworkId::from_manifest_bytes(&manifest_bytes);
-    info!(%network_id, "delivery envelopes must be bound to this network");
+    let network_id = network_id_from_chain_id(args.chain_id);
+    info!(
+        chain_id = args.chain_id,
+        %network_id,
+        "delivery envelopes must be bound to this network"
+    );
 
     let root_key = root_key_file::load_or_generate(&args.root_key_file)?;
     let state = Arc::new(

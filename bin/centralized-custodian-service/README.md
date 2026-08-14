@@ -29,8 +29,8 @@ Two things persist, both under `/var/lib/seismic/custodian/` by default:
   boot re-verifies and re-decrypts them; a corrupt file stops that purpose's
   scan at the last good epoch, and redelivering the damaged epoch heals it.
 
-Both are checked eagerly at startup: a missing manifest, unusable delivery
-directory, or malformed keyfile fails the boot before any socket binds.
+Both are checked eagerly at startup: an unusable delivery directory or
+malformed keyfile fails the boot before any socket binds.
 
 ## The delivery protocol
 
@@ -50,10 +50,12 @@ One envelope carries one 32-byte purpose key for one `(purpose, epoch)`:
   signature is EIP-712 typed data (`crates/council-delivery`'s `eip712`
   module emits the `eth_signTypedData_v4` JSON for MetaMask,
   `cast wallet sign --data`, or hardware wallets), verified by recovering
-  the signer and comparing it to `--council-address`. The network id rides
-  in the EIP-712 domain as `salt` and the ciphertext is a signed field, so
-  a valid signature cannot be re-attached to different key bytes, another
-  network, purpose, epoch, or recipient. Wallet approval screens show the
+  the signer and comparing it to `--council-address`. The network id —
+  derived from `--chain-id` (`network_id_from_chain_id`, domain-separated
+  SHA-256; no manifest artifact needed in the centralized phase) — rides in
+  the EIP-712 domain as `salt`, and the ciphertext is a signed field, so a
+  valid signature cannot be re-attached to different key bytes, another
+  chain, purpose, epoch, or recipient. Wallet approval screens show the
   actual fields: purpose, epoch, recipient inbox key.
 
 Council tooling therefore splits in two: encryption (the ECIES seal) runs in
@@ -93,7 +95,7 @@ recovery.
 | `--allow USER:PURPOSES` (repeatable) | — | deny-all |
 | `--council-listen` | `SEISMIC_COUNCIL_LISTEN_ADDR` | `0.0.0.0:7876` |
 | `--council-address` (required) | `SEISMIC_COUNCIL_ADDRESS` | — (`0x` + 20-byte Ethereum address hex) |
-| `--network-manifest` (required) | `SEISMIC_NETWORK_MANIFEST` | — |
+| `--chain-id` (required) | `SEISMIC_CHAIN_ID` | — (u64; council tooling must use the same value) |
 | `--delivery-dir` | — | `/var/lib/seismic/custodian/deliveries` |
 
 Like the TDX custodian, this binary links no async runtime; that guarantee
