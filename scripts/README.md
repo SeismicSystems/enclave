@@ -30,8 +30,9 @@ responder's contract-backed bootstrap admission against real `seismic-reth`
 dev nodes seeded with a measurement policy compiled at runtime from the
 runner's own quoted PCRs: an accepted tuple authorizes exactly one root-key
 wrap, an on-chain deprecation denies the next handshake without a service
-restart, an unknown tuple is denied, and an unreachable or stale chain fails
-closed. It additionally needs a `seismic-reth` binary (`SEISMIC_RETH_BIN`).
+restart, an unknown tuple is denied, and an unreachable chain, a stale chain,
+or a chain the manifest does not commit to fails closed. It additionally needs
+a `seismic-reth` binary (`SEISMIC_RETH_BIN`).
 
 ## Requirements
 
@@ -42,9 +43,11 @@ closed. It additionally needs a `seismic-reth` binary (`SEISMIC_RETH_BIN`).
   TPM. On the CI image, the script asks Supervisor to stop it if present.
 - A Rust toolchain.
 
-Each script installs the checked-in network-manifest fixture under
-`/run/seismic/conf`, builds its test binary as the runner user, and
-executes it with `sudo`.
+Each script prepares the `/run/seismic/conf` handoff directory, builds its
+test binary as the runner user, and executes it with `sudo`. The evidence
+script installs the checked-in network-manifest fixture there; the admission
+tests write their own manifest, because a network's identity commits to its
+genesis hash and each of those tests mints a fresh genesis.
 
 ## Running
 

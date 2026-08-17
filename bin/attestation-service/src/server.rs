@@ -11,7 +11,7 @@ use crate::{
         internal_rpc_error, invalid_root_key_request_rpc_error, root_key_answer_rpc_error,
     },
 };
-use alloy_primitives::Address;
+use alloy_primitives::{Address, B256};
 use anyhow::Context as _;
 use jsonrpsee::{
     core::{RpcResult, async_trait},
@@ -156,12 +156,13 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     info!("Derived network_id {network_id} from {NETWORK_MANIFEST_PATH}");
 
     // Joining peers are admitted by the live on-chain policy: the manifest
-    // names the registry, our own reth answers for it. Construction is lazy —
-    // no connection until a join arrives — so serving never waits on reth;
-    // a join that beats reth's startup is denied (fail closed) and the
-    // requester retries.
+    // names the registry and the genesis that identifies the chain to read it
+    // on, our own reth answers for both. Construction is lazy — no connection
+    // until a join arrives — so serving never waits on reth; a join that beats
+    // reth's startup is denied (fail closed) and the requester retries.
     let registry = Address::from(manifest.measurements.contracts.registry);
-    let mut admission = RegistryAdmission::new(args.reth_rpc_url.clone(), registry);
+    let pinned_genesis = B256::from(manifest.eth.genesis_hash);
+    let mut admission = RegistryAdmission::new(args.reth_rpc_url.clone(), registry, pinned_genesis);
     if let Some(max_policy_age) = args.max_policy_age {
         warn!(
             "Admission accepts a finalized policy view no older than {max_policy_age:?} (test override)"
@@ -169,7 +170,8 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
         admission = admission.with_max_policy_age(max_policy_age);
     }
     info!(
-        "Gating joining peers via MeasurementRegistry at {registry} over {}",
+        "Gating joining peers via MeasurementRegistry at {registry} over {}, \
+         on the chain with genesis {pinned_genesis}",
         args.reth_rpc_url
     );
 
