@@ -18,14 +18,12 @@ pub const DEFAULT_FILE_MODE: u32 = 0o644;
 /// files under `conf_dir`. Each downstream service reads its own file in
 /// its native format (env-var pairs for clap-based and bash consumers);
 /// tdx-init is the schema translator.
+///
+/// Every input is validated before the first byte is written, so a bad config
+/// leaves no `conf_dir` and no partially populated set of files behind. The
+/// second half is then pure filesystem work that can only fail on I/O.
 pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Result<()> {
-    fs::create_dir_all(conf_dir).await?;
-    let root_key_peers =
-        crate::peers::validate_and_derive_peers(&config.node, &config.network.bootnodes)?;
-    write_domain_env(conf_dir, config).await?;
-    write_custodian_env(conf_dir, config).await?;
-    write_attestation_svc_env(conf_dir, &root_key_peers).await?;
-    write_reth_p2p_env(conf_dir, config).await?;
+    let peers = crate::peers::validate_and_derive_peers(&config.node, &config.network.bootnodes)?;
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
     let genesis = crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,
@@ -35,6 +33,12 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
         &config.network.summit_genesis_base64,
         &manifest.namespace,
     )?;
+
+    fs::create_dir_all(conf_dir).await?;
+    write_domain_env(conf_dir, config).await?;
+    write_custodian_env(conf_dir, config).await?;
+    write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
+    write_reth_p2p_env(conf_dir, &peers.peer_enodes, &config.node.external_ip).await?;
     write_network_manifest(conf_dir, &manifest).await?;
     write_reth_genesis(conf_dir, &genesis).await?;
     write_summit_genesis(conf_dir, &summit_genesis).await?;
@@ -87,9 +91,9 @@ async fn write_domain_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     Ok(())
 }
 
-/// The custodian's unit loads this via `EnvironmentFile=`; the binary reads
-/// `SEISMIC_CUSTODIAN_GENESIS_NODE` (whether to generate a fresh root key)
-/// through clap `env=`.
+/// The custodian's systemd unit loads this via `EnvironmentFile=`; the binary
+/// reads `SEISMIC_CUSTODIAN_GENESIS_NODE` (whether to generate a fresh root
+/// key) through clap `env=`.
 async fn write_custodian_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     let path = conf_dir.join("custodian.env");
     let content = format!(
@@ -101,10 +105,10 @@ async fn write_custodian_env(conf_dir: &Path, config: &InitConfig) -> Result<()>
     Ok(())
 }
 
-/// The attestation service's unit loads this via `EnvironmentFile=`; the
-/// binary reads `SEISMIC_ROOT_KEY_PEERS` (where to fetch the root key when the
-/// local custodian starts without one) through clap `env=`. The peer list is
-/// not a config field: it is derived from `[network].bootnodes` in
+/// The attestation service's systemd unit loads this via `EnvironmentFile=`;
+/// the binary reads `SEISMIC_ROOT_KEY_PEERS` (where to fetch the root key when
+/// the local custodian starts without one) through clap `env=`. The peer list
+/// is not a config field: it is derived from `[network].bootnodes` in
 /// `crate::peers`.
 async fn write_attestation_svc_env(conf_dir: &Path, root_key_peers: &[String]) -> Result<()> {
     let path = conf_dir.join("attestation.env");
@@ -114,27 +118,41 @@ async fn write_attestation_svc_env(conf_dir: &Path, root_key_peers: &[String]) -
     Ok(())
 }
 
-/// reth's unit loads this via `EnvironmentFile=` and puts the *unquoted*
-/// `$RETH_BOOTNODES_FLAG $RETH_NAT_FLAG` on reth's command line. Each var holds
-/// a whole flag: systemd word-splits an unquoted expansion, so a populated var
-/// expands to argv entries while an empty one drops out entirely. Emitting the
-/// flag name inside the var (rather than a bare value) is what lets the genesis
-/// node's empty bootnode list vanish instead of passing `--bootnodes ""`, which
-/// reth rejects. `RETH_NAT_FLAG` is always populated (external_ip is required);
-/// `RETH_BOOTNODES_FLAG` is empty only when there are no bootnodes. Values may
-/// contain a space; systemd EnvironmentFile keeps everything after `=` verbatim
-/// (no quoting needed), matching the other env files here.
+/// reth's systemd unit loads this via `EnvironmentFile=` and puts the
+/// *unquoted* `$RETH_BOOTNODES_FLAG $RETH_TRUSTED_PEERS_FLAG $RETH_NAT_FLAG`
+/// on reth's command line. Each var holds a whole flag: systemd word-splits an
+/// unquoted expansion, so a populated var expands to argv entries while an
+/// empty one drops out entirely. Emitting the flag name inside the var (rather
+/// than a bare value) is what lets the genesis node's empty bootnode list
+/// vanish instead of passing `--bootnodes ""`, which reth rejects.
+/// `RETH_NAT_FLAG` is always populated (external_ip is required); the two peer
+/// flags are empty together, on a node whose cohort names no other machine.
+/// Values may contain a space; systemd EnvironmentFile keeps everything after
+/// `=` verbatim (no quoting needed), matching the other env files here.
 ///
-/// Inputs are validated in `crate::peers` at POST time.
-async fn write_reth_p2p_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
+/// One enode list fills both peer flags — see `crate::peers::PeerLists` for
+/// why reth gets it twice, and for the POST-time validation behind it.
+async fn write_reth_p2p_env(
+    conf_dir: &Path,
+    peer_enodes: &[String],
+    external_ip: &str,
+) -> Result<()> {
     let path = conf_dir.join("reth-p2p.env");
-    let bootnodes_flag = if config.network.bootnodes.is_empty() {
-        String::new()
+    let (bootnodes_flag, trusted_peers_flag) = if peer_enodes.is_empty() {
+        (String::new(), String::new())
     } else {
-        format!("--bootnodes {}", config.network.bootnodes.join(","))
+        let csv = peer_enodes.join(",");
+        (
+            format!("--bootnodes {csv}"),
+            format!("--trusted-peers {csv}"),
+        )
     };
-    let nat_flag = format!("--nat extip:{}", config.node.external_ip);
-    let content = format!("RETH_BOOTNODES_FLAG={bootnodes_flag}\nRETH_NAT_FLAG={nat_flag}\n");
+    let nat_flag = format!("--nat extip:{external_ip}");
+    let content = format!(
+        "RETH_BOOTNODES_FLAG={bootnodes_flag}\n\
+         RETH_TRUSTED_PEERS_FLAG={trusted_peers_flag}\n\
+         RETH_NAT_FLAG={nat_flag}\n"
+    );
     write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
     info!("wrote {}", path.display());
     Ok(())
@@ -228,9 +246,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn drops_own_enode_from_peers_but_not_from_reth_bootnodes() {
-        // The persisted founding bootnode set includes this node's own enode;
-        // reth gets the full set while the root-key fetch skips self.
+    async fn drops_own_enode_from_every_rendered_list() {
+        // The persisted founding bootnode set includes this node's own enode.
+        // Nothing this node uses to reach others should name itself, so it is
+        // absent from both reth flags and from the root-key fetch list.
         let tmp = TempDir::new().unwrap();
         let mut cfg = sample_config(false);
         cfg.network.bootnodes = vec![enode("203.0.113.1:30303"), enode("10.0.0.2:30303")];
@@ -241,8 +260,14 @@ mod tests {
         assert_eq!(attestation, "SEISMIC_ROOT_KEY_PEERS=http://10.0.0.2:7878\n");
 
         let p2p = std::fs::read_to_string(tmp.path().join("reth-p2p.env")).unwrap();
-        assert!(p2p.contains("203.0.113.1:30303"), "{p2p}");
-        assert!(p2p.contains("10.0.0.2:30303"), "{p2p}");
+        assert!(!p2p.contains("203.0.113.1:30303"), "{p2p}");
+        let id = "a".repeat(128);
+        assert_eq!(
+            p2p,
+            format!(
+                "RETH_BOOTNODES_FLAG=--bootnodes enode://{id}@10.0.0.2:30303\nRETH_TRUSTED_PEERS_FLAG=--trusted-peers enode://{id}@10.0.0.2:30303\nRETH_NAT_FLAG=--nat extip:203.0.113.1\n"
+            )
+        );
     }
 
     #[tokio::test]
@@ -252,6 +277,23 @@ mod tests {
 
         let err = write_service_configs(tmp.path(), &cfg).await.unwrap_err();
         assert!(matches!(err, crate::error::TdxInitError::InvalidPeers(_)));
+    }
+
+    #[tokio::test]
+    async fn a_rejected_config_writes_nothing() {
+        // Validation runs to completion before any file is written, so a
+        // failure in the last-validated artifact still leaves an empty conf
+        // dir rather than a set of files the boot chain would go on to read.
+        let tmp = TempDir::new().unwrap();
+        let mut cfg = sample_config(true);
+        cfg.network.summit_genesis_base64 = "not base64".to_string();
+
+        let err = write_service_configs(tmp.path(), &cfg).await.unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::TdxInitError::InvalidSummitGenesis(_)
+        ));
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
     }
 
     #[tokio::test]
@@ -268,16 +310,17 @@ mod tests {
         assert_eq!(
             p2p,
             format!(
-                "RETH_BOOTNODES_FLAG=--bootnodes enode://{id}@10.0.0.1:30303,enode://{id}@10.0.0.2:30303\nRETH_NAT_FLAG=--nat extip:203.0.113.7\n"
+                "RETH_BOOTNODES_FLAG=--bootnodes enode://{id}@10.0.0.1:30303,enode://{id}@10.0.0.2:30303\nRETH_TRUSTED_PEERS_FLAG=--trusted-peers enode://{id}@10.0.0.1:30303,enode://{id}@10.0.0.2:30303\nRETH_NAT_FLAG=--nat extip:203.0.113.7\n"
             )
         );
     }
 
     #[tokio::test]
     async fn writes_reth_p2p_env_without_bootnodes() {
-        // The genesis node has no bootnodes: RETH_BOOTNODES_FLAG is empty so
-        // reth.service's unquoted expansion drops it, while RETH_NAT_FLAG is
-        // still populated from the (required) external_ip.
+        // The lone genesis node has no bootnodes: RETH_BOOTNODES_FLAG and
+        // RETH_TRUSTED_PEERS_FLAG are empty so reth.service's unquoted
+        // expansion drops them, while RETH_NAT_FLAG is still populated from the
+        // (required) external_ip.
         let tmp = TempDir::new().unwrap();
         let cfg = sample_config(true);
 
@@ -286,7 +329,7 @@ mod tests {
         let p2p = std::fs::read_to_string(tmp.path().join("reth-p2p.env")).unwrap();
         assert_eq!(
             p2p,
-            "RETH_BOOTNODES_FLAG=\nRETH_NAT_FLAG=--nat extip:203.0.113.1\n"
+            "RETH_BOOTNODES_FLAG=\nRETH_TRUSTED_PEERS_FLAG=\nRETH_NAT_FLAG=--nat extip:203.0.113.1\n"
         );
     }
 

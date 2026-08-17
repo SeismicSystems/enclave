@@ -93,11 +93,12 @@ pub struct NetworkConfig {
     pub summit_genesis_base64: String,
 
     /// Network-wide devp2p bootnodes, as `enode://<128 hex pubkey>@host:port`
-    /// URLs — the single source for the cohort's peer machines. Feeds reth
-    /// verbatim (`reth-p2p.env`'s `RETH_BOOTNODES_FLAG`) and, derived, the
-    /// attestation service's root-key fetch list (`attestation.env`:
-    /// `http://<host>:7878` per bootnode, this node's own entry dropped);
-    /// validation and derivation live in `src/peers.rs`. The field is required,
+    /// URLs — the single source for the cohort's peer machines. With this
+    /// node's own entry dropped, they feed both of reth's devp2p flags
+    /// (`reth-p2p.env`'s `RETH_BOOTNODES_FLAG` and `RETH_TRUSTED_PEERS_FLAG`)
+    /// and, as `http://<host>:7878`, the attestation service's root-key fetch
+    /// list (`attestation.env`); the rendering lives in `src/peers.rs`, which
+    /// also documents why reth gets the list twice. The field is required,
     /// but an empty list is valid on the genesis node only — it has no peers
     /// to dial and mints `root_key` itself; a non-genesis POST with no usable
     /// bootnode is rejected with `400`.
