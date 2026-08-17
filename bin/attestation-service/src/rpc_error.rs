@@ -28,21 +28,89 @@ use seismic_attestation::{
 use std::fmt::Debug;
 use tracing::{error, warn};
 
-/// Terminal verdict on the requester's evidence: no identity the network can
-/// appraise came out of it, so retrying with the same image cannot change the
-/// answer. This code sends a joiner's operator to inspect its own attestation
-/// stack, so only a failure attributed to the evidence is answered with it.
-pub const ROOT_KEY_EVIDENCE_DENIED_CODE: i32 = -32001;
-/// Terminal verdict on the requester's identity: its evidence verified and
-/// yielded an admission ID the network does not accept. Nothing is wrong with
-/// its attestation stack — this code sends a joiner's operator to launch a
-/// guest whose admission ID the registry accepts.
-pub const ROOT_KEY_IDENTITY_DENIED_CODE: i32 = -32003;
-/// The responder could not decide, because its own chain, registry read, or
-/// collateral infrastructure produced no usable answer. The requester's
-/// evidence is not what failed: worth retrying — against another peer, or this
-/// responder later.
-pub const ROOT_KEY_ADMISSION_UNAVAILABLE_CODE: i32 = -32002;
+/// A refused root-key answer, in the one type both sides of the handshake
+/// hold it in: the responder builds its wire error from a value of this type,
+/// and the joiner reads one back out of the code that arrives.
+///
+/// This is [`DenialKind`] as a stranger may see it. It keeps that same split by
+/// party, and collapses the responder's own half — a peer that is
+/// misconfigured and one that is merely lagging leave a requester the same
+/// move, and which of the two it is belongs in that peer's log, not in an
+/// answer to an unauthenticated caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootKeyRefusal {
+    /// Terminal verdict on the requester's evidence: no identity the network
+    /// can appraise came out of it, so retrying with the same image cannot
+    /// change the answer. It sends a joiner's operator to inspect its own
+    /// attestation stack, so only a failure attributed to the evidence is
+    /// answered with it.
+    RequesterEvidenceUnusable,
+    /// Terminal verdict on the requester's identity: its evidence verified and
+    /// yielded an admission ID the network does not accept. Nothing is wrong
+    /// with its attestation stack — this sends a joiner's operator to launch a
+    /// guest whose admission ID the registry accepts.
+    RequesterIdentityNotAccepted,
+    /// The responder could not decide, because its own chain, registry read, or
+    /// collateral infrastructure produced no usable answer. The requester's
+    /// evidence is not what failed: worth retrying — against another peer, or
+    /// this responder later.
+    ResponderUnavailable,
+}
+
+impl RootKeyRefusal {
+    /// Every refusal this contract defines. [`Self::from_code`] reads this
+    /// list, so a variant left out of it is one no joiner can read back.
+    const ALL: [Self; 3] = [
+        Self::RequesterEvidenceUnusable,
+        Self::RequesterIdentityNotAccepted,
+        Self::ResponderUnavailable,
+    ];
+
+    /// The JSON-RPC error code this refusal travels as. The three run in the
+    /// order the handshake reaches them: what the requester's evidence
+    /// yielded, then whether that identity is accepted, then whether this
+    /// responder could decide at all.
+    pub const fn code(self) -> i32 {
+        match self {
+            Self::RequesterEvidenceUnusable => -32001,
+            Self::RequesterIdentityNotAccepted => -32002,
+            Self::ResponderUnavailable => -32003,
+        }
+    }
+
+    /// The message that travels with it: a stable constant, so an
+    /// unauthenticated caller learns the outcome and nothing about why. Paired
+    /// with the code here, where the two cannot drift apart.
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::RequesterEvidenceUnusable => "Root-key evidence denied",
+            Self::RequesterIdentityNotAccepted => "Root-key admission identity denied",
+            Self::ResponderUnavailable => "Root-key admission temporarily unavailable",
+        }
+    }
+
+    /// Read a refusal back off a JSON-RPC error code.
+    ///
+    /// `None` for every other code — an internal error, an invalid request, or
+    /// a code this service does not define. Those leave the requester exactly
+    /// where an unattributed failure does: nothing said about it, and the same
+    /// move as for an unavailable responder.
+    pub fn from_code(code: i32) -> Option<Self> {
+        Self::ALL.into_iter().find(|refusal| refusal.code() == code)
+    }
+}
+
+impl From<DenialKind> for RootKeyRefusal {
+    fn from(kind: DenialKind) -> Self {
+        match kind {
+            DenialKind::RequesterEvidenceUnusable => Self::RequesterEvidenceUnusable,
+            DenialKind::RequesterIdentityNotAccepted => Self::RequesterIdentityNotAccepted,
+            DenialKind::ResponderMisconfigured | DenialKind::ResponderTransient => {
+                Self::ResponderUnavailable
+            }
+        }
+    }
+}
 
 pub(crate) fn invalid_root_key_request_rpc_error(error: impl Debug) -> ErrorObjectOwned {
     warn!(?error, "invalid root-key request");
@@ -62,37 +130,17 @@ pub(crate) fn internal_rpc_error(operation: &'static str, error: impl Debug) -> 
     )
 }
 
-pub(crate) fn root_key_evidence_denied_rpc_error(error: impl Debug) -> ErrorObjectOwned {
-    warn!(?error, "root-key evidence denied");
-    ErrorObjectOwned::owned(
-        ROOT_KEY_EVIDENCE_DENIED_CODE,
-        "Root-key evidence denied",
-        None::<()>,
-    )
-}
-
-pub(crate) fn root_key_identity_denied_rpc_error(error: impl Debug) -> ErrorObjectOwned {
-    warn!(?error, "root-key admission identity denied");
-    ErrorObjectOwned::owned(
-        ROOT_KEY_IDENTITY_DENIED_CODE,
-        "Root-key admission identity denied",
-        None::<()>,
-    )
-}
-
-pub(crate) fn root_key_admission_unavailable_rpc_error(error: impl Debug) -> ErrorObjectOwned {
-    warn!(?error, "root-key admission temporarily unavailable");
-    ErrorObjectOwned::owned(
-        ROOT_KEY_ADMISSION_UNAVAILABLE_CODE,
-        "Root-key admission temporarily unavailable",
-        None::<()>,
-    )
+/// Answer with `refusal`, keeping the detail that produced it in this
+/// responder's log.
+fn refusal_rpc_error(refusal: RootKeyRefusal, error: impl Debug) -> ErrorObjectOwned {
+    warn!(?error, ?refusal, "refusing the root-key request");
+    ErrorObjectOwned::owned(refusal.code(), refusal.message(), None::<()>)
 }
 
 /// Route a failed root-key answer to its wire error, by what the failure says
-/// about the two parties (see [`DenialKind`]). Each code carries one move: fix
-/// your attestation stack, get your identity accepted, or ask someone else. The
-/// message is a stable constant either way; failure detail stays in the
+/// about the two parties (see [`DenialKind`]). Each refusal carries one move:
+/// fix your attestation stack, get your identity accepted, or ask someone else.
+/// The message is a stable constant either way; failure detail stays in the
 /// responder's log.
 ///
 /// A failure neither party can be held to answers as an internal error, the
@@ -104,12 +152,8 @@ pub(crate) fn root_key_admission_unavailable_rpc_error(error: impl Debug) -> Err
 /// prevent. Unattributed means neither side is blamed, and the joiner's move is
 /// the same as for an unavailable responder: another peer.
 pub(crate) fn root_key_answer_rpc_error(error: AnswerError) -> ErrorObjectOwned {
-    match answer_failure_kind(&error) {
-        Some(DenialKind::ResponderMisconfigured | DenialKind::ResponderTransient) => {
-            root_key_admission_unavailable_rpc_error(error)
-        }
-        Some(DenialKind::RequesterIdentityNotAccepted) => root_key_identity_denied_rpc_error(error),
-        Some(DenialKind::RequesterEvidenceUnusable) => root_key_evidence_denied_rpc_error(error),
+    match answer_failure_kind(&error).map(RootKeyRefusal::from) {
+        Some(refusal) => refusal_rpc_error(refusal, error),
         None => internal_rpc_error("answering the root-key request", error),
     }
 }
@@ -220,32 +264,63 @@ fn backend_failure_kind(backend: &BackendAttestationError) -> Option<DenialKind>
 mod tests {
     use super::*;
 
+    /// The numbers and messages a peer of any version reads. Pinned as
+    /// literals: this is the wire, so changing one has to be a deliberate edit
+    /// to this list, not a side effect of renaming a variant.
+    #[test]
+    fn the_wire_form_of_every_refusal_is_fixed() {
+        let wire = [
+            (
+                RootKeyRefusal::RequesterEvidenceUnusable,
+                -32001,
+                "Root-key evidence denied",
+            ),
+            (
+                RootKeyRefusal::RequesterIdentityNotAccepted,
+                -32002,
+                "Root-key admission identity denied",
+            ),
+            (
+                RootKeyRefusal::ResponderUnavailable,
+                -32003,
+                "Root-key admission temporarily unavailable",
+            ),
+        ];
+
+        assert_eq!(
+            wire.len(),
+            RootKeyRefusal::ALL.len(),
+            "a refusal the contract defines is missing its wire form here"
+        );
+        for (refusal, code, message) in wire {
+            assert_eq!(refusal.code(), code);
+            assert_eq!(refusal.message(), message);
+            assert_eq!(RootKeyRefusal::from_code(code), Some(refusal));
+        }
+        assert_eq!(
+            RootKeyRefusal::from_code(ErrorCode::InternalError.code()),
+            None
+        );
+    }
+
     #[test]
     fn rpc_errors_expose_only_stable_messages() {
         let invalid = invalid_root_key_request_rpc_error("private parser detail");
         assert_eq!(invalid.code(), ErrorCode::InvalidParams.code());
         assert_eq!(invalid.message(), "Invalid root-key request");
 
-        let denied = root_key_evidence_denied_rpc_error("private verifier detail");
-        assert_eq!(denied.code(), ROOT_KEY_EVIDENCE_DENIED_CODE);
-        assert_eq!(denied.message(), "Root-key evidence denied");
-
-        let unavailable = root_key_admission_unavailable_rpc_error("private chain detail");
-        assert_eq!(unavailable.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
-        assert_eq!(
-            unavailable.message(),
-            "Root-key admission temporarily unavailable"
-        );
-
-        let identity = root_key_identity_denied_rpc_error("private admission ID");
-        assert_eq!(identity.code(), ROOT_KEY_IDENTITY_DENIED_CODE);
-        assert_eq!(identity.message(), "Root-key admission identity denied");
-
         let internal = internal_rpc_error("generating evidence", "private backend detail");
         assert_eq!(internal.code(), ErrorCode::InternalError.code());
         assert_eq!(internal.message(), "Internal error");
 
-        for error in [invalid, denied, identity, unavailable, internal] {
+        let refused =
+            RootKeyRefusal::ALL.map(|refusal| refusal_rpc_error(refusal, "private denial detail"));
+        for (error, refusal) in refused.iter().zip(RootKeyRefusal::ALL) {
+            assert_eq!(error.code(), refusal.code());
+            assert_eq!(error.message(), refusal.message());
+        }
+
+        for error in refused.into_iter().chain([invalid, internal]) {
             assert!(!error.to_string().contains("private"));
         }
     }
@@ -265,36 +340,49 @@ mod tests {
         verify_error(AttestationError::AdmissionDenied(Box::new(denial)))
     }
 
+    /// What a joiner takes away from a failed answer: the responder's error
+    /// put on the wire and read back off it, so every case below asserts on
+    /// the round trip rather than on a number.
+    fn refusal_of(error: AnswerError) -> Option<RootKeyRefusal> {
+        RootKeyRefusal::from_code(root_key_answer_rpc_error(error).code())
+    }
+
     #[test]
     fn responder_chain_faults_map_to_unavailable() {
-        let unavailable =
-            root_key_answer_rpc_error(denial_error(AdmissionDenial::ChainRegressedToGenesis));
-        assert_eq!(unavailable.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+        assert_eq!(
+            refusal_of(denial_error(AdmissionDenial::ChainRegressedToGenesis)),
+            Some(RootKeyRefusal::ResponderUnavailable)
+        );
 
         // A responder on the wrong chain is unavailable rather than denying,
         // even though waiting cannot fix it: the requester's move is to ask
         // another peer, and its evidence is not what failed.
-        let wrong_chain =
-            root_key_answer_rpc_error(denial_error(AdmissionDenial::ChainGenesisMismatch {
+        assert_eq!(
+            refusal_of(denial_error(AdmissionDenial::ChainGenesisMismatch {
                 expected: alloy_primitives::B256::repeat_byte(0xb0),
                 found: alloy_primitives::B256::repeat_byte(0xef),
-            }));
-        assert_eq!(wrong_chain.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+            })),
+            Some(RootKeyRefusal::ResponderUnavailable)
+        );
     }
 
     /// The requester's two verdicts answer two different questions, so they
-    /// travel on two different codes.
+    /// travel as two different refusals.
     #[test]
     fn requester_verdicts_split_evidence_from_identity() {
-        let unusable = root_key_answer_rpc_error(denial_error(
-            AdmissionDenial::UnsupportedAttestationType(seismic_attestation::AttestationType::None),
-        ));
-        assert_eq!(unusable.code(), ROOT_KEY_EVIDENCE_DENIED_CODE);
+        assert_eq!(
+            refusal_of(denial_error(AdmissionDenial::UnsupportedAttestationType(
+                seismic_attestation::AttestationType::None
+            ))),
+            Some(RootKeyRefusal::RequesterEvidenceUnusable)
+        );
 
-        let identity = root_key_answer_rpc_error(denial_error(
-            AdmissionDenial::RegistryNotAccepted(alloy_primitives::B256::ZERO.into()),
-        ));
-        assert_eq!(identity.code(), ROOT_KEY_IDENTITY_DENIED_CODE);
+        assert_eq!(
+            refusal_of(denial_error(AdmissionDenial::RegistryNotAccepted(
+                alloy_primitives::B256::ZERO.into()
+            ))),
+            Some(RootKeyRefusal::RequesterIdentityNotAccepted)
+        );
     }
 
     /// A responder that cannot obtain collateral has appraised nothing, so it
@@ -302,37 +390,38 @@ mod tests {
     /// image.
     #[test]
     fn collateral_infrastructure_faults_map_to_unavailable() {
-        let no_pccs = root_key_answer_rpc_error(backend_error(BackendAttestationError::NoPccs));
-        assert_eq!(no_pccs.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
-
-        let provider = root_key_answer_rpc_error(backend_error(
+        let faults = [
+            BackendAttestationError::NoPccs,
             BackendAttestationError::AttestationProvider("502 Bad Gateway".into()),
-        ));
-        assert_eq!(provider.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
-
-        let provider_url = root_key_answer_rpc_error(backend_error(
             BackendAttestationError::AttestationProviderUrl("not a URL".into()),
-        ));
-        assert_eq!(provider_url.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+        ];
+
+        for fault in faults {
+            assert_eq!(
+                refusal_of(backend_error(fault)),
+                Some(RootKeyRefusal::ResponderUnavailable)
+            );
+        }
     }
 
     /// Offline appraisal of the evidence is the requester's to answer for, and
     /// the Azure funnel is where the production path reports it.
     #[test]
     fn offline_evidence_failures_are_denied_on_the_evidence() {
-        let binding = root_key_answer_rpc_error(backend_error(BackendAttestationError::Maa(
-            MaaError::TdReportInputMismatch,
-        )));
-        assert_eq!(binding.code(), ROOT_KEY_EVIDENCE_DENIED_CODE);
+        let failures = [
+            BackendAttestationError::Maa(MaaError::TdReportInputMismatch),
+            BackendAttestationError::Maa(MaaError::DcapVerification(
+                DcapVerificationError::InputMismatch,
+            )),
+            BackendAttestationError::NoCertificate,
+        ];
 
-        let dcap = root_key_answer_rpc_error(backend_error(BackendAttestationError::Maa(
-            MaaError::DcapVerification(DcapVerificationError::InputMismatch),
-        )));
-        assert_eq!(dcap.code(), ROOT_KEY_EVIDENCE_DENIED_CODE);
-
-        let no_certificate =
-            root_key_answer_rpc_error(backend_error(BackendAttestationError::NoCertificate));
-        assert_eq!(no_certificate.code(), ROOT_KEY_EVIDENCE_DENIED_CODE);
+        for failure in failures {
+            assert_eq!(
+                refusal_of(backend_error(failure)),
+                Some(RootKeyRefusal::RequesterEvidenceUnusable)
+            );
+        }
     }
 
     /// Neither denial is reachable by omission. A failure this responder cannot
@@ -340,25 +429,27 @@ mod tests {
     /// healthy joiner to stop asking on no evidence at all.
     #[test]
     fn unattributed_failures_blame_neither_party() {
-        let unnamed_backend = root_key_answer_rpc_error(backend_error(
-            BackendAttestationError::MeasurementsNotAccepted,
-        ));
-        assert_eq!(
-            unnamed_backend.code(),
-            ErrorCode::InternalError.code(),
-            "an unnamed backend variant must not reach a verdict"
-        );
-
-        let own_plumbing =
-            root_key_answer_rpc_error(verify_error(AttestationError::MissingMeasurements {
+        let unattributed = [
+            // An unnamed backend variant must not reach a verdict.
+            backend_error(BackendAttestationError::MeasurementsNotAccepted),
+            // This responder's own plumbing.
+            verify_error(AttestationError::MissingMeasurements {
                 attestation_type: seismic_attestation::AttestationType::AzureTdx,
-            }));
-        assert_eq!(own_plumbing.code(), ErrorCode::InternalError.code());
+            }),
+            AnswerError::WrapRootKey {
+                source: seismic_custodian_ipc::IpcError::Denied("WrapRootKey".into()),
+            },
+        ];
 
-        let custodian = root_key_answer_rpc_error(AnswerError::WrapRootKey {
-            source: seismic_custodian_ipc::IpcError::Denied("WrapRootKey".into()),
-        });
-        assert_eq!(custodian.code(), ErrorCode::InternalError.code());
+        for error in unattributed {
+            let answer = root_key_answer_rpc_error(error);
+            assert_eq!(answer.code(), ErrorCode::InternalError.code());
+            assert_eq!(
+                RootKeyRefusal::from_code(answer.code()),
+                None,
+                "an unattributed failure must not arrive as a refusal"
+            );
+        }
     }
 
     /// The step is what attributes, not the error inside it: the very variant
@@ -367,8 +458,10 @@ mod tests {
     /// evidence.
     #[test]
     fn the_same_backend_error_attributes_by_step() {
-        let verifying = root_key_answer_rpc_error(backend_error(BackendAttestationError::NoPccs));
-        assert_eq!(verifying.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+        assert_eq!(
+            refusal_of(backend_error(BackendAttestationError::NoPccs)),
+            Some(RootKeyRefusal::ResponderUnavailable)
+        );
 
         let generating = root_key_answer_rpc_error(AnswerError::GenerateResponderEvidence {
             source: AttestationError::Backend(BackendAttestationError::NoPccs),

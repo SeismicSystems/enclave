@@ -12,14 +12,14 @@
 //!
 //! - an **accepted** tuple authorizes exactly one root-key wrap (a real
 //!   joiner service completes its bootstrap);
-//! - a **deprecated** tuple is denied on its identity (`-32003`) by the same
+//! - a **deprecated** tuple is denied on its identity (`-32002`) by the same
 //!   still-running responder — the policy is read live from the chain, never
 //!   cached;
-//! - an **unknown** tuple is denied on its identity (`-32003`);
-//! - an unreachable (`-32002`) or **stale** (`-32002`, via a tightened
+//! - an **unknown** tuple is denied on its identity (`-32002`);
+//! - an unreachable (`-32003`) or **stale** (`-32003`, via a tightened
 //!   policy-age bound) local reth fails closed;
 //! - a local reth serving a chain the manifest does not commit to fails closed
-//!   (`-32002`), exercising the pinned `eth.genesis_hash` end to end.
+//!   (`-32003`), exercising the pinned `eth.genesis_hash` end to end.
 //!
 //! The genesis is generated at runtime, not committed: evidence carries the
 //! runner's real PCRs, so the seeded policy is compiled either from the
@@ -72,7 +72,7 @@ use seismic_attestation_service::{
     Args,
     api::NodeStatusRpcClient as _,
     bootstrap::build_root_key_request,
-    rpc_error::{ROOT_KEY_ADMISSION_UNAVAILABLE_CODE, ROOT_KEY_IDENTITY_DENIED_CODE},
+    rpc_error::RootKeyRefusal,
     utils::{init_tracing, is_sudo},
 };
 use seismic_custodian::Custodian;
@@ -198,7 +198,10 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
     // Same responder process, no restart: the live chain read alone flips
     // the verdict, and the denied handshake never reaches the custodian.
     let denied = request_root_key(&responder.url, &manifest).await;
-    assert_eq!(denial_code(denied), ROOT_KEY_IDENTITY_DENIED_CODE);
+    assert_eq!(
+        denial_refusal(denied),
+        RootKeyRefusal::RequesterIdentityNotAccepted
+    );
     assert_eq!(
         responder.wrap_count.load(Ordering::SeqCst),
         1,
@@ -235,14 +238,17 @@ async fn test_unknown_tuple_is_denied_and_reth_outage_fails_closed() {
 
     let responder = start_service("responder", 32, None, &node.http_url, None).await;
     let denied = request_root_key(&responder.url, &manifest).await;
-    assert_eq!(denial_code(denied), ROOT_KEY_IDENTITY_DENIED_CODE);
+    assert_eq!(
+        denial_refusal(denied),
+        RootKeyRefusal::RequesterIdentityNotAccepted
+    );
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
 
     node.stop();
     let unavailable = request_root_key(&responder.url, &manifest).await;
     assert_eq!(
-        denial_code(unavailable),
-        ROOT_KEY_ADMISSION_UNAVAILABLE_CODE
+        denial_refusal(unavailable),
+        RootKeyRefusal::ResponderUnavailable
     );
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
     responder.handle.abort();
@@ -281,7 +287,7 @@ async fn test_stale_policy_view_fails_closed() {
     wait_finalized_older_than(&provider, STALE_MAX_POLICY_AGE * 3).await;
 
     let stale = request_root_key(&responder.url, &manifest).await;
-    assert_eq!(denial_code(stale), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+    assert_eq!(denial_refusal(stale), RootKeyRefusal::ResponderUnavailable);
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
     responder.handle.abort();
 }
@@ -310,8 +316,8 @@ async fn test_foreign_pinned_genesis_fails_closed() {
     let responder = start_service("responder", 34, None, &node.http_url, None).await;
     let unavailable = request_root_key(&responder.url, &manifest).await;
     assert_eq!(
-        denial_code(unavailable),
-        ROOT_KEY_ADMISSION_UNAVAILABLE_CODE
+        denial_refusal(unavailable),
+        RootKeyRefusal::ResponderUnavailable
     );
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
     responder.handle.abort();
@@ -772,9 +778,17 @@ async fn request_root_key(
 }
 
 /// The JSON-RPC error code a failed handshake surfaced.
-fn denial_code(result: Result<Vec<u8>, jsonrpsee::core::client::Error>) -> i32 {
+/// The refusal a denied handshake came back with, read off the wire the way a
+/// joining node reads it.
+fn denial_refusal(result: Result<Vec<u8>, jsonrpsee::core::client::Error>) -> RootKeyRefusal {
     match result {
-        Err(jsonrpsee::core::client::Error::Call(error)) => error.code(),
+        Err(jsonrpsee::core::client::Error::Call(error)) => RootKeyRefusal::from_code(error.code())
+            .unwrap_or_else(|| {
+                panic!(
+                    "handshake must be refused with a root-key code, got {}",
+                    error.code()
+                )
+            }),
         Ok(_) => panic!("handshake must be denied, but a wrapped root key came back"),
         Err(other) => panic!("handshake must fail with a JSON-RPC call error, got: {other}"),
     }
