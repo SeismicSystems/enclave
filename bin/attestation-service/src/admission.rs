@@ -100,11 +100,21 @@ pub enum AdmissionDenial {
 /// Whose problem a denial is, and whether time alone can change it. Both
 /// consumers of a denial read this: the retry loop below asks whether to try
 /// again, and the wire layer asks what to tell the requester.
+///
+/// The two requester verdicts answer the two questions a handshake asks of the
+/// requester in order — did a usable identity come out of its evidence, and is
+/// that identity accepted — because the remedies differ and each belongs to a
+/// different party.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DenialKind {
-    /// A verdict on the requester: its evidence was appraised and refused, and
-    /// the same image asking again gets the same answer.
-    RequesterVerdict,
+    /// A verdict on the requester, reached before any identity was: nothing
+    /// the network can appraise came out of its evidence. Its own operator
+    /// investigates its attestation stack.
+    RequesterEvidenceUnusable,
+    /// A verdict on the requester's identity: the evidence yielded an
+    /// admission ID, and the network does not accept it. Its own operator
+    /// launches a guest whose admission ID the registry accepts.
+    RequesterIdentityNotAccepted,
     /// The responder cannot decide, and no waiting changes that: it reads a
     /// chain the network manifest does not commit to until an operator gives
     /// it the right one. The requester's evidence is not what failed, so its
@@ -125,13 +135,17 @@ impl DenialKind {
 
 impl AdmissionDenial {
     /// Classify this denial. One exhaustive match, so a denial added later
-    /// cannot inherit a class by omission — least of all the requester
-    /// verdict, which tells a healthy joiner to stop asking.
+    /// cannot inherit a class by omission — least of all a requester verdict,
+    /// which tells a healthy joiner to stop asking.
     pub fn kind(&self) -> DenialKind {
         match self {
-            Self::UnsupportedAttestationType(_)
-            | Self::MissingPcr(_)
-            | Self::RegistryNotAccepted(_) => DenialKind::RequesterVerdict,
+            // No admission ID came out of the evidence: a non-Azure
+            // attestation type has no admission schema at all, and a PCR bank
+            // missing a schema register yields no identity to appraise.
+            Self::UnsupportedAttestationType(_) | Self::MissingPcr(_) => {
+                DenialKind::RequesterEvidenceUnusable
+            }
+            Self::RegistryNotAccepted(_) => DenialKind::RequesterIdentityNotAccepted,
             Self::ChainGenesisMismatch { .. } => DenialKind::ResponderMisconfigured,
             Self::RegistryQueryFailed { .. }
             | Self::ChainQueryFailed { .. }

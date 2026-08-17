@@ -12,9 +12,10 @@
 //!
 //! - an **accepted** tuple authorizes exactly one root-key wrap (a real
 //!   joiner service completes its bootstrap);
-//! - a **deprecated** tuple is denied (`-32001`) by the same still-running
-//!   responder — the policy is read live from the chain, never cached;
-//! - an **unknown** tuple is denied (`-32001`);
+//! - a **deprecated** tuple is denied on its identity (`-32003`) by the same
+//!   still-running responder — the policy is read live from the chain, never
+//!   cached;
+//! - an **unknown** tuple is denied on its identity (`-32003`);
 //! - an unreachable (`-32002`) or **stale** (`-32002`, via a tightened
 //!   policy-age bound) local reth fails closed;
 //! - a local reth serving a chain the manifest does not commit to fails closed
@@ -71,7 +72,7 @@ use seismic_attestation_service::{
     Args,
     api::NodeStatusRpcClient as _,
     bootstrap::build_root_key_request,
-    rpc_error::{ROOT_KEY_ADMISSION_UNAVAILABLE_CODE, ROOT_KEY_REQUEST_DENIED_CODE},
+    rpc_error::{ROOT_KEY_ADMISSION_UNAVAILABLE_CODE, ROOT_KEY_IDENTITY_DENIED_CODE},
     utils::{init_tracing, is_sudo},
 };
 use seismic_custodian::Custodian;
@@ -197,7 +198,7 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
     // Same responder process, no restart: the live chain read alone flips
     // the verdict, and the denied handshake never reaches the custodian.
     let denied = request_root_key(&responder.url, &manifest).await;
-    assert_eq!(denial_code(denied), ROOT_KEY_REQUEST_DENIED_CODE);
+    assert_eq!(denial_code(denied), ROOT_KEY_IDENTITY_DENIED_CODE);
     assert_eq!(
         responder.wrap_count.load(Ordering::SeqCst),
         1,
@@ -234,7 +235,7 @@ async fn test_unknown_tuple_is_denied_and_reth_outage_fails_closed() {
 
     let responder = start_service("responder", 32, None, &node.http_url, None).await;
     let denied = request_root_key(&responder.url, &manifest).await;
-    assert_eq!(denial_code(denied), ROOT_KEY_REQUEST_DENIED_CODE);
+    assert_eq!(denial_code(denied), ROOT_KEY_IDENTITY_DENIED_CODE);
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
 
     node.stop();

@@ -36,6 +36,14 @@ pub use seismic_network_manifest::{ManifestError, NetworkId, NetworkManifestV1};
 
 /// Backend measurement types returned after successful verification.
 pub use attestation::measurements::{DcapMeasurementRegister, MultiMeasurements};
+/// The backend error enum [`AttestationError::Backend`] wraps, and the two
+/// nested enums a caller has to descend into to tell a verdict on the evidence
+/// apart from its own collateral infrastructure failing: the Azure verifier
+/// funnels every Azure TDX outcome through `MaaError`, and the DCAP layer
+/// reports a collateral-cache failure as `DcapVerificationError::Pccs`.
+pub use attestation::{
+    AttestationError as BackendAttestationError, azure::MaaError, dcap::DcapVerificationError,
+};
 /// Backend evidence envelope and attestation-type enum used on the wire.
 pub use attestation::{AttestationExchangeMessage, AttestationType};
 
