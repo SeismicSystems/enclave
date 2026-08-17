@@ -7,7 +7,9 @@ use crate::{
         verify_root_key_response,
     },
     network::{NETWORK_MANIFEST_PATH, load_manifest},
-    utils::{internal_rpc_error, invalid_root_key_request_rpc_error, root_key_answer_rpc_error},
+    rpc_error::{
+        internal_rpc_error, invalid_root_key_request_rpc_error, root_key_answer_rpc_error,
+    },
 };
 use alloy_primitives::Address;
 use anyhow::Context as _;
