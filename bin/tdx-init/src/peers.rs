@@ -1,13 +1,19 @@
-//! POST-time validation of the peer inputs and derivation of the root-key
-//! fetch peers.
+//! POST-time validation of the peer inputs and derivation of the per-consumer
+//! peer lists.
 //!
 //! `[network].bootnodes` is the single source for the cohort's peer machines.
-//! It feeds two consumers: reth verbatim (rendered into `reth-p2p.env` by the
-//! writer module) and — derived here — the attestation service's root-key
-//! fetch list (`http://<bootnode host>:7878`, this node's own entry dropped).
-//! Bootnodes and root-key peers are the same machines by construction, so
-//! deriving one list from the other makes skew between them unrepresentable,
-//! and the `http://…:7878` convention is rendered in exactly one place.
+//! It feeds three consumers, in two renderings:
+//!
+//! - reth's `--bootnodes` and `--trusted-peers` both take the peer enodes, for
+//!   different jobs: trusted peers are how the node reaches the cohort,
+//!   bootnodes are how it reaches everyone the cohort list cannot name (the
+//!   writer module renders both into `reth-p2p.env`).
+//! - the attestation service's root-key fetch list takes the same machines as
+//!   `http://<host>:7878`.
+//!
+//! Both renderings drop this node's own entry and come from one pass over the
+//! input, so skew between them is unrepresentable and the `http://…:7878`
+//! convention lives in exactly one place.
 //!
 //! Validation is structural, so a malformed enode or IP fails the deploy POST
 //! with `400` rather than surfacing when reth parses its flags at boot and
@@ -18,7 +24,7 @@
 use crate::config::NodeConfig;
 use crate::error::{Result, TdxInitError};
 use std::net::IpAddr;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Number of hex chars in an enode node id: the 64-byte secp256k1 public key
 /// (uncompressed, without the 0x04 prefix), hex-encoded.
@@ -29,27 +35,53 @@ const ENODE_ID_HEX_LEN: usize = 128;
 /// crate — the constant can't be imported).
 const ROOT_KEY_PEER_PORT: u16 = 7878;
 
-/// Validate the peer inputs from the POSTed config and derive the root-key
-/// fetch peer URLs from the bootnodes: `external_ip` must parse as an IP
-/// address and every bootnode must be a well-formed `enode://` URL. The
-/// node's own enode (host == `external_ip`) is dropped — after the founding
-/// ceremony the persisted bootnode set includes every founding node, this one
-/// included — and a non-genesis node must end up with at least one peer, or
-/// it has no source for `root_key`.
-pub fn validate_and_derive_peers(node: &NodeConfig, bootnodes: &[String]) -> Result<Vec<String>> {
+/// The cohort as this node's consumers need it: two renderings of the same
+/// machines, built in one pass from `[network].bootnodes` so they cannot
+/// disagree about who the cohort is. This node's own entry is dropped from
+/// both — nothing here is a list this node uses to reach itself.
+#[derive(Debug)]
+pub struct PeerLists {
+    /// The other founding nodes' enodes, in the order given. Both of reth's
+    /// devp2p flags take this list (`reth-p2p.env`'s `RETH_BOOTNODES_FLAG` and
+    /// `RETH_TRUSTED_PEERS_FLAG`), because they do different jobs with it:
+    /// `--trusted-peers` is how the node reaches *the cohort* — direct RLPx
+    /// dials, retried, exempt from reputation slashing — while `--bootnodes`
+    /// seeds discv5, which is how it reaches everyone the list cannot name.
+    /// Membership on this plane is open, so later joiners are exactly the peers
+    /// no founding-era list could have held.
+    pub peer_enodes: Vec<String>,
+    /// Where the attestation service fetches `root_key` when the local
+    /// custodian starts without one (`attestation.env`'s
+    /// `SEISMIC_ROOT_KEY_PEERS`): `http://<host>:7878` per peer host, deduped
+    /// by URL, since one host serves one root key however many enodes it runs.
+    pub root_key_urls: Vec<String>,
+}
+
+/// Validate the peer inputs from the POSTed config and render this node's peer
+/// lists from the bootnodes: `external_ip` must parse as an IP address and
+/// every bootnode must be a well-formed `enode://` URL. The node's own enode
+/// (host == `external_ip`) is dropped — after the founding ceremony the
+/// persisted bootnode set includes every founding node, this one included, and
+/// a node has no reason to reach itself. A non-genesis node must end up with at
+/// least one peer, or it has no source for `root_key`.
+pub fn validate_and_derive_peers(node: &NodeConfig, bootnodes: &[String]) -> Result<PeerLists> {
     let external_ip = parse_external_ip(&node.external_ip)?;
-    let mut peers = Vec::new();
+    let mut derived = PeerLists {
+        peer_enodes: Vec::new(),
+        root_key_urls: Vec::new(),
+    };
     for enode in bootnodes {
         let host = parse_enode_host(enode)?;
         if is_self(host, external_ip) {
             continue;
         }
+        derived.peer_enodes.push(enode.clone());
         let peer = format!("http://{host}:{ROOT_KEY_PEER_PORT}");
-        if !peers.contains(&peer) {
-            peers.push(peer);
+        if !derived.root_key_urls.contains(&peer) {
+            derived.root_key_urls.push(peer);
         }
     }
-    if !node.genesis_node && peers.is_empty() {
+    if !node.genesis_node && derived.root_key_urls.is_empty() {
         return Err(TdxInitError::InvalidPeers(
             "non-genesis node has no source for root_key: [network].bootnodes \
              must name at least one machine other than this node"
@@ -57,12 +89,24 @@ pub fn validate_and_derive_peers(node: &NodeConfig, bootnodes: &[String]) -> Res
         ));
     }
     info!(
-        "peer config valid: {} bootnode(s), {} derived root-key peer(s), external_ip={}",
+        "peer config valid: {} bootnode(s), {} peer enode(s), {} root-key peer(s), external_ip={}",
         bootnodes.len(),
-        peers.len(),
+        derived.peer_enodes.len(),
+        derived.root_key_urls.len(),
         node.external_ip,
     );
-    Ok(peers)
+    // Only a genesis node reaches this empty (a joiner without peers already
+    // failed above), and its two readings look identical from here: correct at
+    // founding, a stale peer list on any boot after joiners arrived.
+    if derived.peer_enodes.is_empty() {
+        warn!(
+            "[network].bootnodes names no machine other than this node: reth starts with \
+             neither bootnodes nor trusted peers, so this node joins no gossip mesh. \
+             Expected for the genesis node at founding; on a later boot it means the \
+             delivered peer list is stale."
+        );
+    }
+    Ok(derived)
 }
 
 /// Check that `enode` matches `enode://<128 hex pubkey>@host:port` and return
@@ -144,7 +188,8 @@ mod tests {
             &node("203.0.113.7", false),
             &[enode("10.0.0.1:30303"), enode("10.0.0.2:30303")],
         )
-        .unwrap();
+        .unwrap()
+        .root_key_urls;
         assert_eq!(peers, vec!["http://10.0.0.1:7878", "http://10.0.0.2:7878"]);
     }
 
@@ -154,7 +199,8 @@ mod tests {
             &node("10.0.0.1", false),
             &[enode("10.0.0.1:30303"), enode("10.0.0.2:30303")],
         )
-        .unwrap();
+        .unwrap()
+        .root_key_urls;
         assert_eq!(peers, vec!["http://10.0.0.2:7878"]);
     }
 
@@ -169,7 +215,8 @@ mod tests {
                 enode("10.0.0.2:30303"),
             ],
         )
-        .unwrap();
+        .unwrap()
+        .root_key_urls;
         assert_eq!(peers, vec!["http://10.0.0.2:7878"]);
     }
 
@@ -177,7 +224,8 @@ mod tests {
     fn keeps_bracketed_ipv6_peer_hosts() {
         let peers =
             validate_and_derive_peers(&node("10.0.0.1", false), &[enode("[2001:db8::1]:30303")])
-                .unwrap();
+                .unwrap()
+                .root_key_urls;
         assert_eq!(peers, vec!["http://[2001:db8::1]:7878"]);
     }
 
@@ -187,26 +235,50 @@ mod tests {
             &node("10.0.0.1", false),
             &[enode("node2.example.com:30303")],
         )
-        .unwrap();
+        .unwrap()
+        .root_key_urls;
         assert_eq!(peers, vec!["http://node2.example.com:7878"]);
     }
 
     #[test]
     fn dedupes_repeated_hosts() {
+        // Two enodes on one host collapse to a single root-key URL, but both
+        // stay peer enodes: reth keys peers by node id, not by address.
         let mut second = enode("10.0.0.2:30303");
         second = second.replacen('a', "b", 1);
-        let peers =
-            validate_and_derive_peers(&node("10.0.0.1", false), &[enode("10.0.0.2:30303"), second])
-                .unwrap();
-        assert_eq!(peers, vec!["http://10.0.0.2:7878"]);
+        let derived = validate_and_derive_peers(
+            &node("10.0.0.1", false),
+            &[enode("10.0.0.2:30303"), second.clone()],
+        )
+        .unwrap();
+        assert_eq!(derived.root_key_urls, vec!["http://10.0.0.2:7878"]);
+        assert_eq!(derived.peer_enodes, vec![enode("10.0.0.2:30303"), second]);
+    }
+
+    #[test]
+    fn keeps_peer_enodes_in_order_without_self() {
+        let derived = validate_and_derive_peers(
+            &node("10.0.0.1", false),
+            &[
+                enode("10.0.0.1:30303"),
+                enode("10.0.0.2:30303"),
+                enode("node3.example.com:30303"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            derived.peer_enodes,
+            vec![enode("10.0.0.2:30303"), enode("node3.example.com:30303")]
+        );
     }
 
     #[test]
     fn genesis_node_may_have_no_bootnodes() {
         // The greenfield genesis node has no peers to dial and mints
         // root_key itself.
-        let peers = validate_and_derive_peers(&node("10.0.0.1", true), &[]).unwrap();
-        assert!(peers.is_empty());
+        let derived = validate_and_derive_peers(&node("10.0.0.1", true), &[]).unwrap();
+        assert!(derived.root_key_urls.is_empty());
+        assert!(derived.peer_enodes.is_empty());
     }
 
     #[test]

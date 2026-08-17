@@ -87,12 +87,20 @@ the manifest's `summit.namespace` (`src/summit_genesis.rs`). Written verbatim
 to `summit-genesis.toml`.
 
 `[network].bootnodes` is the network-wide devp2p bootnode list — the single
-source for the cohort's peer machines. It feeds reth verbatim (rendered into
-`reth-p2p.env`, see below) and, derived, the root-key fetch list the
-attestation service uses (`attestation.env`): `http://<bootnode host>:7878`
-per bootnode, with this node's own entry dropped. Deriving the peers instead
-of delivering a second list makes skew between the two unrepresentable — the
-bootnodes and the root-key peers are the same machines by construction.
+source for the cohort's peer machines. Dropping this node's own entry leaves
+the peer enodes, which three consumers read in two renderings:
+
+- **reth's `--bootnodes`** (rendered into `reth-p2p.env`, see below) seeds
+  discv5, where one live bootnode is enough for the DHT to flood the rest.
+  Bootstrap is one-shot per boot.
+- **reth's `--trusted-peers`** takes the same enodes. reth dials these directly
+  over RLPx with retry, so a lost discv5 round-trip costs latency instead of a
+  seat in the tx-gossip mesh.
+- **the attestation service's root-key fetch list** (`attestation.env`) takes
+  the same machines as `http://<host>:7878`.
+
+Rendering the lists instead of delivering three makes skew between them
+unrepresentable — all three name the same machines by construction.
 
 `[node].external_ip` is this VM's public IP — Azure NICs hold private
 addresses, so reth's NAT autodetection can't be trusted; it is also what
@@ -115,7 +123,7 @@ After validation, tdx-init writes:
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
 | `/run/seismic/conf/summit-genesis.toml` | verbatim summit genesis bytes | `summit.service` (seismic-images) — passed to `summit --genesis-path` |
-| `/run/seismic/conf/reth-p2p.env` | `RETH_BOOTNODES_FLAG=...`, `RETH_NAT_FLAG=...` | `reth.service` (seismic-images) — loaded via `EnvironmentFile=`; each var holds a whole flag (`--bootnodes <csv>` / `--nat extip:<ip>`) or is empty, and the unit places the unquoted `$RETH_BOOTNODES_FLAG $RETH_NAT_FLAG` on the command line so empty vars drop out |
+| `/run/seismic/conf/reth-p2p.env` | `RETH_BOOTNODES_FLAG=...`, `RETH_TRUSTED_PEERS_FLAG=...`, `RETH_NAT_FLAG=...` | `reth.service` (seismic-images) — loaded via `EnvironmentFile=`; each var holds a whole flag (`--bootnodes <csv>` / `--trusted-peers <csv>` / `--nat extip:<ip>`) or is empty, and the unit places the unquoted `$RETH_*_FLAG` vars on the command line so empty ones drop out |
 
 Each downstream service reads its own native format (env-var pairs,
 either via systemd `EnvironmentFile=` or shell `source`); tdx-init is
