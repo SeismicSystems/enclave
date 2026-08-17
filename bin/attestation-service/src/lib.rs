@@ -3,6 +3,7 @@ pub mod api;
 pub mod bootstrap;
 mod luks_status;
 mod network;
+pub mod rpc_error;
 mod server;
 pub mod utils;
 

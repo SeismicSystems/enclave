@@ -69,6 +69,7 @@ use seismic_attestation_service::{
     Args,
     api::NodeStatusRpcClient as _,
     bootstrap::build_root_key_request,
+    rpc_error::{ROOT_KEY_ADMISSION_UNAVAILABLE_CODE, ROOT_KEY_REQUEST_DENIED_CODE},
     utils::{init_tracing, is_sudo},
 };
 use seismic_custodian::Custodian;
@@ -99,11 +100,6 @@ const OWNER_SK: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d
 /// read, for which seismic-reth zeroes `msg.sender`, tripping the owner check
 /// during the preflight (see `reth_registry.rs` for the long version).
 const APPLY_POLICY_UPDATE_GAS: u64 = 500_000;
-
-/// The wire contract under test (`src/utils.rs` keeps the service's copy):
-/// a terminal admission verdict, and a responder that could not decide.
-const ROOT_KEY_REQUEST_DENIED_CODE: i32 = -32001;
-const ROOT_KEY_ADMISSION_UNAVAILABLE_CODE: i32 = -32002;
 
 /// Interval-mining period. The freshness gate reads the finalized view, which
 /// trails `latest` by ~63 blocks in dev mode: 500ms blocks hold that view
