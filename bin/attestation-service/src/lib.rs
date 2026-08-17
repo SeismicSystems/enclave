@@ -1,11 +1,19 @@
 mod admission;
 pub mod api;
 pub mod bootstrap;
+mod join;
 mod luks_status;
 mod network;
 pub mod rpc_error;
 mod server;
 pub mod utils;
+
+/// Attestation type this build mints and verifies evidence for. Azure TDX +
+/// vTPM is the only supported type today. Both roles hold to it: the evidence
+/// this node mints for its own join, and the evidence it accepts from nodes
+/// joining after it.
+pub(crate) const ATTESTATION_TYPE: seismic_attestation::AttestationType =
+    seismic_attestation::AttestationType::AzureTdx;
 
 /// Loopback as a safe default but production should listen on `0.0.0.0` instead:
 /// joining peers fetch the wrapped root key from here and deploy tooling polls node status.
