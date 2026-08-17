@@ -6,7 +6,7 @@
 //! stable constant — an unauthenticated caller learns the outcome and nothing
 //! about why — so the failure detail lives in this responder's log instead.
 
-use crate::admission::AdmissionDenial;
+use crate::admission::{AdmissionDenial, DenialKind};
 use jsonrpsee::types::{ErrorCode, ErrorObjectOwned};
 use std::fmt::Debug;
 use tracing::{error, warn};
@@ -14,9 +14,9 @@ use tracing::{error, warn};
 /// Terminal verdict: the requester does not get the key, and retrying with
 /// the same image cannot change the answer.
 pub const ROOT_KEY_REQUEST_DENIED_CODE: i32 = -32001;
-/// Transient failure: the responder could not decide, because its own chain
-/// or registry read produced no usable answer. Worth retrying — against this
-/// responder moments later, or against another peer.
+/// The responder could not decide, because its own chain or registry read
+/// produced no usable answer. The requester's evidence is not what failed:
+/// worth retrying — against another peer, or this responder later.
 pub const ROOT_KEY_ADMISSION_UNAVAILABLE_CODE: i32 = -32002;
 
 pub(crate) fn invalid_root_key_request_rpc_error(error: impl Debug) -> ErrorObjectOwned {
@@ -55,21 +55,27 @@ pub(crate) fn root_key_admission_unavailable_rpc_error(error: impl Debug) -> Err
     )
 }
 
-/// Route a failed root-key answer to its wire error. An [`AdmissionDenial`]
-/// that is transient (see [`AdmissionDenial::is_transient`]) maps to
-/// [`ROOT_KEY_ADMISSION_UNAVAILABLE_CODE`]; everything else — admission
-/// verdicts, and failures carrying no typed denial (e.g. quote verification)
-/// — maps to [`ROOT_KEY_REQUEST_DENIED_CODE`]. Either way the message is a
-/// stable constant; failure detail stays in the responder's log.
+/// Route a failed root-key answer to its wire error, by what the failure says
+/// about the two parties (see [`DenialKind`]). The two codes carry the two
+/// moves open to a requester: change something about itself, or ask someone
+/// else. Either way the message is a stable constant; failure detail stays in
+/// the responder's log.
 pub(crate) fn root_key_answer_rpc_error(error: anyhow::Error) -> ErrorObjectOwned {
-    let transient = error
+    let kind = error
         .chain()
         .find_map(|cause| cause.downcast_ref::<AdmissionDenial>())
-        .is_some_and(AdmissionDenial::is_transient);
-    if transient {
-        root_key_admission_unavailable_rpc_error(error)
-    } else {
-        root_key_request_denied_rpc_error(error)
+        .map(AdmissionDenial::kind);
+    match kind {
+        Some(DenialKind::ResponderMisconfigured | DenialKind::ResponderTransient) => {
+            root_key_admission_unavailable_rpc_error(error)
+        }
+        // A verdict on the requester, and every failure that carries no typed
+        // denial — evidence verification among them, whatever its cause.
+        // TODO: attribute evidence failures the way admission denials are.
+        // Verification fetches collateral over the network, so a fetch this
+        // responder could not complete is its own fault, yet it reaches the
+        // requester here as a terminal verdict on evidence that was fine.
+        Some(DenialKind::RequesterVerdict) | None => root_key_request_denied_rpc_error(error),
     }
 }
 
@@ -104,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn transient_admission_failures_map_to_unavailable_others_to_denied() {
+    fn responder_faults_map_to_unavailable_others_to_denied() {
         use seismic_attestation::AttestationError;
 
         // The nesting a real handshake produces: the bootstrap wraps the
@@ -118,6 +124,16 @@ mod tests {
         let unavailable =
             root_key_answer_rpc_error(handshake_error(AdmissionDenial::ChainRegressedToGenesis));
         assert_eq!(unavailable.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+
+        // A responder on the wrong chain is unavailable rather than denying,
+        // even though waiting cannot fix it: the requester's move is to ask
+        // another peer, and its evidence is not what failed.
+        let wrong_chain =
+            root_key_answer_rpc_error(handshake_error(AdmissionDenial::ChainGenesisMismatch {
+                expected: alloy_primitives::B256::repeat_byte(0xb0),
+                found: alloy_primitives::B256::repeat_byte(0xef),
+            }));
+        assert_eq!(wrong_chain.code(), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
 
         let verdict = root_key_answer_rpc_error(handshake_error(
             AdmissionDenial::RegistryNotAccepted(alloy_primitives::B256::ZERO.into()),

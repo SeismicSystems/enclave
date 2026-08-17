@@ -15,11 +15,10 @@ export RUST_LOG=info
 echo "🚀 Starting attestation-service admission tests..."
 
 # The image service normally creates these runtime directories. Ensure they
-# also exist when the test job starts from a clean runner boot.
+# also exist when the test job starts from a clean runner boot. The manifest
+# that lands here is written by the tests themselves: each one pins the genesis
+# of the node it just generated, so only the test can render it.
 sudo install -d -m 0755 /run/seismic/conf
-sudo install -m 0644 \
-    crates/network-manifest/fixtures/network-manifest-v1.json \
-    /run/seismic/conf/network-manifest.json
 
 # Free the TPM before the tests start their handshakes: quote generation
 # opens the raw TPM device (/dev/tpm0), which the kernel hands to one process

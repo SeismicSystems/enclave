@@ -16,7 +16,9 @@
 //!   responder — the policy is read live from the chain, never cached;
 //! - an **unknown** tuple is denied (`-32001`);
 //! - an unreachable (`-32002`) or **stale** (`-32002`, via a tightened
-//!   policy-age bound) local reth fails closed.
+//!   policy-age bound) local reth fails closed;
+//! - a local reth serving a chain the manifest does not commit to fails closed
+//!   (`-32002`), exercising the pinned `eth.genesis_hash` end to end.
 //!
 //! The genesis is generated at runtime, not committed: evidence carries the
 //! runner's real PCRs, so the seeded policy is compiled either from the
@@ -34,9 +36,9 @@
 //! opens the raw single-open TPM device, so every test carries
 //! `serial(attestation_evidence)` and runs its handshakes sequentially.
 //!
-//! Requires sudo (TPM access), the `/run/seismic` manifest handoff, and a
-//! `seismic-reth` binary (`SEISMIC_RETH_BIN`, `$PATH`, or a sibling
-//! checkout's target directory).
+//! Requires sudo (TPM access, and the `/run/seismic` handoff directory the
+//! suite writes each network's manifest into) plus a `seismic-reth` binary
+//! (`SEISMIC_RETH_BIN`, `$PATH`, or a sibling checkout's target directory).
 
 use std::{
     collections::HashMap,
@@ -84,11 +86,19 @@ use seismic_measurement_admission::{
 };
 use seismic_measurement_registry_client::{MEASUREMENT_REGISTRY_ADDRESS, MeasurementRegistry};
 
-/// The manifest both sides of every handshake derive their network ID from;
-/// the runner script installs the same fixture at the server's fixed
-/// `/run/seismic` handoff path.
-const NETWORK_MANIFEST: &[u8] =
+/// The manifest both sides of every handshake derive their network ID from.
+/// The fixture is a template here: a network's identity commits to its genesis
+/// block, and this suite mints a fresh genesis per test — the seeded policy and
+/// the stamped timestamp both move its hash — so `eth.genesis_hash` is filled
+/// in from the live node by [`install_network_manifest`].
+const NETWORK_MANIFEST_TEMPLATE: &[u8] =
     include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+
+/// Where the image drops the manifest and the service reads it from.
+const NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
+/// A genesis hash no seeded node here can serve, so a manifest pinning it
+/// names a chain the responder's local reth is not on.
+const FOREIGN_GENESIS: B256 = B256::repeat_byte(0xef);
 
 /// `MeasurementAuthorityDev` genesis predeploy (the manifest's
 /// `measurements.contracts.authority`).
@@ -147,6 +157,7 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
         .as_b256();
     let node = launch_seeded_reth("suite-observed", &pcrs);
     let provider = wait_for_rpc(&node).await;
+    let manifest = install_network_manifest(&provider).await;
     wait_past_genesis(&provider).await;
 
     let responder = start_service("responder", 30, None, &node.http_url, None).await;
@@ -185,7 +196,7 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
 
     // Same responder process, no restart: the live chain read alone flips
     // the verdict, and the denied handshake never reaches the custodian.
-    let denied = request_root_key(&responder.url).await;
+    let denied = request_root_key(&responder.url, &manifest).await;
     assert_eq!(denial_code(denied), ROOT_KEY_REQUEST_DENIED_CODE);
     assert_eq!(
         responder.wrap_count.load(Ordering::SeqCst),
@@ -218,15 +229,16 @@ async fn test_unknown_tuple_is_denied_and_reth_outage_fails_closed() {
     // match these values, so the runner's admission ID is unknown on chain.
     let mut node = launch_seeded_reth("suite-synthetic", &synthetic_pcrs());
     let provider = wait_for_rpc(&node).await;
+    let manifest = install_network_manifest(&provider).await;
     wait_past_genesis(&provider).await;
 
     let responder = start_service("responder", 32, None, &node.http_url, None).await;
-    let denied = request_root_key(&responder.url).await;
+    let denied = request_root_key(&responder.url, &manifest).await;
     assert_eq!(denial_code(denied), ROOT_KEY_REQUEST_DENIED_CODE);
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
 
     node.stop();
-    let unavailable = request_root_key(&responder.url).await;
+    let unavailable = request_root_key(&responder.url, &manifest).await;
     assert_eq!(
         denial_code(unavailable),
         ROOT_KEY_ADMISSION_UNAVAILABLE_CODE
@@ -250,6 +262,7 @@ async fn test_stale_policy_view_fails_closed() {
     let pcrs = observed_pcrs().await;
     let node = launch_seeded_reth("suite-observed", &pcrs);
     let provider = wait_for_rpc(&node).await;
+    let manifest = install_network_manifest(&provider).await;
     wait_past_genesis(&provider).await;
 
     let responder = start_service(
@@ -266,8 +279,39 @@ async fn test_stale_policy_view_fails_closed() {
     // within the handshake sees a stale chain.
     wait_finalized_older_than(&provider, STALE_MAX_POLICY_AGE * 3).await;
 
-    let stale = request_root_key(&responder.url).await;
+    let stale = request_root_key(&responder.url, &manifest).await;
     assert_eq!(denial_code(stale), ROOT_KEY_ADMISSION_UNAVAILABLE_CODE);
+    assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
+    responder.handle.abort();
+}
+
+/// A responder reading its policy off a chain its manifest does not commit to
+/// refuses to decide. Everything else is the accepted path — the node is
+/// seeded from the runner's observed PCRs, mining, and fresh — so the pinned
+/// genesis alone turns the answer into temporarily unavailable, and it does so
+/// on the manifest field the service reads at startup.
+#[serial_test::serial(attestation_evidence)]
+#[tokio::test]
+async fn test_foreign_pinned_genesis_fails_closed() {
+    init_tracing();
+    if !is_sudo() {
+        panic!("test_foreign_pinned_genesis_fails_closed: requires sudo");
+    }
+
+    let pcrs = observed_pcrs().await;
+    let node = launch_seeded_reth("suite-observed", &pcrs);
+    let provider = wait_for_rpc(&node).await;
+    let manifest = install_manifest_pinning(FOREIGN_GENESIS);
+    // Past genesis the gate reads block 0 through a query of its own, the
+    // branch a forged chain with a progressing head aims at.
+    wait_past_genesis(&provider).await;
+
+    let responder = start_service("responder", 34, None, &node.http_url, None).await;
+    let unavailable = request_root_key(&responder.url, &manifest).await;
+    assert_eq!(
+        denial_code(unavailable),
+        ROOT_KEY_ADMISSION_UNAVAILABLE_CODE
+    );
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
     responder.handle.abort();
 }
@@ -495,6 +539,35 @@ async fn wait_for_rpc(node: &RethNode) -> RootProvider {
     }
 }
 
+/// Render the manifest for the chain `provider` serves, drop it at the
+/// service's handoff path, and return the exact bytes written.
+///
+/// Pinning `eth.genesis_hash` to this node's block 0 is what lets the
+/// responder's admission read its registry at all: the gate refuses to answer
+/// on a chain the manifest does not commit to. `network_id` is SHA-256 over the
+/// file's bytes, so callers must hash the returned bytes rather than
+/// re-serialize the manifest.
+async fn install_network_manifest(provider: &RootProvider) -> Vec<u8> {
+    let genesis = provider
+        .get_block_by_number(alloy::eips::BlockNumberOrTag::Earliest)
+        .await
+        .expect("genesis query")
+        .expect("dev node serves block 0");
+    install_manifest_pinning(genesis.header.hash)
+}
+
+/// Render the manifest that pins `genesis_hash`, drop it at the service's
+/// handoff path, and return the exact bytes written.
+fn install_manifest_pinning(genesis_hash: B256) -> Vec<u8> {
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(NETWORK_MANIFEST_TEMPLATE).expect("manifest template JSON");
+    manifest["eth"]["genesis_hash"] = serde_json::Value::from(format!("{genesis_hash:#x}"));
+    let bytes = serde_json::to_vec_pretty(&manifest).expect("serialize manifest");
+    fs::write(NETWORK_MANIFEST_PATH, &bytes)
+        .unwrap_or_else(|e| panic!("writing {NETWORK_MANIFEST_PATH}: {e}"));
+    bytes
+}
+
 /// Wait until `latest` is past block 0: the admission gate's genesis window
 /// admits unconditionally at block 0, so every rejection scenario starts
 /// after the chain has advanced.
@@ -676,11 +749,14 @@ async fn wait_for_health(
 /// runner's real quote, POSTed to `responder_url`. The denial scenarios ride
 /// this instead of a joiner service, whose fetch loop would retry denials
 /// forever. The ephemeral key is fixed — no response is ever unwrapped here.
-async fn request_root_key(responder_url: &str) -> Result<Vec<u8>, jsonrpsee::core::client::Error> {
+async fn request_root_key(
+    responder_url: &str,
+    manifest: &[u8],
+) -> Result<Vec<u8>, jsonrpsee::core::client::Error> {
     let eph_sk = secp256k1::SecretKey::from_slice(&[0x42u8; 32]).expect("valid test secret key");
     let eph_pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &eph_sk);
     let request = build_root_key_request(
-        &NetworkId::from_manifest_bytes(NETWORK_MANIFEST),
+        &NetworkId::from_manifest_bytes(manifest),
         &eph_pk,
         AttestationType::AzureTdx,
     )

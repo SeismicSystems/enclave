@@ -532,6 +532,12 @@ A responder MUST:
 - read `isAccepted(admissionId)` from the registry address in the network
   manifest, on local chain state;
 - authorize the join only when that call succeeds and returns true;
+- check that local chain state is this network's chain: block 0 MUST hash to
+  the manifest's `eth.genesis_hash`, on every decision. The genesis file is
+  host-supplied and the responder is the only party able to appraise it at
+  decision time; the pin is what makes the read an appraisal against the
+  accepted set that `network_id` commits to, rather than against whatever
+  policy the local node was booted with;
 - treat local chain state as policy only while it satisfies the readiness
   and freshness gate. A stale or eclipsed node MUST NOT admit a peer,
   because emergency deprecation must not be bypassable;
