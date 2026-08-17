@@ -56,11 +56,11 @@ use anyhow::{Context, Result};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_attestation::{
-    AdmissionPredicate, AttestationExchangeMessage, AttestationType, NetworkId,
+    AdmissionPredicate, AttestationError, AttestationExchangeMessage, AttestationType, NetworkId,
     bindings::{binding64_from_digest32, root_key_request_binding, root_key_response_binding},
     generate_evidence, verify_evidence_with_predicate,
 };
-use seismic_custodian_ipc::CustodianClient;
+use seismic_custodian_ipc::{CustodianClient, IpcError};
 use serde::{Deserialize, Serialize};
 
 /// The requester's half of the handshake: a fresh nonce + ephemeral pubkey,
@@ -121,6 +121,40 @@ pub fn build_root_key_request(
     })
 }
 
+/// Why a responder could not answer a root-key request: one variant per step of
+/// [`answer_root_key_request`], because which step failed is what says whose
+/// problem the failure is. Only the first appraises the requester; the rest is
+/// this responder's own machinery. Verifying the requester's evidence and
+/// minting this node's own both surface an [`AttestationError`], and the step
+/// they came from is the only thing that separates them.
+#[derive(Debug, thiserror::Error)]
+pub enum AnswerError {
+    /// The requester's evidence failed verification, or the admission predicate
+    /// denied the verified guest.
+    #[error("verifying requester attestation evidence: {source}")]
+    VerifyRequester {
+        #[source]
+        source: AttestationError,
+    },
+    /// The custodian would not wrap the root key.
+    #[error("wrapping root key for peer: {source}")]
+    WrapRootKey {
+        #[source]
+        source: IpcError,
+    },
+    #[error("custodian returned an invalid responder ephemeral key: {source}")]
+    ResponderEphemeralKey {
+        #[source]
+        source: secp256k1::Error,
+    },
+    /// This responder could not attest its own half of the exchange.
+    #[error("generating responder attestation evidence: {source}")]
+    GenerateResponderEvidence {
+        #[source]
+        source: AttestationError,
+    },
+}
+
 /// Responder step: verify the requester's evidence, have the custodian wrap
 /// the root key for it, and attest the response.
 ///
@@ -137,7 +171,7 @@ pub async fn answer_root_key_request(
     custodian: &mut CustodianClient,
     admission: &impl AdmissionPredicate,
     attestation_type: AttestationType,
-) -> Result<RootKeyResponse> {
+) -> Result<RootKeyResponse, AnswerError> {
     // 1. Verify the requester's quote and appraise its measurements,
     //    recomputing the expected binding from *our* network_id + the
     //    request's claimed fields.
@@ -149,7 +183,7 @@ pub async fn answer_root_key_request(
         admission,
     )
     .await
-    .context("verifying requester attestation evidence")?;
+    .map_err(|source| AnswerError::VerifyRequester { source })?;
 
     // 2. Verification succeeded: authorize the custodian to wrap the root key
     //    to the requester's attested ephemeral key, with the verified request
@@ -158,9 +192,9 @@ pub async fn answer_root_key_request(
     let wrap = custodian
         .wrap_root_key(expected, request.eph_pk_b.serialize())
         .await
-        .context("wrapping root key for peer")?;
+        .map_err(|source| AnswerError::WrapRootKey { source })?;
     let eph_pk_a = PublicKey::from_slice(&wrap.responder_eph_pk)
-        .context("custodian returned an invalid responder ephemeral key")?;
+        .map_err(|source| AnswerError::ResponderEphemeralKey { source })?;
 
     // 3. Attest over the response transcript, committing to the ciphertext.
     let binding = root_key_response_binding(
@@ -170,7 +204,7 @@ pub async fn answer_root_key_request(
         &wrap.wrapped,
     );
     let evidence = generate_evidence(attestation_type, binding64_from_digest32(binding))
-        .context("generating responder attestation evidence")?;
+        .map_err(|source| AnswerError::GenerateResponderEvidence { source })?;
 
     Ok(RootKeyResponse {
         eph_pk_a,
