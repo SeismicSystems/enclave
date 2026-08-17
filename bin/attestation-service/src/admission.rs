@@ -13,8 +13,9 @@
 //! - [`RegistryAdmission`] — the responder's predicate. A requester is
 //!   admitted iff its Azure v1 admission ID is currently accepted by the
 //!   on-chain `MeasurementRegistry`, asked via `eth_call isAccepted(id)`
-//!   pinned to a provably fresh finalized block of the node's local reth
-//!   (see `fresh_policy_block`). The chain carries the *live* policy:
+//!   pinned to a provably fresh finalized block of the node's local reth, on
+//!   the chain the network manifest commits to (see `fresh_policy_block` and
+//!   `check_pinned_genesis`). The chain carries the *live* policy:
 //!   additions and deprecations take effect on the next handshake, no node
 //!   restart needed.
 //! - [`DangerouslyAdmitAnyAzureGuest`] — the requester's (joiner's) predicate
@@ -27,11 +28,14 @@
 //! bank missing a schema register, an unreachable or stale chain, and a false
 //! `isAccepted` all deny the handshake.
 //!
-//! The freshness gate measures staleness against the guest's wall clock, so
-//! it defends against a lagging, partitioned, or network-eclipsed node — not
-//! against a malicious host that both eclipses the node and controls the
-//! guest's clock. That residual risk is accepted host influence under the
-//! TEE threat model.
+//! Every input to the decision is host-supplied state, so each is anchored as
+//! tightly as a locally checkable witness allows: the policy is read on the
+//! chain `network_id` commits to, at a finalized block whose timestamp is
+//! recent. Two residuals survive, both accepted host influence under the TEE
+//! threat model — a host that eclipses the guest *and* controls its clock, and
+//! a host that rewinds the guest's chain view to block 0, where the genesis
+//! window applies and no timestamp check bites. The pinned-genesis check
+//! bounds the second to the network's founding accepted set.
 
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
@@ -86,24 +90,54 @@ pub enum AdmissionDenial {
     },
     #[error("local reth is at genesis after chain progress was observed")]
     ChainRegressedToGenesis,
+    #[error(
+        "local reth serves genesis {found}, not the {expected} this node's \
+         network_id commits to; its chain is not this network's chain"
+    )]
+    ChainGenesisMismatch { expected: B256, found: B256 },
+}
+
+/// Whose problem a denial is, and whether time alone can change it. Both
+/// consumers of a denial read this: the retry loop below asks whether to try
+/// again, and the wire layer asks what to tell the requester.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DenialKind {
+    /// A verdict on the requester: its evidence was appraised and refused, and
+    /// the same image asking again gets the same answer.
+    RequesterVerdict,
+    /// The responder cannot decide, and no waiting changes that: it reads a
+    /// chain the network manifest does not commit to until an operator gives
+    /// it the right one. The requester's evidence is not what failed, so its
+    /// move is another peer.
+    ResponderMisconfigured,
+    /// The responder cannot decide right now: a reth that is restarting,
+    /// resyncing, or catching back under the freshness bound answers the same
+    /// query differently moments later.
+    ResponderTransient,
+}
+
+impl DenialKind {
+    /// Whether retrying inside the handshake can change the answer.
+    pub fn is_retryable(self) -> bool {
+        matches!(self, Self::ResponderTransient)
+    }
 }
 
 impl AdmissionDenial {
-    /// Whether this denial is the responder failing to *decide* — the local
-    /// chain or registry read did not produce a usable answer — as opposed to
-    /// a verdict on the requester (whose evidence will keep failing the same
-    /// way). Transient denials are worth retrying: against the same responder
-    /// moments later, or against another responder entirely.
-    pub fn is_transient(&self) -> bool {
+    /// Classify this denial. One exhaustive match, so a denial added later
+    /// cannot inherit a class by omission — least of all the requester
+    /// verdict, which tells a healthy joiner to stop asking.
+    pub fn kind(&self) -> DenialKind {
         match self {
+            Self::UnsupportedAttestationType(_)
+            | Self::MissingPcr(_)
+            | Self::RegistryNotAccepted(_) => DenialKind::RequesterVerdict,
+            Self::ChainGenesisMismatch { .. } => DenialKind::ResponderMisconfigured,
             Self::RegistryQueryFailed { .. }
             | Self::ChainQueryFailed { .. }
             | Self::ChainBlockMissing { .. }
             | Self::ChainStale { .. }
-            | Self::ChainRegressedToGenesis => true,
-            Self::UnsupportedAttestationType(_)
-            | Self::MissingPcr(_)
-            | Self::RegistryNotAccepted(_) => false,
+            | Self::ChainRegressedToGenesis => DenialKind::ResponderTransient,
         }
     }
 }
@@ -138,6 +172,10 @@ const MAX_POLICY_AGE: Duration = Duration::from_secs(60);
 #[derive(Clone)]
 pub struct RegistryAdmission {
     registry: MeasurementRegistryInstance<RootProvider>,
+    /// The genesis block `network_id` commits to, from the manifest's
+    /// `eth.genesis_hash`. Every policy read is checked against it, so a
+    /// verdict can only come from this network's chain.
+    pinned_genesis: B256,
     /// Bound on the finalized-block age this admission accepts; defaults to
     /// [`MAX_POLICY_AGE`].
     max_policy_age: Duration,
@@ -151,14 +189,20 @@ pub struct RegistryAdmission {
 impl RegistryAdmission {
     /// Admission backed by the `MeasurementRegistry` at `registry` (the
     /// manifest's `measurements.contracts.registry`), read over the node's
-    /// local reth HTTP endpoint.
-    pub fn new(reth_rpc_url: url::Url, registry: Address) -> Self {
-        Self::with_provider(RootProvider::new_http(reth_rpc_url), registry)
+    /// local reth HTTP endpoint, on the chain whose genesis is
+    /// `pinned_genesis` (the manifest's `eth.genesis_hash`).
+    pub fn new(reth_rpc_url: url::Url, registry: Address, pinned_genesis: B256) -> Self {
+        Self::with_provider(
+            RootProvider::new_http(reth_rpc_url),
+            registry,
+            pinned_genesis,
+        )
     }
 
-    fn with_provider(provider: RootProvider, registry: Address) -> Self {
+    fn with_provider(provider: RootProvider, registry: Address, pinned_genesis: B256) -> Self {
         Self {
             registry: MeasurementRegistry::new(registry, provider),
+            pinned_genesis,
             max_policy_age: MAX_POLICY_AGE,
             chain_has_advanced: Arc::new(AtomicBool::new(false)),
         }
@@ -188,17 +232,26 @@ impl RegistryAdmission {
     ///
     /// The one exception is a chain still at genesis, where finality is not
     /// yet being published and the genesis timestamp is arbitrarily old.
-    /// Admitting there is sound by construction — block-0 state *is* the
-    /// genesis-pinned policy, and no deprecation can predate the chain — and
-    /// it is what lets the founding cohort join before consensus starts.
+    /// Admitting there reads the policy `network_id` itself commits to — the
+    /// pinned-genesis check is what makes that equivalence hold — and no
+    /// deprecation can predate the chain, so this is what lets the founding
+    /// cohort join before consensus starts. The window latches shut for the
+    /// rest of the process once the chain is seen past genesis; a host that
+    /// restarts the service on a wiped reth reopens it, bounded by the pin to
+    /// the founding accepted set.
     async fn fresh_policy_block(&self) -> Result<B256, AdmissionDenial> {
         let latest = self.block_by_tag(BlockNumberOrTag::Latest).await?;
         if latest.header.inner.number == 0 {
+            // At genesis the block the policy is read at *is* block 0, so the
+            // pin is checked on it directly rather than queried again.
+            self.check_pinned_genesis(latest.header.hash)?;
             if self.chain_has_advanced.load(Ordering::Relaxed) {
                 return Err(AdmissionDenial::ChainRegressedToGenesis);
             }
             return Ok(latest.header.hash);
         }
+        let genesis = self.block_by_tag(BlockNumberOrTag::Earliest).await?;
+        self.check_pinned_genesis(genesis.header.hash)?;
         self.chain_has_advanced.store(true, Ordering::Relaxed);
 
         let finalized = self.block_by_tag(BlockNumberOrTag::Finalized).await?;
@@ -218,6 +271,25 @@ impl RegistryAdmission {
             });
         }
         Ok(finalized.header.hash)
+    }
+
+    /// Deny unless local reth's genesis is the one the network manifest pins.
+    ///
+    /// A registry read is only as trustworthy as the chain it runs against,
+    /// and that chain is host-supplied: reth boots from a genesis file the
+    /// host POSTs, and the guest is the only place able to check it at
+    /// decision time. Comparing block 0 against `eth.genesis_hash` ties every
+    /// verdict back to `network_id`, and reth validating state transitions
+    /// from that genesis does the rest — reaching a policy the network never
+    /// authorized then needs the authority key, not an edited JSON file.
+    fn check_pinned_genesis(&self, genesis: B256) -> Result<(), AdmissionDenial> {
+        if genesis != self.pinned_genesis {
+            return Err(AdmissionDenial::ChainGenesisMismatch {
+                expected: self.pinned_genesis,
+                found: genesis,
+            });
+        }
+        Ok(())
     }
 
     async fn block_by_tag(&self, tag: BlockNumberOrTag) -> Result<Block, AdmissionDenial> {
@@ -277,7 +349,7 @@ impl AdmissionPredicate for RegistryAdmission {
         let mut attempt = 1;
         loop {
             match self.decide(admission_id).await {
-                Err(denial) if denial.is_transient() && attempt < DECIDE_ATTEMPTS => {
+                Err(denial) if denial.kind().is_retryable() && attempt < DECIDE_ATTEMPTS => {
                     warn!(
                         "bootstrap: admission attempt {attempt}/{DECIDE_ATTEMPTS} \
                          hit a transient failure, retrying: {denial}"
@@ -348,10 +420,15 @@ mod tests {
         HashMap::from([(4, PCR4), (9, PCR9), (11, PCR11)])
     }
 
+    /// The genesis the mocked manifest pins, and the hash [`rpc_block`] gives
+    /// block 0.
+    const PINNED_GENESIS: B256 = B256::repeat_byte(0xb0);
+
     fn mocked_registry(asserter: &Asserter) -> RegistryAdmission {
         RegistryAdmission::with_provider(
             RootProvider::new(RpcClient::mocked(asserter.clone())),
             Address::ZERO,
+            PINNED_GENESIS,
         )
     }
 
@@ -363,12 +440,22 @@ mod tests {
     }
 
     /// An `eth_getBlockByNumber` response body, with a hash derived from the
-    /// block number so distinct blocks are tellable apart.
+    /// block number so distinct blocks are tellable apart. No block hashes to
+    /// `B256::ZERO`, so a default-constructed block can never satisfy a hash
+    /// comparison by accident.
     fn rpc_block(number: u64, timestamp: u64) -> Block {
         let mut block: Block = Block::default();
-        block.header.hash = alloy_primitives::B256::with_last_byte(number as u8);
+        block.header.hash = B256::repeat_byte(0xb0 ^ number as u8);
         block.header.inner.number = number;
         block.header.inner.timestamp = timestamp;
+        block
+    }
+
+    /// A block reth serves on a chain whose genesis the manifest does not pin:
+    /// a forged genesis, or simply the wrong network.
+    fn foreign_block(number: u64, timestamp: u64) -> Block {
+        let mut block = rpc_block(number, timestamp);
+        block.header.hash = B256::repeat_byte(0xef);
         block
     }
 
@@ -382,23 +469,25 @@ mod tests {
             .as_millis() as u64
     }
 
-    /// Queue responses for the two chain reads `admit` issues before the
+    /// Queue responses for the three chain reads `admit` issues before the
     /// registry call. The [`Asserter`] is parameter-blind and serves queued
-    /// responses in request order, so these stand in for the `latest`-tag and
-    /// `finalized`-tag queries respectively; that the code really asks with
-    /// those tags (and pins the registry call to the finalized hash) is
-    /// proven by `policy_read_is_pinned_to_the_fresh_finalized_block`.
+    /// responses in request order, so these stand in for the `latest`-,
+    /// `earliest`- and `finalized`-tag queries respectively; that the code
+    /// really asks with those tags (and pins the registry call to the
+    /// finalized hash) is proven by
+    /// `policy_read_is_pinned_to_the_fresh_finalized_block`.
     fn push_fresh_chain(asserter: &Asserter) {
         asserter.push_success(&rpc_block(7, now_millis()));
+        asserter.push_success(&rpc_block(0, 1_000));
         asserter.push_success(&rpc_block(6, now_millis()));
     }
 
-    /// A parameter-checking reth stand-in: serves `latest` and `finalized`
-    /// blocks by tag, errors on any other `eth_getBlockByNumber` query, and
-    /// answers `isAccepted` with `true` only when the `eth_call` is pinned
-    /// to the finalized block's hash. Any admission that queries the wrong
-    /// tag or reads the policy at any other block therefore fails.
-    async fn spawn_tag_checking_reth(latest: Block, finalized: Block) -> String {
+    /// A parameter-checking reth stand-in: serves `latest`, `earliest` and
+    /// `finalized` blocks by tag, errors on any other `eth_getBlockByNumber`
+    /// query, and answers `isAccepted` with `true` only when the `eth_call` is
+    /// pinned to the finalized block's hash. Any admission that queries the
+    /// wrong tag or reads the policy at any other block therefore fails.
+    async fn spawn_tag_checking_reth(latest: Block, genesis: Block, finalized: Block) -> String {
         use jsonrpsee::{server::ServerBuilder, types::ErrorObjectOwned};
 
         fn unexpected(message: String) -> ErrorObjectOwned {
@@ -417,6 +506,7 @@ mod tests {
                 let (tag, _full_transactions): (String, bool) = params.parse()?;
                 let block = match tag.as_str() {
                     "latest" => &latest,
+                    "earliest" => &genesis,
                     "finalized" => &finalized,
                     other => return Err(unexpected(format!("unexpected block tag {other}"))),
                 };
@@ -484,13 +574,22 @@ mod tests {
 
     #[tokio::test]
     async fn policy_read_is_pinned_to_the_fresh_finalized_block() {
-        // The mock denies every request except the two tag queries and an
+        // The mock denies every request except the three tag queries and an
         // eth_call at exactly the finalized hash, so this admission succeeding
-        // proves the gate reads the finalized tag and pins the registry query
-        // to the block it freshness-checked.
-        let url =
-            spawn_tag_checking_reth(rpc_block(7, now_millis()), rpc_block(6, now_millis())).await;
-        let admission = RegistryAdmission::new(url.parse().expect("mock reth URL"), Address::ZERO);
+        // proves the gate checks the pin at the earliest tag, reads the
+        // finalized tag, and pins the registry query to the block it
+        // freshness-checked.
+        let url = spawn_tag_checking_reth(
+            rpc_block(7, now_millis()),
+            rpc_block(0, 1_000),
+            rpc_block(6, now_millis()),
+        )
+        .await;
+        let admission = RegistryAdmission::new(
+            url.parse().expect("mock reth URL"),
+            Address::ZERO,
+            PINNED_GENESIS,
+        );
 
         admission
             .admit(&verified_azure(golden_pcr_bank()))
@@ -569,6 +668,7 @@ mod tests {
         let asserter = Asserter::new();
         for _ in 0..DECIDE_ATTEMPTS {
             asserter.push_success(&rpc_block(7, now_millis()));
+            asserter.push_success(&rpc_block(0, 1_000));
             asserter.push_success(&rpc_block(6, now_millis() - 3_600_000));
         }
         let admission = mocked_registry(&asserter);
@@ -587,6 +687,7 @@ mod tests {
         let asserter = Asserter::new();
         for _ in 0..DECIDE_ATTEMPTS {
             asserter.push_success(&rpc_block(7, now_millis()));
+            asserter.push_success(&rpc_block(0, 1_000));
             asserter.push_success(&serde_json::Value::Null);
         }
         let admission = mocked_registry(&asserter);
@@ -617,7 +718,9 @@ mod tests {
 
     #[tokio::test]
     async fn genesis_window_admits_at_block_zero() {
-        // The genesis timestamp is far in the past; the window ignores it.
+        // The genesis timestamp is far in the past; the window ignores it. Only
+        // two responses are queued, so the pin is checked on `latest` itself
+        // here — a second block query would surface as a missing response.
         let asserter = Asserter::new();
         asserter.push_success(&rpc_block(0, 1_000));
         asserter.push_success(&abi_bool(true));
@@ -648,6 +751,50 @@ mod tests {
             .await
             .expect_err("a chain back at genesis after progress must deny");
         assert!(error.to_string().contains("genesis"), "{error}");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn foreign_genesis_is_denied_past_the_window() {
+        // One round of chain responses and no registry response: a retry or a
+        // policy read would surface as a missing response rather than the
+        // mismatch, so this also pins the denial as final and as taken before
+        // the registry is consulted.
+        let asserter = Asserter::new();
+        asserter.push_success(&rpc_block(7, now_millis()));
+        asserter.push_success(&foreign_block(0, 1_000));
+        let admission = mocked_registry(&asserter);
+
+        let error = admission
+            .admit(&verified_azure(golden_pcr_bank()))
+            .await
+            .expect_err("a chain whose genesis the manifest does not pin must deny");
+        let denial = error
+            .downcast_ref::<AdmissionDenial>()
+            .expect("typed admission denial");
+        assert!(
+            matches!(denial, AdmissionDenial::ChainGenesisMismatch { .. }),
+            "{denial}"
+        );
+        // Not the joiner's fault, and no amount of waiting fixes it.
+        assert_eq!(denial.kind(), DenialKind::ResponderMisconfigured);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn foreign_genesis_is_denied_inside_the_window() {
+        // The genesis window is the one branch that admits on an arbitrarily
+        // old timestamp, so it is the branch a forged genesis aims at.
+        let asserter = Asserter::new();
+        asserter.push_success(&foreign_block(0, now_millis()));
+        let admission = mocked_registry(&asserter);
+
+        let error = admission
+            .admit(&verified_azure(golden_pcr_bank()))
+            .await
+            .expect_err("a forged genesis must deny even at block 0");
+        assert!(
+            error.to_string().contains("network_id commits to"),
+            "{error}"
+        );
     }
 
     #[tokio::test]

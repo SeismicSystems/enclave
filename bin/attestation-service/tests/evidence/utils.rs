@@ -1,4 +1,6 @@
+use alloy_primitives::B256;
 use jsonrpsee::{RpcModule, server::ServerBuilder};
+use seismic_attestation::NetworkManifestV1;
 use seismic_attestation_service::Args;
 use seismic_custodian_ipc::server::{MethodAcl, bind, serve};
 use seismic_custodian_service::{dispatch::dispatch, state::CustodianState};
@@ -16,15 +18,30 @@ pub fn get_args(n: u16, peers: Vec<String>, custodian_socket: PathBuf, reth_rpc_
     }
 }
 
+/// The genesis block the fixture manifest commits to, read from the fixture
+/// itself so the stand-in chain and the manifest the service loads can never
+/// disagree.
+fn fixture_genesis_hash() -> B256 {
+    const FIXTURE: &[u8] =
+        include_bytes!("../../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+    B256::from(
+        NetworkManifestV1::from_json_bytes(FIXTURE)
+            .expect("fixture manifest is valid")
+            .eth
+            .genesis_hash,
+    )
+}
+
 /// Serve a permissive stand-in for the node-local reth that answers the
-/// responder's admission reads: `eth_getBlockByNumber` answers the `latest`
-/// and `finalized` tag queries — and only those — with a fresh block past
-/// genesis (so the freshness gate passes), and every `eth_call` returns
-/// ABI-encoded `true`, so the runner's own measurements count as
-/// registry-accepted. These tests thereby exercise the full live-TEE
-/// admission path — verified evidence → admission ID → fresh chain state →
-/// registry query — while denial behavior is covered by the admission
-/// module's unit tests.
+/// responder's admission reads: `eth_getBlockByNumber` answers the `earliest`,
+/// `latest` and `finalized` tag queries — and only those — with the manifest's
+/// pinned genesis at block 0 (so the chain is the one `network_id` commits to)
+/// and a fresh block past genesis for the other two (so the freshness gate
+/// passes), and every `eth_call` returns ABI-encoded `true`, so the runner's
+/// own measurements count as registry-accepted. These tests thereby exercise
+/// the full live-TEE admission path — verified evidence → admission ID → fresh
+/// chain state → registry query — while denial behavior is covered by the
+/// admission module's unit tests.
 pub async fn spawn_accepting_registry() -> String {
     let server = ServerBuilder::default()
         .build("127.0.0.1:0")
@@ -32,24 +49,33 @@ pub async fn spawn_accepting_registry() -> String {
         .expect("bind mock registry endpoint");
     let addr = server.local_addr().expect("mock registry local addr");
     let mut module = RpcModule::new(());
+    let genesis_hash = fixture_genesis_hash();
     module
-        .register_method("eth_getBlockByNumber", |params, _, _| {
+        .register_method("eth_getBlockByNumber", move |params, _, _| {
             let (tag, _full_transactions): (String, bool) = params.parse()?;
-            if tag != "latest" && tag != "finalized" {
-                return Err(jsonrpsee::types::ErrorObjectOwned::owned(
-                    -32000,
-                    format!("mock reth serves only the latest and finalized tags, got {tag}"),
-                    None::<()>,
-                ));
-            }
             let mut block = alloy::rpc::types::Block::<alloy::rpc::types::Transaction>::default();
-            block.header.inner.number = 1;
-            // Milliseconds, like real Seismic headers: the freshness gate
-            // reads the timestamp in that unit.
-            block.header.inner.timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("system clock after epoch")
-                .as_millis() as u64;
+            match tag.as_str() {
+                "earliest" => block.header.hash = genesis_hash,
+                "latest" | "finalized" => {
+                    block.header.inner.number = 1;
+                    // Milliseconds, like real Seismic headers: the freshness
+                    // gate reads the timestamp in that unit.
+                    block.header.inner.timestamp = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("system clock after epoch")
+                        .as_millis() as u64;
+                }
+                other => {
+                    return Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                        -32000,
+                        format!(
+                            "mock reth serves only the earliest, latest and finalized tags, \
+                             got {other}"
+                        ),
+                        None::<()>,
+                    ));
+                }
+            }
             Ok(serde_json::to_value(block).expect("serialize mock block"))
         })
         .expect("register eth_getBlockByNumber");
