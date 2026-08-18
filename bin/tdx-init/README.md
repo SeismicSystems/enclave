@@ -39,7 +39,7 @@ summit_genesis_base64 = "bmFtZXNwYWNlID0gInNlaXNtaWM..."
 bootnodes = ["enode://<128 hex pubkey>@host:port"]  # the cohort's peers; [] only on the genesis node
 
 [node]                               # this node only
-external_ip = "203.0.113.7"          # this VM's public IP (reth --nat extip:)
+external_ip = "203.0.113.7"          # this VM's public IP (reth --nat extip:, summit --ip)
 genesis_node = false                 # optional (default false); true on exactly one VM per network
 
 [node.domain]
@@ -104,12 +104,15 @@ unrepresentable — all three name the same machines by construction.
 
 `[node].external_ip` is this VM's public IP — Azure NICs hold private
 addresses, so reth's NAT autodetection can't be trusted; it is also what
-identifies the node's own enode in the bootnode set. Both fields are
-validated structurally at POST time (`src/peers.rs`): each bootnode must be
-`enode://<128 hex pubkey>@host:port`, `external_ip` must parse as an IP address, and
-a node with `genesis_node = false` must end up with at least one root-key
-peer; a bad value fails the deploy with `400`. `bootnodes = []` is valid only
-on the genesis node (nothing to dial; it mints `root_key` itself).
+identifies the node's own enode in the bootnode set, and the address summit
+advertises for consensus (`summit.env`, below). Both planes advertise the one
+delivered address, which is what keeps them agreed on where this machine is.
+Both fields are validated structurally at POST time (`src/peers.rs`): each
+bootnode must be `enode://<128 hex pubkey>@host:port`, `external_ip` must
+parse as an IP address, and a node with `genesis_node = false` must end up
+with at least one root-key peer; a bad value fails the deploy with `400`.
+`bootnodes = []` is valid only on the genesis node (nothing to dial; it mints
+`root_key` itself).
 
 ## Per-service outputs
 
@@ -123,7 +126,8 @@ After validation, tdx-init writes:
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
 | `/run/seismic/conf/summit-genesis.toml` | verbatim summit genesis bytes | `summit.service` (seismic-images) — passed to `summit --genesis-path` |
-| `/run/seismic/conf/reth-p2p.env` | `RETH_BOOTNODES_FLAG=...`, `RETH_TRUSTED_PEERS_FLAG=...`, `RETH_NAT_FLAG=...` | `reth.service` (seismic-images) — loaded via `EnvironmentFile=`; each var holds a whole flag (`--bootnodes <csv>` / `--trusted-peers <csv>` / `--nat extip:<ip>`) or is empty, and the unit places the unquoted `$RETH_*_FLAG` vars on the command line so empty ones drop out |
+| `/run/seismic/conf/summit.env` | `SUMMIT_ADVERTISED_ADDR=<ip>:<consensus port>` | `summit.service` (seismic-images) — loaded via `EnvironmentFile=`; spliced into `summit --ip` as the consensus address this node signs and gossips to the cohort. Derived from `[node].external_ip`, the same address reth advertises via `--nat extip` |
+| `/run/seismic/conf/reth-p2p.env` | `RETH_BOOTNODES_FLAG=...`, `RETH_TRUSTED_PEERS_FLAG=...`, `RETH_NAT_FLAG=...` | `reth.service` (seismic-images) — loaded via `EnvironmentFile=`; each var holds a whole flag (`--bootnodes <csv>` / `--trusted-peers <csv>` / `--nat extip:<ip>`) or is empty, and the unit places the unquoted `$RETH_*_FLAG` vars on the command line so empty ones drop out. The peer flags are derived from `[network].bootnodes`, the NAT flag from `[node].external_ip` |
 
 Each downstream service reads its own native format (env-var pairs,
 either via systemd `EnvironmentFile=` or shell `source`); tdx-init is
