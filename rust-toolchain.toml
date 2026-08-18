@@ -3,4 +3,4 @@
 # image build installs, so a local `cargo build` and the image build agree:
 # https://github.com/SeismicSystems/seismic-images/blob/seismic/modules/seismic/mkosi.build
 [toolchain]
-channel = "1.91.1"
+channel = "1.95.0"
