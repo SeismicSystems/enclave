@@ -1,0 +1,6 @@
+# The deployed binaries in bin/ ship inside the TDX image, and the image
+# measurement depends on the compiler that produced them. Pin the toolchain the
+# image build installs, so a local `cargo build` and the image build agree:
+# https://github.com/SeismicSystems/seismic-images/blob/seismic/modules/seismic/mkosi.build
+[toolchain]
+channel = "1.91.1"
