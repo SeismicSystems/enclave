@@ -15,6 +15,10 @@
 //! input, so skew between them is unrepresentable and the `http://…:7878`
 //! convention lives in exactly one place.
 //!
+//! `[node].external_ip` is validated here too, as the address this machine is
+//! reached at: it decides which bootnode entry names this node itself, and it
+//! is the address summit advertises for consensus (`summit_advertised_addr`).
+//!
 //! Validation is structural, so a malformed enode or IP fails the deploy POST
 //! with `400` rather than surfacing when reth parses its flags at boot and
 //! crash-loops — likewise a non-genesis node left with no usable bootnode,
@@ -23,7 +27,7 @@
 
 use crate::config::NodeConfig;
 use crate::error::{Result, TdxInitError};
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use tracing::{info, warn};
 
 /// Number of hex chars in an enode node id: the 64-byte secp256k1 public key
@@ -34,6 +38,17 @@ const ENODE_ID_HEX_LEN: usize = 128;
 /// (`DEFAULT_ENDPOINT_PORT` in `bin/attestation-service`, which is a binary
 /// crate — the constant can't be imported).
 const ROOT_KEY_PEER_PORT: u16 = 7878;
+
+// TODO: delete this constant and emit the bare IP once
+// https://github.com/SeismicSystems/summit/pull/455 is merged and the image's
+// summit pin carries it. summit's `--ip` then takes an address without a port
+// and pairs it with its own `--port`, so `summit_advertised_addr` returns the
+// validated `IpAddr`, `summit.env` carries a host, and neither the port nor the
+// IPv6 bracketing it forces has to live here.
+/// Port summit accepts consensus connections on. Must equal the `--port` its
+/// systemd unit passes, since the two halves of `summit_advertised_addr` are
+/// what the node listens on and what it tells the cohort to dial.
+const SUMMIT_CONSENSUS_PORT: u16 = 18551;
 
 /// The cohort as this node's consumers need it: two renderings of the same
 /// machines, built in one pass from `[network].bootnodes` so they cannot
@@ -141,6 +156,28 @@ fn parse_enode_host(enode: &str) -> Result<&str> {
         ))
     })?;
     Ok(host)
+}
+
+/// The consensus address this node advertises to the cohort (`summit.env`'s
+/// `SUMMIT_ADVERTISED_ADDR`, spliced into summit's `--ip`): `external_ip` at
+/// the consensus port.
+///
+/// An address is not part of validator identity — summit's genesis carries the
+/// founding cohort's addresses outside its config digest, and a validator's
+/// consensus-state record holds none at all. Each node instead signs its own
+/// address and gossips that record, so this value is what the whole cohort
+/// dials this node on. Delivering it keeps that declaration sourced from the
+/// operator's descriptor, the same field reth advertises via `--nat extip`: a
+/// joining node has no genesis entry to read its address from, and would
+/// otherwise resolve one by asking public IP-echo services. It also keeps a
+/// founding node truthful across an address change, which its founding-era
+/// genesis entry cannot follow.
+///
+/// A `SocketAddr` rather than a formatted string: its `Display` brackets IPv6,
+/// which is the form summit parses.
+pub fn summit_advertised_addr(node: &NodeConfig) -> Result<SocketAddr> {
+    let external_ip = parse_external_ip(&node.external_ip)?;
+    Ok(SocketAddr::new(external_ip, SUMMIT_CONSENSUS_PORT))
 }
 
 /// Check that `external_ip` parses as an IPv4 or IPv6 address.
@@ -360,6 +397,26 @@ mod tests {
         let err = validate_and_derive_peers(&node("not.an.ip", true), &[enode("10.0.0.1:30303")])
             .unwrap_err();
         assert!(matches!(err, TdxInitError::InvalidPeers(_)));
+        assert!(err.to_string().contains("valid IP"), "{err}");
+    }
+
+    #[test]
+    fn advertises_external_ip_at_the_consensus_port() {
+        let addr = summit_advertised_addr(&node("203.0.113.7", false)).unwrap();
+        assert_eq!(addr.to_string(), "203.0.113.7:18551");
+    }
+
+    #[test]
+    fn advertises_ipv6_bracketed() {
+        // The address is handed to summit as text and parsed there as a socket
+        // address, so an IPv6 host has to arrive bracketed.
+        let addr = summit_advertised_addr(&node("2001:db8::7", false)).unwrap();
+        assert_eq!(addr.to_string(), "[2001:db8::7]:18551");
+    }
+
+    #[test]
+    fn advertised_addr_rejects_invalid_external_ip() {
+        let err = summit_advertised_addr(&node("not.an.ip", false)).unwrap_err();
         assert!(err.to_string().contains("valid IP"), "{err}");
     }
 }

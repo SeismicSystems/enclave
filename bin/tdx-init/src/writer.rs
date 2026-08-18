@@ -1,5 +1,6 @@
 use crate::config::InitConfig;
 use crate::error::Result;
+use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tokio::fs;
@@ -24,6 +25,7 @@ pub const DEFAULT_FILE_MODE: u32 = 0o644;
 /// second half is then pure filesystem work that can only fail on I/O.
 pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     let peers = crate::peers::validate_and_derive_peers(&config.node, &config.network.bootnodes)?;
+    let summit_addr = crate::peers::summit_advertised_addr(&config.node)?;
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
     let genesis = crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,
@@ -39,6 +41,7 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
     write_custodian_env(conf_dir, config).await?;
     write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
     write_reth_p2p_env(conf_dir, &peers.peer_enodes, &config.node.external_ip).await?;
+    write_summit_env(conf_dir, summit_addr).await?;
     write_network_manifest(conf_dir, &manifest).await?;
     write_reth_genesis(conf_dir, &genesis).await?;
     write_summit_genesis(conf_dir, &summit_genesis).await?;
@@ -155,6 +158,23 @@ async fn write_reth_p2p_env(
     );
     write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
     info!("wrote {}", path.display());
+    Ok(())
+}
+
+/// summit's systemd unit loads this via `EnvironmentFile=` and splices
+/// `SUMMIT_ADVERTISED_ADDR` into `--ip`, as a quoted expansion: it is always
+/// populated (external_ip is required), so it needs none of the empty-var
+/// disappearing act `reth-p2p.env` above depends on.
+///
+/// A complete `<ip>:<port>` rather than a host the unit appends a port to —
+/// summit parses the value as one socket address, and IPv6 makes composing it
+/// textually a bracketing trap. See `crate::peers::summit_advertised_addr` for
+/// what the address means to the cohort.
+async fn write_summit_env(conf_dir: &Path, advertised_addr: SocketAddr) -> Result<()> {
+    let path = conf_dir.join("summit.env");
+    let content = format!("SUMMIT_ADVERTISED_ADDR={advertised_addr}\n");
+    write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
+    info!("wrote {} (advertising {advertised_addr})", path.display());
     Ok(())
 }
 
@@ -334,6 +354,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn writes_summit_env() {
+        let tmp = TempDir::new().unwrap();
+        let mut cfg = sample_config(false);
+        cfg.network.bootnodes = vec![enode("10.0.0.2:30303")];
+        cfg.node.external_ip = "203.0.113.7".to_string();
+
+        write_service_configs(tmp.path(), &cfg).await.unwrap();
+
+        let env = std::fs::read_to_string(tmp.path().join("summit.env")).unwrap();
+        assert_eq!(env, "SUMMIT_ADVERTISED_ADDR=203.0.113.7:18551\n");
+    }
+
+    #[tokio::test]
+    async fn writes_summit_env_bracketing_ipv6() {
+        // summit parses the value as a SocketAddr, which requires the brackets
+        // an IPv6 external_ip does not carry. Appending ":<port>" to the bare
+        // address would emit a value it rejects, so the address is formatted as
+        // a SocketAddr rather than composed textually.
+        let tmp = TempDir::new().unwrap();
+        let mut cfg = sample_config(false);
+        cfg.network.bootnodes = vec![enode("[2001:db8::2]:30303")];
+        cfg.node.external_ip = "2001:db8::7".to_string();
+
+        write_service_configs(tmp.path(), &cfg).await.unwrap();
+
+        let env = std::fs::read_to_string(tmp.path().join("summit.env")).unwrap();
+        assert_eq!(env, "SUMMIT_ADVERTISED_ADDR=[2001:db8::7]:18551\n");
+    }
+
+    #[tokio::test]
     async fn writes_network_manifest_verbatim() {
         let tmp = TempDir::new().unwrap();
         let mut cfg = sample_config(true);
@@ -395,6 +445,7 @@ mod tests {
             "custodian.env",
             "attestation.env",
             "reth-p2p.env",
+            "summit.env",
         ] {
             let meta = std::fs::metadata(tmp.path().join(name)).unwrap();
             let mode = meta.permissions().mode() & 0o777;
