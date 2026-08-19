@@ -5816,6 +5816,7 @@ dependencies = [
  "rand 0.9.2",
  "seismic-attestation",
  "seismic-attestation-rpc",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
