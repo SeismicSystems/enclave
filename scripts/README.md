@@ -20,6 +20,13 @@ network/key/epoch binding, and verifies the complete evidence envelope
 through `seismic-attestation`; wrong bindings and malformed evidence are
 rejected.
 
+`test_deploy_verification_relying_party` runs an operator's deploy
+verification against a single genesis pair: the verifier sends a fresh
+`deployment_nonce`
+to `getDeployVerificationEvidence`, independently derives the expected
+network/nonce binding, and verifies the complete evidence envelope; bindings
+for another nonce or another network are rejected.
+
 `test_four_node_root_key_distribution` starts one genesis pair plus three
 joining pairs — two bootstrapping from the genesis node, one from an
 already-bootstrapped joiner — and checks that every join completes and all
