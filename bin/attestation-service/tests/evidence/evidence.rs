@@ -30,10 +30,12 @@ use crate::utils::{get_args, spawn_accepting_registry, spawn_custodian};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy,
-    bindings::{binding64_from_digest32, tx_io_binding},
+    bindings::{binding64_from_digest32, deploy_verification_binding, tx_io_binding},
     verify_evidence_with_policy,
 };
-use seismic_attestation_rpc::{AttestationRpcClient as _, TxIoAttestationResponse};
+use seismic_attestation_rpc::{
+    AttestationRpcClient as _, DeployVerificationResponse, TxIoAttestationResponse,
+};
 use seismic_attestation_service::{
     api::NodeStatusRpcClient as _,
     utils::{init_tracing, is_sudo},
@@ -159,6 +161,66 @@ async fn test_tx_io_evidence_relying_party() {
         .await
         .is_err(),
         "tampered evidence verified successfully"
+    );
+
+    node.handle.abort();
+}
+
+/// The operator's deploy-verification path against a single genesis pair: the
+/// verifier sends a fresh `deployment_nonce`, recomputes the expected binding
+/// from its own manifest copy, and verifies the returned evidence; the same
+/// evidence must fail against another request's nonce and against another
+/// network's identity.
+#[serial_test::serial(attestation_evidence)]
+#[tokio::test]
+async fn test_deploy_verification_relying_party() {
+    init_tracing();
+    if !is_sudo() {
+        panic!("test_deploy_verification_relying_party: skipped (requires sudo privileges)");
+    }
+
+    let node = start_node("genesis node", 21, None).await;
+
+    let deployment_nonce = [0xD7u8; 32];
+    let response = get_deploy_verification_evidence(&node.client, deployment_nonce).await;
+
+    let network_id = NetworkId::from_manifest_bytes(EXPECTED_NETWORK_MANIFEST);
+    let expected_binding =
+        binding64_from_digest32(deploy_verification_binding(&network_id, &deployment_nonce));
+    verify_evidence_with_policy(
+        response.evidence.clone(),
+        expected_binding,
+        test_measurement_policy(),
+    )
+    .await
+    .expect("Verifier rejected valid deploy-verification evidence");
+
+    // A quote captured for one verification can't answer another: a different
+    // nonce derives a different binding.
+    let other_nonce_digest = deploy_verification_binding(&network_id, &[0xD8u8; 32]);
+    assert!(
+        verify_evidence_with_policy(
+            response.evidence.clone(),
+            binding64_from_digest32(other_nonce_digest),
+            test_measurement_policy(),
+        )
+        .await
+        .is_err(),
+        "evidence verified against another request's nonce"
+    );
+
+    // Nor can it pass for a node of a different network.
+    let other_network_digest =
+        deploy_verification_binding(&NetworkId::from_bytes([0xAB; 32]), &deployment_nonce);
+    assert!(
+        verify_evidence_with_policy(
+            response.evidence,
+            binding64_from_digest32(other_network_digest),
+            test_measurement_policy(),
+        )
+        .await
+        .is_err(),
+        "evidence verified against another network's binding"
     );
 
     node.handle.abort();
@@ -377,6 +439,29 @@ async fn get_tx_io_attestation_evidence(
                 assert!(
                     tokio::time::Instant::now() < deadline,
                     "Unable to get tx-io attestation evidence within {EVIDENCE_RPC_TIMEOUT:?}: {error}"
+                );
+            }
+        }
+        tokio::time::sleep(RETRY_INTERVAL).await;
+    }
+}
+
+async fn get_deploy_verification_evidence(
+    client: &HttpClient,
+    deployment_nonce: [u8; 32],
+) -> DeployVerificationResponse {
+    let deadline = tokio::time::Instant::now() + EVIDENCE_RPC_TIMEOUT;
+
+    loop {
+        match client
+            .get_deploy_verification_evidence(deployment_nonce)
+            .await
+        {
+            Ok(response) => return response,
+            Err(error) => {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "Unable to get deploy-verification evidence within {EVIDENCE_RPC_TIMEOUT:?}: {error}"
                 );
             }
         }

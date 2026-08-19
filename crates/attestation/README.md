@@ -31,7 +31,7 @@ This crate is responsible for:
   - `tx_io_binding`,
   - `root_key_request_binding`,
   - `root_key_response_binding`,
-  - `deploy_preflight_binding`;
+  - `deploy_verification_binding`;
 - generating local evidence for a caller-supplied binding;
 - verifying remote evidence against an expected binding and a measurement policy;
 - exposing Seismic-typed verified outputs so callers do not mix provider-specific
