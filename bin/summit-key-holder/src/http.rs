@@ -8,8 +8,8 @@
 //!   assertion (live pubkeys == pinned pubkeys).
 //! - `GET /v1/quote?nonce=<64-hex>` → the keys plus attestation evidence
 //!   whose `report_data` is `founding_summit_keys_binding(nonce, node_pk,
-//!   consensus_pk)` — the exact JSON `verify-quote --evidence` consumes and
-//!   deploy's harvest archives verbatim. Refuses 410 once the network
+//!   consensus_pk)` — the exact JSON `verify-quote harvest --evidence`
+//!   consumes and deploy's harvest archives verbatim. Refuses 410 once the network
 //!   manifest exists: attestation-service owns the TPM from the config POST
 //!   onward.
 //!
@@ -45,7 +45,7 @@ pub struct QuoteResponse {
     pub node_public_key: String,
     pub consensus_public_key: String,
     /// The harvest wire *and* archive format: deploy stores these bytes
-    /// verbatim and hands them to `verify-quote --evidence`.
+    /// verbatim and hands them to `verify-quote harvest --evidence`.
     pub evidence: AttestationExchangeMessage,
 }
 

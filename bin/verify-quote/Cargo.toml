@@ -7,7 +7,7 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Verification-only CLI that DCAP-verifies a founding-keys harvest quote"
+description = "Operator relying-party CLI that verifies Seismic node quotes against intended image measurements"
 
 [[bin]]
 name = "verify-quote"
@@ -15,10 +15,13 @@ path = "src/main.rs"
 
 [dependencies]
 seismic-attestation.workspace = true
+seismic-attestation-rpc.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
 hex.workspace = true
+jsonrpsee.workspace = true
+rand.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

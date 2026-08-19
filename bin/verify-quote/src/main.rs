@@ -1,18 +1,35 @@
-//! `verify-quote` — DCAP-verify one founding node's summit-keys harvest quote.
+//! `verify-quote` — operator-side relying party for Seismic node quotes.
 //!
-//! Checks that a quote's `report_data` is
-//! `founding_summit_keys_binding(harvest_nonce, node_pk, consensus_pk)` for the
-//! nonce and pubkeys given on the command line, that the quote verifies
-//! cryptographically, and that its measurements satisfy the given measurement
-//! policy. The binding is per node, so one run covers one node's harvest.
+//! Two checks, one per subcommand, sharing one DCAP verification path
+//! (`seismic-attestation` over the complete evidence envelope, enforcing the
+//! measurement policy). The subcommands differ only in which binding they
+//! recompute and where the evidence comes from:
+//!
+//! - `harvest` checks one founding node's summit-keys harvest quote: the
+//!   quote's `report_data` must be
+//!   `founding_summit_keys_binding(harvest_nonce, node_pk, consensus_pk)` for
+//!   the nonce and pubkeys given on the command line, and the evidence is
+//!   supplied by the caller (the harvest archive). The binding is per node,
+//!   so one run covers one node's harvest.
+//! - `deploy` checks a freshly provisioned node before the operator relies
+//!   on it (publishing its address, handing it out as a bootnode): it mints a
+//!   fresh `deployment_nonce`, requests evidence from the node's attestation
+//!   service (`getDeployVerificationEvidence` at `--endpoint`), and
+//!   recomputes `deploy_verification_binding(network_id, nonce)` from its own
+//!   copy of the network manifest.
 //!
 //! ```text
-//! verify-quote \
+//! verify-quote harvest \
 //!   --evidence harvest/box-1.evidence.json \
 //!   --policy build/measurements.json \
 //!   --nonce <64-hex> \
 //!   --node-pubkey <64-hex> \
 //!   --consensus-pubkey <96-hex>
+//!
+//! verify-quote deploy \
+//!   --endpoint http://<node-ip>:7878 \
+//!   --manifest network-manifest.json \
+//!   --policy build/measurements.json
 //! ```
 //!
 //! `--evidence` is a JSON-serialized [`AttestationExchangeMessage`]; `-` reads
@@ -24,58 +41,107 @@
 //! Verification-only: this never touches a local TPM. Azure TDX verification
 //! is pure computation over the evidence bytes (the `azure-verifier` feature
 //! of the `attestation` backend), so it builds and runs anywhere, including
-//! macOS.
+//! macOS; `deploy` additionally makes one JSON-RPC request to the target node.
 
 use anyhow::Context as _;
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
+use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_attestation::{
-    AttestationExchangeMessage, AttestationType, SeismicMeasurementPolicy,
-    VerifiedAzureAttestation, VerifiedSeismicAttestation, VerifyOptions,
-    bindings::{binding64_from_digest32, founding_summit_keys_binding},
+    AttestationExchangeMessage, AttestationType, NetworkId, NetworkManifestV1,
+    SeismicMeasurementPolicy, VerifiedAzureAttestation, VerifiedSeismicAttestation, VerifyOptions,
+    bindings::{
+        binding64_from_digest32, deploy_verification_binding, founding_summit_keys_binding,
+    },
     verify_evidence_with_policy_and_options,
 };
+use seismic_attestation_rpc::AttestationRpcClient as _;
 use std::{
     collections::BTreeMap,
     io::Read as _,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 #[derive(Debug, Parser)]
 #[command(
     name = "verify-quote",
     version,
-    about = "DCAP-verify one founding node's summit-keys harvest quote against the intended image \
-             measurements",
-    long_about = "DCAP-verify one founding node's summit-keys harvest quote against the intended \
-                  image measurements.\n\n\
-                  Recomputes the report_data the key holder must have quoted over \
-                  (founding_summit_keys_binding of --nonce, --node-pubkey, --consensus-pubkey), \
-                  verifies \
-                  the evidence cryptographically, and enforces --policy on the quoted \
-                  measurements. The policy is required: there is no accept-any mode, because the \
-                  measurement check is the point.\n\n\
-                  Exit 0 with a single JSON object on stdout means verified: \
-                  {\"verified\": true, \"attestation_type\": ..., \"binding\": <128-hex \
-                  report_data>, \"pcrs\": {\"pcr4\": <64-hex>, ...}}. The pcrs map carries every \
-                  register the quote covers, not just the ones the policy pins, so the caller can \
-                  archive it as harvest provenance. Any failure — unreadable or malformed input, \
-                  binding mismatch, measurement mismatch, DCAP failure, non-Azure evidence — \
-                  prints an error to stderr and exits nonzero, with nothing on stdout.\n\n\
-                  Verification-only: this never touches a local TPM, and Azure TDX verification \
-                  is pure computation over the evidence bytes, so it builds and runs anywhere, \
-                  including macOS."
+    about = "Verify Seismic node quotes against the intended image measurements",
+    long_about = "Verify Seismic node quotes against the intended image measurements.\n\n\
+                  Each subcommand recomputes its purpose-specific binding, verifies the \
+                  evidence cryptographically, and enforces --policy on the quoted \
+                  measurements. The policy is required: there is no accept-any mode, because \
+                  the measurement check is the point.\n\n\
+                  Exit 0 with a single JSON object on stdout means verified. Any failure — \
+                  unreadable or malformed input, binding mismatch, measurement mismatch, DCAP \
+                  failure, non-Azure evidence — prints an error to stderr and exits nonzero, \
+                  with nothing on stdout.\n\n\
+                  Verification-only: this never touches a local TPM, and Azure TDX \
+                  verification is pure computation over the evidence bytes, so it builds and \
+                  runs anywhere, including macOS."
 )]
 struct Cli {
-    /// JSON-serialized AttestationExchangeMessage the key holder served
-    /// (`-` reads stdin).
-    #[arg(long, value_name = "PATH")]
-    evidence: PathBuf,
+    #[command(subcommand)]
+    command: Command,
+}
 
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// DCAP-verify one founding node's summit-keys harvest quote
+    #[command(
+        long_about = "DCAP-verify one founding node's summit-keys harvest quote.\n\n\
+                      Recomputes the report_data the key holder must have quoted over \
+                      (founding_summit_keys_binding of --nonce, --node-pubkey, \
+                      --consensus-pubkey) and verifies the caller-supplied evidence against \
+                      it.\n\n\
+                      The success report's pcrs map carries every register the quote covers, \
+                      not just the ones the policy pins, so the caller can archive it as \
+                      harvest provenance."
+    )]
+    Harvest(HarvestCli),
+
+    /// DCAP-verify a freshly provisioned node before relying on it
+    #[command(
+        long_about = "DCAP-verify a freshly provisioned node before relying on it — \
+                      publishing its address, handing it to later nodes as a bootnode, \
+                      pointing tooling at it.\n\n\
+                      Mints a fresh deployment_nonce, requests evidence from the node's \
+                      attestation service (getDeployVerificationEvidence at --endpoint), \
+                      recomputes deploy_verification_binding from --manifest's network \
+                      identity and the nonce, and verifies the returned envelope. A pass \
+                      proves a measured node holding this manifest answered this exact \
+                      request.\n\n\
+                      The check protects only the operator's own decisions: membership in \
+                      the network is granted by the network's own gates (the attested \
+                      root-key handshake and its admission policy), never by this check."
+    )]
+    Deploy(DeployCli),
+}
+
+/// Flags shared by every verification purpose.
+#[derive(Debug, Args)]
+struct CommonArgs {
     /// Measurement-policy JSON pinning the intended image measurements, e.g.
     /// seismic-images' `build/measurements.json`. Required: a quote from an
     /// unintended image must not pass.
     #[arg(long, value_name = "PATH")]
     policy: PathBuf,
+
+    /// Optional PCCS URL for DCAP collateral, instead of the backend default.
+    #[arg(long, value_name = "URL")]
+    pccs_url: Option<String>,
+
+    /// Allow the backend's Azure outdated-TCB override path.
+    #[arg(long)]
+    override_azure_outdated_tcb: bool,
+}
+
+#[derive(Debug, Args)]
+struct HarvestCli {
+    /// JSON-serialized AttestationExchangeMessage the key holder served
+    /// (`-` reads stdin).
+    #[arg(long, value_name = "PATH")]
+    evidence: PathBuf,
 
     /// The harvest nonce this quote was requested with (32 bytes hex).
     #[arg(long, value_name = "HEX")]
@@ -90,28 +156,46 @@ struct Cli {
     #[arg(long, value_name = "HEX")]
     consensus_pubkey: String,
 
-    /// Optional PCCS URL for DCAP collateral, instead of the backend default.
-    #[arg(long, value_name = "URL")]
-    pccs_url: Option<String>,
+    #[command(flatten)]
+    common: CommonArgs,
+}
 
-    /// Allow the backend's Azure outdated-TCB override path.
-    #[arg(long)]
-    override_azure_outdated_tcb: bool,
+#[derive(Debug, Args)]
+struct DeployCli {
+    /// The node's attestation-service JSON-RPC endpoint,
+    /// e.g. http://<node-ip>:7878.
+    #[arg(long, value_name = "URL")]
+    endpoint: String,
+
+    /// The network-manifest.json the node is expected to have booted with.
+    /// Its exact bytes are the network identity the binding commits to.
+    #[arg(long, value_name = "PATH")]
+    manifest: PathBuf,
+
+    #[command(flatten)]
+    common: CommonArgs,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Returning the error from main sends it to stderr with a nonzero exit and
-    // leaves stdout empty, which is exactly deploy's contract.
+    // leaves stdout empty, which is exactly the deploy tooling's contract.
     println!("{}", run(Cli::parse()).await?);
     Ok(())
 }
 
-/// Verify the harvest quote described by `cli` and render the success report.
+/// Verify the quote described by `cli` and render the success report.
 ///
 /// Separate from `main` so the whole path — including every rejection — is
 /// callable from tests.
 async fn run(cli: Cli) -> anyhow::Result<String> {
+    match cli.command {
+        Command::Harvest(harvest) => run_harvest(harvest).await,
+        Command::Deploy(deploy) => run_deploy(deploy).await,
+    }
+}
+
+async fn run_harvest(cli: HarvestCli) -> anyhow::Result<String> {
     // Resolve everything that can fail on bad input before any verification:
     // DCAP costs collateral round-trips, so a mistyped pubkey should not be
     // discovered on the far side of them.
@@ -124,13 +208,100 @@ async fn run(cli: Cli) -> anyhow::Result<String> {
     let evidence: AttestationExchangeMessage = serde_json::from_slice(&evidence_bytes)
         .context("--evidence is not a JSON-serialized AttestationExchangeMessage")?;
 
-    let policy = SeismicMeasurementPolicy::from_file(cli.policy.clone())
+    let policy = load_policy(&cli.common.policy).await?;
+    let verified = verify_azure(evidence, binding, policy, &cli.common)
         .await
-        .with_context(|| format!("loading measurement policy {}", cli.policy.display()))?;
+        .context("verifying harvest evidence")?;
+    Ok(report(&verified, []))
+}
 
-    // Wrong-platform evidence is rejected on the claimed type, before
-    // verification: DCAP verification costs collateral round-trips, and this
-    // policy format cannot pin a non-Azure platform's measurements anyway.
+async fn run_deploy(cli: DeployCli) -> anyhow::Result<String> {
+    // Resolve every local input before contacting the node: a mistyped path
+    // should not be discovered on the far side of an RPC round-trip.
+    let manifest_bytes = tokio::fs::read(&cli.manifest)
+        .await
+        .with_context(|| format!("reading --manifest {}", cli.manifest.display()))?;
+    // Parse strictly, then derive the id from the same raw bytes. The parse is
+    // what separates "you passed the wrong file" from "this node answered for
+    // another network": without it, any file hashes to some id and the run
+    // fails as a binding mismatch — the alarm that makes an operator burn a box.
+    NetworkManifestV1::from_json_bytes(&manifest_bytes).with_context(|| {
+        format!(
+            "--manifest {} is not a v1 network manifest",
+            cli.manifest.display()
+        )
+    })?;
+    let network_id = NetworkId::from_manifest_bytes(&manifest_bytes);
+    let policy = load_policy(&cli.common.policy).await?;
+    let client = HttpClientBuilder::default()
+        // Quote generation opens the node's TPM exclusively and is serialized
+        // in-process, so a busy node answers in seconds, not milliseconds.
+        .request_timeout(Duration::from_secs(120))
+        .build(&cli.endpoint)
+        .with_context(|| format!("--endpoint {} is not a usable URL", cli.endpoint))?;
+
+    // Minted here and never handed to anyone but the node under test, so the
+    // returned quote can only answer this exact request.
+    let deployment_nonce: [u8; 32] = rand::random();
+    let response = client
+        .get_deploy_verification_evidence(deployment_nonce)
+        .await
+        .with_context(|| {
+            format!(
+                "requesting deploy-verification evidence from --endpoint {}",
+                cli.endpoint
+            )
+        })?;
+
+    let binding = deploy_binding(&network_id, &deployment_nonce);
+    let verified = verify_azure(response.evidence, binding, policy, &cli.common)
+        .await
+        .context("verifying deploy-verification evidence")?;
+    // The extras document what was checked: which network identity the binding
+    // committed to, and the nonce that made this run's quote fresh.
+    Ok(report(
+        &verified,
+        [
+            ("network_id", network_id.to_string()),
+            ("deployment_nonce", hex::encode(deployment_nonce)),
+        ],
+    ))
+}
+
+/// The 64-byte `report_data` a harvested quote must carry.
+///
+/// Pure and deliberately trivial: the deploy tooling calls this binary
+/// instead of deriving the binding itself, so this one line is the single
+/// definition of the check on both sides.
+fn harvest_binding(nonce: &[u8; 32], node_pk: &[u8; 32], consensus_pk: &[u8; 48]) -> [u8; 64] {
+    binding64_from_digest32(founding_summit_keys_binding(nonce, node_pk, consensus_pk))
+}
+
+/// The 64-byte `report_data` a deploy-verification quote must carry
+/// (same single-definition rationale as [`harvest_binding`]).
+fn deploy_binding(network_id: &NetworkId, deployment_nonce: &[u8; 32]) -> [u8; 64] {
+    binding64_from_digest32(deploy_verification_binding(network_id, deployment_nonce))
+}
+
+/// Load the measurement policy, failing closed: this binary has no accept-any
+/// path, so an unparseable policy must stop the run rather than widen it.
+async fn load_policy(path: &Path) -> anyhow::Result<SeismicMeasurementPolicy> {
+    SeismicMeasurementPolicy::from_file(path.to_path_buf())
+        .await
+        .with_context(|| format!("loading measurement policy {}", path.display()))
+}
+
+/// Verify Azure TDX evidence against `binding` and `policy`.
+///
+/// Wrong-platform evidence is rejected on the claimed type, before
+/// verification: DCAP verification costs collateral round-trips, and this
+/// policy format cannot pin a non-Azure platform's measurements anyway.
+async fn verify_azure(
+    evidence: AttestationExchangeMessage,
+    binding: [u8; 64],
+    policy: SeismicMeasurementPolicy,
+    common: &CommonArgs,
+) -> anyhow::Result<VerifiedAzureAttestation> {
     anyhow::ensure!(
         evidence.attestation_type() == AttestationType::AzureTdx,
         "expected {} evidence, got {}",
@@ -143,27 +314,16 @@ async fn run(cli: Cli) -> anyhow::Result<String> {
         binding,
         policy,
         VerifyOptions {
-            pccs_url: cli.pccs_url,
+            pccs_url: common.pccs_url.clone(),
             dump_dcap_quotes: false,
-            override_azure_outdated_tcb: cli.override_azure_outdated_tcb,
+            override_azure_outdated_tcb: common.override_azure_outdated_tcb,
         },
     )
-    .await
-    .context("verifying harvest evidence")?;
+    .await?;
     let VerifiedSeismicAttestation::AzureTdx(verified) = verified else {
         anyhow::bail!("verified output is not azure-tdx despite azure-tdx evidence: {verified:?}");
     };
-
-    Ok(report(&verified))
-}
-
-/// The 64-byte `report_data` a harvested quote must carry.
-///
-/// Pure and deliberately trivial: deploy calls this instead of deriving the
-/// binding itself, so this one line is the single definition of the check on
-/// both sides.
-fn harvest_binding(nonce: &[u8; 32], node_pk: &[u8; 32], consensus_pk: &[u8; 48]) -> [u8; 64] {
-    binding64_from_digest32(founding_summit_keys_binding(nonce, node_pk, consensus_pk))
+    Ok(verified)
 }
 
 /// Decode a fixed-length hex argument, naming the flag in every failure.
@@ -203,8 +363,12 @@ async fn read_evidence(path: &Path) -> anyhow::Result<Vec<u8>> {
 /// order and archived reports diff cleanly across nodes, boots, and builds (the
 /// backend hands back a `HashMap`, whose iteration order is not stable). Every
 /// quoted register is included, not just the policy's, because the caller keeps
-/// this output as harvest provenance.
-fn report(verified: &VerifiedAzureAttestation) -> String {
+/// this output as provenance. `extras` carries the purpose-specific facts of
+/// what was checked.
+fn report(
+    verified: &VerifiedAzureAttestation,
+    extras: impl IntoIterator<Item = (&'static str, String)>,
+) -> String {
     let pcrs: serde_json::Map<String, serde_json::Value> = verified
         .guest_measurements
         .pcrs
@@ -215,13 +379,19 @@ fn report(verified: &VerifiedAzureAttestation) -> String {
         .map(|(index, value)| (format!("pcr{index}"), hex::encode(value).into()))
         .collect();
 
-    serde_json::json!({
+    let mut object = serde_json::json!({
         "verified": true,
         "attestation_type": AttestationType::AzureTdx.as_str(),
         "binding": hex::encode(verified.binding),
         "pcrs": pcrs,
-    })
-    .to_string()
+    });
+    for (key, value) in extras {
+        object
+            .as_object_mut()
+            .expect("report literal is an object")
+            .insert(key.to_string(), value.into());
+    }
+    object.to_string()
 }
 
 #[cfg(test)]
@@ -244,6 +414,11 @@ mod tests {
       }
     ]"#;
 
+    /// The manifest fixture the whole repo shares, so `deploy`'s strict parse
+    /// is exercised against the same document the node parses at boot.
+    const VALID_MANIFEST: &str =
+        include_str!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+
     const NONCE_HEX: &str = "7777777777777777777777777777777777777777777777777777777777777777";
     const NODE_PK_HEX: &str = "8888888888888888888888888888888888888888888888888888888888888888";
     const CONSENSUS_PK_HEX: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999";
@@ -254,9 +429,10 @@ mod tests {
         path
     }
 
-    fn cli(evidence: &Path, policy: &Path) -> Cli {
+    fn harvest_cli(evidence: &Path, policy: &Path) -> Cli {
         Cli::try_parse_from([
             "verify-quote".as_ref(),
+            "harvest".as_ref(),
             "--evidence".as_ref(),
             evidence.as_os_str(),
             "--policy".as_ref(),
@@ -271,23 +447,43 @@ mod tests {
         .expect("well-formed argv")
     }
 
+    fn deploy_cli(endpoint: &str, manifest: &Path, policy: &Path) -> Cli {
+        Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "deploy".as_ref(),
+            "--endpoint".as_ref(),
+            endpoint.as_ref(),
+            "--manifest".as_ref(),
+            manifest.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+        ])
+        .expect("well-formed argv")
+    }
+
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
     }
 
-    /// The binding is a wire-format commitment shared with the key holder and
-    /// with deploy's assemble-time re-check, so this vector is frozen: it is
-    /// `founding_summit_keys_binding`'s frozen digest, zero-padded to 64 bytes.
+    /// The bindings are wire-format commitments shared with the quoting node,
+    /// so these vectors are frozen: each is its `bindings.rs` frozen digest,
+    /// zero-padded to 64 bytes.
     #[test]
-    fn harvest_binding_matches_frozen_vector() {
-        let binding = harvest_binding(&[0x77; 32], &[0x88; 32], &[0x99; 48]);
-
+    fn bindings_match_frozen_vectors() {
+        let harvest = harvest_binding(&[0x77; 32], &[0x88; 32], &[0x99; 48]);
         assert_eq!(
-            hex::encode(&binding[..32]),
+            hex::encode(&harvest[..32]),
             "8973b984dc10f809ebfaacdcad64b8cc5a647cf24e4bc27b3833cc234a9290e5"
         );
-        assert_eq!(&binding[32..], &[0u8; 32]);
+        assert_eq!(&harvest[32..], &[0u8; 32]);
+
+        let deploy = deploy_binding(&NetworkId::from_bytes([0x11; 32]), &[0x66; 32]);
+        assert_eq!(
+            hex::encode(&deploy[..32]),
+            "16a53bcb2d1421951a830a1308bca525b8ecfbf96fc89ad6152cdbfce4777eb9"
+        );
+        assert_eq!(&deploy[32..], &[0u8; 32]);
     }
 
     /// The hex flags feed the binding, and a wrong one produces a mismatch that
@@ -325,7 +521,10 @@ mod tests {
         let evidence = write_file(&dir, "evidence.json", "{ not evidence");
         let policy = write_file(&dir, "policy.json", VALID_POLICY);
 
-        let error = run(cli(&evidence, &policy)).await.unwrap_err().to_string();
+        let error = run(harvest_cli(&evidence, &policy))
+            .await
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("--evidence"), "{error}");
     }
 
@@ -334,7 +533,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let policy = write_file(&dir, "policy.json", VALID_POLICY);
 
-        let error = run(cli(&dir.path().join("absent.json"), &policy))
+        let error = run(harvest_cli(&dir.path().join("absent.json"), &policy))
             .await
             .unwrap_err()
             .to_string();
@@ -353,7 +552,10 @@ mod tests {
         );
         let policy = write_file(&dir, "policy.json", "{ not a policy");
 
-        let error = run(cli(&evidence, &policy)).await.unwrap_err().to_string();
+        let error = run(harvest_cli(&evidence, &policy))
+            .await
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("measurement policy"), "{error}");
     }
 
@@ -369,7 +571,67 @@ mod tests {
         );
         let policy = write_file(&dir, "policy.json", VALID_POLICY);
 
-        assert!(run(cli(&evidence, &policy)).await.is_err());
+        assert!(run(harvest_cli(&evidence, &policy)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn deploy_missing_manifest_fails_by_flag_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+
+        let error = run(deploy_cli(
+            "http://127.0.0.1:1",
+            &dir.path().join("absent.json"),
+            &policy,
+        ))
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("reading --manifest"), "{error}");
+    }
+
+    /// A file that isn't a manifest is named as such, rather than hashing to
+    /// some id and surfacing later as a binding mismatch — which reads as a
+    /// node that answered for another network.
+    #[tokio::test]
+    async fn deploy_rejects_a_manifest_that_is_not_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = write_file(&dir, "reth-genesis.json", "{}");
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+
+        let error = run(deploy_cli("http://127.0.0.1:1", &manifest, &policy))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("not a v1 network manifest"), "{error}");
+    }
+
+    /// Local inputs resolve before the node is contacted: a bad policy fails
+    /// even though the endpoint points nowhere, proving no RPC was attempted.
+    #[tokio::test]
+    async fn deploy_resolves_local_inputs_before_contacting_the_endpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = write_file(&dir, "network-manifest.json", VALID_MANIFEST);
+        let policy = write_file(&dir, "policy.json", "{ not a policy");
+
+        let error = run(deploy_cli("http://127.0.0.1:1", &manifest, &policy))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("measurement policy"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn deploy_malformed_endpoint_fails_by_flag_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = write_file(&dir, "network-manifest.json", VALID_MANIFEST);
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+
+        let error = run(deploy_cli("not a url", &manifest, &policy))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--endpoint"), "{error}");
     }
 
     #[test]
@@ -381,7 +643,7 @@ mod tests {
             },
         };
 
-        let report: serde_json::Value = serde_json::from_str(&report(&verified)).unwrap();
+        let report: serde_json::Value = serde_json::from_str(&report(&verified, [])).unwrap();
 
         assert_eq!(report["verified"], true);
         assert_eq!(report["attestation_type"], "azure-tdx");
@@ -399,5 +661,32 @@ mod tests {
         assert_eq!(pcrs["pcr4"], "44".repeat(32));
         assert_eq!(pcrs["pcr9"], "99".repeat(32));
         assert_eq!(pcrs["pcr11"], "bb".repeat(32));
+    }
+
+    /// The deploy report documents what was checked: the network identity the
+    /// binding committed to and the nonce that made the quote fresh.
+    #[test]
+    fn report_extras_document_the_deploy_check() {
+        let network_id = NetworkId::from_bytes([0x11; 32]);
+        let nonce = [0x66u8; 32];
+        let verified = VerifiedAzureAttestation {
+            binding: deploy_binding(&network_id, &nonce),
+            guest_measurements: AzureGuestMeasurements {
+                pcrs: HashMap::from([(4, [0x44; 32])]),
+            },
+        };
+
+        let rendered = report(
+            &verified,
+            [
+                ("network_id", network_id.to_string()),
+                ("deployment_nonce", hex::encode(nonce)),
+            ],
+        );
+        let report: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+        assert_eq!(report["verified"], true);
+        assert_eq!(report["network_id"], format!("0x{}", "11".repeat(32)));
+        assert_eq!(report["deployment_nonce"], "66".repeat(32));
     }
 }
