@@ -30,7 +30,7 @@ summit-key-holder persist-wait [--control-socket ...]
 | Endpoint | Response |
 |---|---|
 | `GET /v1/keys` | `{node_public_key, consensus_public_key}` — bare lowercase hex (64 / 96 chars), exactly as summit renders them. Served for life; post-persist it reads the keystore and feeds deploy's launch-time continuity assertion. |
-| `GET /v1/quote?nonce=<64-hex>` | The keys plus `evidence`, a JSON-serialized `AttestationExchangeMessage` with `report_data = founding_summit_keys_binding(nonce, node_pk, consensus_pk)` — the exact bytes `verify-quote harvest --evidence` consumes and deploy's harvest archives verbatim. `410 Gone` once the network manifest exists. |
+| `GET /v1/quote?nonce=<64-hex>` | The keys plus `evidence`, a JSON-serialized `AttestationExchangeMessage` with `report_data = founding_summit_keys_binding(nonce, node_pk, consensus_pk)` — deploy's harvest archives these bytes verbatim, inside the harvest record `verify-quote harvest --record` verifies. `410 Gone` once the network manifest exists. |
 
 Quote generation opens the raw TPM (`/dev/tpm0`, exclusive) and costs
 seconds per call; requests are serialized in-process. Once the manifest

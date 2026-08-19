@@ -5,12 +5,12 @@
 //! measurement policy). The subcommands differ only in which binding they
 //! recompute and where the evidence comes from:
 //!
-//! - `harvest` checks one founding node's summit-keys harvest quote: the
-//!   quote's `report_data` must be
-//!   `founding_summit_keys_binding(harvest_nonce, node_pk, consensus_pk)` for
-//!   the nonce and pubkeys given on the command line, and the evidence is
-//!   supplied by the caller (the harvest archive). The binding is per node,
-//!   so one run covers one node's harvest.
+//! - `harvest` checks one founding node's summit-keys harvest quote, taking
+//!   that node's whole harvest record (see [`HarvestRecord`]): the record's
+//!   evidence must carry
+//!   `founding_summit_keys_binding(harvest_nonce, node_public_key,
+//!   consensus_public_key)` over the record's own claims. The record is per
+//!   node, so one run covers one node's harvest.
 //! - `deploy` checks a freshly provisioned node before the operator relies
 //!   on it (publishing its address, handing it out as a bootnode): it mints a
 //!   fresh `deployment_nonce`, requests evidence from the node's attestation
@@ -20,11 +20,8 @@
 //!
 //! ```text
 //! verify-quote harvest \
-//!   --evidence harvest/box-1.evidence.json \
-//!   --policy build/measurements.json \
-//!   --nonce <64-hex> \
-//!   --node-pubkey <64-hex> \
-//!   --consensus-pubkey <96-hex>
+//!   --record inputs/harvest/box-1.json \
+//!   --policy build/measurements.json
 //!
 //! verify-quote deploy \
 //!   --endpoint http://<node-ip>:7878 \
@@ -32,11 +29,10 @@
 //!   --policy build/measurements.json
 //! ```
 //!
-//! `--evidence` is a JSON-serialized [`AttestationExchangeMessage`]; `-` reads
-//! it from stdin. Exit 0 plus one JSON object on stdout means verified. Every
-//! failure — bad input, binding mismatch, measurement mismatch, DCAP failure,
-//! non-Azure evidence — is an error on stderr with a nonzero exit and nothing on
-//! stdout.
+//! `--record` is a harvest-record JSON document; `-` reads it from stdin. Exit 0
+//! plus one JSON object on stdout means verified. Every failure — bad input,
+//! binding mismatch, measurement mismatch, DCAP failure, non-Azure evidence —
+//! is an error on stderr with a nonzero exit and nothing on stdout.
 //!
 //! Verification-only: this never touches a local TPM. Azure TDX verification
 //! is pure computation over the evidence bytes (the `azure-verifier` feature
@@ -55,6 +51,7 @@ use seismic_attestation::{
     verify_evidence_with_policy_and_options,
 };
 use seismic_attestation_rpc::AttestationRpcClient as _;
+use serde::Deserialize;
 use std::{
     collections::BTreeMap,
     io::Read as _,
@@ -89,11 +86,12 @@ struct Cli {
 enum Command {
     /// DCAP-verify one founding node's summit-keys harvest quote
     #[command(
-        long_about = "DCAP-verify one founding node's summit-keys harvest quote.\n\n\
+        long_about = "DCAP-verify one founding node's summit-keys harvest quote, given that \
+                      node's harvest record from the founding archive.\n\n\
                       Recomputes the report_data the key holder must have quoted over \
-                      (founding_summit_keys_binding of --nonce, --node-pubkey, \
-                      --consensus-pubkey) and verifies the caller-supplied evidence against \
-                      it.\n\n\
+                      (founding_summit_keys_binding of the record's harvest_nonce, \
+                      node_public_key and consensus_public_key) and verifies the record's \
+                      evidence against it.\n\n\
                       The success report's pcrs map carries every register the quote covers, \
                       not just the ones the policy pins, so the caller can archive it as \
                       harvest provenance."
@@ -138,26 +136,42 @@ struct CommonArgs {
 
 #[derive(Debug, Args)]
 struct HarvestCli {
-    /// JSON-serialized AttestationExchangeMessage the key holder served
-    /// (`-` reads stdin).
+    /// The node's harvest record, e.g. a founding archive's
+    /// `inputs/harvest/<node>.json` (`-` reads stdin).
     #[arg(long, value_name = "PATH")]
-    evidence: PathBuf,
-
-    /// The harvest nonce this quote was requested with (32 bytes hex).
-    #[arg(long, value_name = "HEX")]
-    nonce: String,
-
-    /// The ed25519 node pubkey the key holder returned (32 bytes hex).
-    #[arg(long, value_name = "HEX")]
-    node_pubkey: String,
-
-    /// The BLS12-381 MinPk consensus pubkey the key holder returned
-    /// (48 bytes hex).
-    #[arg(long, value_name = "HEX")]
-    consensus_pubkey: String,
+    record: PathBuf,
 
     #[command(flatten)]
     common: CommonArgs,
+}
+
+/// One founding node's harvest record: the four facts a harvest quote is
+/// verified against, in one JSON document.
+///
+/// This is the founding harvest archive's schema, and what makes the archive
+/// re-verifiable: deploy writes one such document per node when it collects
+/// the keys, and anyone re-checking the founding set later hands the same file
+/// straight back to `harvest`. What the archive keeps alongside these fields
+/// (when the harvest ran, the report of the verification that passed) is
+/// ignored here, so an archived file verifies as-is.
+///
+/// The three claims are untrusted input: the quote's `report_data` is what
+/// decides whether the node's keys really are these, so a wrong claim surfaces
+/// as a binding mismatch.
+#[derive(Debug, Deserialize)]
+struct HarvestRecord {
+    /// The nonce the quote was requested with (32 bytes hex).
+    harvest_nonce: String,
+
+    /// The ed25519 node pubkey the key holder served (32 bytes hex).
+    node_public_key: String,
+
+    /// The BLS12-381 MinPk consensus pubkey the key holder served
+    /// (48 bytes hex).
+    consensus_public_key: String,
+
+    /// The evidence the key holder served, verbatim.
+    evidence: AttestationExchangeMessage,
 }
 
 #[derive(Debug, Args)]
@@ -197,19 +211,19 @@ async fn run(cli: Cli) -> anyhow::Result<String> {
 
 async fn run_harvest(cli: HarvestCli) -> anyhow::Result<String> {
     // Resolve everything that can fail on bad input before any verification:
-    // DCAP costs collateral round-trips, so a mistyped pubkey should not be
+    // DCAP costs collateral round-trips, so a malformed record should not be
     // discovered on the far side of them.
-    let nonce = decode_hex_arg::<32>("--nonce", &cli.nonce)?;
-    let node_pk = decode_hex_arg::<32>("--node-pubkey", &cli.node_pubkey)?;
-    let consensus_pk = decode_hex_arg::<48>("--consensus-pubkey", &cli.consensus_pubkey)?;
+    let record_bytes = read_record(&cli.record).await?;
+    let record: HarvestRecord =
+        serde_json::from_slice(&record_bytes).context("--record is not a harvest record")?;
+    let nonce = decode_hex_field::<32>("harvest_nonce", &record.harvest_nonce)?;
+    let node_pk = decode_hex_field::<32>("node_public_key", &record.node_public_key)?;
+    let consensus_pk =
+        decode_hex_field::<48>("consensus_public_key", &record.consensus_public_key)?;
     let binding = harvest_binding(&nonce, &node_pk, &consensus_pk);
 
-    let evidence_bytes = read_evidence(&cli.evidence).await?;
-    let evidence: AttestationExchangeMessage = serde_json::from_slice(&evidence_bytes)
-        .context("--evidence is not a JSON-serialized AttestationExchangeMessage")?;
-
     let policy = load_policy(&cli.common.policy).await?;
-    let verified = verify_azure(evidence, binding, policy, &cli.common)
+    let verified = verify_azure(record.evidence, binding, policy, &cli.common)
         .await
         .context("verifying harvest evidence")?;
     Ok(report(&verified, []))
@@ -326,35 +340,37 @@ async fn verify_azure(
     Ok(verified)
 }
 
-/// Decode a fixed-length hex argument, naming the flag in every failure.
+/// Decode one fixed-length hex field of the record, naming the field in every
+/// failure.
 ///
-/// The caller is a script assembling five hex strings; an error that does not
-/// say which one it means costs a round of guessing.
-fn decode_hex_arg<const N: usize>(flag: &str, value: &str) -> anyhow::Result<[u8; N]> {
+/// A field of the wrong length or spelling is a malformed record, not a failed
+/// quote, and the two look alike once the binding is computed — so each is
+/// rejected up front, by name.
+fn decode_hex_field<const N: usize>(field: &str, value: &str) -> anyhow::Result<[u8; N]> {
     let bare = value.strip_prefix("0x").unwrap_or(value);
-    let bytes = hex::decode(bare).with_context(|| format!("{flag} is not valid hex"))?;
+    let bytes = hex::decode(bare).with_context(|| format!("record {field} is not valid hex"))?;
     bytes.try_into().map_err(|bytes: Vec<u8>| {
         anyhow::anyhow!(
-            "{flag} must be {N} bytes ({} hex chars), got {}",
+            "record {field} must be {N} bytes ({} hex chars), got {}",
             N * 2,
             bytes.len()
         )
     })
 }
 
-/// Read the evidence document from a path, or stdin for `-` (the subprocess
+/// Read the harvest record from a path, or stdin for `-` (the subprocess
 /// boundary deploy uses to pass exact bytes without a temp file).
-async fn read_evidence(path: &Path) -> anyhow::Result<Vec<u8>> {
+async fn read_record(path: &Path) -> anyhow::Result<Vec<u8>> {
     if path == Path::new("-") {
         let mut bytes = Vec::new();
         std::io::stdin()
             .read_to_end(&mut bytes)
-            .context("reading --evidence from stdin")?;
+            .context("reading --record from stdin")?;
         return Ok(bytes);
     }
     tokio::fs::read(path)
         .await
-        .with_context(|| format!("reading --evidence {}", path.display()))
+        .with_context(|| format!("reading --record {}", path.display()))
 }
 
 /// The success report: one JSON object, printed only once verification passed.
@@ -429,22 +445,29 @@ mod tests {
         path
     }
 
-    fn harvest_cli(evidence: &Path, policy: &Path) -> Cli {
+    fn harvest_cli(record: &Path, policy: &Path) -> Cli {
         Cli::try_parse_from([
             "verify-quote".as_ref(),
             "harvest".as_ref(),
-            "--evidence".as_ref(),
-            evidence.as_os_str(),
+            "--record".as_ref(),
+            record.as_os_str(),
             "--policy".as_ref(),
             policy.as_os_str(),
-            "--nonce".as_ref(),
-            NONCE_HEX.as_ref(),
-            "--node-pubkey".as_ref(),
-            NODE_PK_HEX.as_ref(),
-            "--consensus-pubkey".as_ref(),
-            CONSENSUS_PK_HEX.as_ref(),
         ])
         .expect("well-formed argv")
+    }
+
+    /// A harvest record carrying `evidence` verbatim, with the frozen claims
+    /// the binding vectors use.
+    fn record_json(evidence: &str) -> String {
+        format!(
+            r#"{{
+              "harvest_nonce": "{NONCE_HEX}",
+              "node_public_key": "{NODE_PK_HEX}",
+              "consensus_public_key": "{CONSENSUS_PK_HEX}",
+              "evidence": {evidence}
+            }}"#
+        )
     }
 
     fn deploy_cli(endpoint: &str, manifest: &Path, policy: &Path) -> Cli {
@@ -486,50 +509,92 @@ mod tests {
         assert_eq!(&deploy[32..], &[0u8; 32]);
     }
 
-    /// The hex flags feed the binding, and a wrong one produces a mismatch that
-    /// looks exactly like a bad quote — so they are rejected up front, by name.
+    /// The record's hex fields feed the binding, and a wrong one produces a
+    /// mismatch that looks exactly like a bad quote — so they are rejected up
+    /// front, by name.
     #[test]
-    fn hex_args_fail_by_flag_name() {
-        let not_hex = decode_hex_arg::<32>("--nonce", "zz77")
+    fn hex_fields_fail_by_field_name() {
+        let not_hex = decode_hex_field::<32>("harvest_nonce", "zz77")
             .unwrap_err()
             .to_string();
-        assert!(not_hex.contains("--nonce"), "{not_hex}");
+        assert!(not_hex.contains("harvest_nonce"), "{not_hex}");
 
-        let wrong_length = decode_hex_arg::<48>("--consensus-pubkey", NODE_PK_HEX)
+        let wrong_length = decode_hex_field::<48>("consensus_public_key", NODE_PK_HEX)
             .unwrap_err()
             .to_string();
         assert!(
-            wrong_length.contains("--consensus-pubkey"),
+            wrong_length.contains("consensus_public_key"),
             "{wrong_length}"
         );
         assert!(wrong_length.contains("48 bytes"), "{wrong_length}");
 
         assert_eq!(
-            decode_hex_arg::<32>("--node-pubkey", NODE_PK_HEX).unwrap(),
+            decode_hex_field::<32>("node_public_key", NODE_PK_HEX).unwrap(),
             [0x88; 32]
         );
-        // Deploy may hand over 0x-prefixed hex; the two forms mean the same key.
+        // The archive writes bare hex; 0x-prefixed means the same key.
         assert_eq!(
-            decode_hex_arg::<32>("--node-pubkey", &format!("0x{NODE_PK_HEX}")).unwrap(),
+            decode_hex_field::<32>("node_public_key", &format!("0x{NODE_PK_HEX}")).unwrap(),
             [0x88; 32]
         );
     }
 
+    /// The archived record is the input format: a file carrying the harvest's
+    /// own provenance fields around the four verified ones parses as-is.
+    #[test]
+    fn record_ignores_the_archives_extra_fields() {
+        let archived = format!(
+            r#"{{
+              "harvest_nonce": "{NONCE_HEX}",
+              "node_public_key": "{NODE_PK_HEX}",
+              "consensus_public_key": "{CONSENSUS_PK_HEX}",
+              "evidence": {{ "attestation_type": "azure-tdx", "attestation": [1, 2, 3] }},
+              "harvested_at": "2026-08-04T00:00:00+00:00",
+              "verification": {{ "verified": true, "pcrs": {{}} }}
+            }}"#
+        );
+        let record: HarvestRecord = serde_json::from_str(&archived).expect("archived record");
+
+        assert_eq!(
+            decode_hex_field::<32>("harvest_nonce", &record.harvest_nonce).unwrap(),
+            [0x77; 32]
+        );
+        assert_eq!(
+            decode_hex_field::<48>("consensus_public_key", &record.consensus_public_key).unwrap(),
+            [0x99; 48]
+        );
+    }
+
     #[tokio::test]
-    async fn malformed_evidence_is_rejected() {
+    async fn malformed_record_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
-        let evidence = write_file(&dir, "evidence.json", "{ not evidence");
+        let record = write_file(&dir, "node-1.json", "{ not a record");
         let policy = write_file(&dir, "policy.json", VALID_POLICY);
 
-        let error = run(harvest_cli(&evidence, &policy))
+        let error = run(harvest_cli(&record, &policy))
             .await
             .unwrap_err()
             .to_string();
-        assert!(error.contains("--evidence"), "{error}");
+        assert!(error.contains("--record"), "{error}");
+    }
+
+    /// A record whose evidence field is not an evidence envelope fails as a bad
+    /// record, before any collateral is fetched.
+    #[tokio::test]
+    async fn record_with_malformed_evidence_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = write_file(&dir, "node-1.json", &record_json(r#""not an envelope""#));
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+
+        let error = run(harvest_cli(&record, &policy))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--record"), "{error}");
     }
 
     #[tokio::test]
-    async fn missing_evidence_file_is_rejected() {
+    async fn missing_record_file_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
         let policy = write_file(&dir, "policy.json", VALID_POLICY);
 
@@ -537,7 +602,7 @@ mod tests {
             .await
             .unwrap_err()
             .to_string();
-        assert!(error.contains("reading --evidence"), "{error}");
+        assert!(error.contains("reading --record"), "{error}");
     }
 
     /// Fail-closed on the policy: this binary has no accept-any path, so an
@@ -545,14 +610,14 @@ mod tests {
     #[tokio::test]
     async fn malformed_policy_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
-        let evidence = write_file(
+        let record = write_file(
             &dir,
-            "evidence.json",
-            r#"{ "attestation_type": "azure-tdx", "attestation": [1, 2, 3] }"#,
+            "node-1.json",
+            &record_json(r#"{ "attestation_type": "azure-tdx", "attestation": [1, 2, 3] }"#),
         );
         let policy = write_file(&dir, "policy.json", "{ not a policy");
 
-        let error = run(harvest_cli(&evidence, &policy))
+        let error = run(harvest_cli(&record, &policy))
             .await
             .unwrap_err()
             .to_string();
@@ -564,14 +629,14 @@ mod tests {
     #[tokio::test]
     async fn non_azure_evidence_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
-        let evidence = write_file(
+        let record = write_file(
             &dir,
-            "evidence.json",
-            r#"{ "attestation_type": "none", "attestation": [] }"#,
+            "node-1.json",
+            &record_json(r#"{ "attestation_type": "none", "attestation": [] }"#),
         );
         let policy = write_file(&dir, "policy.json", VALID_POLICY);
 
-        assert!(run(harvest_cli(&evidence, &policy)).await.is_err());
+        assert!(run(harvest_cli(&record, &policy)).await.is_err());
     }
 
     #[tokio::test]
