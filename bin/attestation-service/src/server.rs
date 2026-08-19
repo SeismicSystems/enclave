@@ -24,10 +24,12 @@ use jsonrpsee::{
 use secp256k1::PublicKey;
 use seismic_attestation::{
     NetworkId,
-    bindings::{binding64_from_digest32, tx_io_binding},
+    bindings::{binding64_from_digest32, deploy_verification_binding, tx_io_binding},
     generate_evidence,
 };
-use seismic_attestation_rpc::{AttestationRpcServer, TxIoAttestationResponse};
+use seismic_attestation_rpc::{
+    AttestationRpcServer, DeployVerificationResponse, TxIoAttestationResponse,
+};
 use seismic_custodian_ipc::{CustodianClient, IpcError};
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::{info, warn};
@@ -135,6 +137,24 @@ impl AttestationRpcServer for AttestationService {
             epoch,
             evidence,
         })
+    }
+
+    /// Generate evidence for an operator's deploy verification of this node.
+    ///
+    /// The binding combines the caller's fresh `deployment_nonce` with this
+    /// service's own `network_id` — the caller picks nothing else, so the
+    /// method can't be used as an oracle to quote arbitrary transcripts.
+    async fn get_deploy_verification_evidence(
+        &self,
+        deployment_nonce: [u8; 32],
+    ) -> RpcResult<DeployVerificationResponse> {
+        let binding = deploy_verification_binding(&self.network_id, &deployment_nonce);
+        let evidence = generate_evidence(ATTESTATION_TYPE, binding64_from_digest32(binding))
+            .map_err(|error| {
+                internal_rpc_error("generating deploy-verification evidence", error)
+            })?;
+
+        Ok(DeployVerificationResponse { evidence })
     }
 }
 

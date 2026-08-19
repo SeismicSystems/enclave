@@ -58,30 +58,23 @@ pub fn root_key_response_binding(
     hasher.finalize().into()
 }
 
-/// Binding for deploy-preflight verification of a candidate node.
+/// Binding for deploy verification of a candidate node.
 ///
-/// The deploy tool checks a freshly provisioned VM before wiring it into the
-/// network: it sends a fresh `deployment_nonce`, the node quotes over this
-/// binding using the `network_id` of the manifest it booted with, and the
-/// deploy tool recomputes the binding from its own copies of all three fields.
-/// A passing quote proves the node holds the expected manifest (right network,
-/// not a clone or wrong fork) and minted the evidence for this exact request
+/// An operator checks a freshly provisioned VM before relying on it: they
+/// send a fresh `deployment_nonce`, the node quotes over this binding using
+/// the `network_id` of the manifest it booted with, and the operator
+/// recomputes the binding from its own copies of both fields. A passing
+/// quote proves the node holds the expected manifest (right network, not a
+/// clone or wrong fork) and minted the evidence for this exact request
 /// (`deployment_nonce` is per-request, so captured quotes can't be replayed).
-///
-/// `context` identifies what is being preflighted, so an answer to one
-/// question can't be repurposed for another — e.g. a hash of the exact
-/// `node.toml` being POSTed to tdx-init, which makes the quote an attested
-/// acknowledgement of the delivered config.
-pub fn deploy_preflight_binding(
+pub fn deploy_verification_binding(
     network_id: &NetworkId,
     deployment_nonce: &[u8; 32],
-    context: &[u8],
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"seismic-deploy-v1:");
     hasher.update(network_id.as_bytes());
     hasher.update(deployment_nonce);
-    hasher.update(context);
     hasher.finalize().into()
 }
 
@@ -163,12 +156,8 @@ mod tests {
             "2ac4df85ca3f07ca8f279bd6aea9db824e8481f776178e051439c92118782eee"
         );
         assert_eq!(
-            hex::encode(deploy_preflight_binding(
-                &network_id,
-                &[0x66; 32],
-                b"deploy-context"
-            )),
-            "780975fd8a3e5a2730261c967db281fc639360ecbc2f166fed1465f5dfae81d7"
+            hex::encode(deploy_verification_binding(&network_id, &[0x66; 32])),
+            "16a53bcb2d1421951a830a1308bca525b8ecfbf96fc89ad6152cdbfce4777eb9"
         );
         assert_eq!(
             hex::encode(founding_summit_keys_binding(
