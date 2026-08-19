@@ -37,6 +37,7 @@ rand.workspace = true
 secp256k1.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 # Tests drive the served socket with the async client. Dev-only: resolver v2

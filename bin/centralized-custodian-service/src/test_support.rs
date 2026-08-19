@@ -40,17 +40,7 @@ pub(crate) fn build_state(dir: &Path) -> CentralizedCustodianState {
     .expect("build state")
 }
 
-/// Seal one envelope exactly as council tooling would: to the inbox key that
-/// every holder of [`ROOT_KEY`] derives.
+/// Seal one envelope exactly as council tooling would.
 pub(crate) fn seal(purpose: DeliveryPurpose, epoch: u64, key: [u8; 32]) -> SignedDeliveryEnvelope {
-    let inbox_pk = Custodian::new(ROOT_KEY).get_council_inbox_pk();
-    seal_delivery(
-        &council_keys().0,
-        &network_id(),
-        purpose,
-        epoch,
-        &inbox_pk,
-        &key,
-    )
-    .expect("seal delivery")
+    seal_delivery(&council_keys().0, &network_id(), purpose, epoch, &key)
 }

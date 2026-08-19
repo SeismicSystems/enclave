@@ -44,9 +44,11 @@ struct Args {
     #[arg(long, default_value = DEFAULT_CUSTODIAN_SOCKET_PATH)]
     socket: PathBuf,
 
-    /// Path of the 32-byte root keyfile; generated (mode 0600) on first
-    /// boot if absent. Back it up: epoch-0 keys and the council inbox key
-    /// derive from it.
+    /// Path of the 32-byte root keyfile. If absent, the PUBLICLY KNOWN
+    /// shared default is pinned there so every node agrees on epoch-0 keys
+    /// with no coordination — epoch 0 then provides no confidentiality;
+    /// rotate via the council immediately. Pre-place 32 random bytes for a
+    /// secret root key instead.
     #[arg(long, env = "SEISMIC_ROOT_KEY_FILE", default_value = DEFAULT_ROOT_KEY_PATH)]
     root_key_file: PathBuf,
 
@@ -72,8 +74,9 @@ struct Args {
     #[arg(long, env = "SEISMIC_CHAIN_ID")]
     chain_id: u64,
 
-    /// Directory where delivery envelopes persist (signed + encrypted;
-    /// never plaintext keys).
+    /// Directory where delivery envelopes persist. Envelopes contain the
+    /// plaintext purpose keys (council-signed), so this directory is itself
+    /// secret: protect it like the root keyfile.
     #[arg(long, default_value = DEFAULT_DELIVERY_DIR)]
     delivery_dir: PathBuf,
 }
@@ -93,7 +96,7 @@ fn main() -> Result<()> {
         "delivery envelopes must be bound to this network"
     );
 
-    let root_key = root_key_file::load_or_generate(&args.root_key_file)?;
+    let root_key = root_key_file::load_or_default(&args.root_key_file)?;
     let state = Arc::new(
         CentralizedCustodianState::new(
             Custodian::new(root_key),

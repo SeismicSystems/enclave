@@ -8,8 +8,6 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 const PURPOSE_DERIVE_SALT: &[u8] = b"seismic-purpose-derive-salt";
 /// Prefix used in domain separation when deriving purpose-specific keys.
 const PREFIX: &str = "seismic-purpose";
-/// The council-inbox keypair never rotates (see [`KeyPurpose::CouncilInbox`]).
-const COUNCIL_INBOX_EPOCH: u64 = 0;
 
 #[derive(Zeroize, ZeroizeOnDrop, Clone)]
 pub struct Key([u8; 32]);
@@ -77,11 +75,6 @@ pub enum KeyPurpose {
     /// and store the result as a custom LUKS2 token; verified on every subsequent boot
     /// before `cryptsetup open`.
     LuksHeaderMac,
-    /// ECDH keypair to which a security council encrypts per-epoch key
-    /// deliveries (the centralized custodian's "inbox"). Pinned at epoch 0:
-    /// it is an addressing key, not a rotating secret, and rotating it would
-    /// orphan persisted delivery envelopes.
-    CouncilInbox,
 }
 
 impl KeyPurpose {
@@ -93,7 +86,6 @@ impl KeyPurpose {
             KeyPurpose::TxIo => "tx-io",
             KeyPurpose::Storage => "storage",
             KeyPurpose::LuksHeaderMac => "luks-header-mac",
-            KeyPurpose::CouncilInbox => "council-inbox",
         }
     }
 
@@ -182,28 +174,6 @@ impl Custodian {
             .expect("purpose key derivation must succeed")
             .to_snapshot_key()
     }
-
-    /// Secret half of the council-inbox ECDH keypair (see
-    /// [`KeyPurpose::CouncilInbox`]). Derived from the network-wide root key,
-    /// so every node holding the root key shares the same inbox and a council
-    /// envelope encrypted once is openable by all of them.
-    pub fn get_council_inbox_sk(&self) -> secp256k1::SecretKey {
-        self.derive_purpose_key(KeyPurpose::CouncilInbox, COUNCIL_INBOX_EPOCH)
-            .expect("purpose key derivation must succeed")
-            .to_secp256k1_keypair()
-            .expect("derived secp256k1 secret key should be valid")
-            .0
-    }
-
-    /// Public half of the council-inbox ECDH keypair, published to the
-    /// council so it can encrypt deliveries.
-    pub fn get_council_inbox_pk(&self) -> secp256k1::PublicKey {
-        self.derive_purpose_key(KeyPurpose::CouncilInbox, COUNCIL_INBOX_EPOCH)
-            .expect("purpose key derivation must succeed")
-            .to_secp256k1_keypair()
-            .expect("derived secp256k1 secret key should be valid")
-            .1
-    }
 }
 
 #[cfg(test)]
@@ -239,21 +209,6 @@ mod tests {
                 custodian.get_snapshot_key(epoch)
             );
         }
-    }
-
-    #[test]
-    fn council_inbox_keypair_is_stable_and_consistent() {
-        let custodian = Custodian::new(ROOT_KEY);
-        let sk = custodian.get_council_inbox_sk();
-        let pk = custodian.get_council_inbox_pk();
-        assert_eq!(
-            pk,
-            secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk)
-        );
-        // Same root key on another node derives the identical inbox.
-        assert_eq!(Custodian::new(ROOT_KEY).get_council_inbox_sk(), sk);
-        // The inbox lives in its own derivation domain, not tx-io's.
-        assert_ne!(sk, custodian.get_tx_io_sk(0));
     }
 
     #[test]

@@ -4,21 +4,22 @@
 //! moves to decentralized custody inside TEEs — so unlike
 //! `seismic-custodian-service` there is no bootstrap flow, no LUKS handoff,
 //! and no waiting on late-mounted storage: the root key is loaded (or
-//! generated) from a keyfile before this state exists, and the delivery
+//! defaulted) from a keyfile before this state exists, and the delivery
 //! store is scanned eagerly at construction, boot-fatally if its directory
 //! is unusable.
 //!
 //! The [`EpochKeyStore`] holds per-purpose sequences of council-delivered
 //! keys for epochs >= 1 (epoch 0 stays root-key-derived). Each delivery is
-//! accepted only as a verified [`SignedDeliveryEnvelope`] and persisted (as
-//! the envelope, never plaintext) before it becomes observable, so a served
-//! key always survives a restart.
+//! accepted only as a council-signed [`SignedDeliveryEnvelope`] and
+//! persisted before it becomes observable, so a served key always survives
+//! a restart. Envelopes carry the key in plaintext (transport
+//! confidentiality is the deployment's TLS/tunnel in front of the port), so
+//! the persisted files are themselves secrets: dirs 0700, files 0600.
 
 use anyhow::{Context as _, Result};
-use secp256k1::{PublicKey, SecretKey};
 use seismic_council_delivery::{
-    CouncilResponse, CouncilStatus, DeliveryPurpose, OpenDeliveryError, RejectCode,
-    SignedDeliveryEnvelope, canonical_envelope_bytes, envelope_from_bytes, open_delivery,
+    CouncilResponse, CouncilStatus, DeliveryPurpose, RejectCode, SignedDeliveryEnvelope,
+    VerifyDeliveryError, canonical_envelope_bytes, envelope_from_bytes, verify_delivery,
 };
 use seismic_custodian::{Custodian, Key};
 use seismic_network_manifest::NetworkId;
@@ -28,6 +29,7 @@ use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tracing::{error, info, warn};
+use zeroize::Zeroizing;
 
 /// The host's one state slot: the custodian plus the delivered-key store.
 pub struct CentralizedCustodianState {
@@ -51,9 +53,9 @@ struct EpochKeyStore {
 struct StoredDelivery {
     key: Key,
     /// Canonical envelope CBOR — what is on disk; compared byte-for-byte to
-    /// distinguish idempotent redelivery from an epoch conflict. Ciphertext
-    /// only, not secret.
-    envelope_bytes: Vec<u8>,
+    /// distinguish idempotent redelivery from an epoch conflict. Contains
+    /// the plaintext key, hence zeroized.
+    envelope_bytes: Zeroizing<Vec<u8>>,
 }
 
 impl EpochKeyStore {
@@ -91,18 +93,10 @@ impl CentralizedCustodianState {
             .create(&delivery_dir)
             .with_context(|| format!("creating delivery dir {}", delivery_dir.display()))?;
 
-        let inbox_sk = custodian.get_council_inbox_sk();
-        let inbox_pk = custodian.get_council_inbox_pk();
         let mut store = EpochKeyStore::default();
         for purpose in DeliveryPurpose::ALL {
-            *store.purpose_mut(purpose) = load_purpose(
-                &delivery_dir,
-                purpose,
-                &council_address,
-                &network_id,
-                &inbox_sk,
-                &inbox_pk,
-            );
+            *store.purpose_mut(purpose) =
+                load_purpose(&delivery_dir, purpose, &council_address, &network_id);
         }
         info!(
             tx_io = store.tx_io.len(),
@@ -126,24 +120,18 @@ impl CentralizedCustodianState {
     }
 
     /// Handle one `DeliverEpochKey`. Verification order: envelope validity
-    /// (network, recipient, signature, decrypt), then sequencing, then key
-    /// validity — and the envelope is durable on disk before the key becomes
-    /// observable, so a served delivered key always survives a restart.
+    /// (network, signature), then sequencing, then key validity — and the
+    /// envelope is durable on disk before the key becomes observable, so a
+    /// served delivered key always survives a restart.
     pub fn deliver(&self, envelope: &SignedDeliveryEnvelope) -> CouncilResponse {
         let purpose = envelope.payload.purpose;
         let epoch = envelope.payload.epoch;
 
-        let key_bytes = match open_delivery(
-            envelope,
-            &self.council_address,
-            &self.network_id,
-            &self.custodian.get_council_inbox_sk(),
-            &self.custodian.get_council_inbox_pk(),
-        ) {
+        let key_bytes = match verify_delivery(envelope, &self.council_address, &self.network_id) {
             Ok(key_bytes) => key_bytes,
             Err(e) => {
                 warn!(?e, purpose = purpose.label(), epoch, "delivery refused");
-                return rejected(open_error_code(e), &e.to_string());
+                return rejected(verify_error_code(e), &e.to_string());
             }
         };
 
@@ -159,7 +147,7 @@ impl CentralizedCustodianState {
                     return rejected(RejectCode::EpochConflict, "envelope comparison failed");
                 }
             };
-            return if existing.envelope_bytes == incoming {
+            return if *existing.envelope_bytes == *incoming {
                 CouncilResponse::AlreadyDelivered { purpose, epoch }
             } else {
                 rejected(
@@ -178,10 +166,7 @@ impl CentralizedCustodianState {
         let key = Key::new(*key_bytes);
         if !key_is_valid_for(&key, purpose) {
             warn!(purpose = purpose.label(), epoch, "delivered key unusable");
-            return rejected(
-                RejectCode::InvalidKey,
-                "decrypted key is not usable for this purpose",
-            );
+            return rejected(RejectCode::InvalidKey, "key is not usable for this purpose");
         }
 
         let envelope_bytes = match canonical_envelope_bytes(envelope) {
@@ -213,9 +198,6 @@ impl CentralizedCustodianState {
         let store = self.lock_deliveries();
         CouncilStatus {
             network_id: *self.network_id.as_bytes(),
-            inbox_pk: seismic_council_delivery::InboxPk(
-                self.custodian.get_council_inbox_pk().serialize(),
-            ),
             tx_io_epoch: store.tx_io.len() as u64,
             rng_epoch: store.rng.len() as u64,
             snapshot_epoch: store.snapshot.len() as u64,
@@ -261,14 +243,12 @@ fn load_purpose(
     purpose: DeliveryPurpose,
     council_address: &[u8; 20],
     network_id: &NetworkId,
-    inbox_sk: &SecretKey,
-    inbox_pk: &PublicKey,
 ) -> Vec<StoredDelivery> {
     let mut sequence = Vec::new();
     for epoch in 1u64.. {
         let path = envelope_path(delivery_dir, purpose, epoch);
         let bytes = match fs::read(&path) {
-            Ok(bytes) => bytes,
+            Ok(bytes) => Zeroizing::new(bytes),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
             Err(e) => {
                 error!(?e, path = %path.display(), "unreadable stored delivery");
@@ -281,7 +261,7 @@ fn load_purpose(
                 if envelope.payload.purpose != purpose || envelope.payload.epoch != epoch {
                     return Err("purpose/epoch does not match its path".into());
                 }
-                open_delivery(&envelope, council_address, network_id, inbox_sk, inbox_pk)
+                verify_delivery(&envelope, council_address, network_id)
                     .map_err(|e| format!("verify: {e}"))
             })
             .and_then(|key_bytes| {
@@ -316,12 +296,10 @@ fn rejected(code: RejectCode, message: &str) -> CouncilResponse {
     }
 }
 
-fn open_error_code(e: OpenDeliveryError) -> RejectCode {
+fn verify_error_code(e: VerifyDeliveryError) -> RejectCode {
     match e {
-        OpenDeliveryError::WrongNetwork => RejectCode::WrongNetwork,
-        OpenDeliveryError::WrongRecipient => RejectCode::WrongRecipient,
-        OpenDeliveryError::BadSignature => RejectCode::BadSignature,
-        OpenDeliveryError::DecryptFailed => RejectCode::DecryptFailed,
+        VerifyDeliveryError::WrongNetwork => RejectCode::WrongNetwork,
+        VerifyDeliveryError::BadSignature => RejectCode::BadSignature,
     }
 }
 
@@ -344,7 +322,7 @@ fn envelope_path(delivery_dir: &Path, purpose: DeliveryPurpose, epoch: u64) -> P
 /// Durably write one envelope: tmp sibling + fsync + rename over the final
 /// name + directory fsync (the same pattern the TDX custodian uses for its
 /// LUKS keyfile). Rename-over, not `create_new`, so redelivery can heal a
-/// corrupt earlier file.
+/// corrupt earlier file. Mode 0600: the file contains the plaintext key.
 fn persist_envelope(
     delivery_dir: &Path,
     purpose: DeliveryPurpose,
@@ -437,10 +415,6 @@ mod tests {
         assert_eq!(status.snapshot_epoch, 1);
         assert_eq!(status.rng_epoch, 0);
         assert_eq!(status.network_id, NETWORK);
-        assert_eq!(
-            status.inbox_pk.0,
-            Custodian::new(ROOT_KEY).get_council_inbox_pk().serialize()
-        );
     }
 
     #[test]
@@ -466,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn identical_redelivery_is_idempotent_but_conflicts_reject() {
+    fn redelivery_is_idempotent_but_a_different_key_conflicts() {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
         let envelope = seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY);
@@ -475,10 +449,15 @@ mod tests {
             state.deliver(&envelope),
             CouncilResponse::AlreadyDelivered { epoch: 1, .. }
         ));
-        // A fresh seal of the same key is a different envelope (fresh
-        // ephemeral + nonce): conflict, by design.
+        // Sealing is deterministic, so even a from-scratch re-seal of the
+        // same key is the identical envelope: idempotent.
+        assert!(matches!(
+            state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+            CouncilResponse::AlreadyDelivered { epoch: 1, .. }
+        ));
+        // A *different* key at an installed epoch is a conflict.
         assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+            &state.deliver(&seal(DeliveryPurpose::TxIo, 1, [0x43; 32])),
             RejectCode::EpochConflict,
         );
         // The original still serves.
@@ -492,7 +471,6 @@ mod tests {
     fn envelope_validation_failures_map_to_codes() {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
-        let inbox_pk = Custodian::new(ROOT_KEY).get_council_inbox_pk();
 
         // Wrong network.
         let foreign = seal_delivery(
@@ -500,10 +478,8 @@ mod tests {
             &NetworkId::from_bytes([0x99; 32]),
             DeliveryPurpose::TxIo,
             1,
-            &inbox_pk,
             &PURPOSE_KEY,
-        )
-        .unwrap();
+        );
         assert_rejected(&state.deliver(&foreign), RejectCode::WrongNetwork);
 
         // Signed by an impostor key.
@@ -513,24 +489,9 @@ mod tests {
             &state.network_id,
             DeliveryPurpose::TxIo,
             1,
-            &inbox_pk,
             &PURPOSE_KEY,
-        )
-        .unwrap();
+        );
         assert_rejected(&state.deliver(&forged), RejectCode::BadSignature);
-
-        // Sealed to someone else's inbox.
-        let other_inbox = Custodian::new([9; 32]).get_council_inbox_pk();
-        let misdirected = seal_delivery(
-            &council_keys().0,
-            &state.network_id,
-            DeliveryPurpose::TxIo,
-            1,
-            &other_inbox,
-            &PURPOSE_KEY,
-        )
-        .unwrap();
-        assert_rejected(&state.deliver(&misdirected), RejectCode::WrongRecipient);
 
         // A key that is not a secp256k1 scalar cannot serve tx-io.
         assert_rejected(

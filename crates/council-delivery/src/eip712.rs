@@ -1,12 +1,12 @@
 //! EIP-712 typed-data digest for council delivery signatures.
 //!
 //! The council signs with an ordinary Ethereum wallet, so the signed digest
-//! is EIP-712 typed data (keccak-256), not the repo's SHA-256 binding
-//! convention — a wallet can display "authorize the tx-io key for epoch 3 on
-//! network X" instead of an opaque hash. The network id rides in the domain
-//! separator as `salt`, so a signature can never migrate across networks;
-//! the ciphertext is a signed field, so a signature can never be re-attached
-//! to a swapped re-encryption.
+//! is EIP-712 typed data (keccak-256) — a wallet can display "authorize the
+//! tx-io key for epoch 3 on network X" instead of an opaque hash. The
+//! network id rides in the domain separator as `salt`, so a signature can
+//! never migrate across networks; the key itself appears only as its
+//! keccak-256 **commitment**, so the secret never passes through wallet UIs
+//! or extension logs while the signature still binds the exact bytes.
 //!
 //! [`typed_data_json`] emits the eth_signTypedData_v4 JSON for exactly the
 //! digest [`payload_digest`] computes; council tooling hands it to MetaMask,
@@ -24,9 +24,15 @@ pub const DOMAIN_NAME: &str = "SeismicCouncilKeyDelivery";
 pub const DOMAIN_VERSION: &str = "1";
 
 /// The one signed struct. `purpose` is the human-readable label so wallet
-/// approval screens show "tx-io", not an enum tag.
-const KEY_DELIVERY_TYPE: &str =
-    "KeyDelivery(string purpose,uint64 epoch,bytes senderEphPk,bytes inboxPk,bytes encryptedKey)";
+/// approval screens show "tx-io", not an enum tag; `keyCommitment` is
+/// [`key_commitment`] of the plaintext key.
+const KEY_DELIVERY_TYPE: &str = "KeyDelivery(string purpose,uint64 epoch,bytes32 keyCommitment)";
+
+/// keccak-256 of the 32-byte purpose key — what the wallet signs in place of
+/// the key itself.
+pub fn key_commitment(key: &[u8; 32]) -> [u8; 32] {
+    keccak256(key).0
+}
 
 fn domain_separator(network_id: &[u8; 32]) -> [u8; 32] {
     let mut words = Vec::with_capacity(4 * 32);
@@ -41,13 +47,11 @@ fn struct_hash(payload: &DeliveryPayload) -> [u8; 32] {
     let mut epoch_word = [0u8; 32];
     epoch_word[24..].copy_from_slice(&payload.epoch.to_be_bytes());
 
-    let mut words = Vec::with_capacity(6 * 32);
+    let mut words = Vec::with_capacity(4 * 32);
     words.extend_from_slice(keccak256(KEY_DELIVERY_TYPE).as_slice());
     words.extend_from_slice(keccak256(payload.purpose.label()).as_slice());
     words.extend_from_slice(&epoch_word);
-    words.extend_from_slice(keccak256(payload.sender_eph_pk).as_slice());
-    words.extend_from_slice(keccak256(payload.inbox_pk).as_slice());
-    words.extend_from_slice(keccak256(&payload.encrypted_key).as_slice());
+    words.extend_from_slice(&key_commitment(&payload.key));
     keccak256(&words).0
 }
 
@@ -63,7 +67,8 @@ pub fn payload_digest(payload: &DeliveryPayload) -> [u8; 32] {
 
 /// The `eth_signTypedData_v4` JSON for `payload` — hand this to a wallet
 /// (MetaMask, `cast wallet sign --data`, hardware wallets) and it produces
-/// a signature over exactly [`payload_digest`].
+/// a signature over exactly [`payload_digest`]. Contains the key's
+/// commitment, never the key.
 pub fn typed_data_json(payload: &DeliveryPayload) -> String {
     format!(
         concat!(
@@ -73,23 +78,18 @@ pub fn typed_data_json(payload: &DeliveryPayload) -> String {
             r#"{{"name":"salt","type":"bytes32"}}],"#,
             r#""KeyDelivery":[{{"name":"purpose","type":"string"}},"#,
             r#"{{"name":"epoch","type":"uint64"}},"#,
-            r#"{{"name":"senderEphPk","type":"bytes"}},"#,
-            r#"{{"name":"inboxPk","type":"bytes"}},"#,
-            r#"{{"name":"encryptedKey","type":"bytes"}}]}},"#,
+            r#"{{"name":"keyCommitment","type":"bytes32"}}]}},"#,
             r#""primaryType":"KeyDelivery","#,
             r#""domain":{{"name":"{name}","version":"{version}","salt":"0x{salt}"}},"#,
             r#""message":{{"purpose":"{purpose}","epoch":{epoch},"#,
-            r#""senderEphPk":"0x{sender}","inboxPk":"0x{inbox}","#,
-            r#""encryptedKey":"0x{ct}"}}}}"#,
+            r#""keyCommitment":"0x{commitment}"}}}}"#,
         ),
         name = DOMAIN_NAME,
         version = DOMAIN_VERSION,
         salt = hex::encode(payload.network_id),
         purpose = payload.purpose.label(),
         epoch = payload.epoch,
-        sender = hex::encode(payload.sender_eph_pk),
-        inbox = hex::encode(payload.inbox_pk),
-        ct = hex::encode(&payload.encrypted_key),
+        commitment = hex::encode(key_commitment(&payload.key)),
     )
 }
 
@@ -114,22 +114,19 @@ mod tests {
             network_id: [0x11; 32],
             purpose: DeliveryPurpose::TxIo,
             epoch: 7,
-            sender_eph_pk: [0x22; 33],
-            inbox_pk: [0x33; 33],
-            encrypted_key: vec![0x44; 60],
+            key: [0x44; 32],
         }
     }
 
     /// Golden vector: signatures over this digest live on disk and in
     /// council custody; it must never change. Independently reproducible
-    /// with foundry:
-    /// `cast keccak $(cast abi-encode ...)` per EIP-712, or
+    /// with foundry: `cast keccak $(cast abi-encode ...)` per EIP-712, or
     /// `cast wallet sign --data '<typed_data_json(payload)>'`.
     #[test]
     fn digest_matches_golden_vector() {
         assert_eq!(
             hex::encode(payload_digest(&fixture())),
-            "d0169df1d80af4f1f4cf9e4be73050591194a765d8e0a4d88cac51614cd72079",
+            "685c34c4ef1c922072cb7294c07f5e24095bd11bf253b5e48c111ede0c1a4115"
         );
     }
 
@@ -142,9 +139,7 @@ mod tests {
             (|p: &mut DeliveryPayload| p.network_id = [0x12; 32]) as fn(&mut DeliveryPayload),
             |p| p.purpose = DeliveryPurpose::RngPrecompile,
             |p| p.epoch = 8,
-            |p| p.sender_eph_pk = [0x23; 33],
-            |p| p.inbox_pk = [0x34; 33],
-            |p| p.encrypted_key = vec![0x45; 60],
+            |p| p.key = [0x45; 32],
         ] {
             let mut payload = fixture();
             mutate(&mut payload);
@@ -156,14 +151,15 @@ mod tests {
     }
 
     #[test]
-    fn typed_data_json_is_wallet_shaped() {
+    fn typed_data_json_is_wallet_shaped_and_key_free() {
         let json = typed_data_json(&fixture());
-        // Structural sanity; the digest-equivalence guarantee is pinned by
-        // the cast-verified golden vector above.
         assert!(json.contains(r#""primaryType":"KeyDelivery""#));
         assert!(json.contains(r#""purpose":"tx-io""#));
         assert!(json.contains(r#""epoch":7"#));
         assert!(json.contains(&format!("0x{}", hex::encode([0x11u8; 32]))));
+        // The commitment appears; the key itself never does.
+        assert!(json.contains(&format!("0x{}", hex::encode(key_commitment(&[0x44; 32])))));
+        assert!(!json.contains(&hex::encode([0x44u8; 32])));
         serde_json::from_str::<serde_json::Value>(&json).expect("valid JSON");
     }
 

@@ -7,6 +7,8 @@
 //! is what makes envelopes safe to persist verbatim.
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Which purpose key a delivery rotates. LUKS `Storage` and `LuksHeaderMac`
 /// are deliberately not deliverable: they are local-disk keys pinned at
@@ -47,29 +49,46 @@ impl DeliveryPurpose {
 }
 
 /// The signed portion of a delivery: everything the council attests to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Carries the purpose key in PLAINTEXT: confidentiality in transit is the
+/// deployment's affair (a TLS terminator or tunnel in front of the council
+/// port — the centralized phase runs among known operators), and at rest an
+/// envelope file is itself a secret. Zeroized on drop; `Debug` redacts.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct DeliveryPayload {
     /// Network this delivery is for; rejected elsewhere (anti-replay across
     /// networks).
+    #[zeroize(skip)]
     #[serde(with = "serde_bytes")]
     pub network_id: [u8; 32],
+    #[zeroize(skip)]
     pub purpose: DeliveryPurpose,
+    #[zeroize(skip)]
     pub epoch: u64,
-    /// Council-side ephemeral ECDH pubkey, fresh per envelope.
+    /// The 32-byte purpose key itself. The council signature covers its
+    /// keccak-256 commitment, so the wallet never sees these bytes.
     #[serde(with = "serde_bytes")]
-    pub sender_eph_pk: [u8; 33],
-    /// The custodian inbox pubkey this ciphertext was sealed to.
-    #[serde(with = "serde_bytes")]
-    pub inbox_pk: [u8; 33],
-    /// `nonce(12) || AES-256-GCM ciphertext+tag` over the 32-byte purpose key.
-    #[serde(with = "serde_bytes")]
-    pub encrypted_key: Vec<u8>,
+    pub key: [u8; 32],
+}
+
+impl fmt::Debug for DeliveryPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DeliveryPayload")
+            .field("network_id", &self.network_id)
+            .field("purpose", &self.purpose)
+            .field("epoch", &self.epoch)
+            .field("key", &"<redacted>")
+            .finish()
+    }
 }
 
 /// One council delivery: payload plus an Ethereum-wallet signature —
 /// 65-byte `r || s || v` recoverable ECDSA over the EIP-712 typed-data
 /// digest [`crate::eip712::payload_digest`]. Verification recovers the
-/// signer and compares it to the configured council address.
+/// signer and compares it to the configured council address. Sealing is
+/// deterministic (RFC 6979, no randomness), so re-sealing the same payload
+/// reproduces the identical envelope — which is what makes retries
+/// idempotent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedDeliveryEnvelope {
     pub payload: DeliveryPayload,
@@ -106,16 +125,12 @@ impl CouncilRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RejectCode {
     WrongNetwork,
-    /// `payload.inbox_pk` is not this custodian's inbox.
-    WrongRecipient,
     BadSignature,
     /// Epochs are sequential per purpose; the message names the expected one.
     NonSequentialEpoch,
     /// A different envelope already holds this epoch.
     EpochConflict,
-    /// AEAD open failed.
-    DecryptFailed,
-    /// The decrypted bytes are not a usable key for the purpose.
+    /// The key bytes are not usable for the purpose.
     InvalidKey,
     /// Verified but could not be made durable; nothing was installed.
     PersistFailed,
@@ -127,18 +142,12 @@ pub enum RejectCode {
 pub struct CouncilStatus {
     #[serde(with = "serde_bytes")]
     pub network_id: [u8; 32],
-    /// The inbox pubkey deliveries must be sealed to.
-    pub inbox_pk: InboxPk,
     /// Highest delivered epoch per purpose; 0 = only the derived epoch 0
     /// exists, so the next delivery is epoch 1.
     pub tx_io_epoch: u64,
     pub rng_epoch: u64,
     pub snapshot_epoch: u64,
 }
-
-/// Wrapper so the optional inbox pubkey still encodes as a CBOR byte string.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InboxPk(#[serde(with = "serde_bytes")] pub [u8; 33]);
 
 /// One response over the council delivery port.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,9 +196,7 @@ mod tests {
                 network_id: [0x11; 32],
                 purpose: DeliveryPurpose::TxIo,
                 epoch: 1,
-                sender_eph_pk: [0x22; 33],
-                inbox_pk: [0x33; 33],
-                encrypted_key: vec![0x44; 60],
+                key: [0x44; 32],
             },
             signature: [0x55; 65],
         };
@@ -203,6 +210,19 @@ mod tests {
         );
         let decoded: SignedDeliveryEnvelope = ciborium::from_reader(wire.as_slice()).unwrap();
         assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn payload_debug_redacts_the_key() {
+        let payload = DeliveryPayload {
+            network_id: [0x11; 32],
+            purpose: DeliveryPurpose::TxIo,
+            epoch: 1,
+            key: [0xA5; 32],
+        };
+        let debug = format!("{payload:?}");
+        assert!(debug.contains("<redacted>"), "{debug}");
+        assert!(!debug.contains("165"), "key leaked: {debug}");
     }
 
     #[test]
