@@ -5685,6 +5685,7 @@ dependencies = [
  "aes-gcm",
  "anyhow",
  "hex",
+ "hex-literal",
  "hkdf",
  "rand 0.9.2",
  "schnorrkel",

@@ -12,12 +12,13 @@ description = "AES-GCM / ECDH / HKDF helpers shared across the Seismic stack"
 [dependencies]
 aes-gcm.workspace = true
 anyhow.workspace = true
+hex-literal.workspace = true
 hkdf.workspace = true
 rand.workspace = true
-schnorrkel.workspace = true
 secp256k1.workspace = true
 serde.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
 hex.workspace = true
+schnorrkel.workspace = true

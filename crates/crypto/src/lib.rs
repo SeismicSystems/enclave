@@ -4,11 +4,8 @@ use aes_gcm::{
 };
 use anyhow::anyhow;
 use hkdf::Hkdf;
-pub use schnorrkel::keys::Keypair as SchnorrkelKeypair;
-use schnorrkel::{ExpansionMode, MiniSecretKey};
-// Re-exported so consumers version-match the secp256k1 this crate's API
-// exposes (`derive_aes_key` takes its `SharedSecret`; the sample-key fns
-// return its key types).
+// Re-exported so consumers version-match the secp256k1 whose types this
+// crate's API exposes.
 pub use secp256k1;
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret, ecdsa::Signature};
 use sha2::{Digest, Sha256};
@@ -320,36 +317,33 @@ pub fn secp256k1_verify(
     }
 }
 
-/// Returns a sample Secp256k1 secret key for testing purposes.
-pub fn get_unsecure_sample_secp256k1_sk() -> secp256k1::SecretKey {
-    secp256k1::SecretKey::from_str(
+/// The well-known tx-io keypair for transaction encryption on networks
+/// running the well-known keys: clients ECDH against the public half to
+/// encrypt calldata, the node decrypts with the secret half.
+///
+/// The well-known keys serve networks with no root key to derive purpose keys
+/// from — dev networks and pre-TEE deployments. They are published in this
+/// public repository and provide no confidentiality against anyone who reads
+/// the source; their only property is that every node and client agrees on
+/// them.
+pub fn well_known_tx_io_keypair() -> secp256k1::Keypair {
+    let sk = secp256k1::SecretKey::from_str(
         "311d54d3bf8359c70827122a44a7b4458733adce3c51c6b59d9acfce85e07505",
     )
-    .unwrap()
-}
-
-/// Returns a sample Secp256k1 public key for testing purposes.
-pub fn get_unsecure_sample_secp256k1_pk() -> secp256k1::PublicKey {
-    secp256k1::PublicKey::from_str(
-        "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0",
-    )
-    .unwrap()
-}
-
-/// Returns a sample SchnorrkelKeypair public key for testing purposes.
-pub fn get_unsecure_sample_schnorrkel_keypair() -> SchnorrkelKeypair {
-    let mini_secret_key = MiniSecretKey::from_bytes(&[
-        221, 143, 4, 149, 139, 56, 101, 208, 232, 50, 47, 39, 112, 211, 4, 111, 63, 63, 202, 141,
-        138, 195, 190, 41, 139, 177, 214, 90, 176, 210, 173, 14,
-    ])
     .unwrap();
-    mini_secret_key.expand(ExpansionMode::Uniform).into()
+    secp256k1::Keypair::from_secret_key(&Secp256k1::new(), &sk)
 }
 
-/// Returns a sample AES key for testing purposes.
-pub fn get_unsecure_sample_aesgcm_key() -> aes_gcm::Key<aes_gcm::Aes256Gcm> {
-    let key: aes_gcm::Key<aes_gcm::Aes256Gcm> = [0u8; 32].into();
-    key
+/// The well-known rng HKDF input key material: seeds the RNG precompile on
+/// networks running the well-known keys.
+///
+/// The value is a consensus input — RNG-precompile outputs derive from it —
+/// so these bytes are frozen; a test pins them against accidental edits.
+pub fn well_known_rng_ikm() -> [u8; 64] {
+    hex_literal::hex!(
+        "6c8fd0805e9524e8f01fee6f3627f6a3e7beed894c136bbc4e857eb7f5323808"
+        "796c7dd73ee7d470538d4b9a6de14a479bfec72a4f64565d9bbea5b5c7f9c372"
+    )
 }
 
 /// Encrypts the provided data using an AES key derived from
@@ -506,6 +500,35 @@ pub fn decrypt_file(
 mod tests {
     use super::*;
 
+    /// The published public half must never drift: clients on running
+    /// networks encrypt to it.
+    #[test]
+    fn well_known_tx_io_pk_is_frozen() {
+        assert_eq!(
+            well_known_tx_io_keypair().public_key(),
+            PublicKey::from_str(
+                "028e76821eb4d77fd30223ca971c49738eb5b5b71eabe93f96b348fdce788ae5a0"
+            )
+            .unwrap()
+        );
+    }
+
+    /// The ikm bytes are `schnorrkel::SecretKey::to_bytes()` (32-byte key ||
+    /// 32-byte nonce) of the keypair expanded from this mini secret. No
+    /// schnorrkel cryptography is performed anywhere with them — consumers
+    /// feed them to HKDF only — but the value is consensus on every network
+    /// running the well-known keys, so it must never drift.
+    #[test]
+    fn well_known_rng_ikm_is_the_frozen_expansion() {
+        let mini_secret_key = schnorrkel::MiniSecretKey::from_bytes(&[
+            221, 143, 4, 149, 139, 56, 101, 208, 232, 50, 47, 39, 112, 211, 4, 111, 63, 63, 202,
+            141, 138, 195, 190, 41, 139, 177, 214, 90, 176, 210, 173, 14,
+        ])
+        .unwrap();
+        let expanded = mini_secret_key.expand(schnorrkel::ExpansionMode::Uniform);
+        assert_eq!(well_known_rng_ikm(), expanded.to_bytes());
+    }
+
     /// Known-answer test shared with the TypeScript (aesKeygen.ts) and Python
     /// (test_crypto.py) client suites. All three languages must derive these
     /// exact keys from the same ECDH inputs; a label edit in any one of them
@@ -553,10 +576,8 @@ mod tests {
 
     #[test]
     fn request_and_response_keys_are_distinct() {
-        let shared_secret = SharedSecret::new(
-            &get_unsecure_sample_secp256k1_pk(),
-            &get_unsecure_sample_secp256k1_sk(),
-        );
+        let keypair = well_known_tx_io_keypair();
+        let shared_secret = SharedSecret::new(&keypair.public_key(), &keypair.secret_key());
 
         let request_key = derive_aes_key(&shared_secret, AesKeyDomain::TxRequest).unwrap();
         let response_key = derive_aes_key(&shared_secret, AesKeyDomain::TxResponse).unwrap();
@@ -574,10 +595,8 @@ mod tests {
 
     #[test]
     fn ciphertext_cannot_be_opened_in_the_other_direction() {
-        let shared_secret = SharedSecret::new(
-            &get_unsecure_sample_secp256k1_pk(),
-            &get_unsecure_sample_secp256k1_sk(),
-        );
+        let keypair = well_known_tx_io_keypair();
+        let shared_secret = SharedSecret::new(&keypair.public_key(), &keypair.secret_key());
         let request_key = derive_aes_key(&shared_secret, AesKeyDomain::TxRequest).unwrap();
         let response_key = derive_aes_key(&shared_secret, AesKeyDomain::TxResponse).unwrap();
         let nonce = [0x42; AESGCM_NONCE_SIZE];
