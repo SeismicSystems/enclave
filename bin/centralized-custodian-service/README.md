@@ -15,6 +15,14 @@ consumers see identical bytes when the network later migrates. The root-key
 bootstrap methods answer a stable error: there is no attested bootstrap
 here.
 
+The binary also has an **observer mode** for the custodians of summit
+observer nodes (non-validators running with a copy of a validator's master
+`node_key.pem`): an observer custodian fetches its root key and all
+council-delivered envelopes from its **parent custodian** at boot, and
+fetches epochs it doesn't have on demand — authenticating with an ed25519
+child key derived from the parent's own node key. See "Observer custodians"
+below.
+
 ## Transport security is the deployment's job
 
 Delivery envelopes carry the purpose key **in plaintext** under the council
@@ -51,8 +59,9 @@ malformed keyfile fails the boot before any socket binds.
 ## The delivery protocol
 
 The council port (default `0.0.0.0:7876`) speaks length-prefixed CBOR — the
-same framing as the custodian socket — with three methods: `Ping`,
-`GetStatus`, and `DeliverEpochKey`. Envelope construction, the EIP-712
+same framing as the custodian socket — with five methods: `Ping`,
+`GetStatus`, `DeliverEpochKey`, and the observer pair
+`ObserverChallenge`/`ObserverFetch`. Envelope construction, the EIP-712
 digest, and the message types live in `crates/council-delivery`, shared with
 off-node council signer tooling.
 
@@ -82,6 +91,49 @@ payload reproduces the byte-identical envelope: redelivery is naturally
 idempotent (`AlreadyDelivered`), and only a *different key* at an existing
 epoch is an `EpochConflict`.
 
+## Observer custodians
+
+A summit **observer** is a non-validator identity additively derived from a
+validator's master ed25519 node key; its operator runs with a copy of the
+validator's `node_key.pem`. The observer's custodian must serve the same
+keys as the validator's ("parent") custodian, but the council only delivers
+to the parent — so the observer custodian syncs from its parent instead:
+
+- **Parent role** (`--summit-key-dir` alone): the council port additionally
+  answers signed observer fetches. Verification derives the child public key
+  from this node's own master key (`seismic-observer-key`, a byte-exact port
+  of summit's derivation) — *any* derivation index is accepted, because only
+  the master-key holder can sign as any child. Only the master *public* key
+  is retained; the seed is dropped at boot.
+- **Observer role** (`--observer <index>` + `--parent-custodian` +
+  `--summit-key-dir`): at boot the custodian fetches the parent's root key
+  (persisting it to `--root-key-file`; a pre-existing local root key that
+  differs from the parent's is **boot-fatal**) and backfills all delivered
+  envelopes; at runtime, a request for an epoch it doesn't have triggers an
+  on-demand fetch (bounded by 5 s connect / 10 s I/O timeouts) before
+  answering `EpochKeyUnavailable`. An observer never pins the public default
+  root key.
+
+Every fetch is challenge-response: the observer requests a single-use nonce,
+then signs `domain || nonce || request` with the derived child key
+(deterministic ed25519). One nonce authorizes exactly one fetch, so captured
+requests can't replay. The derivation namespace comes from `--chain-id`
+(domain-separated, distinct from summit's genesis-digest chain domain), so
+custodian observer identities are scoped per deployment and separate from
+the node's P2P observer identities.
+
+Envelopes fetched from the parent are **never trusted as-is**: each one
+re-verifies the council signature against the observer's own
+`--council-address` and persists through the normal delivery path. The root
+key has no council signature, so for it the parent is authenticated only by
+address plus the fronting TLS/tunnel — which must also cover the observer
+connection, since the root key and plaintext envelopes transit it.
+
+Ops helper: `observer-keytool`
+(`cargo build --release -p seismic-observer-key --features cli`) prints the
+master (`master-pub`) and derived child (`child-pub`) public keys for a
+keystore, to confirm a parent and observer hold the same node key.
+
 ## Security posture
 
 An open TCP port in the key-holding process is a deliberate, council-scoped
@@ -90,7 +142,9 @@ exception to the "no network listeners near keys" rule. Mitigations: the
 verification before any state or disk write, and sanitized wire errors.
 Transport-level authentication and confidentiality are the fronting
 TLS/tunnel's job — authentication of *deliveries* is the per-envelope
-council signature; `Ping`/`GetStatus` reveal only epoch counters.
+council signature, and of *observer fetches* the per-nonce child-key
+signature; `Ping`/`GetStatus` reveal only epoch counters, and observer
+responses (the root key, envelopes) go only to verified child-key holders.
 
 The council must be an EOA — contract accounts (e.g. a Safe) sign via
 EIP-1271, which cannot be verified off-chain by recovery. Rotating the
@@ -109,6 +163,9 @@ new key to recover.
 | `--council-address` (required) | `SEISMIC_COUNCIL_ADDRESS` | — (`0x` + 20-byte Ethereum address hex) |
 | `--chain-id` (required) | `SEISMIC_CHAIN_ID` | — (u64; council tooling must use the same value) |
 | `--delivery-dir` | — | `/var/lib/seismic/custodian/deliveries` (contains plaintext keys; protect it) |
+| `--summit-key-dir` | `SEISMIC_SUMMIT_KEY_DIR` | — (summit keystore with `node_key.pem`; enables serving observers, required in observer mode) |
+| `--observer INDEX` | — | — (observer mode; requires `--parent-custodian` and `--summit-key-dir`) |
+| `--parent-custodian HOST:PORT` | — | — (the parent's council port; front with TLS/tunnel) |
 
 Like the TDX custodian, this binary links no async runtime; that guarantee
 only holds when it is built in its own cargo invocation (see the

@@ -119,6 +119,12 @@ impl CentralizedCustodianState {
         &self.custodian
     }
 
+    /// The deployment's network id (chain-id-derived in the centralized
+    /// phase).
+    pub fn network_id(&self) -> &NetworkId {
+        &self.network_id
+    }
+
     /// Handle one `DeliverEpochKey`. Verification order: envelope validity
     /// (network, signature), then sequencing, then key validity — and the
     /// envelope is durable on disk before the key becomes observable, so a
@@ -222,6 +228,34 @@ impl CentralizedCustodianState {
             .purpose(purpose)
             .get((epoch - 1) as usize)
             .map(|stored| f(&stored.key))
+    }
+
+    /// Decoded envelopes for `purpose`, epochs ascending from `from_epoch`,
+    /// at most `max` — plus the highest delivered epoch, so an observer
+    /// knows whether to page again. Decodes the stored canonical bytes,
+    /// which were signature-verified at delivery or load time; a decode
+    /// failure here is defensive only (log and stop the batch early).
+    pub fn envelopes_from(
+        &self,
+        purpose: DeliveryPurpose,
+        from_epoch: u64,
+        max: usize,
+    ) -> (Vec<SignedDeliveryEnvelope>, u64) {
+        let store = self.lock_deliveries();
+        let sequence = store.purpose(purpose);
+        let delivered_epoch = sequence.len() as u64;
+        let first = from_epoch.max(1);
+        let mut envelopes = Vec::new();
+        for stored in sequence.iter().skip((first - 1) as usize).take(max) {
+            match envelope_from_bytes(&stored.envelope_bytes) {
+                Ok(envelope) => envelopes.push(envelope),
+                Err(e) => {
+                    error!(?e, purpose = purpose.label(), "stored envelope undecodable");
+                    break;
+                }
+            }
+        }
+        (envelopes, delivered_epoch)
     }
 
     fn lock_deliveries(&self) -> MutexGuard<'_, EpochKeyStore> {

@@ -44,3 +44,48 @@ pub(crate) fn build_state(dir: &Path) -> CentralizedCustodianState {
 pub(crate) fn seal(purpose: DeliveryPurpose, epoch: u64, key: [u8; 32]) -> SignedDeliveryEnvelope {
     seal_delivery(&council_keys().0, &network_id(), purpose, epoch, &key)
 }
+
+/// The parent/observer shared master node seed (an observer holds a copy of
+/// its parent's `node_key.pem`).
+pub(crate) const MASTER_SEED: [u8; 32] = [1u8; 32];
+pub(crate) const CHAIN_ID: u64 = 5124;
+
+/// Write a summit keystore (a `node_key.pem` holding `MASTER_SEED` as hex)
+/// under `dir` and return the keystore path.
+pub(crate) fn write_summit_keystore(dir: &Path) -> std::path::PathBuf {
+    let keystore = dir.join("summit-keys");
+    std::fs::create_dir_all(&keystore).expect("create keystore dir");
+    std::fs::write(keystore.join("node_key.pem"), hex::encode(MASTER_SEED))
+        .expect("write node key");
+    keystore
+}
+
+/// Parent-side observer serving over the shared fixtures.
+pub(crate) fn observer_serving(dir: &Path) -> crate::observer_serving::ObserverServing {
+    let keystore = write_summit_keystore(dir);
+    crate::observer_serving::ObserverServing::load(&keystore, CHAIN_ID, ROOT_KEY)
+        .expect("load observer serving")
+}
+
+/// Build one signed `ObserverFetch` the way an observer custodian would,
+/// over an already-known challenge nonce.
+pub(crate) fn signed_fetch(
+    index: u32,
+    nonce: &[u8; 32],
+    query: seismic_council_delivery::ObserverQuery,
+) -> seismic_council_delivery::CouncilRequest {
+    let request = seismic_council_delivery::ObserverFetchRequest {
+        network_id: NETWORK,
+        observer_index: index,
+        query,
+    };
+    let signer = seismic_observer_key::ObserverSigner::derive(
+        &MASTER_SEED,
+        &seismic_observer_key::observer_namespace_from_chain_id(CHAIN_ID),
+        index,
+    );
+    let payload = seismic_council_delivery::observer_fetch_signing_payload(nonce, &request)
+        .expect("encode fetch payload");
+    let signature = signer.sign(&payload);
+    seismic_council_delivery::CouncilRequest::ObserverFetch { request, signature }
+}

@@ -55,6 +55,31 @@ pub fn load_or_default(path: &Path) -> Result<[u8; 32]> {
     Ok(key)
 }
 
+/// Read an existing 32-byte root keyfile; `Ok(None)` if absent. The
+/// observer-mode read path: an observer must never pin the public default
+/// (its root key comes from the parent), so it never calls
+/// [`load_or_default`].
+pub fn load_existing(path: &Path) -> Result<Option<[u8; 32]>> {
+    match fs::read(path) {
+        Ok(bytes) => {
+            let key: [u8; 32] = bytes
+                .try_into()
+                .map_err(|_| anyhow!("{} is not exactly 32 bytes", path.display()))?;
+            info!(path = %path.display(), "loaded root key");
+            Ok(Some(key))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading root key {}", path.display())),
+    }
+}
+
+/// Durably create the keyfile with a known key (the observer-mode
+/// persistence path for a parent-fetched root key). `create_new` semantics:
+/// errors if the file already exists.
+pub fn write_new(path: &Path, key: &[u8; 32]) -> Result<()> {
+    write_key_file(path, key)
+}
+
 fn write_key_file(path: &Path, key: &[u8; 32]) -> Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()

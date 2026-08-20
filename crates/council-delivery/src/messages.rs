@@ -96,17 +96,96 @@ pub struct SignedDeliveryEnvelope {
     pub signature: [u8; 65],
 }
 
+/// What an observer custodian asks its parent for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ObserverQuery {
+    /// The parent's 32-byte root key (epoch-0 derivations).
+    RootKey,
+    /// Delivered envelopes for `purpose`, ascending from `from_epoch`, at
+    /// most [`MAX_ENVELOPES_PER_FETCH`] per response — the reply names the
+    /// parent's highest delivered epoch so the client knows whether to page
+    /// again.
+    Envelopes {
+        purpose: DeliveryPurpose,
+        from_epoch: u64,
+    },
+}
+
+/// The signed portion of an observer fetch: everything the child key attests
+/// to. The signature additionally covers a connection-local single-use nonce
+/// (see `observer_fetch_signing_payload`), which is what makes a captured
+/// request worthless to replay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ObserverFetchRequest {
+    /// Network this fetch is for; rejected elsewhere (anti-replay across
+    /// networks).
+    #[serde(with = "serde_bytes")]
+    pub network_id: [u8; 32],
+    /// Which child of the parent's master key signed this. Any index is
+    /// acceptable — only the master-key holder can sign as any child — so
+    /// the index merely tells the parent which pubkey to derive.
+    pub observer_index: u32,
+    pub query: ObserverQuery,
+}
+
+/// Caps one `Envelopes` response well under the 64 KiB frame limit
+/// (an envelope is ~190 bytes of CBOR; pinned by test).
+pub const MAX_ENVELOPES_PER_FETCH: usize = 64;
+
+/// The parent's root key in transit to an observer. Plaintext for the same
+/// reason envelopes are: transport confidentiality is the fronting
+/// TLS/tunnel's job. Zeroized on drop; `Debug` redacts.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+pub struct ObserverRootKey {
+    #[serde(with = "serde_bytes")]
+    pub key: [u8; 32],
+}
+
+impl fmt::Debug for ObserverRootKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ObserverRootKey")
+            .field("key", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Why an observer fetch was refused. Stable, sanitized vocabulary — detail
+/// stays in the parent's local logs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ObserverRejectCode {
+    /// This custodian has no `--summit-key-dir`, so it cannot verify (and
+    /// does not serve) observer fetches.
+    NotServingObservers,
+    /// No unconsumed challenge on this connection: ask for one first (each
+    /// nonce authorizes exactly one fetch).
+    MissingChallenge,
+    WrongNetwork,
+    BadSignature,
+}
+
 /// One request over the council delivery port.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CouncilRequest {
     /// Liveness probe.
     Ping,
     /// Public delivery state: what the council needs before sealing the next
-    /// envelope (inbox pubkey, next expected epochs, readiness).
+    /// envelope (next expected epochs, readiness).
     GetStatus,
     /// Install one epoch key. Authentication is the signature inside the
     /// envelope, not the transport.
     DeliverEpochKey(SignedDeliveryEnvelope),
+    /// Ask for a single-use nonce to sign into the next `ObserverFetch` on
+    /// this connection.
+    ObserverChallenge,
+    /// Fetch the root key or delivered envelopes, signed by a child key
+    /// derived from the parent's master node key. Authentication is the
+    /// ed25519 signature over the challenge nonce and the request, not the
+    /// transport.
+    ObserverFetch {
+        request: ObserverFetchRequest,
+        #[serde(with = "serde_bytes")]
+        signature: [u8; 64],
+    },
 }
 
 impl CouncilRequest {
@@ -116,6 +195,8 @@ impl CouncilRequest {
             CouncilRequest::Ping => "ping",
             CouncilRequest::GetStatus => "get_status",
             CouncilRequest::DeliverEpochKey(_) => "deliver_epoch_key",
+            CouncilRequest::ObserverChallenge => "observer_challenge",
+            CouncilRequest::ObserverFetch { .. } => "observer_fetch",
         }
     }
 }
@@ -168,6 +249,24 @@ pub enum CouncilResponse {
         code: RejectCode,
         message: String,
     },
+    /// A single-use nonce for the next `ObserverFetch` on this connection.
+    Challenge {
+        #[serde(with = "serde_bytes")]
+        nonce: [u8; 32],
+    },
+    /// The parent's root key, answering `ObserverQuery::RootKey`.
+    RootKey(ObserverRootKey),
+    /// Delivered envelopes, answering `ObserverQuery::Envelopes`.
+    Envelopes {
+        envelopes: Vec<SignedDeliveryEnvelope>,
+        /// The parent's highest delivered epoch for the purpose — page again
+        /// from the last envelope's epoch + 1 while below this.
+        delivered_epoch: u64,
+    },
+    ObserverRejected {
+        code: ObserverRejectCode,
+        message: String,
+    },
 }
 
 impl CouncilResponse {
@@ -179,6 +278,10 @@ impl CouncilResponse {
             CouncilResponse::Delivered { .. } => "delivered",
             CouncilResponse::AlreadyDelivered { .. } => "already_delivered",
             CouncilResponse::Rejected { .. } => "rejected",
+            CouncilResponse::Challenge { .. } => "challenge",
+            CouncilResponse::RootKey(_) => "root_key",
+            CouncilResponse::Envelopes { .. } => "envelopes",
+            CouncilResponse::ObserverRejected { .. } => "observer_rejected",
         }
     }
 }
@@ -223,6 +326,43 @@ mod tests {
         let debug = format!("{payload:?}");
         assert!(debug.contains("<redacted>"), "{debug}");
         assert!(!debug.contains("165"), "key leaked: {debug}");
+    }
+
+    #[test]
+    fn observer_root_key_debug_redacts() {
+        let root = ObserverRootKey { key: [0xA5; 32] };
+        let debug = format!("{root:?}");
+        assert!(debug.contains("<redacted>"), "{debug}");
+        assert!(!debug.contains("165"), "key leaked: {debug}");
+    }
+
+    /// A full envelope batch must fit one frame: MAX_ENVELOPES_PER_FETCH is
+    /// only a valid cap if the worst-case `Envelopes` response encodes under
+    /// the 64 KiB frame body limit shared with custodian-ipc.
+    #[test]
+    fn max_envelope_batch_fits_one_frame() {
+        const MAX_FRAME_BODY_LEN: usize = 64 * 1024; // custodian-ipc framing cap
+        let envelope = SignedDeliveryEnvelope {
+            payload: DeliveryPayload {
+                network_id: [0xFF; 32],
+                purpose: DeliveryPurpose::RngPrecompile, // longest label
+                epoch: u64::MAX,
+                key: [0xFF; 32],
+            },
+            signature: [0xFF; 65],
+        };
+        let response = CouncilResponse::Envelopes {
+            envelopes: vec![envelope; MAX_ENVELOPES_PER_FETCH],
+            delivered_epoch: u64::MAX,
+        };
+        let mut wire = Vec::new();
+        ciborium::into_writer(&response, &mut wire).unwrap();
+        assert!(
+            wire.len() < MAX_FRAME_BODY_LEN,
+            "max batch is {} bytes, frame cap is {}",
+            wire.len(),
+            MAX_FRAME_BODY_LEN
+        );
     }
 
     #[test]

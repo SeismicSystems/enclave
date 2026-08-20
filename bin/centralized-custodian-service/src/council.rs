@@ -3,16 +3,25 @@
 //! (4-byte big-endian length + CBOR, 64 KiB cap).
 //!
 //! The transport is deliberately unauthenticated: authentication is the
-//! council signature carried inside each delivery envelope, and the
-//! unauthenticated methods (`Ping`, `GetStatus`) reveal only public data.
-//! Reachability confinement (firewalling the port to council egress) is the
+//! council signature carried inside each delivery envelope — and, for
+//! observer fetches, the ed25519 child-key signature over a per-connection
+//! single-use challenge nonce. The unauthenticated methods (`Ping`,
+//! `GetStatus`) reveal only public data. Observer fetches return secrets
+//! (the root key, plaintext envelopes), so the transport-confidentiality
+//! assumption the port already documents for deliveries — a TLS terminator
+//! or tunnel in front of it — covers those responses too. Reachability
+//! confinement (firewalling the port to council and observer egress) is the
 //! image's affair. The accept loop mirrors `custodian_ipc::server::serve`:
 //! thread per connection, a capped connection count with a drop-guard, and
 //! per-connection I/O timeouts so an idle or stalled peer can't hold a slot
 //! forever.
 
+use crate::observer_serving::ObserverServing;
 use crate::state::CentralizedCustodianState;
-use seismic_council_delivery::{CouncilRequest, CouncilResponse};
+use seismic_council_delivery::{
+    CouncilRequest, CouncilResponse, MAX_ENVELOPES_PER_FETCH, ObserverQuery, ObserverRejectCode,
+    ObserverRootKey,
+};
 use seismic_custodian_ipc::{read_frame_blocking, write_frame_blocking};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -29,7 +38,13 @@ const COUNCIL_IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Accept loop for the council port. Blocks forever; call from a dedicated
 /// thread. Per-connection errors drop only that connection.
-pub fn serve_council(listener: TcpListener, state: Arc<CentralizedCustodianState>) {
+/// `observer_serving` is `Some` only when the custodian was given a
+/// `--summit-key-dir`; without it observer requests get a typed rejection.
+pub fn serve_council(
+    listener: TcpListener,
+    state: Arc<CentralizedCustodianState>,
+    observer_serving: Option<Arc<ObserverServing>>,
+) {
     if let Ok(addr) = listener.local_addr() {
         info!("council delivery port listening on {addr}");
     }
@@ -56,6 +71,7 @@ pub fn serve_council(listener: TcpListener, state: Arc<CentralizedCustodianState
         }
         active.fetch_add(1, Ordering::AcqRel);
         let (state, active) = (state.clone(), active.clone());
+        let observer_serving = observer_serving.clone();
         std::thread::spawn(move || {
             // Decrement via a drop guard so a panicking handler can't leak
             // the slot (same discipline as the unix-socket server).
@@ -67,17 +83,41 @@ pub fn serve_council(listener: TcpListener, state: Arc<CentralizedCustodianState
             }
             let _slot = SlotGuard(active);
             let mut stream = stream;
-            handle_council_connection(&mut stream, &state);
+            handle_council_connection(
+                &mut stream,
+                &state,
+                observer_serving.as_deref(),
+                &mut random_nonce,
+            );
         });
     }
 }
 
-/// Serve one council connection. Generic over the stream so the
-/// request/response path is testable over in-memory buffers; only
-/// [`serve_council`] touches real sockets. Frame errors (oversize, garbage,
-/// timeout) drop the connection without a reply, matching the unix-socket
-/// discipline.
-fn handle_council_connection<S: Read + Write>(stream: &mut S, state: &CentralizedCustodianState) {
+/// OS-CSPRNG challenge nonce (production; tests inject a deterministic one).
+fn random_nonce() -> [u8; 32] {
+    use rand::RngCore as _;
+    let mut nonce = [0u8; 32];
+    rand::rng().fill_bytes(&mut nonce);
+    nonce
+}
+
+/// Serve one council connection. Generic over the stream (and over nonce
+/// generation) so the request/response path is testable over in-memory
+/// buffers with deterministic nonces; only [`serve_council`] touches real
+/// sockets. Frame errors (oversize, garbage, timeout) drop the connection
+/// without a reply, matching the unix-socket discipline.
+///
+/// Challenge state is connection-local and single-use: each
+/// `ObserverChallenge` stores a fresh nonce (replacing any unconsumed one),
+/// and each `ObserverFetch` consumes it — a second fetch without a new
+/// challenge fails with `MissingChallenge`, which is the replay protection.
+pub fn handle_council_connection<S: Read + Write>(
+    stream: &mut S,
+    state: &CentralizedCustodianState,
+    observer_serving: Option<&ObserverServing>,
+    next_nonce: &mut dyn FnMut() -> [u8; 32],
+) {
+    let mut challenge: Option<[u8; 32]> = None;
     loop {
         let request: CouncilRequest = match read_frame_blocking(stream) {
             Ok(Some(request)) => request,
@@ -91,6 +131,56 @@ fn handle_council_connection<S: Read + Write>(stream: &mut S, state: &Centralize
             CouncilRequest::Ping => CouncilResponse::Pong,
             CouncilRequest::GetStatus => CouncilResponse::Status(state.status()),
             CouncilRequest::DeliverEpochKey(envelope) => state.deliver(envelope),
+            CouncilRequest::ObserverChallenge => match observer_serving {
+                None => not_serving_observers(),
+                Some(_) => {
+                    let nonce = next_nonce();
+                    challenge = Some(nonce);
+                    CouncilResponse::Challenge { nonce }
+                }
+            },
+            CouncilRequest::ObserverFetch { request, signature } => match observer_serving {
+                None => not_serving_observers(),
+                Some(serving) => {
+                    match serving.verify_fetch(
+                        state.network_id(),
+                        challenge.take(),
+                        request,
+                        signature,
+                    ) {
+                        Err((code, message)) => {
+                            warn!(
+                                ?code,
+                                index = request.observer_index,
+                                "observer fetch refused"
+                            );
+                            CouncilResponse::ObserverRejected {
+                                code,
+                                message: message.to_string(),
+                            }
+                        }
+                        Ok(()) => match request.query {
+                            ObserverQuery::RootKey => CouncilResponse::RootKey(ObserverRootKey {
+                                key: serving.root_key(),
+                            }),
+                            ObserverQuery::Envelopes {
+                                purpose,
+                                from_epoch,
+                            } => {
+                                let (envelopes, delivered_epoch) = state.envelopes_from(
+                                    purpose,
+                                    from_epoch,
+                                    MAX_ENVELOPES_PER_FETCH,
+                                );
+                                CouncilResponse::Envelopes {
+                                    envelopes,
+                                    delivered_epoch,
+                                }
+                            }
+                        },
+                    }
+                }
+            },
         };
         info!(
             method = request.method(),
@@ -101,6 +191,13 @@ fn handle_council_connection<S: Read + Write>(stream: &mut S, state: &Centralize
             warn!("council port: write failed: {e}");
             return;
         }
+    }
+}
+
+fn not_serving_observers() -> CouncilResponse {
+    CouncilResponse::ObserverRejected {
+        code: ObserverRejectCode::NotServingObservers,
+        message: "this custodian has no summit key dir and does not serve observers".to_string(),
     }
 }
 
@@ -133,9 +230,19 @@ mod tests {
         }
     }
 
-    fn run_connection(
+    /// Deterministic nonce sequence for tests: 1, 2, 3, ... in every byte.
+    fn counting_nonce() -> impl FnMut() -> [u8; 32] {
+        let mut counter = 0u8;
+        move || {
+            counter += 1;
+            [counter; 32]
+        }
+    }
+
+    fn run_connection_with(
         requests: &[CouncilRequest],
         state: &CentralizedCustodianState,
+        observer_serving: Option<&ObserverServing>,
     ) -> Vec<CouncilResponse> {
         let mut wire = Vec::new();
         for request in requests {
@@ -145,7 +252,8 @@ mod tests {
             input: Cursor::new(wire),
             output: Vec::new(),
         };
-        handle_council_connection(&mut stream, state);
+        let mut nonce = counting_nonce();
+        handle_council_connection(&mut stream, state, observer_serving, &mut nonce);
         let mut reader = stream.output.as_slice();
         let mut responses = Vec::new();
         while let Some(response) =
@@ -154,6 +262,13 @@ mod tests {
             responses.push(response);
         }
         responses
+    }
+
+    fn run_connection(
+        requests: &[CouncilRequest],
+        state: &CentralizedCustodianState,
+    ) -> Vec<CouncilResponse> {
+        run_connection_with(requests, state, None)
     }
 
     #[test]
@@ -192,7 +307,7 @@ mod tests {
             input: Cursor::new(u32::MAX.to_be_bytes().to_vec()),
             output: Vec::new(),
         };
-        handle_council_connection(&mut stream, &state);
+        handle_council_connection(&mut stream, &state, None, &mut counting_nonce());
         assert!(
             stream.output.is_empty(),
             "server must close on an oversize frame, not answer"
@@ -209,7 +324,164 @@ mod tests {
             input: Cursor::new(wire),
             output: Vec::new(),
         };
-        handle_council_connection(&mut stream, &state);
+        handle_council_connection(&mut stream, &state, None, &mut counting_nonce());
         assert!(stream.output.is_empty());
+    }
+
+    // --- observer fetches ---
+
+    use crate::test_support::{ROOT_KEY, observer_serving, signed_fetch};
+    use seismic_council_delivery::ObserverQuery;
+
+    /// The first nonce `counting_nonce` hands out.
+    const NONCE_1: [u8; 32] = [1; 32];
+    const NONCE_2: [u8; 32] = [2; 32];
+
+    fn assert_observer_rejected(response: &CouncilResponse, code: ObserverRejectCode) {
+        assert!(
+            matches!(response, CouncilResponse::ObserverRejected { code: c, .. } if *c == code),
+            "expected ObserverRejected {{ {code:?} }}, got {response:?}"
+        );
+    }
+
+    #[test]
+    fn challenge_then_signed_fetch_serves_root_key_and_envelopes() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        for epoch in 1..=3u64 {
+            state.deliver(&seal(DeliveryPurpose::TxIo, epoch, [epoch as u8; 32]));
+        }
+        let serving = observer_serving(dir.path());
+        let responses = run_connection_with(
+            &[
+                CouncilRequest::ObserverChallenge,
+                signed_fetch(0, &NONCE_1, ObserverQuery::RootKey),
+                CouncilRequest::ObserverChallenge,
+                signed_fetch(
+                    0,
+                    &NONCE_2,
+                    ObserverQuery::Envelopes {
+                        purpose: DeliveryPurpose::TxIo,
+                        from_epoch: 2,
+                    },
+                ),
+            ],
+            &state,
+            Some(&serving),
+        );
+        assert!(matches!(
+            responses[0],
+            CouncilResponse::Challenge { nonce } if nonce == NONCE_1
+        ));
+        let CouncilResponse::RootKey(root) = &responses[1] else {
+            panic!("expected root key, got {:?}", responses[1]);
+        };
+        assert_eq!(root.key, ROOT_KEY);
+        let CouncilResponse::Envelopes {
+            envelopes,
+            delivered_epoch,
+        } = &responses[3]
+        else {
+            panic!("expected envelopes, got {:?}", responses[3]);
+        };
+        assert_eq!(*delivered_epoch, 3);
+        assert_eq!(
+            envelopes
+                .iter()
+                .map(|e| e.payload.epoch)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+    }
+
+    #[test]
+    fn fetch_without_challenge_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        let serving = observer_serving(dir.path());
+        let responses = run_connection_with(
+            &[signed_fetch(0, &NONCE_1, ObserverQuery::RootKey)],
+            &state,
+            Some(&serving),
+        );
+        assert_observer_rejected(&responses[0], ObserverRejectCode::MissingChallenge);
+    }
+
+    /// One challenge authorizes exactly one fetch: replaying a signed fetch
+    /// after the nonce was consumed is refused.
+    #[test]
+    fn nonce_is_single_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        let serving = observer_serving(dir.path());
+        let fetch = signed_fetch(0, &NONCE_1, ObserverQuery::RootKey);
+        let responses = run_connection_with(
+            &[CouncilRequest::ObserverChallenge, fetch.clone(), fetch],
+            &state,
+            Some(&serving),
+        );
+        assert!(matches!(responses[1], CouncilResponse::RootKey(_)));
+        assert_observer_rejected(&responses[2], ObserverRejectCode::MissingChallenge);
+    }
+
+    /// A fetch signed over a *previous* nonce doesn't verify against the
+    /// current one.
+    #[test]
+    fn stale_nonce_signature_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        let serving = observer_serving(dir.path());
+        let responses = run_connection_with(
+            &[
+                CouncilRequest::ObserverChallenge,
+                CouncilRequest::ObserverChallenge, // replaces NONCE_1 with NONCE_2
+                signed_fetch(0, &NONCE_1, ObserverQuery::RootKey),
+            ],
+            &state,
+            Some(&serving),
+        );
+        assert_observer_rejected(&responses[2], ObserverRejectCode::BadSignature);
+    }
+
+    #[test]
+    fn unconfigured_parent_rejects_observer_requests() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        let responses = run_connection_with(
+            &[
+                CouncilRequest::ObserverChallenge,
+                signed_fetch(0, &NONCE_1, ObserverQuery::RootKey),
+                CouncilRequest::Ping, // non-observer traffic still works
+            ],
+            &state,
+            None,
+        );
+        assert_observer_rejected(&responses[0], ObserverRejectCode::NotServingObservers);
+        assert_observer_rejected(&responses[1], ObserverRejectCode::NotServingObservers);
+        assert!(matches!(responses[2], CouncilResponse::Pong));
+    }
+
+    #[test]
+    fn tampered_fetch_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = build_state(dir.path());
+        let serving = observer_serving(dir.path());
+        let CouncilRequest::ObserverFetch { request, .. } =
+            signed_fetch(0, &NONCE_1, ObserverQuery::RootKey)
+        else {
+            unreachable!()
+        };
+        let responses = run_connection_with(
+            &[
+                CouncilRequest::ObserverChallenge,
+                CouncilRequest::ObserverFetch {
+                    request,
+                    signature: [0u8; 64],
+                },
+            ],
+            &state,
+            Some(&serving),
+        );
+        assert_observer_rejected(&responses[1], ObserverRejectCode::BadSignature);
     }
 }

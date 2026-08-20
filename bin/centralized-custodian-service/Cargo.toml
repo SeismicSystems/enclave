@@ -29,6 +29,7 @@ seismic-custodian-service.workspace = true
 # true` because workspace inheritance cannot turn default features off.
 seismic-custodian-ipc = { path = "../../crates/custodian-ipc", default-features = false, features = ["server"] }
 seismic-network-manifest.workspace = true
+seismic-observer-key.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
