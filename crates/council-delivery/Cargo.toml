@@ -26,5 +26,19 @@ sha2.workspace = true
 thiserror.workspace = true
 zeroize = { workspace = true, features = ["derive"] }
 
+# `cli` feature: the council-signer ceremony tool.
+clap = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
+# Raw path dep so default features (tokio via `client`) stay off; only the
+# core wire framing is linked.
+seismic-custodian-ipc = { path = "../custodian-ipc", default-features = false, optional = true }
+
+[features]
+cli = ["dep:clap", "dep:rand", "dep:seismic-custodian-ipc"]
+
+[[bin]]
+name = "council-signer"
+required-features = ["cli"]
+
 [dev-dependencies]
 serde_json.workspace = true

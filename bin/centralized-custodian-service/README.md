@@ -56,6 +56,12 @@ same framing as the custodian socket — with three methods: `Ping`,
 digest, and the message types live in `crates/council-delivery`, shared with
 off-node council signer tooling.
 
+The ceremony tool is `council-signer`
+(`cargo build --release -p seismic-council-delivery --features cli`), with
+`gen-key`, `status`, `typed-data`, and `deliver` subcommands covering the
+whole rotation flow for both a locally held council key and an external
+wallet.
+
 One envelope carries one 32-byte purpose key for one `(purpose, epoch)`,
 **signed with an ordinary Ethereum wallet**: the 65-byte `r || s || v`
 signature is EIP-712 typed data (the crate's `typed_data_json` emits the
