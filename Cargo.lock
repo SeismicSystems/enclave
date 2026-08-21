@@ -5015,6 +5015,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
+ "toml",
  "webpki-roots 1.0.7",
  "zeroize",
 ]

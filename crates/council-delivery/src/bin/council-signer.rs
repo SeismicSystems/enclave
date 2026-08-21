@@ -41,12 +41,11 @@ struct Cli {
 enum Command {
     /// Generate a fresh 32-byte epoch root key and print it as 0x-hex.
     GenKey,
-    /// Query a node's delivery status: network id and next expected epochs.
+    /// Query each node's delivery status: network id and next expected
+    /// epoch.
     Status {
-        /// The node's council port: `host:port` for plain TCP (a tunnel),
-        /// or `tls://host[:port]` for a TLS terminator (default port 443).
-        #[arg(long)]
-        node: String,
+        #[command(flatten)]
+        target: Target,
     },
     /// Print the EIP-712 typed data (eth_signTypedData_v4 JSON) for a
     /// delivery, for signing with an external wallet:
@@ -56,12 +55,11 @@ enum Command {
         #[command(flatten)]
         delivery: DeliveryArgs,
     },
-    /// Sign (or attach a wallet signature to) a delivery and send it.
+    /// Sign (or attach a wallet signature to) a delivery and send it to
+    /// every target node.
     Deliver {
-        /// The node's council port: `host:port` for plain TCP (a tunnel),
-        /// or `tls://host[:port]` for a TLS terminator (default port 443).
-        #[arg(long)]
-        node: String,
+        #[command(flatten)]
+        target: Target,
         #[command(flatten)]
         delivery: DeliveryArgs,
         /// Council secret key (0x + 64 hex) to sign locally. Mutually
@@ -79,19 +77,87 @@ enum Command {
         #[arg(long, env = "COUNCIL_ENVELOPE_DIR")]
         save_dir: Option<PathBuf>,
     },
-    /// Send every saved envelope a node is missing, in epoch order — brings
-    /// a freshly joined node from its current epoch to the latest saved one
-    /// in one command.
+    /// Send every saved envelope each target node is missing, in epoch
+    /// order — brings a freshly joined node (or a whole fleet) from its
+    /// current epoch to the latest saved one in one command.
     DeliverBatch {
-        /// The node's council port: `host:port` for plain TCP (a tunnel),
-        /// or `tls://host[:port]` for a TLS terminator (default port 443).
-        #[arg(long)]
-        node: String,
+        #[command(flatten)]
+        target: Target,
         /// Directory of `<epoch>.cbor` envelopes, as written by
         /// `deliver --save-dir`.
         #[arg(long, env = "COUNCIL_ENVELOPE_DIR")]
         envelope_dir: PathBuf,
     },
+}
+
+/// Where to send: one node, or every node in a TOML file. Exactly one.
+#[derive(clap::Args)]
+struct Target {
+    /// One node's council port: `host:port` for plain TCP (a tunnel), or
+    /// `tls://host[:port]` for a TLS terminator (default port 443).
+    #[arg(
+        long,
+        required_unless_present = "nodes_file",
+        conflicts_with = "nodes_file"
+    )]
+    node: Option<String>,
+    /// TOML file listing every node's council port, in --node syntax:
+    /// `nodes = ["10.0.0.1:7876", "tls://node-1.example.com:7443"]`.
+    /// The command runs against each node in order, continues past
+    /// per-node failures, and exits non-zero if any node failed.
+    #[arg(long)]
+    nodes_file: Option<PathBuf>,
+}
+
+impl Target {
+    /// The node list, every entry validated upfront so a typo fails before
+    /// anything is sent anywhere.
+    fn resolve(&self) -> Result<Vec<String>> {
+        let nodes = match (&self.node, &self.nodes_file) {
+            (Some(node), None) => vec![node.clone()],
+            (None, Some(path)) => {
+                #[derive(serde::Deserialize)]
+                struct NodesFile {
+                    nodes: Vec<String>,
+                }
+                let text = std::fs::read_to_string(path)
+                    .with_context(|| format!("reading {}", path.display()))?;
+                let file: NodesFile =
+                    toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+                if file.nodes.is_empty() {
+                    bail!("{} lists no nodes", path.display());
+                }
+                file.nodes
+            }
+            _ => unreachable!("clap enforces exactly one of --node/--nodes-file"),
+        };
+        for node in &nodes {
+            NodeSpec::parse(node).with_context(|| format!("invalid node '{node}'"))?;
+        }
+        Ok(nodes)
+    }
+}
+
+/// Run one action per node, continuing past failures; error out at the end
+/// naming every node that failed (so a down node never blocks the rest of
+/// the fleet, and scripts still see a non-zero exit).
+fn for_each_node(nodes: &[String], action: impl Fn(&str) -> Result<()>) -> Result<()> {
+    let mut failed: Vec<String> = Vec::new();
+    for node in nodes {
+        if let Err(e) = action(node) {
+            eprintln!("{node}: FAILED: {e:#}");
+            failed.push(node.clone());
+        }
+    }
+    if !failed.is_empty() {
+        bail!(
+            "failed for {} of {} node(s): {}",
+            failed.len(),
+            nodes.len(),
+            failed.join(", ")
+        );
+    }
+    Ok(())
 }
 
 #[derive(clap::Args)]
@@ -133,29 +199,30 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Command::Status { node } => {
-            let CouncilResponse::Status(status) = call(&node, &CouncilRequest::GetStatus)? else {
+        Command::Status { target } => for_each_node(&target.resolve()?, |node| {
+            let CouncilResponse::Status(status) = call(node, &CouncilRequest::GetStatus)? else {
                 bail!("unexpected response to GetStatus");
             };
-            println!("network_id: 0x{}", hex::encode(status.network_id));
             println!(
-                "epoch {} (next delivery: {})",
+                "{node}: network_id 0x{}, epoch {} (next delivery: {})",
+                hex::encode(status.network_id),
                 status.epoch,
                 status.epoch + 1
             );
             Ok(())
-        }
+        }),
         Command::TypedData { delivery } => {
             println!("{}", typed_data_json(&delivery.payload()?));
             Ok(())
         }
         Command::Deliver {
-            node,
+            target,
             delivery,
             council_key,
             signature,
             save_dir,
         } => {
+            let nodes = target.resolve()?;
             let payload = delivery.payload()?;
             let envelope = match (council_key, signature) {
                 (Some(council_key), None) => {
@@ -180,73 +247,82 @@ fn main() -> Result<()> {
                 let path = save_envelope(dir, &envelope)?;
                 println!("saved: {}", path.display());
             }
-            match call(&node, &CouncilRequest::DeliverEpochKey(envelope))? {
-                CouncilResponse::Delivered { epoch } => {
-                    println!("delivered: root key for epoch {epoch}");
-                    Ok(())
-                }
-                CouncilResponse::AlreadyDelivered { epoch } => {
-                    println!("already delivered: epoch {epoch} (idempotent retry)");
-                    Ok(())
-                }
-                CouncilResponse::Rejected { code, message } => {
-                    bail!("rejected ({code:?}): {message}")
-                }
-                other => bail!("unexpected response: {other:?}"),
-            }
-        }
-        Command::DeliverBatch { node, envelope_dir } => {
-            let envelopes = load_envelope_dir(&envelope_dir)?;
-            let Some(latest) = envelopes.last().map(|e| e.payload.epoch) else {
-                bail!("no envelopes in {}", envelope_dir.display());
-            };
-
-            // One connection for the whole batch (the port serves many
-            // requests per connection).
-            let mut stream = NodeSpec::parse(&node)?.connect()?;
-            let CouncilResponse::Status(status) =
-                exchange(&mut stream, &CouncilRequest::GetStatus)?
-            else {
-                bail!("unexpected response to GetStatus");
-            };
-            if status.epoch >= latest {
-                println!(
-                    "node is already at epoch {} (latest saved envelope: {latest})",
-                    status.epoch
-                );
-                return Ok(());
-            }
-
-            for epoch in (status.epoch + 1)..=latest {
-                let envelope = envelopes
-                    .iter()
-                    .find(|e| e.payload.epoch == epoch)
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "the node needs epoch {epoch} but {} has no {epoch}.cbor                              (epochs are sequential; nothing past the gap can install)",
-                            envelope_dir.display()
-                        )
-                    })?;
-                match exchange(
-                    &mut stream,
-                    &CouncilRequest::DeliverEpochKey(envelope.clone()),
-                )? {
+            for_each_node(&nodes, |node| {
+                match call(node, &CouncilRequest::DeliverEpochKey(envelope.clone()))? {
                     CouncilResponse::Delivered { epoch } => {
-                        println!("delivered: root key for epoch {epoch}");
+                        println!("{node}: delivered root key for epoch {epoch}");
+                        Ok(())
                     }
                     CouncilResponse::AlreadyDelivered { epoch } => {
-                        println!("already delivered: epoch {epoch}");
+                        println!("{node}: already delivered epoch {epoch} (idempotent retry)");
+                        Ok(())
                     }
                     CouncilResponse::Rejected { code, message } => {
-                        bail!("epoch {epoch} rejected ({code:?}): {message}")
+                        bail!("rejected ({code:?}): {message}")
                     }
                     other => bail!("unexpected response: {other:?}"),
                 }
+            })
+        }
+        Command::DeliverBatch {
+            target,
+            envelope_dir,
+        } => {
+            let nodes = target.resolve()?;
+            let envelopes = load_envelope_dir(&envelope_dir)?;
+            if envelopes.is_empty() {
+                bail!("no envelopes in {}", envelope_dir.display());
             }
-            println!("node is now at epoch {latest}");
-            Ok(())
+            for_each_node(&nodes, |node| batch_to(node, &envelopes, &envelope_dir))
         }
     }
+}
+
+/// Bring one node from its current epoch to the latest saved envelope, over
+/// a single connection (the port serves many requests per connection).
+fn batch_to(node: &str, envelopes: &[SignedDeliveryEnvelope], dir: &Path) -> Result<()> {
+    let latest = envelopes.last().expect("checked non-empty").payload.epoch;
+    let mut stream = NodeSpec::parse(node)?.connect()?;
+    let CouncilResponse::Status(status) = exchange(&mut stream, &CouncilRequest::GetStatus)? else {
+        bail!("unexpected response to GetStatus");
+    };
+    if status.epoch >= latest {
+        println!(
+            "{node}: already at epoch {} (latest saved envelope: {latest})",
+            status.epoch
+        );
+        return Ok(());
+    }
+
+    for epoch in (status.epoch + 1)..=latest {
+        let envelope = envelopes
+            .iter()
+            .find(|e| e.payload.epoch == epoch)
+            .ok_or_else(|| {
+                anyhow!(
+                    "the node needs epoch {epoch} but {} has no {epoch}.cbor \
+                     (epochs are sequential; nothing past the gap can install)",
+                    dir.display()
+                )
+            })?;
+        match exchange(
+            &mut stream,
+            &CouncilRequest::DeliverEpochKey(envelope.clone()),
+        )? {
+            CouncilResponse::Delivered { epoch } => {
+                println!("{node}: delivered root key for epoch {epoch}");
+            }
+            CouncilResponse::AlreadyDelivered { epoch } => {
+                println!("{node}: already delivered epoch {epoch}");
+            }
+            CouncilResponse::Rejected { code, message } => {
+                bail!("epoch {epoch} rejected ({code:?}): {message}")
+            }
+            other => bail!("unexpected response: {other:?}"),
+        }
+    }
+    println!("{node}: now at epoch {latest}");
+    Ok(())
 }
 
 /// Write one envelope as `<epoch>.cbor` (dir 0700, file 0600 — the bytes
@@ -595,6 +671,87 @@ mod tests {
         let error = load_envelope_dir(&dir).unwrap_err();
         assert!(error.to_string().contains("epoch 9, not 4"), "{error}");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn target(node: Option<&str>, nodes_file: Option<PathBuf>) -> Target {
+        Target {
+            node: node.map(str::to_string),
+            nodes_file,
+        }
+    }
+
+    #[test]
+    fn target_resolves_single_node_and_nodes_file() {
+        assert_eq!(
+            target(Some("10.0.0.1:7876"), None).resolve().unwrap(),
+            vec!["10.0.0.1:7876".to_string()]
+        );
+
+        let dir = temp_dir("nodes");
+        let path = dir.join("nodes.toml");
+        std::fs::write(
+            &path,
+            r#"
+# fleet
+nodes = [
+    "10.0.0.1:7876",
+    "tls://node-1.example.com:7443",
+]
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            target(None, Some(path.clone())).resolve().unwrap(),
+            vec![
+                "10.0.0.1:7876".to_string(),
+                "tls://node-1.example.com:7443".to_string()
+            ]
+        );
+
+        // An invalid node spec anywhere in the file fails upfront, before
+        // anything would be sent.
+        std::fs::write(&path, r#"nodes = ["https://x.example.com/custodian"]"#).unwrap();
+        let error = target(None, Some(path.clone())).resolve().unwrap_err();
+        assert!(
+            format!("{error:#}").contains("raw TCP, not HTTP"),
+            "{error:#}"
+        );
+
+        // An empty list is an error, as is a malformed file.
+        std::fs::write(&path, "nodes = []").unwrap();
+        assert!(target(None, Some(path.clone())).resolve().is_err());
+        std::fs::write(&path, "not toml at all [").unwrap();
+        assert!(target(None, Some(path)).resolve().is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cli_requires_exactly_one_target() {
+        // --node and --nodes-file conflict.
+        assert!(
+            Cli::try_parse_from([
+                "council-signer",
+                "status",
+                "--node",
+                "a:1",
+                "--nodes-file",
+                "/tmp/nodes.toml"
+            ])
+            .is_err()
+        );
+        // Neither is a parse error.
+        assert!(Cli::try_parse_from(["council-signer", "status"]).is_err());
+        // Each alone parses.
+        assert!(Cli::try_parse_from(["council-signer", "status", "--node", "a:1"]).is_ok());
+        assert!(
+            Cli::try_parse_from([
+                "council-signer",
+                "status",
+                "--nodes-file",
+                "/tmp/nodes.toml"
+            ])
+            .is_ok()
+        );
     }
 
     #[test]

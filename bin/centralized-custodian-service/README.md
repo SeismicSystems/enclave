@@ -104,6 +104,24 @@ connection, bringing it to the latest epoch in one command. Envelopes are
 deterministic and redelivery is idempotent, so re-running a batch is
 harmless.
 
+**Fleet operations:** `status`, `deliver`, and `deliver-batch` all accept
+`--nodes-file <path>` instead of `--node` — a TOML file listing every
+node's council port in `--node` syntax:
+
+```toml
+nodes = [
+    "10.0.0.1:7876",
+    "tls://node-1.example.com:7443",
+]
+```
+
+One `deliver --nodes-file fleet.toml --epoch N` rotates the whole network.
+Every entry is validated before anything is sent; a down node is reported
+and skipped (the rest of the fleet still advances) and the command exits
+non-zero naming the failures — re-running the same command (or a
+`deliver-batch --nodes-file`) heals the stragglers, since redelivery is
+idempotent.
+
 One envelope carries the 32-byte root key for one epoch, **signed with an
 ordinary Ethereum wallet**: the 65-byte `r || s || v` signature is EIP-712
 typed data (`RootKeyDelivery(uint64 epoch,bytes32 keyCommitment)`; the
