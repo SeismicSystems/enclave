@@ -2,7 +2,7 @@
 //!
 //! The council signs with an ordinary Ethereum wallet, so the signed digest
 //! is EIP-712 typed data (keccak-256) — a wallet can display "authorize the
-//! tx-io key for epoch 3 on network X" instead of an opaque hash. The
+//! root key for epoch 3 on network X" instead of an opaque hash. The
 //! network id rides in the domain separator as `salt`, so a signature can
 //! never migrate across networks; the key itself appears only as its
 //! keccak-256 **commitment**, so the secret never passes through wallet UIs
@@ -23,13 +23,12 @@ const DOMAIN_TYPE: &str = "EIP712Domain(string name,string version,bytes32 salt)
 pub const DOMAIN_NAME: &str = "SeismicCouncilKeyDelivery";
 pub const DOMAIN_VERSION: &str = "1";
 
-/// The one signed struct. `purpose` is the human-readable label so wallet
-/// approval screens show "tx-io", not an enum tag; `keyCommitment` is
-/// [`key_commitment`] of the plaintext key.
-const KEY_DELIVERY_TYPE: &str = "KeyDelivery(string purpose,uint64 epoch,bytes32 keyCommitment)";
+/// The one signed struct: the epoch being rotated to, and the commitment to
+/// the 32-byte root key every purpose key of that epoch derives from.
+const KEY_DELIVERY_TYPE: &str = "RootKeyDelivery(uint64 epoch,bytes32 keyCommitment)";
 
-/// keccak-256 of the 32-byte purpose key — what the wallet signs in place of
-/// the key itself.
+/// keccak-256 of the 32-byte epoch root key — what the wallet signs in place
+/// of the key itself.
 pub fn key_commitment(key: &[u8; 32]) -> [u8; 32] {
     keccak256(key).0
 }
@@ -47,9 +46,8 @@ fn struct_hash(payload: &DeliveryPayload) -> [u8; 32] {
     let mut epoch_word = [0u8; 32];
     epoch_word[24..].copy_from_slice(&payload.epoch.to_be_bytes());
 
-    let mut words = Vec::with_capacity(4 * 32);
+    let mut words = Vec::with_capacity(3 * 32);
     words.extend_from_slice(keccak256(KEY_DELIVERY_TYPE).as_slice());
-    words.extend_from_slice(keccak256(payload.purpose.label()).as_slice());
     words.extend_from_slice(&epoch_word);
     words.extend_from_slice(&key_commitment(&payload.key));
     keccak256(&words).0
@@ -76,18 +74,16 @@ pub fn typed_data_json(payload: &DeliveryPayload) -> String {
             r#""EIP712Domain":[{{"name":"name","type":"string"}},"#,
             r#"{{"name":"version","type":"string"}},"#,
             r#"{{"name":"salt","type":"bytes32"}}],"#,
-            r#""KeyDelivery":[{{"name":"purpose","type":"string"}},"#,
-            r#"{{"name":"epoch","type":"uint64"}},"#,
+            r#""RootKeyDelivery":[{{"name":"epoch","type":"uint64"}},"#,
             r#"{{"name":"keyCommitment","type":"bytes32"}}]}},"#,
-            r#""primaryType":"KeyDelivery","#,
+            r#""primaryType":"RootKeyDelivery","#,
             r#""domain":{{"name":"{name}","version":"{version}","salt":"0x{salt}"}},"#,
-            r#""message":{{"purpose":"{purpose}","epoch":{epoch},"#,
+            r#""message":{{"epoch":{epoch},"#,
             r#""keyCommitment":"0x{commitment}"}}}}"#,
         ),
         name = DOMAIN_NAME,
         version = DOMAIN_VERSION,
         salt = hex::encode(payload.network_id),
-        purpose = payload.purpose.label(),
         epoch = payload.epoch,
         commitment = hex::encode(key_commitment(&payload.key)),
     )
@@ -107,12 +103,10 @@ pub fn address_from_pubkey(pk: &secp256k1::PublicKey) -> [u8; 20] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::messages::DeliveryPurpose;
 
     fn fixture() -> DeliveryPayload {
         DeliveryPayload {
             network_id: [0x11; 32],
-            purpose: DeliveryPurpose::TxIo,
             epoch: 7,
             key: [0x44; 32],
         }
@@ -126,7 +120,7 @@ mod tests {
     fn digest_matches_golden_vector() {
         assert_eq!(
             hex::encode(payload_digest(&fixture())),
-            "685c34c4ef1c922072cb7294c07f5e24095bd11bf253b5e48c111ede0c1a4115"
+            "552c6a04685ba82eb0a71e390e598fabb8799d807978e6fb8bfbe83b5002b967"
         );
     }
 
@@ -137,7 +131,6 @@ mod tests {
         let mut variants = Vec::new();
         for mutate in [
             (|p: &mut DeliveryPayload| p.network_id = [0x12; 32]) as fn(&mut DeliveryPayload),
-            |p| p.purpose = DeliveryPurpose::RngPrecompile,
             |p| p.epoch = 8,
             |p| p.key = [0x45; 32],
         ] {
@@ -153,8 +146,7 @@ mod tests {
     #[test]
     fn typed_data_json_is_wallet_shaped_and_key_free() {
         let json = typed_data_json(&fixture());
-        assert!(json.contains(r#""primaryType":"KeyDelivery""#));
-        assert!(json.contains(r#""purpose":"tx-io""#));
+        assert!(json.contains(r#""primaryType":"RootKeyDelivery""#));
         assert!(json.contains(r#""epoch":7"#));
         assert!(json.contains(&format!("0x{}", hex::encode([0x11u8; 32]))));
         // The commitment appears; the key itself never does.

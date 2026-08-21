@@ -3,12 +3,14 @@
 The custodian for the network's **centralized phase**, before custody moves
 to decentralized TEEs. It runs standalone — no attestation service, no
 tdx-init, no setup-persistent-luks — and serves the same Unix-socket API as
-`seismic-custodian-service`, with one difference: purpose keys at epochs
-`>= 1` are not derived from the root key. They arrive as **deliveries signed
-by a security council's Ethereum wallet** over a TCP port, and asking for an
-epoch the council has not delivered answers the typed `EpochKeyUnavailable`
-error instead of deriving — making the council the network's actual rotation
-authority.
+`seismic-custodian-service`, with one difference: at epochs `>= 1` the ROOT
+key itself rotates. Each rotation is **one 32-byte root key signed by a
+security council's Ethereum wallet** delivered over a TCP port, and every
+purpose key of that epoch (tx-io, rng, snapshot) is HKDF-derived from the
+delivered root — the same derivation epoch 0 applies to the local keyfile.
+Asking for an epoch the council has not delivered answers the typed
+`EpochKeyUnavailable` error instead of deriving — making the council the
+network's actual rotation authority, one signature per rotation.
 
 Epoch-0 derivations use the same HKDF paths as the TDX custodian, so
 consumers see identical bytes when the network later migrates. The root-key
@@ -25,13 +27,34 @@ below.
 
 ## Transport security is the deployment's job
 
-Delivery envelopes carry the purpose key **in plaintext** under the council
-signature. This service deliberately contains no TLS and no envelope
+Delivery envelopes carry the epoch root key **in plaintext** under the
+council signature. This service deliberately contains no TLS and no envelope
 encryption: the centralized phase runs among known operators, who must front
 the council port with a TLS terminator or tunnel (nginx, WireGuard, SSH —
 whatever the ops stack uses) so key material is never plaintext on an
 untrusted wire. The port itself must never be reachable directly from
 untrusted networks.
+
+The council protocol is **raw framed TCP, not HTTP**, so an nginx HTTP
+`location` (a URL with a path) cannot front it. Terminate TLS with an nginx
+`stream` block that proxies raw TCP:
+
+```nginx
+stream {
+    server {
+        listen 7443 ssl;                    # own port; HTTP vhosts can't share it by path
+        ssl_certificate     /etc/ssl/custodian.crt;
+        ssl_certificate_key /etc/ssl/custodian.key;
+        proxy_pass 127.0.0.1:7876;          # the custodian's --council-listen
+    }
+}
+```
+
+`council-signer` then connects with `--node tls://host:7443` (plain
+`host:port` still works through a tunnel). The same applies to
+`--parent-custodian` for observer custodians — the binary itself speaks
+plain TCP, so give it a tunnel-local endpoint (stunnel/WireGuard/SSH -L)
+rather than an HTTPS URL.
 
 ## State on disk
 
@@ -45,12 +68,12 @@ Two things persist, both under `/var/lib/seismic/custodian/` by default:
   council deliver epoch 1 immediately after launch (the service warns on
   every boot while the default is in use). An operator who wants a secret
   root key pre-places 32 random bytes before first boot.
-- **Delivery envelopes** (`--delivery-dir`, `<purpose>/<epoch>.cbor`, dirs
-  0700 / files 0600): accepted deliveries stored verbatim, written durably
-  **before** the key becomes observable. The files contain the plaintext
-  keys — the directory is as secret as the keys themselves. Every boot
-  re-verifies each envelope's council signature; a corrupt file stops that
-  purpose's scan at the last good epoch, and redelivering the epoch heals
+- **Delivery envelopes** (`--delivery-dir`, `<epoch>.cbor`, dir 0700 /
+  files 0600): accepted deliveries stored verbatim, written durably
+  **before** the epoch becomes observable. The files contain the plaintext
+  epoch root keys — the directory is as secret as the keys themselves.
+  Every boot re-verifies each envelope's council signature; a corrupt file
+  stops the scan at the last good epoch, and redelivering the epoch heals
   it.
 
 Both are checked eagerly at startup: an unusable delivery directory or
@@ -71,21 +94,23 @@ The ceremony tool is `council-signer`
 whole rotation flow for both a locally held council key and an external
 wallet.
 
-One envelope carries one 32-byte purpose key for one `(purpose, epoch)`,
-**signed with an ordinary Ethereum wallet**: the 65-byte `r || s || v`
-signature is EIP-712 typed data (the crate's `typed_data_json` emits the
-`eth_signTypedData_v4` JSON for MetaMask, `cast wallet sign --data`, or
-hardware wallets), verified by recovering the signer and comparing it to
-`--council-address`. The wallet signs the key's **keccak-256 commitment**,
-never the key itself, so the secret doesn't pass through wallet UIs — while
-the signature still binds the exact key bytes. The network id — derived
-from `--chain-id` (`network_id_from_chain_id`, domain-separated SHA-256; no
-manifest artifact needed in the centralized phase) — rides in the EIP-712
-domain as `salt`, so a signature can never replay onto another chain.
-Wallet approval screens show the fields: purpose, epoch, commitment.
+One envelope carries the 32-byte root key for one epoch, **signed with an
+ordinary Ethereum wallet**: the 65-byte `r || s || v` signature is EIP-712
+typed data (`RootKeyDelivery(uint64 epoch,bytes32 keyCommitment)`; the
+crate's `typed_data_json` emits the `eth_signTypedData_v4` JSON for
+MetaMask, `cast wallet sign --data`, or hardware wallets), verified by
+recovering the signer and comparing it to `--council-address`. The wallet
+signs the key's **keccak-256 commitment**, never the key itself, so the
+secret doesn't pass through wallet UIs — while the signature still binds
+the exact key bytes. The network id — derived from `--chain-id`
+(`network_id_from_chain_id`, domain-separated SHA-256; no manifest artifact
+needed in the centralized phase) — rides in the EIP-712 domain as `salt`,
+so a signature can never replay onto another chain. Wallet approval screens
+show the fields: epoch, commitment.
 
-Epochs are sequential per purpose: the first delivery is epoch 1 (epoch 0 is
-forever derivation-sourced), and epoch N+1 is accepted only once N exists.
+Epochs are sequential: the first delivery is epoch 1 (epoch 0 is forever
+keyfile-sourced), and epoch N+1 is accepted only once N exists. A delivered
+root is validated to derive cleanly for every purpose before it installs.
 Sealing is deterministic (RFC 6979, no randomness), so re-sealing the same
 payload reproduces the byte-identical envelope: redelivery is naturally
 idempotent (`AlreadyDelivered`), and only a *different key* at an existing

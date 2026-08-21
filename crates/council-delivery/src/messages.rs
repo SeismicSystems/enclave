@@ -2,58 +2,24 @@
 //!
 //! Everything crosses the wire as CBOR over the same 4-byte length-prefixed
 //! framing as the custodian Unix socket; byte fields are tagged `serde_bytes`
-//! so they encode as native byte strings. The envelope carries only
-//! signed-and-AEAD-sealed material — nothing in this module is secret, which
-//! is what makes envelopes safe to persist verbatim.
+//! so they encode as native byte strings.
+//!
+//! A delivery rotates the ROOT key: one envelope carries the 32-byte root
+//! key for one epoch, and every purpose key of that epoch (tx-io, rng,
+//! snapshot) is HKDF-derived from it — exactly how epoch 0 derives from the
+//! local root keyfile. Rotating one secret rotates everything.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-/// Which purpose key a delivery rotates. LUKS `Storage` and `LuksHeaderMac`
-/// are deliberately not deliverable: they are local-disk keys pinned at
-/// epoch 0 forever (rotating them would mean re-encrypting the disk).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DeliveryPurpose {
-    TxIo,
-    RngPrecompile,
-    Snapshot,
-}
-
-impl DeliveryPurpose {
-    pub const ALL: [DeliveryPurpose; 3] = [
-        DeliveryPurpose::TxIo,
-        DeliveryPurpose::RngPrecompile,
-        DeliveryPurpose::Snapshot,
-    ];
-
-    /// Short label matching the corresponding `KeyPurpose` label; also the
-    /// on-disk directory name for persisted envelopes.
-    pub fn label(&self) -> &'static str {
-        match self {
-            DeliveryPurpose::TxIo => "tx-io",
-            DeliveryPurpose::RngPrecompile => "rng-precompile",
-            DeliveryPurpose::Snapshot => "snapshot",
-        }
-    }
-
-    /// Fixed-length stand-in for the purpose in binding digests, per the
-    /// binding layout rule (only fixed-length fields before the tail).
-    pub fn binding_tag(&self) -> u8 {
-        match self {
-            DeliveryPurpose::TxIo => 0x01,
-            DeliveryPurpose::RngPrecompile => 0x02,
-            DeliveryPurpose::Snapshot => 0x03,
-        }
-    }
-}
-
 /// The signed portion of a delivery: everything the council attests to.
 ///
-/// Carries the purpose key in PLAINTEXT: confidentiality in transit is the
-/// deployment's affair (a TLS terminator or tunnel in front of the council
-/// port — the centralized phase runs among known operators), and at rest an
-/// envelope file is itself a secret. Zeroized on drop; `Debug` redacts.
+/// Carries the epoch root key in PLAINTEXT: confidentiality in transit is
+/// the deployment's affair (a TLS terminator or tunnel in front of the
+/// council port — the centralized phase runs among known operators), and at
+/// rest an envelope file is itself a secret. Zeroized on drop; `Debug`
+/// redacts.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct DeliveryPayload {
     /// Network this delivery is for; rejected elsewhere (anti-replay across
@@ -62,11 +28,10 @@ pub struct DeliveryPayload {
     #[serde(with = "serde_bytes")]
     pub network_id: [u8; 32],
     #[zeroize(skip)]
-    pub purpose: DeliveryPurpose,
-    #[zeroize(skip)]
     pub epoch: u64,
-    /// The 32-byte purpose key itself. The council signature covers its
-    /// keccak-256 commitment, so the wallet never sees these bytes.
+    /// The 32-byte epoch root key itself. Every purpose key of this epoch
+    /// derives from it. The council signature covers its keccak-256
+    /// commitment, so the wallet never sees these bytes.
     #[serde(with = "serde_bytes")]
     pub key: [u8; 32],
 }
@@ -75,7 +40,6 @@ impl fmt::Debug for DeliveryPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DeliveryPayload")
             .field("network_id", &self.network_id)
-            .field("purpose", &self.purpose)
             .field("epoch", &self.epoch)
             .field("key", &"<redacted>")
             .finish()
@@ -99,17 +63,18 @@ pub struct SignedDeliveryEnvelope {
 /// What an observer custodian asks its parent for.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObserverQuery {
-    /// The parent's 32-byte root key (epoch-0 derivations).
+    /// The parent's 32-byte epoch-0 root key (from its keyfile).
     RootKey,
-    /// Delivered envelopes for `purpose`, ascending from `from_epoch`, at
-    /// most [`MAX_ENVELOPES_PER_FETCH`] per response — the reply names the
+    /// Delivered epoch-root envelopes, ascending from `from_epoch`, at most
+    /// [`MAX_ENVELOPES_PER_FETCH`] per response — the reply names the
     /// parent's highest delivered epoch so the client knows whether to page
     /// again.
-    Envelopes {
-        purpose: DeliveryPurpose,
-        from_epoch: u64,
-    },
+    Envelopes { from_epoch: u64 },
 }
+
+/// Caps one `Envelopes` response well under the 64 KiB frame limit
+/// (an envelope is ~180 bytes of CBOR; pinned by test).
+pub const MAX_ENVELOPES_PER_FETCH: usize = 64;
 
 /// The signed portion of an observer fetch: everything the child key attests
 /// to. The signature additionally covers a connection-local single-use nonce
@@ -128,12 +93,8 @@ pub struct ObserverFetchRequest {
     pub query: ObserverQuery,
 }
 
-/// Caps one `Envelopes` response well under the 64 KiB frame limit
-/// (an envelope is ~190 bytes of CBOR; pinned by test).
-pub const MAX_ENVELOPES_PER_FETCH: usize = 64;
-
-/// The parent's root key in transit to an observer. Plaintext for the same
-/// reason envelopes are: transport confidentiality is the fronting
+/// The parent's epoch-0 root key in transit to an observer. Plaintext for
+/// the same reason envelopes are: transport confidentiality is the fronting
 /// TLS/tunnel's job. Zeroized on drop; `Debug` redacts.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct ObserverRootKey {
@@ -169,16 +130,16 @@ pub enum CouncilRequest {
     /// Liveness probe.
     Ping,
     /// Public delivery state: what the council needs before sealing the next
-    /// envelope (next expected epochs, readiness).
+    /// envelope (next expected epoch, readiness).
     GetStatus,
-    /// Install one epoch key. Authentication is the signature inside the
-    /// envelope, not the transport.
+    /// Install one epoch root key. Authentication is the signature inside
+    /// the envelope, not the transport.
     DeliverEpochKey(SignedDeliveryEnvelope),
     /// Ask for a single-use nonce to sign into the next `ObserverFetch` on
     /// this connection.
     ObserverChallenge,
-    /// Fetch the root key or delivered envelopes, signed by a child key
-    /// derived from the parent's master node key. Authentication is the
+    /// Fetch the epoch-0 root key or delivered envelopes, signed by a child
+    /// key derived from the parent's master node key. Authentication is the
     /// ed25519 signature over the challenge nonce and the request, not the
     /// transport.
     ObserverFetch {
@@ -207,11 +168,12 @@ impl CouncilRequest {
 pub enum RejectCode {
     WrongNetwork,
     BadSignature,
-    /// Epochs are sequential per purpose; the message names the expected one.
+    /// Epochs are sequential; the message names the expected one.
     NonSequentialEpoch,
     /// A different envelope already holds this epoch.
     EpochConflict,
-    /// The key bytes are not usable for the purpose.
+    /// A purpose key derived from this root is unusable (astronomically
+    /// unlikely; checked so serving can never fail later).
     InvalidKey,
     /// Verified but could not be made durable; nothing was installed.
     PersistFailed,
@@ -223,11 +185,9 @@ pub enum RejectCode {
 pub struct CouncilStatus {
     #[serde(with = "serde_bytes")]
     pub network_id: [u8; 32],
-    /// Highest delivered epoch per purpose; 0 = only the derived epoch 0
+    /// Highest delivered epoch; 0 = only the keyfile-derived epoch 0
     /// exists, so the next delivery is epoch 1.
-    pub tx_io_epoch: u64,
-    pub rng_epoch: u64,
-    pub snapshot_epoch: u64,
+    pub epoch: u64,
 }
 
 /// One response over the council delivery port.
@@ -236,13 +196,11 @@ pub enum CouncilResponse {
     Pong,
     Status(CouncilStatus),
     Delivered {
-        purpose: DeliveryPurpose,
         epoch: u64,
     },
     /// Byte-identical redelivery of an already-installed epoch: idempotent
     /// success, nothing changed.
     AlreadyDelivered {
-        purpose: DeliveryPurpose,
         epoch: u64,
     },
     Rejected {
@@ -254,13 +212,13 @@ pub enum CouncilResponse {
         #[serde(with = "serde_bytes")]
         nonce: [u8; 32],
     },
-    /// The parent's root key, answering `ObserverQuery::RootKey`.
+    /// The parent's epoch-0 root key, answering `ObserverQuery::RootKey`.
     RootKey(ObserverRootKey),
     /// Delivered envelopes, answering `ObserverQuery::Envelopes`.
     Envelopes {
         envelopes: Vec<SignedDeliveryEnvelope>,
-        /// The parent's highest delivered epoch for the purpose — page again
-        /// from the last envelope's epoch + 1 while below this.
+        /// The parent's highest delivered epoch — page again from the last
+        /// envelope's epoch + 1 while below this.
         delivered_epoch: u64,
     },
     ObserverRejected {
@@ -297,7 +255,6 @@ mod tests {
         let envelope = SignedDeliveryEnvelope {
             payload: DeliveryPayload {
                 network_id: [0x11; 32],
-                purpose: DeliveryPurpose::TxIo,
                 epoch: 1,
                 key: [0x44; 32],
             },
@@ -319,7 +276,6 @@ mod tests {
     fn payload_debug_redacts_the_key() {
         let payload = DeliveryPayload {
             network_id: [0x11; 32],
-            purpose: DeliveryPurpose::TxIo,
             epoch: 1,
             key: [0xA5; 32],
         };
@@ -345,7 +301,6 @@ mod tests {
         let envelope = SignedDeliveryEnvelope {
             payload: DeliveryPayload {
                 network_id: [0xFF; 32],
-                purpose: DeliveryPurpose::RngPrecompile, // longest label
                 epoch: u64::MAX,
                 key: [0xFF; 32],
             },
@@ -363,15 +318,5 @@ mod tests {
             wire.len(),
             MAX_FRAME_BODY_LEN
         );
-    }
-
-    #[test]
-    fn purpose_labels_and_tags_are_distinct() {
-        for (i, a) in DeliveryPurpose::ALL.iter().enumerate() {
-            for b in &DeliveryPurpose::ALL[i + 1..] {
-                assert_ne!(a.label(), b.label());
-                assert_ne!(a.binding_tag(), b.binding_tag());
-            }
-        }
     }
 }

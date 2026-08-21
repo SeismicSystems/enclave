@@ -36,16 +36,13 @@ pub fn observer_fetch_signing_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::messages::{DeliveryPurpose, ObserverQuery};
+    use crate::messages::ObserverQuery;
 
     fn request() -> ObserverFetchRequest {
         ObserverFetchRequest {
             network_id: [0x11; 32],
             observer_index: 3,
-            query: ObserverQuery::Envelopes {
-                purpose: DeliveryPurpose::TxIo,
-                from_epoch: 5,
-            },
+            query: ObserverQuery::Envelopes { from_epoch: 5 },
         }
     }
 

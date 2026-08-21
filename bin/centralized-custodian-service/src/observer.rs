@@ -20,7 +20,7 @@ use crate::root_key_file;
 use crate::state::CentralizedCustodianState;
 use anyhow::{Context as _, Result, anyhow, bail};
 use seismic_council_delivery::{
-    CouncilRequest, CouncilResponse, DeliveryPurpose, ObserverFetchRequest, ObserverQuery,
+    CouncilRequest, CouncilResponse, ObserverFetchRequest, ObserverQuery,
     observer_fetch_signing_payload,
 };
 use seismic_custodian_ipc::{read_frame_blocking, write_frame_blocking};
@@ -130,22 +130,17 @@ impl ParentFetcher {
         }
     }
 
-    /// Close the delivery gap for one purpose: page envelopes from the local
-    /// max upward and install each through `state.deliver()` (which
-    /// re-verifies the council signature and persists). Returns the parent's
-    /// highest delivered epoch.
-    fn sync_purpose(
-        &self,
-        state: &CentralizedCustodianState,
-        purpose: DeliveryPurpose,
-    ) -> Result<u64> {
+    /// Close the delivery gap: page epoch-root envelopes from the local max
+    /// upward and install each through `state.deliver()` (which re-verifies
+    /// the council signature and persists). Returns the parent's highest
+    /// delivered epoch.
+    fn sync(&self, state: &CentralizedCustodianState) -> Result<u64> {
         let mut stream = self.connect()?;
         loop {
-            let local = local_epoch(state, purpose);
+            let local = state.status().epoch;
             let response = self.signed_fetch(
                 &mut stream,
                 ObserverQuery::Envelopes {
-                    purpose,
                     from_epoch: local + 1,
                 },
             )?;
@@ -154,20 +149,14 @@ impl ParentFetcher {
                     envelopes,
                     delivered_epoch,
                 } => (envelopes, delivered_epoch),
-                other => bail!(
-                    "parent refused envelopes for {}: {}",
-                    purpose.label(),
-                    describe(&other)
-                ),
+                other => bail!("parent refused envelopes: {}", describe(&other)),
             };
             if local >= delivered_epoch {
                 return Ok(delivered_epoch);
             }
             if envelopes.is_empty() {
                 bail!(
-                    "parent reports {} epochs for {} but sent none from {}",
-                    delivered_epoch,
-                    purpose.label(),
+                    "parent reports {delivered_epoch} epochs but sent none from {}",
                     local + 1
                 );
             }
@@ -176,19 +165,15 @@ impl ParentFetcher {
                     CouncilResponse::Delivered { .. }
                     | CouncilResponse::AlreadyDelivered { .. } => {}
                     CouncilResponse::Rejected { code, message } => bail!(
-                        "parent-forwarded envelope for {} epoch {} rejected ({code:?}): {message}",
-                        purpose.label(),
+                        "parent-forwarded envelope for epoch {} rejected ({code:?}): {message}",
                         envelope.payload.epoch,
                     ),
                     other => bail!("unexpected deliver outcome: {}", other.kind()),
                 }
             }
-            let after = local_epoch(state, purpose);
+            let after = state.status().epoch;
             if after <= local {
-                bail!(
-                    "no progress installing {} envelopes (local epoch stuck at {local})",
-                    purpose.label()
-                );
+                bail!("no progress installing envelopes (local epoch stuck at {local})");
             }
             if after >= delivered_epoch {
                 return Ok(delivered_epoch);
@@ -196,39 +181,31 @@ impl ParentFetcher {
         }
     }
 
-    /// Boot-time backfill: bring every purpose up to the parent's delivered
-    /// epoch. Failures are returned, not fatal — the caller decides (boot
-    /// warns and relies on on-demand fetches to heal later).
+    /// Boot-time backfill: bring the epoch sequence up to the parent's
+    /// delivered epoch. Failures are returned, not fatal — the caller
+    /// decides (boot warns and relies on on-demand fetches to heal later).
     pub fn backfill(&self, state: &CentralizedCustodianState) -> Result<()> {
         let _serialized = lock(&self.fetch_lock);
-        for purpose in DeliveryPurpose::ALL {
-            let delivered = self
-                .sync_purpose(state, purpose)
-                .with_context(|| format!("backfilling {}", purpose.label()))?;
-            info!(
-                purpose = purpose.label(),
-                delivered, "backfilled from parent custodian"
-            );
-        }
+        let delivered = self.sync(state).context("backfilling epoch roots")?;
+        info!(delivered, "backfilled from parent custodian");
         Ok(())
     }
 
-    /// On-demand: try to close the gap up to `target_epoch` for one purpose.
-    /// `Ok(true)` if the epoch is now installed locally, `Ok(false)` if the
-    /// parent doesn't have it either.
+    /// On-demand: try to close the gap up to `target_epoch`. `Ok(true)` if
+    /// the epoch is now installed locally, `Ok(false)` if the parent doesn't
+    /// have it either.
     pub fn fetch_up_to(
         &self,
         state: &CentralizedCustodianState,
-        purpose: DeliveryPurpose,
         target_epoch: u64,
     ) -> Result<bool> {
         let _serialized = lock(&self.fetch_lock);
         // A racing handler may have closed the gap while we waited.
-        if local_epoch(state, purpose) >= target_epoch {
+        if state.status().epoch >= target_epoch {
             return Ok(true);
         }
-        self.sync_purpose(state, purpose)?;
-        Ok(local_epoch(state, purpose) >= target_epoch)
+        self.sync(state)?;
+        Ok(state.status().epoch >= target_epoch)
     }
 }
 
@@ -236,16 +213,6 @@ fn lock(mutex: &Mutex<()>) -> std::sync::MutexGuard<'_, ()> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-/// The local highest installed epoch for one purpose.
-fn local_epoch(state: &CentralizedCustodianState, purpose: DeliveryPurpose) -> u64 {
-    let status = state.status();
-    match purpose {
-        DeliveryPurpose::TxIo => status.tx_io_epoch,
-        DeliveryPurpose::RngPrecompile => status.rng_epoch,
-        DeliveryPurpose::Snapshot => status.snapshot_epoch,
-    }
 }
 
 /// Log-friendly description of an unexpected response; never includes key
@@ -307,7 +274,7 @@ mod tests {
     use super::*;
     use crate::council::serve_council;
     use crate::test_support::{
-        CHAIN_ID, MASTER_SEED, PURPOSE_KEY, ROOT_KEY, build_state, network_id, observer_serving,
+        CHAIN_ID, EPOCH_ROOT, MASTER_SEED, ROOT_KEY, build_state, network_id, observer_serving,
         seal,
     };
     use seismic_council_delivery::MAX_ENVELOPES_PER_FETCH;
@@ -348,34 +315,26 @@ mod tests {
     }
 
     #[test]
-    fn backfill_installs_all_purposes_and_pages_past_one_batch() {
+    fn backfill_installs_epoch_roots_and_pages_past_one_batch() {
         let parent_dir = tempfile::tempdir().unwrap();
         let (addr, parent) = spawn_parent(parent_dir.path());
-        // More tx-io epochs than one fetch batch carries, plus one epoch of
-        // another purpose; rng stays empty.
-        let tx_io_epochs = (MAX_ENVELOPES_PER_FETCH + 3) as u64;
-        for epoch in 1..=tx_io_epochs {
+        // More epochs than one fetch batch carries, so backfill must page.
+        let epochs = (MAX_ENVELOPES_PER_FETCH + 3) as u64;
+        for epoch in 1..=epochs {
             assert!(matches!(
-                parent.deliver(&seal(DeliveryPurpose::TxIo, epoch, PURPOSE_KEY)),
+                parent.deliver(&seal(epoch, EPOCH_ROOT)),
                 CouncilResponse::Delivered { .. }
             ));
         }
-        assert!(matches!(
-            parent.deliver(&seal(DeliveryPurpose::Snapshot, 1, [0xAB; 32])),
-            CouncilResponse::Delivered { .. }
-        ));
 
         let observer_dir = tempfile::tempdir().unwrap();
         let observer = build_state(observer_dir.path());
         fetcher(addr, 0).backfill(&observer).expect("backfill");
 
-        let status = observer.status();
-        assert_eq!(status.tx_io_epoch, tx_io_epochs);
-        assert_eq!(status.snapshot_epoch, 1);
-        assert_eq!(status.rng_epoch, 0);
+        assert_eq!(observer.status().epoch, epochs);
         // Envelopes were re-verified and persisted: a restart still has them.
         let reloaded = build_state(observer_dir.path());
-        assert_eq!(reloaded.status().tx_io_epoch, tx_io_epochs);
+        assert_eq!(reloaded.status().epoch, epochs);
     }
 
     #[test]
@@ -383,7 +342,7 @@ mod tests {
         let parent_dir = tempfile::tempdir().unwrap();
         let (addr, parent) = spawn_parent(parent_dir.path());
         assert!(matches!(
-            parent.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+            parent.deliver(&seal(1, EPOCH_ROOT)),
             CouncilResponse::Delivered { .. }
         ));
 
@@ -403,7 +362,7 @@ mod tests {
             format!("{error:#}").contains("BadSignature"),
             "unexpected error: {error:#}"
         );
-        assert_eq!(observer.status().tx_io_epoch, 0);
+        assert_eq!(observer.status().epoch, 0);
     }
 
     #[test]
@@ -415,23 +374,15 @@ mod tests {
         let fetcher = fetcher(addr, 3);
 
         // Nothing delivered anywhere: the epoch is genuinely unavailable.
-        assert!(
-            !fetcher
-                .fetch_up_to(&observer, DeliveryPurpose::TxIo, 1)
-                .expect("fetch")
-        );
+        assert!(!fetcher.fetch_up_to(&observer, 1).expect("fetch"));
 
         // Delivered at the parent only: the gap closes on demand.
         assert!(matches!(
-            parent.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+            parent.deliver(&seal(1, EPOCH_ROOT)),
             CouncilResponse::Delivered { .. }
         ));
-        assert!(
-            fetcher
-                .fetch_up_to(&observer, DeliveryPurpose::TxIo, 1)
-                .expect("fetch")
-        );
-        assert_eq!(observer.status().tx_io_epoch, 1);
+        assert!(fetcher.fetch_up_to(&observer, 1).expect("fetch"));
+        assert_eq!(observer.status().epoch, 1);
     }
 
     #[test]
@@ -441,7 +392,7 @@ mod tests {
         let parent_dir = tempfile::tempdir().unwrap();
         let (addr, parent) = spawn_parent(parent_dir.path());
         assert!(matches!(
-            parent.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+            parent.deliver(&seal(1, EPOCH_ROOT)),
             CouncilResponse::Delivered { .. }
         ));
 
@@ -449,7 +400,8 @@ mod tests {
         let observer = build_state(observer_dir.path());
         let fetcher = fetcher(addr, 0);
 
-        // Delivered only at the parent: the observer's socket still serves it.
+        // Delivered only at the parent: the observer's socket still serves
+        // it, deriving the tx-io key from the fetched epoch root.
         let response = crate::dispatch::dispatch(
             &observer,
             Some(&fetcher),
@@ -458,7 +410,10 @@ mod tests {
         let Response::TxIoKeypair(keys) = response else {
             panic!("expected tx-io keypair, got {}", response.kind());
         };
-        assert_eq!(keys.sk, PURPOSE_KEY);
+        assert_eq!(
+            keys.sk,
+            Custodian::new(EPOCH_ROOT).get_tx_io_sk(1).secret_bytes()
+        );
 
         // An epoch the parent doesn't have either stays a typed error.
         let response = crate::dispatch::dispatch(

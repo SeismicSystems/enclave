@@ -1,9 +1,9 @@
 //! Unix-socket dispatch for the centralized custodian.
 //!
-//! Epoch 0 of every purpose derives from the root key exactly like the TDX
-//! custodian, so consumers see identical bytes across the two services.
-//! Epochs >= 1 of tx-io/rng/snapshot are served only from council-delivered
-//! keys; a key not delivered yet answers the typed
+//! Epoch 0 of every purpose derives from the keyfile root exactly like the
+//! TDX custodian, so consumers see identical bytes across the two services.
+//! Epochs >= 1 derive the same way, but from the COUNCIL-DELIVERED root for
+//! that epoch; an epoch whose root has not been delivered answers the typed
 //! [`Response::EpochKeyUnavailable`] so callers can retry after delivery —
 //! except in observer mode, where the custodian first tries to fetch the
 //! missing epoch from its parent custodian (bounded by the parent I/O
@@ -14,13 +14,11 @@
 
 use crate::observer::ParentFetcher;
 use crate::state::CentralizedCustodianState;
-use anyhow::Result;
-use seismic_council_delivery::DeliveryPurpose;
-use seismic_custodian::Key;
+use seismic_custodian::Custodian;
 use seismic_custodian_ipc::{
     Request, Response, RngIkmBytes, SnapshotKeyBytes, TxIoKeypairBytes, TxIoPublicKeyBytes,
 };
-use tracing::{error, warn};
+use tracing::warn;
 
 /// Map one ACL-authorized socket request onto the centralized state.
 /// `fetcher` is `Some` only in observer mode.
@@ -47,43 +45,31 @@ pub fn dispatch(
         Request::GetSnapshotKey { epoch: 0 } => Response::SnapshotKey(SnapshotKeyBytes {
             key: state.custodian().get_snapshot_key(0).into(),
         }),
-        Request::GetTxIoKeypair { epoch } => {
-            serve_epoch_key(state, fetcher, DeliveryPurpose::TxIo, epoch, |key| {
-                let (sk, pk) = key.to_secp256k1_keypair()?;
-                Ok(Response::TxIoKeypair(TxIoKeypairBytes {
-                    sk: sk.secret_bytes(),
-                    pk: pk.serialize(),
-                }))
+        Request::GetTxIoKeypair { epoch } => serve_epoch_key(state, fetcher, epoch, |custodian| {
+            Response::TxIoKeypair(TxIoKeypairBytes {
+                sk: custodian.get_tx_io_sk(epoch).secret_bytes(),
+                pk: custodian.get_tx_io_pk(epoch).serialize(),
             })
-        }
-        // The public key exists only once the secret was delivered, so an
-        // undelivered epoch is EpochKeyUnavailable here too.
+        }),
+        // The public key exists only once the epoch root was delivered, so
+        // an undelivered epoch is EpochKeyUnavailable here too.
         Request::GetTxIoPublicKey { epoch } => {
-            serve_epoch_key(state, fetcher, DeliveryPurpose::TxIo, epoch, |key| {
-                let (_, pk) = key.to_secp256k1_keypair()?;
-                Ok(Response::TxIoPublicKey(TxIoPublicKeyBytes {
-                    pk: pk.serialize(),
-                }))
+            serve_epoch_key(state, fetcher, epoch, |custodian| {
+                Response::TxIoPublicKey(TxIoPublicKeyBytes {
+                    pk: custodian.get_tx_io_pk(epoch).serialize(),
+                })
             })
         }
-        Request::GetRngIkm { epoch } => serve_epoch_key(
-            state,
-            fetcher,
-            DeliveryPurpose::RngPrecompile,
-            epoch,
-            |key| {
-                Ok(Response::RngIkm(RngIkmBytes {
-                    ikm: key.to_rng_ikm()?,
-                }))
-            },
-        ),
-        Request::GetSnapshotKey { epoch } => {
-            serve_epoch_key(state, fetcher, DeliveryPurpose::Snapshot, epoch, |key| {
-                Ok(Response::SnapshotKey(SnapshotKeyBytes {
-                    key: key.to_snapshot_key().into(),
-                }))
+        Request::GetRngIkm { epoch } => serve_epoch_key(state, fetcher, epoch, |custodian| {
+            Response::RngIkm(RngIkmBytes {
+                ikm: custodian.get_rng_ikm(epoch),
             })
-        }
+        }),
+        Request::GetSnapshotKey { epoch } => serve_epoch_key(state, fetcher, epoch, |custodian| {
+            Response::SnapshotKey(SnapshotKeyBytes {
+                key: custodian.get_snapshot_key(epoch).into(),
+            })
+        }),
         Request::CreateRootKeyBootstrapAttempt
         | Request::WrapRootKey { .. }
         | Request::InstallRootKeyFromVerifiedBootstrapResponse { .. } => {
@@ -99,28 +85,29 @@ pub fn dispatch(
     }
 }
 
+/// Serve one epoch >= 1 request from the custodian holding that epoch's
+/// delivered root. Derivations cannot fail here: every root is validated to
+/// derive cleanly for all purposes before it is installed.
 fn serve_epoch_key(
     state: &CentralizedCustodianState,
     fetcher: Option<&ParentFetcher>,
-    purpose: DeliveryPurpose,
     epoch: u64,
-    f: impl FnOnce(&Key) -> Result<Response>,
+    f: impl FnOnce(&Custodian) -> Response,
 ) -> Response {
     // In observer mode, a locally missing epoch triggers a parent fetch
-    // first — outside `with_epoch_key`, so the store mutex is never held
-    // across network I/O. Failures degrade to the same typed availability
-    // error the caller would have gotten anyway.
+    // first — outside `with_epoch_custodian`, so the store mutex is never
+    // held across network I/O. Failures degrade to the same typed
+    // availability error the caller would have gotten anyway.
     if epoch >= 1
         && let Some(fetcher) = fetcher
-        && state.with_epoch_key(purpose, epoch, |_| ()).is_none()
+        && state.with_epoch_custodian(epoch, |_| ()).is_none()
     {
-        match fetcher.fetch_up_to(state, purpose, epoch) {
+        match fetcher.fetch_up_to(state, epoch) {
             Ok(true) => {}
             Ok(false) => return Response::EpochKeyUnavailable { epoch },
             Err(e) => {
                 warn!(
                     error = %format!("{e:#}"),
-                    purpose = purpose.label(),
                     epoch,
                     "on-demand fetch from parent custodian failed"
                 );
@@ -128,20 +115,8 @@ fn serve_epoch_key(
             }
         }
     }
-    match state.with_epoch_key(purpose, epoch, f) {
-        Some(Ok(response)) => response,
-        // Defensive only: keys are conversion-validated at delivery time.
-        Some(Err(e)) => {
-            error!(
-                ?e,
-                purpose = purpose.label(),
-                epoch,
-                "delivered key conversion failed"
-            );
-            Response::Error {
-                message: "delivered key conversion failed".to_string(),
-            }
-        }
+    match state.with_epoch_custodian(epoch, f) {
+        Some(response) => response,
         None => Response::EpochKeyUnavailable { epoch },
     }
 }
@@ -149,7 +124,7 @@ fn serve_epoch_key(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{PURPOSE_KEY, ROOT_KEY, build_state, seal};
+    use crate::test_support::{EPOCH_ROOT, ROOT_KEY, build_state, seal};
     use seismic_council_delivery::CouncilResponse;
     use seismic_custodian::Custodian;
 
@@ -234,45 +209,45 @@ mod tests {
     }
 
     #[test]
-    fn delivered_epochs_serve_the_delivered_key() {
+    fn delivered_epochs_serve_keys_derived_from_the_epoch_root() {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
         assert!(matches!(
-            state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
-            CouncilResponse::Delivered { .. }
-        ));
-        assert!(matches!(
-            state.deliver(&seal(DeliveryPurpose::Snapshot, 1, [0xAB; 32])),
+            state.deliver(&seal(1, EPOCH_ROOT)),
             CouncilResponse::Delivered { .. }
         ));
 
-        // The delivered 32 bytes ARE the purpose key: the secret scalar for
-        // tx-io, the AES key for snapshots.
+        // One delivered root serves every purpose of the epoch, each key
+        // HKDF-derived exactly as a custodian over that root derives it.
+        let epoch_custodian = Custodian::new(EPOCH_ROOT);
+
         let Response::TxIoKeypair(keys) =
             dispatch(&state, None, Request::GetTxIoKeypair { epoch: 1 })
         else {
             panic!("expected tx-io keypair");
         };
-        assert_eq!(keys.sk, PURPOSE_KEY);
-        let expected_pk = secp256k1::PublicKey::from_secret_key(
-            &secp256k1::Secp256k1::new(),
-            &secp256k1::SecretKey::from_byte_array(&PURPOSE_KEY).unwrap(),
-        );
-        assert_eq!(keys.pk, expected_pk.serialize());
+        assert_eq!(keys.sk, epoch_custodian.get_tx_io_sk(1).secret_bytes());
+        assert_eq!(keys.pk, epoch_custodian.get_tx_io_pk(1).serialize());
 
         let Response::TxIoPublicKey(pk) =
             dispatch(&state, None, Request::GetTxIoPublicKey { epoch: 1 })
         else {
             panic!("expected tx-io public key");
         };
-        assert_eq!(pk.pk, expected_pk.serialize());
+        assert_eq!(pk.pk, epoch_custodian.get_tx_io_pk(1).serialize());
+
+        let Response::RngIkm(rng) = dispatch(&state, None, Request::GetRngIkm { epoch: 1 }) else {
+            panic!("expected rng ikm");
+        };
+        assert_eq!(rng.ikm, epoch_custodian.get_rng_ikm(1));
 
         let Response::SnapshotKey(snapshot) =
             dispatch(&state, None, Request::GetSnapshotKey { epoch: 1 })
         else {
             panic!("expected snapshot key");
         };
-        assert_eq!(snapshot.key, [0xAB; 32]);
+        let expected: [u8; 32] = epoch_custodian.get_snapshot_key(1).into();
+        assert_eq!(snapshot.key, expected);
 
         // Epoch 0 still answers from derivation, unaffected by deliveries.
         let Response::TxIoKeypair(epoch0) =
@@ -342,26 +317,27 @@ mod tests {
                 .expect_err("not delivered");
             assert!(matches!(error, IpcError::EpochKeyUnavailable { epoch: 1 }));
 
-            // The council asks for status (inbox key, next epoch), delivers.
+            // The council asks for status (next epoch), delivers.
             let CouncilResponse::Status(status) =
                 council_call(council_addr, &CouncilRequest::GetStatus)
             else {
                 panic!("expected status");
             };
-            assert_eq!(status.tx_io_epoch, 0);
+            assert_eq!(status.epoch, 0);
             let response = council_call(
                 council_addr,
-                &CouncilRequest::DeliverEpochKey(seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+                &CouncilRequest::DeliverEpochKey(seal(1, EPOCH_ROOT)),
             );
-            assert!(matches!(
-                response,
-                CouncilResponse::Delivered { epoch: 1, .. }
-            ));
+            assert!(matches!(response, CouncilResponse::Delivered { epoch: 1 }));
 
-            // The delivered key now serves; epoch 0 still derives; epoch 2
-            // stays unavailable.
+            // The delivered epoch now serves keys derived from its root;
+            // epoch 0 still derives from the keyfile; epoch 2 stays
+            // unavailable.
             let keys = client.get_tx_io_keypair(1).await.expect("delivered epoch");
-            assert_eq!(keys.sk, PURPOSE_KEY);
+            assert_eq!(
+                keys.sk,
+                Custodian::new(EPOCH_ROOT).get_tx_io_sk(1).secret_bytes()
+            );
             let epoch0 = client.get_tx_io_keypair(0).await.expect("derived epoch");
             assert_eq!(
                 epoch0.sk,
@@ -396,7 +372,7 @@ mod tests {
             std::thread::spawn(move || serve_council(tcp_listener, parent_council, Some(serving)));
             let response = council_call(
                 parent_addr,
-                &CouncilRequest::DeliverEpochKey(seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+                &CouncilRequest::DeliverEpochKey(seal(1, EPOCH_ROOT)),
             );
             assert!(matches!(response, CouncilResponse::Delivered { .. }));
 
@@ -442,7 +418,10 @@ mod tests {
             // Backfilled epoch and derived epoch 0 both serve, with the
             // same bytes the parent would give.
             let keys = client.get_tx_io_keypair(1).await.expect("backfilled");
-            assert_eq!(keys.sk, PURPOSE_KEY);
+            assert_eq!(
+                keys.sk,
+                Custodian::new(EPOCH_ROOT).get_tx_io_sk(1).secret_bytes()
+            );
             let epoch0 = client.get_tx_io_keypair(0).await.expect("derived");
             assert_eq!(
                 epoch0.sk,
@@ -453,13 +432,16 @@ mod tests {
             // when the observer's socket is asked for it...
             let response = council_call(
                 parent_addr,
-                &CouncilRequest::DeliverEpochKey(seal(DeliveryPurpose::TxIo, 2, [0x51; 32])),
+                &CouncilRequest::DeliverEpochKey(seal(2, [0x51; 32])),
             );
             assert!(matches!(response, CouncilResponse::Delivered { .. }));
             let keys = client.get_tx_io_keypair(2).await.expect("on-demand fetch");
-            assert_eq!(keys.sk, [0x51; 32]);
+            assert_eq!(
+                keys.sk,
+                Custodian::new([0x51; 32]).get_tx_io_sk(2).secret_bytes()
+            );
             // ...and was persisted locally on the way through.
-            assert_eq!(observer.status().tx_io_epoch, 2);
+            assert_eq!(observer.status().epoch, 2);
 
             // An epoch nobody has stays a typed, retriable error.
             let error = client

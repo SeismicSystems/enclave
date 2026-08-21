@@ -1,27 +1,29 @@
-//! Council-delivered epoch keys over a locally persisted root key.
+//! Council-delivered epoch root keys over a locally persisted epoch-0 root.
 //!
 //! This service runs standalone — the centralized phase before the network
 //! moves to decentralized custody inside TEEs — so unlike
 //! `seismic-custodian-service` there is no bootstrap flow, no LUKS handoff,
-//! and no waiting on late-mounted storage: the root key is loaded (or
-//! defaulted) from a keyfile before this state exists, and the delivery
+//! and no waiting on late-mounted storage: the epoch-0 root key is loaded
+//! (or defaulted) from a keyfile before this state exists, and the delivery
 //! store is scanned eagerly at construction, boot-fatally if its directory
 //! is unusable.
 //!
-//! The [`EpochKeyStore`] holds per-purpose sequences of council-delivered
-//! keys for epochs >= 1 (epoch 0 stays root-key-derived). Each delivery is
-//! accepted only as a council-signed [`SignedDeliveryEnvelope`] and
-//! persisted before it becomes observable, so a served key always survives
-//! a restart. Envelopes carry the key in plaintext (transport
+//! Rotation model: the council delivers one 32-byte ROOT key per epoch, and
+//! every purpose key of that epoch (tx-io, rng, snapshot) is HKDF-derived
+//! from it — the exact derivation epoch 0 uses on the keyfile root. The
+//! [`EpochKeyStore`] holds one [`Custodian`] per delivered epoch. Each
+//! delivery is accepted only as a council-signed [`SignedDeliveryEnvelope`]
+//! and persisted before it becomes observable, so a served key always
+//! survives a restart. Envelopes carry the root key in plaintext (transport
 //! confidentiality is the deployment's TLS/tunnel in front of the port), so
 //! the persisted files are themselves secrets: dirs 0700, files 0600.
 
 use anyhow::{Context as _, Result};
 use seismic_council_delivery::{
-    CouncilResponse, CouncilStatus, DeliveryPurpose, RejectCode, SignedDeliveryEnvelope,
-    VerifyDeliveryError, canonical_envelope_bytes, envelope_from_bytes, verify_delivery,
+    CouncilResponse, CouncilStatus, RejectCode, SignedDeliveryEnvelope, VerifyDeliveryError,
+    canonical_envelope_bytes, envelope_from_bytes, verify_delivery,
 };
-use seismic_custodian::{Custodian, Key};
+use seismic_custodian::{Custodian, KeyPurpose};
 use seismic_network_manifest::NetworkId;
 use std::fs;
 use std::io::Write as _;
@@ -31,7 +33,8 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use tracing::{error, info, warn};
 use zeroize::Zeroizing;
 
-/// The host's one state slot: the custodian plus the delivered-key store.
+/// The host's one state slot: the epoch-0 custodian plus the delivered
+/// epoch-root store.
 pub struct CentralizedCustodianState {
     custodian: Custodian,
     deliveries: Mutex<EpochKeyStore>,
@@ -40,40 +43,22 @@ pub struct CentralizedCustodianState {
     network_id: NetworkId,
 }
 
-/// Council-delivered keys, one sequence per purpose: index `e - 1` holds
-/// epoch `e`, so `len()` is the highest delivered epoch (0 = none delivered;
-/// epoch 0 itself is always root-key-derived, never stored here).
+/// Council-delivered epoch roots: index `e - 1` holds epoch `e`, so `len()`
+/// is the highest delivered epoch (0 = none delivered; epoch 0 itself is
+/// always keyfile-derived, never stored here).
 #[derive(Default)]
 struct EpochKeyStore {
-    tx_io: Vec<StoredDelivery>,
-    rng: Vec<StoredDelivery>,
-    snapshot: Vec<StoredDelivery>,
+    epochs: Vec<StoredDelivery>,
 }
 
 struct StoredDelivery {
-    key: Key,
+    /// A custodian over the delivered epoch root: purpose keys for this
+    /// epoch derive from it exactly as epoch 0 derives from the keyfile.
+    custodian: Custodian,
     /// Canonical envelope CBOR — what is on disk; compared byte-for-byte to
     /// distinguish idempotent redelivery from an epoch conflict. Contains
-    /// the plaintext key, hence zeroized.
+    /// the plaintext root key, hence zeroized.
     envelope_bytes: Zeroizing<Vec<u8>>,
-}
-
-impl EpochKeyStore {
-    fn purpose(&self, purpose: DeliveryPurpose) -> &Vec<StoredDelivery> {
-        match purpose {
-            DeliveryPurpose::TxIo => &self.tx_io,
-            DeliveryPurpose::RngPrecompile => &self.rng,
-            DeliveryPurpose::Snapshot => &self.snapshot,
-        }
-    }
-
-    fn purpose_mut(&mut self, purpose: DeliveryPurpose) -> &mut Vec<StoredDelivery> {
-        match purpose {
-            DeliveryPurpose::TxIo => &mut self.tx_io,
-            DeliveryPurpose::RngPrecompile => &mut self.rng,
-            DeliveryPurpose::Snapshot => &mut self.snapshot,
-        }
-    }
 }
 
 impl CentralizedCustodianState {
@@ -93,17 +78,10 @@ impl CentralizedCustodianState {
             .create(&delivery_dir)
             .with_context(|| format!("creating delivery dir {}", delivery_dir.display()))?;
 
-        let mut store = EpochKeyStore::default();
-        for purpose in DeliveryPurpose::ALL {
-            *store.purpose_mut(purpose) =
-                load_purpose(&delivery_dir, purpose, &council_address, &network_id);
-        }
-        info!(
-            tx_io = store.tx_io.len(),
-            rng = store.rng.len(),
-            snapshot = store.snapshot.len(),
-            "delivery store loaded"
-        );
+        let store = EpochKeyStore {
+            epochs: load_epochs(&delivery_dir, &council_address, &network_id),
+        };
+        info!(epoch = store.epochs.len(), "delivery store loaded");
 
         Ok(Self {
             custodian,
@@ -114,7 +92,7 @@ impl CentralizedCustodianState {
         })
     }
 
-    /// The custodian, for epoch-0 derivations.
+    /// The custodian for epoch-0 derivations (the keyfile root).
     pub fn custodian(&self) -> &Custodian {
         &self.custodian
     }
@@ -126,26 +104,24 @@ impl CentralizedCustodianState {
     }
 
     /// Handle one `DeliverEpochKey`. Verification order: envelope validity
-    /// (network, signature), then sequencing, then key validity — and the
-    /// envelope is durable on disk before the key becomes observable, so a
-    /// served delivered key always survives a restart.
+    /// (network, signature), then sequencing, then derived-key validity —
+    /// and the envelope is durable on disk before the root becomes
+    /// observable, so a served epoch always survives a restart.
     pub fn deliver(&self, envelope: &SignedDeliveryEnvelope) -> CouncilResponse {
-        let purpose = envelope.payload.purpose;
         let epoch = envelope.payload.epoch;
 
-        let key_bytes = match verify_delivery(envelope, &self.council_address, &self.network_id) {
-            Ok(key_bytes) => key_bytes,
+        let root = match verify_delivery(envelope, &self.council_address, &self.network_id) {
+            Ok(root) => root,
             Err(e) => {
-                warn!(?e, purpose = purpose.label(), epoch, "delivery refused");
+                warn!(?e, epoch, "delivery refused");
                 return rejected(verify_error_code(e), &e.to_string());
             }
         };
 
         let mut store = self.lock_deliveries();
-        let sequence = store.purpose_mut(purpose);
-        let max = sequence.len() as u64;
+        let max = store.epochs.len() as u64;
         if (1..=max).contains(&epoch) {
-            let existing = &sequence[(epoch - 1) as usize];
+            let existing = &store.epochs[(epoch - 1) as usize];
             let incoming = match canonical_envelope_bytes(envelope) {
                 Ok(bytes) => bytes,
                 Err(e) => {
@@ -154,7 +130,7 @@ impl CentralizedCustodianState {
                 }
             };
             return if *existing.envelope_bytes == *incoming {
-                CouncilResponse::AlreadyDelivered { purpose, epoch }
+                CouncilResponse::AlreadyDelivered { epoch }
             } else {
                 rejected(
                     RejectCode::EpochConflict,
@@ -169,10 +145,13 @@ impl CentralizedCustodianState {
             );
         }
 
-        let key = Key::new(*key_bytes);
-        if !key_is_valid_for(&key, purpose) {
-            warn!(purpose = purpose.label(), epoch, "delivered key unusable");
-            return rejected(RejectCode::InvalidKey, "key is not usable for this purpose");
+        let custodian = Custodian::new(*root);
+        if !root_serves_all_purposes(&custodian, epoch) {
+            warn!(epoch, "delivered root derives an unusable purpose key");
+            return rejected(
+                RejectCode::InvalidKey,
+                "a purpose key derived from this root is unusable",
+            );
         }
 
         let envelope_bytes = match canonical_envelope_bytes(envelope) {
@@ -182,20 +161,20 @@ impl CentralizedCustodianState {
                 return rejected(RejectCode::PersistFailed, "envelope encoding failed");
             }
         };
-        if let Err(e) = persist_envelope(&self.delivery_dir, purpose, epoch, &envelope_bytes) {
-            error!(?e, purpose = purpose.label(), epoch, "persisting delivery");
+        if let Err(e) = persist_envelope(&self.delivery_dir, epoch, &envelope_bytes) {
+            error!(?e, epoch, "persisting delivery");
             return rejected(
                 RejectCode::PersistFailed,
                 "delivery could not be made durable; nothing was installed",
             );
         }
 
-        sequence.push(StoredDelivery {
-            key,
+        store.epochs.push(StoredDelivery {
+            custodian,
             envelope_bytes,
         });
-        info!(purpose = purpose.label(), epoch, "epoch key delivered");
-        CouncilResponse::Delivered { purpose, epoch }
+        info!(epoch, "epoch root key delivered");
+        CouncilResponse::Delivered { epoch }
     }
 
     /// Public delivery state: what the council needs to seal the next
@@ -204,53 +183,48 @@ impl CentralizedCustodianState {
         let store = self.lock_deliveries();
         CouncilStatus {
             network_id: *self.network_id.as_bytes(),
-            tx_io_epoch: store.tx_io.len() as u64,
-            rng_epoch: store.rng.len() as u64,
-            snapshot_epoch: store.snapshot.len() as u64,
+            epoch: store.epochs.len() as u64,
         }
     }
 
-    /// Run `f` against the delivered key for `(purpose, epoch)`, or `None`
-    /// if that epoch has not been delivered. Callers route epoch 0 to the
-    /// custodian's derivation, never here.
-    pub fn with_epoch_key<T>(
+    /// Run `f` against the custodian holding the delivered root for `epoch`,
+    /// or `None` if that epoch has not been delivered. Callers route epoch 0
+    /// to [`Self::custodian`], never here.
+    pub fn with_epoch_custodian<T>(
         &self,
-        purpose: DeliveryPurpose,
         epoch: u64,
-        f: impl FnOnce(&Key) -> T,
+        f: impl FnOnce(&Custodian) -> T,
     ) -> Option<T> {
-        debug_assert!(epoch >= 1, "epoch 0 is derived, not delivered");
+        debug_assert!(epoch >= 1, "epoch 0 is keyfile-derived, not delivered");
         if epoch == 0 {
             return None;
         }
         let store = self.lock_deliveries();
         store
-            .purpose(purpose)
+            .epochs
             .get((epoch - 1) as usize)
-            .map(|stored| f(&stored.key))
+            .map(|stored| f(&stored.custodian))
     }
 
-    /// Decoded envelopes for `purpose`, epochs ascending from `from_epoch`,
-    /// at most `max` — plus the highest delivered epoch, so an observer
-    /// knows whether to page again. Decodes the stored canonical bytes,
-    /// which were signature-verified at delivery or load time; a decode
-    /// failure here is defensive only (log and stop the batch early).
+    /// Decoded envelopes for epochs ascending from `from_epoch`, at most
+    /// `max` — plus the highest delivered epoch, so an observer knows
+    /// whether to page again. Decodes the stored canonical bytes, which were
+    /// signature-verified at delivery or load time; a decode failure here is
+    /// defensive only (log and stop the batch early).
     pub fn envelopes_from(
         &self,
-        purpose: DeliveryPurpose,
         from_epoch: u64,
         max: usize,
     ) -> (Vec<SignedDeliveryEnvelope>, u64) {
         let store = self.lock_deliveries();
-        let sequence = store.purpose(purpose);
-        let delivered_epoch = sequence.len() as u64;
+        let delivered_epoch = store.epochs.len() as u64;
         let first = from_epoch.max(1);
         let mut envelopes = Vec::new();
-        for stored in sequence.iter().skip((first - 1) as usize).take(max) {
+        for stored in store.epochs.iter().skip((first - 1) as usize).take(max) {
             match envelope_from_bytes(&stored.envelope_bytes) {
                 Ok(envelope) => envelopes.push(envelope),
                 Err(e) => {
-                    error!(?e, purpose = purpose.label(), "stored envelope undecodable");
+                    error!(?e, "stored envelope undecodable");
                     break;
                 }
             }
@@ -267,20 +241,19 @@ impl CentralizedCustodianState {
     }
 }
 
-/// Load `1.cbor, 2.cbor, ...` for one purpose, stopping at the first gap. A
-/// file that fails verification stops the scan at the last good epoch —
-/// deliberately not boot-fatal, because a byte-faithful redelivery of that
-/// epoch heals it (persist renames over the bad file) while a fatal error
-/// would keep the service down.
-fn load_purpose(
+/// Load `1.cbor, 2.cbor, ...`, stopping at the first gap. A file that fails
+/// verification stops the scan at the last good epoch — deliberately not
+/// boot-fatal, because a byte-faithful redelivery of that epoch heals it
+/// (persist renames over the bad file) while a fatal error would keep the
+/// service down.
+fn load_epochs(
     delivery_dir: &Path,
-    purpose: DeliveryPurpose,
     council_address: &[u8; 20],
     network_id: &NetworkId,
 ) -> Vec<StoredDelivery> {
-    let mut sequence = Vec::new();
+    let mut epochs = Vec::new();
     for epoch in 1u64.. {
-        let path = envelope_path(delivery_dir, purpose, epoch);
+        let path = envelope_path(delivery_dir, epoch);
         let bytes = match fs::read(&path) {
             Ok(bytes) => Zeroizing::new(bytes),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
@@ -292,21 +265,21 @@ fn load_purpose(
         let stored = envelope_from_bytes(&bytes)
             .map_err(|e| format!("decode: {e}"))
             .and_then(|envelope| {
-                if envelope.payload.purpose != purpose || envelope.payload.epoch != epoch {
-                    return Err("purpose/epoch does not match its path".into());
+                if envelope.payload.epoch != epoch {
+                    return Err("epoch does not match its path".into());
                 }
                 verify_delivery(&envelope, council_address, network_id)
                     .map_err(|e| format!("verify: {e}"))
             })
-            .and_then(|key_bytes| {
-                let key = Key::new(*key_bytes);
-                key_is_valid_for(&key, purpose)
-                    .then_some(key)
-                    .ok_or_else(|| "key unusable for purpose".into())
+            .and_then(|root| {
+                let custodian = Custodian::new(*root);
+                root_serves_all_purposes(&custodian, epoch)
+                    .then_some(custodian)
+                    .ok_or_else(|| "root derives an unusable purpose key".into())
             });
         match stored {
-            Ok(key) => sequence.push(StoredDelivery {
-                key,
+            Ok(custodian) => epochs.push(StoredDelivery {
+                custodian,
                 envelope_bytes: bytes,
             }),
             Err(reason) => {
@@ -320,7 +293,7 @@ fn load_purpose(
             }
         }
     }
-    sequence
+    epochs
 }
 
 fn rejected(code: RejectCode, message: &str) -> CouncilResponse {
@@ -337,41 +310,31 @@ fn verify_error_code(e: VerifyDeliveryError) -> RejectCode {
     }
 }
 
-/// A delivered key must convert cleanly now so serving it can never panic
-/// later.
-fn key_is_valid_for(key: &Key, purpose: DeliveryPurpose) -> bool {
-    match purpose {
-        DeliveryPurpose::TxIo => key.to_secp256k1_keypair().is_ok(),
-        DeliveryPurpose::RngPrecompile => key.to_rng_ikm().is_ok(),
-        DeliveryPurpose::Snapshot => true,
-    }
+/// Every purpose key this epoch will serve must derive and convert cleanly
+/// now (astronomically unlikely to fail), so serving can never panic later.
+fn root_serves_all_purposes(custodian: &Custodian, epoch: u64) -> bool {
+    let tx_io = custodian
+        .derive_purpose_key(KeyPurpose::TxIo, epoch)
+        .is_ok_and(|key| key.to_secp256k1_keypair().is_ok());
+    let rng = custodian
+        .derive_purpose_key(KeyPurpose::RngPrecompile, epoch)
+        .is_ok_and(|key| key.to_rng_ikm().is_ok());
+    // Snapshot: any 32 bytes are a valid AES-256 key.
+    tx_io && rng
 }
 
-fn envelope_path(delivery_dir: &Path, purpose: DeliveryPurpose, epoch: u64) -> PathBuf {
-    delivery_dir
-        .join(purpose.label())
-        .join(format!("{epoch}.cbor"))
+fn envelope_path(delivery_dir: &Path, epoch: u64) -> PathBuf {
+    delivery_dir.join(format!("{epoch}.cbor"))
 }
 
 /// Durably write one envelope: tmp sibling + fsync + rename over the final
 /// name + directory fsync (the same pattern the TDX custodian uses for its
 /// LUKS keyfile). Rename-over, not `create_new`, so redelivery can heal a
-/// corrupt earlier file. Mode 0600: the file contains the plaintext key.
-fn persist_envelope(
-    delivery_dir: &Path,
-    purpose: DeliveryPurpose,
-    epoch: u64,
-    envelope_bytes: &[u8],
-) -> Result<()> {
-    let purpose_dir = delivery_dir.join(purpose.label());
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&purpose_dir)
-        .with_context(|| format!("creating {}", purpose_dir.display()))?;
-
-    let final_path = purpose_dir.join(format!("{epoch}.cbor"));
-    let tmp_path = purpose_dir.join(format!("{epoch}.cbor.tmp"));
+/// corrupt earlier file. Mode 0600: the file contains the plaintext root
+/// key.
+fn persist_envelope(delivery_dir: &Path, epoch: u64, envelope_bytes: &[u8]) -> Result<()> {
+    let final_path = envelope_path(delivery_dir, epoch);
+    let tmp_path = delivery_dir.join(format!("{epoch}.cbor.tmp"));
     match fs::remove_file(&tmp_path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -392,7 +355,7 @@ fn persist_envelope(
     fs::rename(&tmp_path, &final_path)
         .with_context(|| format!("renaming into {}", final_path.display()))?;
     // Make the rename itself durable.
-    fs::File::open(&purpose_dir)
+    fs::File::open(delivery_dir)
         .and_then(|dir| dir.sync_all())
         .context("syncing delivery directory")?;
     Ok(())
@@ -401,13 +364,13 @@ fn persist_envelope(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{NETWORK, PURPOSE_KEY, ROOT_KEY, build_state, council_keys, seal};
+    use crate::test_support::{NETWORK, ROOT_KEY, build_state, council_keys, seal};
     use seismic_council_delivery::seal_delivery;
     use std::os::unix::fs::PermissionsExt as _;
 
     fn assert_delivered(response: &CouncilResponse, epoch: u64) {
         assert!(
-            matches!(response, CouncilResponse::Delivered { epoch: e, .. } if *e == epoch),
+            matches!(response, CouncilResponse::Delivered { epoch: e } if *e == epoch),
             "expected Delivered {{ epoch: {epoch} }}, got {response:?}"
         );
     }
@@ -419,36 +382,46 @@ mod tests {
         );
     }
 
-    fn epoch_key(
-        state: &CentralizedCustodianState,
-        purpose: DeliveryPurpose,
-        epoch: u64,
-    ) -> Option<[u8; 32]> {
-        state.with_epoch_key(purpose, epoch, |key| {
-            key.as_ref().try_into().expect("32 bytes")
+    /// The tx-io secret an epoch serves, or None if undelivered.
+    fn tx_io_sk(state: &CentralizedCustodianState, epoch: u64) -> Option<[u8; 32]> {
+        state.with_epoch_custodian(epoch, |custodian| {
+            custodian.get_tx_io_sk(epoch).secret_bytes()
         })
     }
 
     #[test]
-    fn sequential_deliveries_install_and_serve() {
+    fn sequential_deliveries_install_and_derive_purpose_keys() {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
         for epoch in 1..=3u64 {
-            let key = [epoch as u8; 32];
-            let response = state.deliver(&seal(DeliveryPurpose::TxIo, epoch, key));
+            let root = [epoch as u8; 32];
+            let response = state.deliver(&seal(epoch, root));
             assert_delivered(&response, epoch);
-            assert_eq!(epoch_key(&state, DeliveryPurpose::TxIo, epoch), Some(key));
+            // Purpose keys derive from the delivered root exactly as a
+            // custodian over that root would derive them.
+            assert_eq!(
+                tx_io_sk(&state, epoch),
+                Some(Custodian::new(root).get_tx_io_sk(epoch).secret_bytes())
+            );
         }
-        // Purposes sequence independently.
-        assert_delivered(
-            &state.deliver(&seal(DeliveryPurpose::Snapshot, 1, PURPOSE_KEY)),
-            1,
-        );
         let status = state.status();
-        assert_eq!(status.tx_io_epoch, 3);
-        assert_eq!(status.snapshot_epoch, 1);
-        assert_eq!(status.rng_epoch, 0);
+        assert_eq!(status.epoch, 3);
         assert_eq!(status.network_id, NETWORK);
+    }
+
+    /// The same delivered root serves DIFFERENT purpose keys per purpose and
+    /// per epoch (the epoch is bound into the derivation info).
+    #[test]
+    fn derivations_are_separated_by_purpose_and_epoch() {
+        let root = [9u8; 32];
+        let custodian = Custodian::new(root);
+        let tx_io = custodian.get_tx_io_sk(1).secret_bytes();
+        let rng = custodian.get_rng_ikm(1);
+        let snapshot: [u8; 32] = custodian.get_snapshot_key(1).into();
+        assert_ne!(tx_io.as_slice(), &rng[..32]);
+        assert_ne!(tx_io, snapshot);
+        // Same root at a different epoch derives different keys.
+        assert_ne!(tx_io, custodian.get_tx_io_sk(2).secret_bytes());
     }
 
     #[test]
@@ -456,48 +429,45 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
         assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 2, PURPOSE_KEY)),
+            &state.deliver(&seal(2, [2; 32])),
             RejectCode::NonSequentialEpoch,
         );
         assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 0, PURPOSE_KEY)),
+            &state.deliver(&seal(0, [2; 32])),
             RejectCode::NonSequentialEpoch,
         );
-        assert_delivered(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
-            1,
-        );
+        assert_delivered(&state.deliver(&seal(1, [1; 32])), 1);
         assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 3, PURPOSE_KEY)),
+            &state.deliver(&seal(3, [3; 32])),
             RejectCode::NonSequentialEpoch,
         );
     }
 
     #[test]
-    fn redelivery_is_idempotent_but_a_different_key_conflicts() {
+    fn redelivery_is_idempotent_but_a_different_root_conflicts() {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
-        let envelope = seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY);
+        let envelope = seal(1, [0x42; 32]);
         assert_delivered(&state.deliver(&envelope), 1);
         assert!(matches!(
             state.deliver(&envelope),
-            CouncilResponse::AlreadyDelivered { epoch: 1, .. }
+            CouncilResponse::AlreadyDelivered { epoch: 1 }
         ));
         // Sealing is deterministic, so even a from-scratch re-seal of the
-        // same key is the identical envelope: idempotent.
+        // same root is the identical envelope: idempotent.
         assert!(matches!(
-            state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
-            CouncilResponse::AlreadyDelivered { epoch: 1, .. }
+            state.deliver(&seal(1, [0x42; 32])),
+            CouncilResponse::AlreadyDelivered { epoch: 1 }
         ));
-        // A *different* key at an installed epoch is a conflict.
+        // A *different* root at an installed epoch is a conflict.
         assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 1, [0x43; 32])),
+            &state.deliver(&seal(1, [0x43; 32])),
             RejectCode::EpochConflict,
         );
         // The original still serves.
         assert_eq!(
-            epoch_key(&state, DeliveryPurpose::TxIo, 1),
-            Some(PURPOSE_KEY)
+            tx_io_sk(&state, 1),
+            Some(Custodian::new([0x42; 32]).get_tx_io_sk(1).secret_bytes())
         );
     }
 
@@ -510,62 +480,36 @@ mod tests {
         let foreign = seal_delivery(
             &council_keys().0,
             &NetworkId::from_bytes([0x99; 32]),
-            DeliveryPurpose::TxIo,
             1,
-            &PURPOSE_KEY,
+            &[0x42; 32],
         );
         assert_rejected(&state.deliver(&foreign), RejectCode::WrongNetwork);
 
         // Signed by an impostor key.
         let impostor = secp256k1::SecretKey::from_byte_array(&[0x66; 32]).unwrap();
-        let forged = seal_delivery(
-            &impostor,
-            &state.network_id,
-            DeliveryPurpose::TxIo,
-            1,
-            &PURPOSE_KEY,
-        );
+        let forged = seal_delivery(&impostor, &state.network_id, 1, &[0x42; 32]);
         assert_rejected(&state.deliver(&forged), RejectCode::BadSignature);
 
-        // A key that is not a secp256k1 scalar cannot serve tx-io.
-        assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 1, [0xff; 32])),
-            RejectCode::InvalidKey,
-        );
-        // ...but is fine as a snapshot key (any 32 bytes).
-        assert_delivered(
-            &state.deliver(&seal(DeliveryPurpose::Snapshot, 1, [0xff; 32])),
-            1,
-        );
-        // Nothing was installed for tx-io by the failures above.
-        assert_eq!(state.status().tx_io_epoch, 0);
+        // Nothing was installed by the failures above.
+        assert_eq!(state.status().epoch, 0);
     }
 
     #[test]
     fn unpersistable_delivery_installs_nothing() {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
-        assert_delivered(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
-            1,
-        );
+        assert_delivered(&state.deliver(&seal(1, [1; 32])), 1);
 
-        // Make the purpose directory unwritable; epoch 2 must fail closed.
-        let purpose_dir = dir.path().join("deliveries").join("tx-io");
-        fs::set_permissions(&purpose_dir, fs::Permissions::from_mode(0o500)).unwrap();
-        assert_rejected(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 2, PURPOSE_KEY)),
-            RejectCode::PersistFailed,
-        );
-        assert!(epoch_key(&state, DeliveryPurpose::TxIo, 2).is_none());
-        assert_eq!(state.status().tx_io_epoch, 1);
+        // Make the delivery directory unwritable; epoch 2 must fail closed.
+        let delivery_dir = dir.path().join("deliveries");
+        fs::set_permissions(&delivery_dir, fs::Permissions::from_mode(0o500)).unwrap();
+        assert_rejected(&state.deliver(&seal(2, [2; 32])), RejectCode::PersistFailed);
+        assert!(tx_io_sk(&state, 2).is_none());
+        assert_eq!(state.status().epoch, 1);
 
         // Restored, the same delivery succeeds.
-        fs::set_permissions(&purpose_dir, fs::Permissions::from_mode(0o700)).unwrap();
-        assert_delivered(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 2, PURPOSE_KEY)),
-            2,
-        );
+        fs::set_permissions(&delivery_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        assert_delivered(&state.deliver(&seal(2, [2; 32])), 2);
     }
 
     #[test]
@@ -585,60 +529,54 @@ mod tests {
     #[test]
     fn restart_reloads_persisted_deliveries() {
         let dir = tempfile::tempdir().unwrap();
-        let keys: Vec<[u8; 32]> = (1..=3u8).map(|e| [e; 32]).collect();
+        let roots: Vec<[u8; 32]> = (1..=3u8).map(|e| [e; 32]).collect();
         {
             let state = build_state(dir.path());
-            for (i, key) in keys.iter().enumerate() {
-                assert_delivered(
-                    &state.deliver(&seal(DeliveryPurpose::TxIo, (i + 1) as u64, *key)),
-                    (i + 1) as u64,
-                );
+            for (i, root) in roots.iter().enumerate() {
+                assert_delivered(&state.deliver(&seal((i + 1) as u64, *root)), (i + 1) as u64);
             }
         }
         // "Restart": a fresh state over the same directories.
         let state = build_state(dir.path());
-        let status = state.status();
-        assert_eq!(status.tx_io_epoch, 3);
-        for (i, key) in keys.iter().enumerate() {
+        assert_eq!(state.status().epoch, 3);
+        for (i, root) in roots.iter().enumerate() {
+            let epoch = (i + 1) as u64;
             assert_eq!(
-                epoch_key(&state, DeliveryPurpose::TxIo, (i + 1) as u64),
-                Some(*key)
+                tx_io_sk(&state, epoch),
+                Some(Custodian::new(*root).get_tx_io_sk(epoch).secret_bytes())
             );
         }
         // The sequence continues where it left off.
-        assert_delivered(
-            &state.deliver(&seal(DeliveryPurpose::TxIo, 4, PURPOSE_KEY)),
-            4,
-        );
+        assert_delivered(&state.deliver(&seal(4, [4; 32])), 4);
     }
 
     #[test]
     fn corrupt_stored_epoch_serves_prefix_and_heals_by_redelivery() {
         let dir = tempfile::tempdir().unwrap();
-        let envelope2 = seal(DeliveryPurpose::TxIo, 2, [2; 32]);
+        let envelope2 = seal(2, [2; 32]);
         {
             let state = build_state(dir.path());
-            assert_delivered(&state.deliver(&seal(DeliveryPurpose::TxIo, 1, [1; 32])), 1);
+            assert_delivered(&state.deliver(&seal(1, [1; 32])), 1);
             assert_delivered(&state.deliver(&envelope2), 2);
-            assert_delivered(&state.deliver(&seal(DeliveryPurpose::TxIo, 3, [3; 32])), 3);
+            assert_delivered(&state.deliver(&seal(3, [3; 32])), 3);
         }
-        let epoch2_path = dir.path().join("deliveries/tx-io/2.cbor");
+        let epoch2_path = dir.path().join("deliveries/2.cbor");
         fs::write(&epoch2_path, b"corrupted").unwrap();
 
         // Restart: the scan stops at the last good epoch before the damage.
         let state = build_state(dir.path());
-        assert_eq!(state.status().tx_io_epoch, 1);
-        assert_eq!(epoch_key(&state, DeliveryPurpose::TxIo, 1), Some([1; 32]));
-        assert!(epoch_key(&state, DeliveryPurpose::TxIo, 2).is_none());
+        assert_eq!(state.status().epoch, 1);
+        assert!(tx_io_sk(&state, 1).is_some());
+        assert!(tx_io_sk(&state, 2).is_none());
 
         // Redelivering the original envelope heals epoch 2 (rename-over)...
         assert_delivered(&state.deliver(&envelope2), 2);
-        assert_eq!(epoch_key(&state, DeliveryPurpose::TxIo, 2), Some([2; 32]));
+        assert!(tx_io_sk(&state, 2).is_some());
 
         // ...and epoch 3's file was never touched, so another restart
         // recovers the full sequence.
         let state = build_state(dir.path());
-        assert_eq!(state.status().tx_io_epoch, 3);
-        assert_eq!(epoch_key(&state, DeliveryPurpose::TxIo, 3), Some([3; 32]));
+        assert_eq!(state.status().epoch, 3);
+        assert!(tx_io_sk(&state, 3).is_some());
     }
 }

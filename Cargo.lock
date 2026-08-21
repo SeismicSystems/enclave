@@ -5006,6 +5006,7 @@ dependencies = [
  "clap",
  "hex",
  "rand 0.9.2",
+ "rustls",
  "secp256k1",
  "seismic-custodian-ipc",
  "seismic-network-manifest",
@@ -5014,6 +5015,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
+ "webpki-roots 1.0.7",
  "zeroize",
 ]
 

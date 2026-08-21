@@ -163,15 +163,9 @@ pub fn handle_council_connection<S: Read + Write>(
                             ObserverQuery::RootKey => CouncilResponse::RootKey(ObserverRootKey {
                                 key: serving.root_key(),
                             }),
-                            ObserverQuery::Envelopes {
-                                purpose,
-                                from_epoch,
-                            } => {
-                                let (envelopes, delivered_epoch) = state.envelopes_from(
-                                    purpose,
-                                    from_epoch,
-                                    MAX_ENVELOPES_PER_FETCH,
-                                );
+                            ObserverQuery::Envelopes { from_epoch } => {
+                                let (envelopes, delivered_epoch) =
+                                    state.envelopes_from(from_epoch, MAX_ENVELOPES_PER_FETCH);
                                 CouncilResponse::Envelopes {
                                     envelopes,
                                     delivered_epoch,
@@ -204,8 +198,7 @@ fn not_serving_observers() -> CouncilResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{PURPOSE_KEY, build_state, seal};
-    use seismic_council_delivery::DeliveryPurpose;
+    use crate::test_support::{EPOCH_ROOT, build_state, seal};
     use std::io::Cursor;
 
     /// In-memory stand-in for a TCP connection: reads scripted request
@@ -279,7 +272,7 @@ mod tests {
             &[
                 CouncilRequest::Ping,
                 CouncilRequest::GetStatus,
-                CouncilRequest::DeliverEpochKey(seal(DeliveryPurpose::TxIo, 1, PURPOSE_KEY)),
+                CouncilRequest::DeliverEpochKey(seal(1, EPOCH_ROOT)),
                 CouncilRequest::GetStatus,
             ],
             &state,
@@ -288,15 +281,15 @@ mod tests {
         let CouncilResponse::Status(before) = &responses[1] else {
             panic!("expected status");
         };
-        assert_eq!(before.tx_io_epoch, 0);
+        assert_eq!(before.epoch, 0);
         assert!(matches!(
             responses[2],
-            CouncilResponse::Delivered { epoch: 1, .. }
+            CouncilResponse::Delivered { epoch: 1 }
         ));
         let CouncilResponse::Status(after) = &responses[3] else {
             panic!("expected status");
         };
-        assert_eq!(after.tx_io_epoch, 1);
+        assert_eq!(after.epoch, 1);
     }
 
     #[test]
@@ -349,7 +342,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = build_state(dir.path());
         for epoch in 1..=3u64 {
-            state.deliver(&seal(DeliveryPurpose::TxIo, epoch, [epoch as u8; 32]));
+            state.deliver(&seal(epoch, [epoch as u8; 32]));
         }
         let serving = observer_serving(dir.path());
         let responses = run_connection_with(
@@ -357,14 +350,7 @@ mod tests {
                 CouncilRequest::ObserverChallenge,
                 signed_fetch(0, &NONCE_1, ObserverQuery::RootKey),
                 CouncilRequest::ObserverChallenge,
-                signed_fetch(
-                    0,
-                    &NONCE_2,
-                    ObserverQuery::Envelopes {
-                        purpose: DeliveryPurpose::TxIo,
-                        from_epoch: 2,
-                    },
-                ),
+                signed_fetch(0, &NONCE_2, ObserverQuery::Envelopes { from_epoch: 2 }),
             ],
             &state,
             Some(&serving),

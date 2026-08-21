@@ -31,8 +31,8 @@ pub use envelope::{
     verify_delivery,
 };
 pub use messages::{
-    CouncilRequest, CouncilResponse, CouncilStatus, DeliveryPayload, DeliveryPurpose,
-    MAX_ENVELOPES_PER_FETCH, ObserverFetchRequest, ObserverQuery, ObserverRejectCode,
-    ObserverRootKey, RejectCode, SignedDeliveryEnvelope,
+    CouncilRequest, CouncilResponse, CouncilStatus, DeliveryPayload, MAX_ENVELOPES_PER_FETCH,
+    ObserverFetchRequest, ObserverQuery, ObserverRejectCode, ObserverRootKey, RejectCode,
+    SignedDeliveryEnvelope,
 };
 pub use observer::{OBSERVER_FETCH_DOMAIN, observer_fetch_signing_payload};

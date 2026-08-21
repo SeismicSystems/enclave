@@ -188,10 +188,7 @@ mod tests {
 
         // Tampering with the query after signing.
         let mut tampered = request.clone();
-        tampered.query = ObserverQuery::Envelopes {
-            purpose: seismic_council_delivery::DeliveryPurpose::TxIo,
-            from_epoch: 1,
-        };
+        tampered.query = ObserverQuery::Envelopes { from_epoch: 1 };
         let err = serving
             .verify_fetch(&network(), Some(NONCE), &tampered, &signature)
             .unwrap_err();

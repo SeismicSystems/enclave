@@ -17,7 +17,7 @@
 //! conflict rules live with the caller's state, not here.
 
 use crate::eip712::{address_from_pubkey, payload_digest};
-use crate::messages::{DeliveryPurpose, SignedDeliveryEnvelope};
+use crate::messages::SignedDeliveryEnvelope;
 use anyhow::{Context as _, Result};
 use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
 use secp256k1::{Message, Secp256k1, SecretKey};
@@ -31,15 +31,13 @@ use crate::messages::DeliveryPayload;
 pub fn seal_delivery(
     council_sk: &SecretKey,
     network_id: &NetworkId,
-    purpose: DeliveryPurpose,
     epoch: u64,
-    purpose_key: &[u8; 32],
+    root_key: &[u8; 32],
 ) -> SignedDeliveryEnvelope {
     let payload = DeliveryPayload {
         network_id: *network_id.as_bytes(),
-        purpose,
         epoch,
-        key: *purpose_key,
+        key: *root_key,
     };
     let signature = sign_payload(council_sk, &payload);
     SignedDeliveryEnvelope { payload, signature }
@@ -134,16 +132,15 @@ mod tests {
     }
 
     const NETWORK: [u8; 32] = [0x11; 32];
-    const PURPOSE_KEY: [u8; 32] = [0x42; 32];
+    const ROOT_KEY: [u8; 32] = [0x42; 32];
 
     fn sealed(epoch: u64) -> SignedDeliveryEnvelope {
         let (council_sk, _) = council();
         seal_delivery(
             &council_sk,
             &NetworkId::from_bytes(NETWORK),
-            DeliveryPurpose::TxIo,
             epoch,
-            &PURPOSE_KEY,
+            &ROOT_KEY,
         )
     }
 
@@ -153,7 +150,7 @@ mod tests {
         let envelope = sealed(1);
         let key =
             verify_delivery(&envelope, &council_address, &NetworkId::from_bytes(NETWORK)).unwrap();
-        assert_eq!(*key, PURPOSE_KEY);
+        assert_eq!(*key, ROOT_KEY);
         // Deterministic sealing: the identical payload re-seals to the
         // byte-identical envelope, which is what makes retries idempotent.
         assert_eq!(sealed(1), envelope);
@@ -178,13 +175,7 @@ mod tests {
     #[test]
     fn verify_rejects_non_council_signer() {
         let impostor = SecretKey::from_byte_array(&[0x66; 32]).unwrap();
-        let envelope = seal_delivery(
-            &impostor,
-            &NetworkId::from_bytes(NETWORK),
-            DeliveryPurpose::TxIo,
-            1,
-            &PURPOSE_KEY,
-        );
+        let envelope = seal_delivery(&impostor, &NetworkId::from_bytes(NETWORK), 1, &ROOT_KEY);
         let (_, council_address) = council();
         let err = verify_delivery(&envelope, &council_address, &NetworkId::from_bytes(NETWORK))
             .unwrap_err();
@@ -202,14 +193,8 @@ mod tests {
         key_swap.payload.key = [0x43; 32];
         let mut epoch_bump = sealed(1);
         epoch_bump.payload.epoch = 2;
-        let mut purpose_swap = sealed(1);
-        purpose_swap.payload.purpose = DeliveryPurpose::Snapshot;
 
-        for (label, tampered) in [
-            ("key swap", key_swap),
-            ("epoch bump", epoch_bump),
-            ("purpose swap", purpose_swap),
-        ] {
+        for (label, tampered) in [("key swap", key_swap), ("epoch bump", epoch_bump)] {
             let err = verify_delivery(&tampered, &council_address, &network_id).unwrap_err();
             assert_eq!(err, VerifyDeliveryError::BadSignature, "{label}");
         }
@@ -227,13 +212,12 @@ mod tests {
     fn wallet_produced_signature_recovers_to_the_council_address() {
         let payload = DeliveryPayload {
             network_id: NETWORK,
-            purpose: DeliveryPurpose::TxIo,
             epoch: 7,
             key: [0x44; 32],
         };
         let cast_signature = hex::decode(
-            "3d6a8e585b1a7dfdcc272860162bcf142ccf60b4f3cd8ba6714b416d91bed2d8\
-             0bc8fc0c3e445e46b0c1821455bb28b1305aad519c90c0ea723c7d269c90d7171c",
+            "ec59eef4c231b41cd06f2fd6b125665475b15d856f09b310fe1341b803235bc5\
+             7912291ee7bb2165a000dbe4eb3f1554d0b0805dba59b5777aa97c47f1669f211c",
         )
         .unwrap();
         let envelope = SignedDeliveryEnvelope {
@@ -257,13 +241,7 @@ mod tests {
         assert_eq!(envelope_from_bytes(&bytes).unwrap(), envelope);
         // A different key produces a different envelope (commitment + bytes).
         let (council_sk, _) = council();
-        let other = seal_delivery(
-            &council_sk,
-            &NetworkId::from_bytes(NETWORK),
-            DeliveryPurpose::TxIo,
-            1,
-            &[0x43; 32],
-        );
+        let other = seal_delivery(&council_sk, &NetworkId::from_bytes(NETWORK), 1, &[0x43; 32]);
         assert_ne!(*bytes, *canonical_envelope_bytes(&other).unwrap());
     }
 }

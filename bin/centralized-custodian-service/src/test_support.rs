@@ -4,17 +4,15 @@
 
 use crate::state::CentralizedCustodianState;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
-use seismic_council_delivery::{
-    DeliveryPurpose, SignedDeliveryEnvelope, address_from_pubkey, seal_delivery,
-};
+use seismic_council_delivery::{SignedDeliveryEnvelope, address_from_pubkey, seal_delivery};
 use seismic_custodian::Custodian;
 use seismic_network_manifest::NetworkId;
 use std::path::Path;
 
 pub(crate) const ROOT_KEY: [u8; 32] = [7u8; 32];
 pub(crate) const NETWORK: [u8; 32] = [0x11; 32];
-/// A valid secp256k1 scalar, usable for every purpose.
-pub(crate) const PURPOSE_KEY: [u8; 32] = [0x42; 32];
+/// A deliverable epoch root for tests.
+pub(crate) const EPOCH_ROOT: [u8; 32] = [0x42; 32];
 
 /// The council's signing key and its Ethereum address (what the node is
 /// configured with).
@@ -40,9 +38,9 @@ pub(crate) fn build_state(dir: &Path) -> CentralizedCustodianState {
     .expect("build state")
 }
 
-/// Seal one envelope exactly as council tooling would.
-pub(crate) fn seal(purpose: DeliveryPurpose, epoch: u64, key: [u8; 32]) -> SignedDeliveryEnvelope {
-    seal_delivery(&council_keys().0, &network_id(), purpose, epoch, &key)
+/// Seal one epoch-root envelope exactly as council tooling would.
+pub(crate) fn seal(epoch: u64, root: [u8; 32]) -> SignedDeliveryEnvelope {
+    seal_delivery(&council_keys().0, &network_id(), epoch, &root)
 }
 
 /// The parent/observer shared master node seed (an observer holds a copy of

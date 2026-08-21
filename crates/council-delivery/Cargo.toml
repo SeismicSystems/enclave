@@ -29,12 +29,17 @@ zeroize = { workspace = true, features = ["derive"] }
 # `cli` feature: the council-signer ceremony tool.
 clap = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
+# TLS client so the tool can reach nodes fronted by a TLS terminator
+# (nginx `stream`, stunnel). Off-node tooling only — nothing key-holding
+# links these.
+rustls = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 # Raw path dep so default features (tokio via `client`) stay off; only the
 # core wire framing is linked.
 seismic-custodian-ipc = { path = "../custodian-ipc", default-features = false, optional = true }
 
 [features]
-cli = ["dep:clap", "dep:rand", "dep:seismic-custodian-ipc"]
+cli = ["dep:clap", "dep:rand", "dep:rustls", "dep:webpki-roots", "dep:seismic-custodian-ipc"]
 
 [[bin]]
 name = "council-signer"
