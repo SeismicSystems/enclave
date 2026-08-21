@@ -20,7 +20,7 @@ mod custodian; // it doesn't — RAM-only derivation of root_key + purpose keys
 mod luks_keyfile; // ephemeral tmpfs keyfile, handed off to setup-persistent-luks
 mod root_key_wrap; // over the network, AEAD-wrapped to an attested peer
 
-pub use custodian::{Custodian, Key, KeyPurpose};
+pub use custodian::Custodian;
 pub use root_key_wrap::{
     EphemeralKeypair, VerifiedPeerAuthorization, WrappedRootKey, unwrap_root_key,
 };

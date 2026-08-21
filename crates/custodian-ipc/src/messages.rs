@@ -3,8 +3,8 @@
 //! Everything crosses the wire as raw bytes — fixed-size arrays for keys and
 //! digests, `Vec<u8>` for variable-length blobs — tagged `serde_bytes` so CBOR
 //! encodes them as native byte strings. Callers convert to typed keys
-//! (`secp256k1`, `schnorrkel`, `aes-gcm`) at their own boundary; see the
-//! crate-level boundary rule.
+//! (`secp256k1`, `aes-gcm`) at their own boundary; see the crate-level
+//! boundary rule.
 //!
 //! Key-fetch methods are deliberately one-per-purpose, never bundled: the
 //! method is the unit an ACL grant covers, so each caller can be given
