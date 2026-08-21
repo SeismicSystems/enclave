@@ -16,7 +16,6 @@ aes-gcm.workspace = true
 anyhow.workspace = true
 hkdf.workspace = true
 rand.workspace = true
-schnorrkel.workspace = true
 secp256k1.workspace = true
 sha2.workspace = true
 zeroize.workspace = true

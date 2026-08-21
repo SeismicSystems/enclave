@@ -71,7 +71,7 @@ rand = "0.9.2"
 # Provider choice for the process-level rustls default that attested-tls's
 # collateral fetching requires the application to install.
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
-schnorrkel = { version = "0.11.2", features = ["serde"] }
+schnorrkel = "0.11.2"
 secp256k1 = { version = "0.30", features = ["rand", "recovery", "std", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
