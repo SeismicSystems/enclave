@@ -18,11 +18,13 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
 use seismic_council_delivery::{
     CouncilRequest, CouncilResponse, DeliveryPayload, SignedDeliveryEnvelope,
-    network_id_from_chain_id, seal_delivery, typed_data_json,
+    canonical_envelope_bytes, envelope_from_bytes, network_id_from_chain_id, seal_delivery,
+    typed_data_json,
 };
 use seismic_custodian_ipc::{read_frame_blocking, write_frame_blocking};
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Parser)]
@@ -70,6 +72,25 @@ enum Command {
         /// delivery's typed data (see the typed-data subcommand).
         #[arg(long)]
         signature: Option<String>,
+        /// Also save the sealed envelope as `<epoch>.cbor` in this directory
+        /// (dir 0700, file 0600 — it contains the plaintext root key), so a
+        /// node joining later can be brought current with deliver-batch. The
+        /// file is written before sending, so it survives a failed send.
+        #[arg(long, env = "COUNCIL_ENVELOPE_DIR")]
+        save_dir: Option<PathBuf>,
+    },
+    /// Send every saved envelope a node is missing, in epoch order — brings
+    /// a freshly joined node from its current epoch to the latest saved one
+    /// in one command.
+    DeliverBatch {
+        /// The node's council port: `host:port` for plain TCP (a tunnel),
+        /// or `tls://host[:port]` for a TLS terminator (default port 443).
+        #[arg(long)]
+        node: String,
+        /// Directory of `<epoch>.cbor` envelopes, as written by
+        /// `deliver --save-dir`.
+        #[arg(long, env = "COUNCIL_ENVELOPE_DIR")]
+        envelope_dir: PathBuf,
     },
 }
 
@@ -133,6 +154,7 @@ fn main() -> Result<()> {
             delivery,
             council_key,
             signature,
+            save_dir,
         } => {
             let payload = delivery.payload()?;
             let envelope = match (council_key, signature) {
@@ -154,6 +176,10 @@ fn main() -> Result<()> {
                 },
                 _ => bail!("provide exactly one of --council-key or --signature"),
             };
+            if let Some(dir) = &save_dir {
+                let path = save_envelope(dir, &envelope)?;
+                println!("saved: {}", path.display());
+            }
             match call(&node, &CouncilRequest::DeliverEpochKey(envelope))? {
                 CouncilResponse::Delivered { epoch } => {
                     println!("delivered: root key for epoch {epoch}");
@@ -169,7 +195,151 @@ fn main() -> Result<()> {
                 other => bail!("unexpected response: {other:?}"),
             }
         }
+        Command::DeliverBatch { node, envelope_dir } => {
+            let envelopes = load_envelope_dir(&envelope_dir)?;
+            let Some(latest) = envelopes.last().map(|e| e.payload.epoch) else {
+                bail!("no envelopes in {}", envelope_dir.display());
+            };
+
+            // One connection for the whole batch (the port serves many
+            // requests per connection).
+            let mut stream = NodeSpec::parse(&node)?.connect()?;
+            let CouncilResponse::Status(status) =
+                exchange(&mut stream, &CouncilRequest::GetStatus)?
+            else {
+                bail!("unexpected response to GetStatus");
+            };
+            if status.epoch >= latest {
+                println!(
+                    "node is already at epoch {} (latest saved envelope: {latest})",
+                    status.epoch
+                );
+                return Ok(());
+            }
+
+            for epoch in (status.epoch + 1)..=latest {
+                let envelope = envelopes
+                    .iter()
+                    .find(|e| e.payload.epoch == epoch)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "the node needs epoch {epoch} but {} has no {epoch}.cbor                              (epochs are sequential; nothing past the gap can install)",
+                            envelope_dir.display()
+                        )
+                    })?;
+                match exchange(
+                    &mut stream,
+                    &CouncilRequest::DeliverEpochKey(envelope.clone()),
+                )? {
+                    CouncilResponse::Delivered { epoch } => {
+                        println!("delivered: root key for epoch {epoch}");
+                    }
+                    CouncilResponse::AlreadyDelivered { epoch } => {
+                        println!("already delivered: epoch {epoch}");
+                    }
+                    CouncilResponse::Rejected { code, message } => {
+                        bail!("epoch {epoch} rejected ({code:?}): {message}")
+                    }
+                    other => bail!("unexpected response: {other:?}"),
+                }
+            }
+            println!("node is now at epoch {latest}");
+            Ok(())
+        }
     }
+}
+
+/// Write one envelope as `<epoch>.cbor` (dir 0700, file 0600 — the bytes
+/// contain the plaintext root key). Idempotent for the identical envelope; a
+/// DIFFERENT envelope already saved for the epoch is an error, mirroring the
+/// custodian's EpochConflict.
+fn save_envelope(dir: &Path, envelope: &SignedDeliveryEnvelope) -> Result<PathBuf> {
+    let bytes = canonical_envelope_bytes(envelope)?;
+    create_private_dir(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let path = dir.join(format!("{}.cbor", envelope.payload.epoch));
+    match std::fs::read(&path) {
+        Ok(existing) if existing == *bytes => return Ok(path), // idempotent re-run
+        Ok(_) => bail!(
+            "{} already holds a DIFFERENT envelope for epoch {}; refusing to overwrite",
+            path.display(),
+            envelope.payload.epoch
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+    write_private_file(&path, &bytes).with_context(|| format!("writing {}", path.display()))?;
+    Ok(path)
+}
+
+/// Load every `<epoch>.cbor` in `dir`, sorted ascending by epoch. Each
+/// file's payload epoch must match its name; anything else in the directory
+/// is an error (this folder should hold envelopes and nothing else).
+fn load_envelope_dir(dir: &Path) -> Result<Vec<SignedDeliveryEnvelope>> {
+    let mut envelopes: Vec<SignedDeliveryEnvelope> = Vec::new();
+    for entry in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let path = entry.context("reading directory entry")?.path();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        let epoch: u64 = name
+            .strip_suffix(".cbor")
+            .and_then(|stem| stem.parse().ok())
+            .ok_or_else(|| {
+                anyhow!(
+                    "unexpected file {} (expecting <epoch>.cbor only)",
+                    path.display()
+                )
+            })?;
+        let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        let envelope =
+            envelope_from_bytes(&bytes).with_context(|| format!("decoding {}", path.display()))?;
+        if envelope.payload.epoch != epoch {
+            bail!(
+                "{} holds an envelope for epoch {}, not {epoch}",
+                path.display(),
+                envelope.payload.epoch
+            );
+        }
+        envelopes.push(envelope);
+    }
+    envelopes.sort_by_key(|e| e.payload.epoch);
+    Ok(envelopes)
+}
+
+fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir_all(dir)
+}
+
+fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()
+}
+
+/// One request/response exchange on an already-open connection.
+fn exchange(stream: &mut Box<dyn ReadWrite>, request: &CouncilRequest) -> Result<CouncilResponse> {
+    write_frame_blocking(stream, request).context("sending request")?;
+    read_frame_blocking(stream)
+        .context("reading response")?
+        .ok_or_else(|| anyhow!("node closed the connection without a response"))
 }
 
 /// One request/response exchange over the council port.
@@ -359,5 +529,87 @@ mod tests {
         );
         assert!(parse_hex32("0x00").is_err());
         assert!(parse_hex65(&format!("0x{}", hex::encode([1u8; 65]))).is_ok());
+    }
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "council-signer-test-{tag}-{}-{:x}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn sealed(epoch: u64, root: [u8; 32]) -> SignedDeliveryEnvelope {
+        let sk = secp256k1::SecretKey::from_byte_array(&[0x77; 32]).unwrap();
+        seal_delivery(&sk, &network_id_from_chain_id(5124), epoch, &root)
+    }
+
+    #[test]
+    fn save_is_idempotent_and_refuses_conflicting_overwrites() {
+        let dir = temp_dir("save");
+        let envelope = sealed(1, [1; 32]);
+        let path = save_envelope(&dir, &envelope).unwrap();
+        assert_eq!(path, dir.join("1.cbor"));
+        // Re-saving the identical envelope is fine (re-run of the ceremony).
+        save_envelope(&dir, &envelope).unwrap();
+        // A different envelope for the same epoch is refused.
+        let error = save_envelope(&dir, &sealed(1, [2; 32])).unwrap_err();
+        assert!(error.to_string().contains("DIFFERENT"), "{error}");
+        // The original file is untouched.
+        assert_eq!(
+            envelope_from_bytes(&std::fs::read(&path).unwrap()).unwrap(),
+            envelope
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_envelope_dir_sorts_and_validates() {
+        let dir = temp_dir("load");
+        // Save out of order; loading returns ascending epochs.
+        for epoch in [3u64, 1, 2] {
+            save_envelope(&dir, &sealed(epoch, [epoch as u8; 32])).unwrap();
+        }
+        let envelopes = load_envelope_dir(&dir).unwrap();
+        assert_eq!(
+            envelopes
+                .iter()
+                .map(|e| e.payload.epoch)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+
+        // A stray file is an error: this folder holds envelopes only.
+        std::fs::write(dir.join("notes.txt"), b"hello").unwrap();
+        assert!(load_envelope_dir(&dir).is_err());
+        std::fs::remove_file(dir.join("notes.txt")).unwrap();
+
+        // A misnamed envelope (name/payload epoch mismatch) is an error.
+        let bytes = canonical_envelope_bytes(&sealed(9, [9; 32])).unwrap();
+        std::fs::write(dir.join("4.cbor"), &*bytes).unwrap();
+        let error = load_envelope_dir(&dir).unwrap_err();
+        assert!(error.to_string().contains("epoch 9, not 4"), "{error}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn saved_files_are_private_on_unix() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let dir = temp_dir("perm");
+            let store = dir.join("envelopes");
+            let path = save_envelope(&store, &sealed(1, [1; 32])).unwrap();
+            let dir_mode = std::fs::metadata(&store).unwrap().permissions().mode();
+            let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(dir_mode & 0o777, 0o700);
+            assert_eq!(file_mode & 0o777, 0o600);
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
     }
 }

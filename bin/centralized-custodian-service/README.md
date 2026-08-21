@@ -90,9 +90,19 @@ off-node council signer tooling.
 
 The ceremony tool is `council-signer`
 (`cargo build --release -p seismic-council-delivery --features cli`), with
-`gen-key`, `status`, `typed-data`, and `deliver` subcommands covering the
-whole rotation flow for both a locally held council key and an external
-wallet.
+`gen-key`, `status`, `typed-data`, `deliver`, and `deliver-batch`
+subcommands covering the whole rotation flow for both a locally held
+council key and an external wallet.
+
+**Bootstrapping a new node:** `deliver --save-dir <dir>` (env
+`COUNCIL_ENVELOPE_DIR`) also writes each sealed envelope as `<epoch>.cbor`
+into the council's own archive (dir 0700, files 0600 — they contain the
+plaintext root keys). When a node joins later,
+`deliver-batch --node <addr> --envelope-dir <dir>` asks the node its
+current epoch and replays every missing envelope in order over one
+connection, bringing it to the latest epoch in one command. Envelopes are
+deterministic and redelivery is idempotent, so re-running a batch is
+harmless.
 
 One envelope carries the 32-byte root key for one epoch, **signed with an
 ordinary Ethereum wallet**: the 65-byte `r || s || v` signature is EIP-712
