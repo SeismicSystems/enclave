@@ -8,7 +8,7 @@
 use crate::{
     ATTESTATION_TYPE, Args,
     admission::RegistryAdmission,
-    api::{LuksProvisioningStatus, NodeStatusRpcServer},
+    api::{AdmissionChainStatus, LuksProvisioningStatus, NodeStatusRpcServer},
     bootstrap::{RootKeyRequest, answer_root_key_request},
     join::ensure_root_key_present,
     network::{NETWORK_MANIFEST_PATH, load_manifest},
@@ -79,6 +79,14 @@ impl NodeStatusRpcServer for AttestationService {
     /// [`crate::luks_status`].
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus> {
         Ok(crate::luks_status::read())
+    }
+
+    /// Report whether local reth serves the genesis this node's manifest pins,
+    /// the precondition every admission decision has. Asked on demand, so a
+    /// node whose reth is still coming up answers unreachable now and matches
+    /// later. See [`crate::admission`].
+    async fn get_admission_chain_status(&self) -> RpcResult<AdmissionChainStatus> {
+        Ok(self.admission.chain_status().await)
     }
 }
 

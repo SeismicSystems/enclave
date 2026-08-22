@@ -37,6 +37,7 @@
 //! window applies and no timestamp check bites. The pinned-genesis check
 //! bounds the second to the network's founding accepted set.
 
+use crate::api::AdmissionChainStatus;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     providers::{Provider, RootProvider},
@@ -58,7 +59,7 @@ use tracing::{info, warn};
 
 /// Why a bootstrap admission predicate denied a verified guest.
 #[derive(Debug, thiserror::Error)]
-pub enum AdmissionDenial {
+pub(crate) enum AdmissionDenial {
     #[error("only Azure TDX guests are admitted to the bootstrap; evidence is {0}")]
     UnsupportedAttestationType(AttestationType),
     #[error(transparent)]
@@ -106,7 +107,7 @@ pub enum AdmissionDenial {
 /// that identity accepted — because the remedies differ and each belongs to a
 /// different party.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DenialKind {
+pub(crate) enum DenialKind {
     /// A verdict on the requester, reached before any identity was: nothing
     /// the network can appraise came out of its evidence. Its own operator
     /// investigates its attestation stack.
@@ -128,7 +129,7 @@ pub enum DenialKind {
 
 impl DenialKind {
     /// Whether retrying inside the handshake can change the answer.
-    pub fn is_retryable(self) -> bool {
+    pub(crate) fn is_retryable(self) -> bool {
         matches!(self, Self::ResponderTransient)
     }
 }
@@ -137,7 +138,7 @@ impl AdmissionDenial {
     /// Classify this denial. One exhaustive match, so a denial added later
     /// cannot inherit a class by omission — least of all a requester verdict,
     /// which tells a healthy joiner to stop asking.
-    pub fn kind(&self) -> DenialKind {
+    pub(crate) fn kind(&self) -> DenialKind {
         match self {
             // No admission ID came out of the evidence: a non-Azure
             // attestation type has no admission schema at all, and a PCR bank
@@ -184,7 +185,7 @@ const MAX_POLICY_AGE: Duration = Duration::from_secs(60);
 /// Responder-side admission: registry membership of the requester's
 /// admission ID, decided at fresh local chain state.
 #[derive(Clone)]
-pub struct RegistryAdmission {
+pub(crate) struct RegistryAdmission {
     registry: MeasurementRegistryInstance<RootProvider>,
     /// The genesis block `network_id` commits to, from the manifest's
     /// `eth.genesis_hash`. Every policy read is checked against it, so a
@@ -205,7 +206,7 @@ impl RegistryAdmission {
     /// manifest's `measurements.contracts.registry`), read over the node's
     /// local reth HTTP endpoint, on the chain whose genesis is
     /// `pinned_genesis` (the manifest's `eth.genesis_hash`).
-    pub fn new(reth_rpc_url: url::Url, registry: Address, pinned_genesis: B256) -> Self {
+    pub(crate) fn new(reth_rpc_url: url::Url, registry: Address, pinned_genesis: B256) -> Self {
         Self::with_provider(
             RootProvider::new_http(reth_rpc_url),
             registry,
@@ -225,7 +226,7 @@ impl RegistryAdmission {
     /// The same admission with a tighter policy-age bound. The admission
     /// integration suite injects seconds here, so the staleness denial is
     /// observable without waiting out the production bound.
-    pub fn with_max_policy_age(mut self, max_policy_age: Duration) -> Self {
+    pub(crate) fn with_max_policy_age(mut self, max_policy_age: Duration) -> Self {
         self.max_policy_age = max_policy_age;
         self
     }
@@ -304,6 +305,35 @@ impl RegistryAdmission {
             });
         }
         Ok(())
+    }
+
+    /// Local reth's genesis against the pin, for the operator-facing node
+    /// status ([`crate::api::NodeStatusRpc`]). A mismatch denies every join
+    /// with a class the wire deliberately does not name, so this is where the
+    /// operator who can repair it reads what is wrong.
+    ///
+    /// Strictly a read: it asks block 0 and nothing else, so it never advances
+    /// the genesis-window latch and can never change a decision. A reth that
+    /// does not answer reports as unreachable, never as a mismatch — the two
+    /// have different operator responses.
+    pub(crate) async fn chain_status(&self) -> AdmissionChainStatus {
+        let found = match self.block_by_tag(BlockNumberOrTag::Earliest).await {
+            Ok(genesis) => genesis.header.hash,
+            Err(denial) => {
+                return AdmissionChainStatus::RethUnreachable {
+                    error: denial.to_string(),
+                };
+            }
+        };
+        match self.check_pinned_genesis(found) {
+            Ok(()) => AdmissionChainStatus::Matches { genesis: found },
+            // Its only denial is the mismatch, and the pin it compared
+            // against is right here.
+            Err(_) => AdmissionChainStatus::GenesisMismatch {
+                expected: self.pinned_genesis,
+                found,
+            },
+        }
     }
 
     async fn block_by_tag(&self, tag: BlockNumberOrTag) -> Result<Block, AdmissionDenial> {
@@ -387,7 +417,7 @@ impl AdmissionPredicate for RegistryAdmission {
 /// responder against the network's pinned `tx_io_pk` commitment. Until that
 /// lands, a joiner talking to an attacker-chosen "responder" enclave gets no
 /// measurement guarantee beyond genuine Azure TDX hardware.
-pub struct DangerouslyAdmitAnyAzureGuest;
+pub(crate) struct DangerouslyAdmitAnyAzureGuest;
 
 impl AdmissionPredicate for DangerouslyAdmitAnyAzureGuest {
     async fn admit(
@@ -808,6 +838,57 @@ mod tests {
         assert!(
             error.to_string().contains("network_id commits to"),
             "{error}"
+        );
+    }
+
+    // The operator-facing status read (`chain_status`) must tell the three
+    // cases apart that carry different operator responses: this node serves
+    // the pinned chain, it serves another one, or reth has not answered.
+
+    #[tokio::test]
+    async fn chain_status_reports_the_pinned_genesis() {
+        let asserter = Asserter::new();
+        asserter.push_success(&rpc_block(0, 1_000));
+        let admission = mocked_registry(&asserter);
+
+        assert_eq!(
+            admission.chain_status().await,
+            AdmissionChainStatus::Matches {
+                genesis: PINNED_GENESIS
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn chain_status_reports_a_foreign_genesis_with_both_halves() {
+        // One response and no more: the status is a single block-0 read, so it
+        // cannot advance the genesis-window latch or touch the registry.
+        let asserter = Asserter::new();
+        asserter.push_success(&foreign_block(0, now_millis()));
+        let admission = mocked_registry(&asserter);
+
+        // Both hashes, because the operator's next move is comparing the chain
+        // its reth booted from against the one the manifest names.
+        assert_eq!(
+            admission.chain_status().await,
+            AdmissionChainStatus::GenesisMismatch {
+                expected: PINNED_GENESIS,
+                found: foreign_block(0, 0).header.hash,
+            }
+        );
+        assert!(!admission.chain_has_advanced.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn unreachable_reth_reports_unknown_not_a_mismatch() {
+        let asserter = Asserter::new();
+        asserter.push_failure_msg("connection refused");
+        let admission = mocked_registry(&asserter);
+
+        let status = admission.chain_status().await;
+        assert!(
+            matches!(status, AdmissionChainStatus::RethUnreachable { .. }),
+            "{status:?}"
         );
     }
 

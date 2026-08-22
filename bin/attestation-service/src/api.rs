@@ -1,9 +1,17 @@
+use alloy_primitives::B256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use serde::{Deserialize, Serialize};
 
-/// Operator-facing status surface of the attestation service: liveness plus
-/// first-boot progress. Consumers speak raw JSON-RPC over HTTP (the deploy
-/// CLI, health probes); the generated Rust client exists for tests.
+/// Operator-facing status surface of the attestation service:
+///
+/// - liveness of the service itself,
+/// - first-boot disk-provisioning progress,
+/// - whether admission is reading this network's chain.
+///
+/// Each answers a question only this node's operator acts on, which is what
+/// separates them from the peer-facing methods. Consumers speak raw JSON-RPC
+/// over HTTP (the deploy CLI, health probes); the generated Rust client exists
+/// for tests.
 #[rpc(client, server)]
 pub trait NodeStatusRpc {
     /// Health check endpoint that returns "OK" if service is running
@@ -21,6 +29,16 @@ pub trait NodeStatusRpc {
     /// this.
     #[method(name = "getLuksProvisioningStatus")]
     async fn get_luks_provisioning_status(&self) -> RpcResult<LuksProvisioningStatus>;
+
+    /// Report whether this node's admission gate is reading the chain its
+    /// network manifest commits to.
+    ///
+    /// Admission denies every join while local reth serves a foreign genesis,
+    /// and the only party who can repair that is this node's operator — a
+    /// requester cannot. So the detail is reported here, where operators
+    /// already look, rather than in the answer a refused joiner gets.
+    #[method(name = "getAdmissionChainStatus")]
+    async fn get_admission_chain_status(&self) -> RpcResult<AdmissionChainStatus>;
 }
 
 // TODO: this is intentionally scoped to just the first-boot LUKS wipe - the one
@@ -60,4 +78,30 @@ pub enum LuksProvisioningStatus {
     /// or a perms/IO issue, NOT evidence the wipe finished. The consumer should
     /// surface a warning and keep polling, never treat this as "done".
     Unknown,
+}
+
+/// Local reth's genesis block against the one this node's network manifest
+/// pins (`eth.genesis_hash`) — the precondition every admission decision
+/// re-checks before it reads the on-chain policy.
+///
+/// Computed per call, never cached or checked at startup: reth comes up after
+/// this service, so this must be able to answer `Matches` later without a
+/// restart. Every field is public network data — the pin is in the manifest
+/// and block 0 is served on the node's public `/rpc` — so an unauthenticated
+/// caller learns nothing here it could not compute itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum AdmissionChainStatus {
+    /// Local reth serves the pinned genesis: admission is deciding joins on
+    /// this network's chain, by the live policy it carries.
+    Matches { genesis: B256 },
+    /// Local reth serves some other chain, so this node admits nobody until an
+    /// operator boots it from this network's genesis. Terminal — waiting
+    /// changes nothing, and a re-provision is the fix.
+    GenesisMismatch { expected: B256, found: B256 },
+    /// Local reth did not answer, so which chain it serves is unknown — not
+    /// evidence of a mismatch. Expected during the boot tail (reth starts
+    /// after this service) and across a reth restart; `error` carries this
+    /// node's own failed query.
+    RethUnreachable { error: String },
 }
