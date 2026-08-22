@@ -19,7 +19,8 @@
 //! - an unreachable (`-32003`) or **stale** (`-32003`, via a tightened
 //!   policy-age bound) local reth fails closed;
 //! - a local reth serving a chain the manifest does not commit to fails closed
-//!   (`-32003`), exercising the pinned `eth.genesis_hash` end to end.
+//!   (`-32003`) and names both chains on the operator-facing node status,
+//!   exercising the pinned `eth.genesis_hash` end to end.
 //!
 //! The genesis is generated at runtime, not committed: evidence carries the
 //! runner's real PCRs, so the seeded policy is compiled either from the
@@ -70,7 +71,7 @@ use seismic_attestation::{
 use seismic_attestation_rpc::AttestationRpcClient as _;
 use seismic_attestation_service::{
     Args,
-    api::NodeStatusRpcClient as _,
+    api::{AdmissionChainStatus, NodeStatusRpcClient as _},
     bootstrap::build_root_key_request,
     rpc_error::RootKeyRefusal,
     utils::{init_tracing, is_sudo},
@@ -215,6 +216,18 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
             .expect("responder still serving after the denial"),
         "OK"
     );
+    // A denial on the requester's identity says nothing about this node's own
+    // chain, which is the pinned one throughout.
+    assert_eq!(
+        responder
+            .client
+            .get_admission_chain_status()
+            .await
+            .expect("responder serves its admission chain status"),
+        AdmissionChainStatus::Matches {
+            genesis: genesis_hash(&provider).await
+        }
+    );
     responder.handle.abort();
 }
 
@@ -320,6 +333,28 @@ async fn test_foreign_pinned_genesis_fails_closed() {
         RootKeyRefusal::ResponderUnavailable
     );
     assert_eq!(responder.wrap_count.load(Ordering::SeqCst), 0);
+    // The joiner is told only that this responder could not decide; the
+    // operator who can repair it is told which two chains disagree, on the
+    // status surface, while `healthCheck` still reports the service itself up.
+    assert_eq!(
+        responder
+            .client
+            .health_check()
+            .await
+            .expect("responder still serving"),
+        "OK"
+    );
+    assert_eq!(
+        responder
+            .client
+            .get_admission_chain_status()
+            .await
+            .expect("responder serves its admission chain status"),
+        AdmissionChainStatus::GenesisMismatch {
+            expected: FOREIGN_GENESIS,
+            found: genesis_hash(&provider).await,
+        }
+    );
     responder.handle.abort();
 }
 
@@ -555,12 +590,19 @@ async fn wait_for_rpc(node: &RethNode) -> RootProvider {
 /// file's bytes, so callers must hash the returned bytes rather than
 /// re-serialize the manifest.
 async fn install_network_manifest(provider: &RootProvider) -> Vec<u8> {
-    let genesis = provider
+    install_manifest_pinning(genesis_hash(provider).await)
+}
+
+/// The block-0 hash the live dev node serves: the chain a status read finds,
+/// whether or not the installed manifest pins it.
+async fn genesis_hash(provider: &RootProvider) -> B256 {
+    provider
         .get_block_by_number(alloy::eips::BlockNumberOrTag::Earliest)
         .await
         .expect("genesis query")
-        .expect("dev node serves block 0");
-    install_manifest_pinning(genesis.header.hash)
+        .expect("dev node serves block 0")
+        .header
+        .hash
 }
 
 /// Render the manifest that pins `genesis_hash`, drop it at the service's
