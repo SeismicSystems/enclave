@@ -46,9 +46,12 @@ pub use attestation::{
 };
 /// Backend evidence envelope and attestation-type enum used on the wire.
 pub use attestation::{AttestationExchangeMessage, AttestationType};
+/// Collateral types the public API leaks, through [`VerifyOptions::mode`] and
+/// [`VerifiedEvidence::collateral`].
+pub use attestation::{CollateralSnapshot, QuoteCollateralV3, VerifyMode};
 
 use attestation::{
-    AttestationGenerator, AttestationVerifier,
+    AttestationGenerator, AttestationResult as BackendAttestationResult, AttestationVerifier,
     measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
 };
 use std::{collections::HashMap, path::PathBuf};
@@ -96,7 +99,7 @@ pub async fn verify_evidence_with_policy(
     expected_binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
     options: VerifyOptions,
-) -> Result<VerifiedSeismicAttestation, AttestationError> {
+) -> Result<VerifiedEvidence, AttestationError> {
     verify_with_backend_policy(
         evidence,
         expected_binding,
@@ -137,7 +140,8 @@ pub async fn verify_evidence_with_predicate(
         crypto_only,
         VerifyOptions::default(),
     )
-    .await?;
+    .await?
+    .attestation;
 
     admission
         .admit(&verified)
@@ -151,7 +155,7 @@ async fn verify_with_backend_policy(
     expected_binding: [u8; 64],
     backend_policy: BackendMeasurementPolicy,
     options: VerifyOptions,
-) -> Result<VerifiedSeismicAttestation, AttestationError> {
+) -> Result<VerifiedEvidence, AttestationError> {
     let attestation_type = evidence.attestation_type();
     let verifier = AttestationVerifier::new(
         backend_policy,
@@ -166,8 +170,12 @@ async fn verify_with_backend_policy(
         false,
     );
 
-    let measurements = verifier
-        .verify_attestation(evidence, expected_binding)
+    let BackendAttestationResult {
+        measurements,
+        collateral,
+        ..
+    } = verifier
+        .verify_attestation(evidence, expected_binding, options.mode)
         .await?
         // The verifier accepts evidence that declares no attestation when its
         // policy names no attested platform, and reports that as `None`. Every
@@ -175,7 +183,14 @@ async fn verify_with_backend_policy(
         // refused here, before any admission predicate sees it.
         .ok_or(AttestationError::Unattested)?;
 
-    VerifiedSeismicAttestation::from_backend(attestation_type, expected_binding, measurements)
+    Ok(VerifiedEvidence {
+        attestation: VerifiedSeismicAttestation::from_backend(
+            attestation_type,
+            expected_binding,
+            measurements,
+        )?,
+        collateral,
+    })
 }
 
 // === Public policy and output types ===
@@ -243,12 +258,53 @@ impl SeismicMeasurementPolicy {
 }
 
 /// Operational options passed through to the attestation backend verifier.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+///
+/// The default is a live challenge: fetch collateral, and hold every
+/// freshness check to the wall clock. That is the conservative reading of
+/// evidence — a caller wanting an archived bundle honoured has to say so.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifyOptions {
+    /// Where the verification gets its DCAP collateral, and the instant it
+    /// evaluates freshness at.
+    ///
+    /// [VerifyMode::Live] is what a live challenge wants. Archived evidence
+    /// is checked against its own bundle, as of when it was collected.
+    pub mode: VerifyMode,
     /// Optional PCCS URL for DCAP collateral. If omitted, the backend default is used.
+    ///
+    /// Only consulted under [VerifyMode::Live]. An archived verification
+    /// carries the bundle it verifies against, so it reaches no collateral
+    /// service at all.
     pub pccs_url: Option<String>,
     /// Ask the backend to log/dump DCAP quote material for debugging.
     pub dump_dcap_quotes: bool,
+}
+
+// Hand-written because the backend's `VerifyMode` has no default of its own:
+// which bundle a verification honours is a decision it makes every caller
+// state.
+impl Default for VerifyOptions {
+    fn default() -> Self {
+        Self {
+            mode: VerifyMode::Live,
+            pccs_url: None,
+            dump_dcap_quotes: false,
+        }
+    }
+}
+
+/// A verification's typed outcome, plus the collateral snapshot it consumed.
+///
+/// A caller archiving founding provenance keeps the snapshot beside the
+/// evidence. Fetching its own copy instead does not substitute: a collateral
+/// cache may refresh between two fetches, and a bundle without its instant
+/// does not re-verify.
+#[derive(Clone, Debug)]
+pub struct VerifiedEvidence {
+    /// The verdict: what the evidence proved about the guest that produced it.
+    pub attestation: VerifiedSeismicAttestation,
+    /// The bundle this verification used, and the instant it was held to.
+    pub collateral: CollateralSnapshot,
 }
 
 /// Generic verified Seismic attestation output.

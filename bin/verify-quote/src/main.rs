@@ -21,7 +21,13 @@
 //! ```text
 //! verify-quote harvest \
 //!   --record inputs/harvest/box-1.json \
-//!   --policy build/measurements.json
+//!   --policy build/measurements.json \
+//!   --dump-collateral /tmp/box-1-collateral.json
+//!
+//! verify-quote harvest \
+//!   --record inputs/harvest/box-1.json \
+//!   --policy build/measurements.json \
+//!   --collateral inputs/harvest/dcap-collateral/box-1.json
 //!
 //! verify-quote deploy \
 //!   --endpoint http://<node-ip>:7878 \
@@ -34,17 +40,35 @@
 //! binding mismatch, measurement mismatch, DCAP failure, non-Azure evidence —
 //! is an error on stderr with a nonzero exit and nothing on stdout.
 //!
+//! `--dump-collateral` writes the Intel collateral a harvest verified
+//! against to its own file, once the quote has verified. The destination is
+//! the caller's scratch space: a founding archive admits a cohort's
+//! collateral all at once, so the file is theirs to move into place once
+//! every box has passed.
+//!
+//! `--collateral` is the other end of that archive, and the mode an auditor
+//! runs: the record is verified against the snapshot beside it, at the
+//! instant that snapshot was held to, reaching no collateral service at all.
+//! The snapshot names the record it belongs to by `harvest_nonce`, so a
+//! snapshot filed beside the wrong record is refused rather than replayed.
+//! Intel's TCB Info, QE Identity and both CRLs carry `nextUpdate` on a
+//! roughly 30-day cadence, so this is the only mode under which a founding
+//! quote still verifies a month after the founding.
+//!
 //! Verification-only: this never touches a local TPM. Azure TDX verification
 //! is pure computation over the evidence bytes (the `azure-verifier` feature
 //! of the `attestation` backend), so it builds and runs anywhere, including
 //! macOS; `deploy` additionally makes one JSON-RPC request to the target node.
 
+mod collateral;
+
 use anyhow::Context as _;
 use clap::{Args, Parser, Subcommand};
 use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_attestation::{
-    AttestationExchangeMessage, AttestationType, NetworkId, NetworkManifestV1,
-    SeismicMeasurementPolicy, VerifiedAzureAttestation, VerifiedSeismicAttestation, VerifyOptions,
+    AttestationExchangeMessage, AttestationType, CollateralSnapshot, NetworkId, NetworkManifestV1,
+    SeismicMeasurementPolicy, VerifiedAzureAttestation, VerifiedEvidence,
+    VerifiedSeismicAttestation, VerifyMode, VerifyOptions,
     bindings::{
         binding64_from_digest32, deploy_verification_binding, founding_summit_keys_binding,
     },
@@ -137,6 +161,20 @@ struct HarvestCli {
     #[arg(long, value_name = "PATH")]
     record: PathBuf,
 
+    /// Write the DCAP collateral this verification consumed to PATH, once
+    /// the quote has verified. Somewhere disposable: the caller archives it.
+    #[arg(long, value_name = "PATH")]
+    dump_collateral: Option<PathBuf>,
+
+    /// Verify against the archived collateral snapshot at PATH, at the
+    /// instant it was held to, instead of fetching and using the wall clock.
+    #[arg(
+        long,
+        value_name = "PATH",
+        conflicts_with_all = ["dump_collateral", "pccs_url"]
+    )]
+    collateral: Option<PathBuf>,
+
     #[command(flatten)]
     common: CommonArgs,
 }
@@ -219,9 +257,18 @@ async fn run_harvest(cli: HarvestCli) -> anyhow::Result<String> {
     let binding = harvest_binding(&nonce, &node_pk, &consensus_pk);
 
     let policy = load_policy(&cli.common.policy).await?;
-    let verified = verify_azure(record.evidence, binding, policy, &cli.common)
+    let mode = match &cli.collateral {
+        Some(path) => archived_mode(path, &nonce).await?,
+        None => VerifyMode::Live,
+    };
+    let (verified, collateral) = verify_azure(record.evidence, binding, policy, mode, &cli.common)
         .await
         .context("verifying harvest evidence")?;
+    // After the verdict, never before: a burned harvest must not leave a
+    // half-archive behind for a later reader to trust.
+    if let Some(path) = &cli.dump_collateral {
+        dump_collateral(path, &nonce, &collateral).await?;
+    }
     Ok(report(&verified, []))
 }
 
@@ -264,9 +311,17 @@ async fn run_deploy(cli: DeployCli) -> anyhow::Result<String> {
         })?;
 
     let binding = deploy_binding(&network_id, &deployment_nonce);
-    let verified = verify_azure(response.evidence, binding, policy, &cli.common)
-        .await
-        .context("verifying deploy-verification evidence")?;
+    // The collateral goes unarchived here: a live challenge is fresh
+    // evidence, judged against fresh collateral at the wall clock.
+    let (verified, _collateral) = verify_azure(
+        response.evidence,
+        binding,
+        policy,
+        VerifyMode::Live,
+        &cli.common,
+    )
+    .await
+    .context("verifying deploy-verification evidence")?;
     // The extras document what was checked: which network identity the binding
     // committed to, and the nonce that made this run's quote fresh.
     Ok(report(
@@ -301,7 +356,8 @@ async fn load_policy(path: &Path) -> anyhow::Result<SeismicMeasurementPolicy> {
         .with_context(|| format!("loading measurement policy {}", path.display()))
 }
 
-/// Verify Azure TDX evidence against `binding` and `policy`.
+/// Verify Azure TDX evidence against `binding` and `policy`, returning the
+/// verified output and the DCAP collateral the verification consumed.
 ///
 /// Wrong-platform evidence is rejected on the claimed type, before
 /// verification: DCAP verification costs collateral round-trips, and this
@@ -310,8 +366,9 @@ async fn verify_azure(
     evidence: AttestationExchangeMessage,
     binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
+    mode: VerifyMode,
     common: &CommonArgs,
-) -> anyhow::Result<VerifiedAzureAttestation> {
+) -> anyhow::Result<(VerifiedAzureAttestation, CollateralSnapshot)> {
     anyhow::ensure!(
         evidence.attestation_type() == AttestationType::AzureTdx,
         "expected {} evidence, got {}",
@@ -319,20 +376,90 @@ async fn verify_azure(
         evidence.attestation_type().as_str(),
     );
 
-    let verified = verify_evidence_with_policy(
+    let VerifiedEvidence {
+        attestation,
+        collateral,
+    } = verify_evidence_with_policy(
         evidence,
         binding,
         policy,
         VerifyOptions {
+            mode,
             pccs_url: common.pccs_url.clone(),
             dump_dcap_quotes: false,
         },
     )
     .await?;
-    let VerifiedSeismicAttestation::AzureTdx(verified) = verified else {
-        anyhow::bail!("verified output is not azure-tdx despite azure-tdx evidence: {verified:?}");
+    let VerifiedSeismicAttestation::AzureTdx(verified) = attestation else {
+        anyhow::bail!(
+            "verified output is not azure-tdx despite azure-tdx evidence: {attestation:?}"
+        );
     };
-    Ok(verified)
+    Ok((verified, collateral))
+}
+
+/// Resolve `--collateral` into the mode it names, for the record whose
+/// `harvest_nonce` is `nonce`.
+///
+/// The archived snapshot is the whole input: the bundle Intel served, and the
+/// instant the founding verification held it to be current. So this reaches
+/// no collateral service, and `--pccs-url` has nothing left to reach.
+///
+/// The snapshot has to be the one this record's verification produced. The
+/// instant decides which validity and revocation windows are open, so a
+/// snapshot filed beside another box's record would evaluate the quote at
+/// the wrong instant against the wrong bundle. Neither file is signed, so
+/// this is not a trust boundary; it catches the mispairing an archive comes
+/// to by accident, exactly, since no two records share a nonce.
+async fn archived_mode(path: &Path, nonce: &[u8; 32]) -> anyhow::Result<VerifyMode> {
+    let document = tokio::fs::read_to_string(path)
+        .await
+        .with_context(|| format!("reading --collateral {}", path.display()))?;
+    let archived = collateral::parse(&document).with_context(|| {
+        format!(
+            "--collateral {} is not an archived snapshot",
+            path.display()
+        )
+    })?;
+    anyhow::ensure!(
+        &archived.harvest_nonce == nonce,
+        "--collateral {} belongs to the record with harvest_nonce {}, not to this one ({}): \
+         they are not from one harvest",
+        path.display(),
+        hex::encode(archived.harvest_nonce),
+        hex::encode(nonce),
+    );
+    Ok(VerifyMode::Archived(archived.snapshot))
+}
+
+/// Archive the DCAP collateral the verification of the record with
+/// `harvest_nonce` `nonce` consumed.
+///
+/// The caller owns the layout and passes the destination; this writes the
+/// exact bundle the verdict depended on, so what is archived is what was
+/// verified.
+async fn dump_collateral(
+    path: &Path,
+    nonce: &[u8; 32],
+    collateral: &CollateralSnapshot,
+) -> anyhow::Result<()> {
+    let archived = collateral::ArchivedSnapshot {
+        harvest_nonce: *nonce,
+        snapshot: collateral.clone(),
+    };
+    let document = collateral::render(&archived)?;
+    // Read the document back before it leaves this process. The caller
+    // archives these bytes verbatim and nothing parses them again until a
+    // re-verification that may be a year away, so a snapshot that does not
+    // round-trip has to fail the harvest that produced it.
+    let reread = collateral::parse(&document).context("re-reading the rendered DCAP collateral")?;
+    anyhow::ensure!(
+        reread == archived,
+        "the rendered DCAP collateral does not read back as the collateral this verification used"
+    );
+    tokio::fs::write(path, document)
+        .await
+        .with_context(|| format!("writing --dump-collateral {}", path.display()))
 }
 
 /// Decode one fixed-length hex field of the record, naming the field in every
@@ -482,6 +609,218 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// Capturing the collateral is optional, and its destination is the
+    /// caller's: deploy owns the founding archive's layout, so the path
+    /// arrives on argv. `deploy` has no such flag — a live challenge is
+    /// judged against live collateral and archives nothing.
+    #[test]
+    fn dump_collateral_is_optional_and_harvest_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = write_file(&dir, "node-1.json", &record_json("{}"));
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+
+        let Command::Harvest(harvest) = harvest_cli(&record, &policy).command else {
+            panic!("expected the harvest subcommand");
+        };
+        assert_eq!(harvest.dump_collateral, None);
+
+        let destination = dir.path().join("dcap-collateral/node-1.json");
+        let cli = Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "harvest".as_ref(),
+            "--record".as_ref(),
+            record.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+            "--dump-collateral".as_ref(),
+            destination.as_os_str(),
+        ])
+        .expect("well-formed argv");
+        let Command::Harvest(harvest) = cli.command else {
+            panic!("expected the harvest subcommand");
+        };
+        assert_eq!(
+            harvest.dump_collateral.as_deref(),
+            Some(destination.as_path())
+        );
+
+        assert!(
+            Cli::try_parse_from([
+                "verify-quote".as_ref(),
+                "deploy".as_ref(),
+                "--endpoint".as_ref(),
+                "http://127.0.0.1:1".as_ref(),
+                "--manifest".as_ref(),
+                policy.as_os_str(),
+                "--policy".as_ref(),
+                policy.as_os_str(),
+                "--dump-collateral".as_ref(),
+                destination.as_os_str(),
+            ])
+            .is_err()
+        );
+    }
+
+    /// A harvest CLI in offline mode over the given collateral document.
+    fn offline_cli(dir: &tempfile::TempDir, record: &str, document: &str) -> Cli {
+        let record = write_file(dir, "node-1.json", record);
+        let policy = write_file(dir, "policy.json", VALID_POLICY);
+        let snapshot = write_file(dir, "node-1-collateral.json", document);
+        Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "harvest".as_ref(),
+            "--record".as_ref(),
+            record.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+            "--collateral".as_ref(),
+            snapshot.as_os_str(),
+        ])
+        .expect("well-formed argv")
+    }
+
+    const NO_ATTESTATION: &str = r#"{ "attestation_type": "none", "attestation": [] }"#;
+
+    /// `--collateral` is the whole collateral input: capture verifies live
+    /// and writes, replay reads and verifies offline, and an offline run
+    /// reaches no collateral service. So it excludes both the flag that
+    /// captures and the flag that points at a PCCS — each would name
+    /// something the run does not do.
+    #[test]
+    fn offline_mode_excludes_capture_and_the_pccs() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = write_file(&dir, "node-1.json", &record_json("{}"));
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+        let snapshot = dir.path().join("node-1-collateral.json");
+
+        for extra in [
+            vec!["--dump-collateral", snapshot.to_str().unwrap()],
+            vec!["--pccs-url", "http://127.0.0.1:8081"],
+        ] {
+            let mut argv = vec![
+                "verify-quote",
+                "harvest",
+                "--record",
+                record.to_str().unwrap(),
+                "--policy",
+                policy.to_str().unwrap(),
+                "--collateral",
+                snapshot.to_str().unwrap(),
+            ];
+            argv.extend(extra.iter().copied());
+            assert!(Cli::try_parse_from(&argv).is_err(), "{argv:?}");
+        }
+    }
+
+    /// The instant decides which validity and revocation windows are open, so
+    /// a snapshot has to be the one this record's verification produced. The
+    /// snapshot names its record by nonce, and no two records share one, so
+    /// a snapshot filed beside another box's record is refused exactly.
+    #[tokio::test]
+    async fn replay_pairs_a_snapshot_with_its_record_by_nonce() {
+        let dir = tempfile::tempdir().unwrap();
+        let document = collateral::render(&collateral::fabricated_snapshot()).unwrap();
+        let path = write_file(&dir, "node-1-collateral.json", &document);
+
+        let mode = archived_mode(&path, &collateral::FABRICATED_NONCE)
+            .await
+            .unwrap();
+        assert_eq!(
+            mode,
+            VerifyMode::Archived(collateral::fabricated_collateral())
+        );
+
+        let other_record = [0xa5u8; 32];
+        let error = archived_mode(&path, &other_record)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("not from one harvest"), "{error}");
+        assert!(error.contains(&hex::encode(other_record)), "{error}");
+    }
+
+    /// The dump names the record it was verified with, so the snapshot a
+    /// harvest archives is the one its own replay accepts.
+    #[tokio::test]
+    async fn dump_names_the_record_it_verified() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("node-1-collateral.json");
+        let nonce = [0x3cu8; 32];
+
+        dump_collateral(&path, &nonce, &collateral::fabricated_collateral())
+            .await
+            .unwrap();
+        let archived = collateral::parse(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(archived.harvest_nonce, nonce);
+        assert_eq!(archived.snapshot, collateral::fabricated_collateral());
+    }
+
+    /// Offline mode fails by flag name on every way the snapshot can be
+    /// unusable, since a reader who mistypes the path must not be told the
+    /// founding failed to verify.
+    #[tokio::test]
+    async fn offline_mode_fails_by_flag_name_on_an_unusable_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = record_json(NO_ATTESTATION);
+
+        for document in ["not json at all", r#"{ "version": 2 }"#] {
+            let error = run(offline_cli(&dir, &record, document))
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("--collateral"), "{error}");
+        }
+
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+        let record_path = write_file(&dir, "record.json", &record);
+        let missing = dir.path().join("absent.json");
+        let error = run(Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "harvest".as_ref(),
+            "--record".as_ref(),
+            record_path.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+            "--collateral".as_ref(),
+            missing.as_os_str(),
+        ])
+        .expect("well-formed argv"))
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("--collateral"), "{error}");
+    }
+
+    /// The dump follows the verdict: a run that does not verify leaves no
+    /// collateral behind, so a burned harvest cannot leave a half-archive a
+    /// later reader mistakes for provenance.
+    #[tokio::test]
+    async fn a_failed_verification_writes_no_collateral() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = write_file(
+            &dir,
+            "node-1.json",
+            &record_json(r#"{ "attestation_type": "none", "attestation": [] }"#),
+        );
+        let policy = write_file(&dir, "policy.json", VALID_POLICY);
+        let destination = dir.path().join("node-1-collateral.json");
+
+        let cli = Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "harvest".as_ref(),
+            "--record".as_ref(),
+            record.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+            "--dump-collateral".as_ref(),
+            destination.as_os_str(),
+        ])
+        .expect("well-formed argv");
+
+        assert!(run(cli).await.is_err());
+        assert!(!destination.exists());
     }
 
     /// The bindings are wire-format commitments shared with the quoting node,

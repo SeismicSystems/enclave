@@ -18,6 +18,7 @@ seismic-attestation.workspace = true
 seismic-attestation-rpc.workspace = true
 
 anyhow.workspace = true
+base64.workspace = true
 clap.workspace = true
 hex.workspace = true
 jsonrpsee.workspace = true
