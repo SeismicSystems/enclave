@@ -442,7 +442,9 @@ mod tests {
     use super::*;
     use alloy::{rpc::client::RpcClient, transports::mock::Asserter};
     use alloy_primitives::{Bytes, b256};
-    use seismic_attestation::{AzureGuestMeasurements, VerifiedAzureAttestation};
+    use seismic_attestation::{
+        AzureGuestMeasurements, TdxMeasurements, VerifiedAzureAttestation, VerifiedTdxAttestation,
+    };
     use std::collections::HashMap;
 
     // The golden Azure v1 vector pinned in `seismic-measurement-admission`:
@@ -457,6 +459,21 @@ mod tests {
         VerifiedSeismicAttestation::AzureTdx(VerifiedAzureAttestation {
             binding: [0u8; 64],
             guest_measurements: AzureGuestMeasurements { pcrs },
+        })
+    }
+
+    /// A verified guest of the one attested type no bootstrap predicate has
+    /// an admission schema for.
+    fn verified_dcap() -> VerifiedSeismicAttestation {
+        VerifiedSeismicAttestation::DcapTdx(VerifiedTdxAttestation {
+            binding: [0u8; 64],
+            measurements: TdxMeasurements {
+                mrtd: [0u8; 48],
+                rtmr0: [0u8; 48],
+                rtmr1: [0u8; 48],
+                rtmr2: [0u8; 48],
+                rtmr3: [0u8; 48],
+            },
         })
     }
 
@@ -607,11 +624,10 @@ mod tests {
 
     #[test]
     fn non_azure_attestation_fails_closed() {
-        let verified = VerifiedSeismicAttestation::NoAttestation { binding: [0u8; 64] };
         assert!(matches!(
-            azure_admission_id(&verified),
+            azure_admission_id(&verified_dcap()),
             Err(AdmissionDenial::UnsupportedAttestationType(
-                AttestationType::None
+                AttestationType::DcapTdx
             ))
         ));
     }
@@ -915,7 +931,7 @@ mod tests {
             .expect("any Azure guest is admitted by the temporary predicate");
 
         DangerouslyAdmitAnyAzureGuest
-            .admit(&VerifiedSeismicAttestation::NoAttestation { binding: [0u8; 64] })
+            .admit(&verified_dcap())
             .await
             .expect_err("non-Azure attestation types are denied even by the temporary predicate");
     }

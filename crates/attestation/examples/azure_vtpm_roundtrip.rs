@@ -43,8 +43,7 @@ use clap::{Args as ClapArgs, Parser, Subcommand};
 #[cfg(target_os = "linux")]
 use seismic_attestation::{
     AttestationExchangeMessage, AttestationType, SeismicMeasurementPolicy,
-    VerifiedSeismicAttestation, VerifyOptions, generate_evidence,
-    verify_evidence_with_policy_and_options,
+    VerifiedSeismicAttestation, VerifyOptions, generate_evidence, verify_evidence_with_policy,
 };
 
 #[cfg(target_os = "linux")]
@@ -254,7 +253,7 @@ async fn verify_exchange_message(
     policy: SeismicMeasurementPolicy,
     backend: BackendArgs,
 ) -> anyhow::Result<VerifiedSeismicAttestation> {
-    let verified = verify_evidence_with_policy_and_options(
+    let verified = verify_evidence_with_policy(
         evidence,
         binding,
         policy,

@@ -66,7 +66,7 @@ use alloy_primitives::{Address, B256, address, keccak256};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, SeismicMeasurementPolicy, VerifiedSeismicAttestation,
-    generate_evidence, verify_evidence_with_policy,
+    VerifyOptions, generate_evidence, verify_evidence_with_policy,
 };
 use seismic_attestation_rpc::AttestationRpcClient as _;
 use seismic_attestation_service::{
@@ -369,6 +369,7 @@ async fn observed_pcrs() -> HashMap<u32, [u8; 32]> {
         evidence,
         binding,
         SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx),
+        VerifyOptions::default(),
     )
     .await
     .expect("verifying our own quote");
