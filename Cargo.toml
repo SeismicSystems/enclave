@@ -49,8 +49,10 @@ alloy-primitives = { version = "1.0", default-features = false, features = ["std
 alloy-sol-types = "1.0"
 aes-gcm = "0.10"
 anyhow = "1.0"
-# Pointing to https://github.com/SeismicSystems/attested-tls/pull/2
-attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "2ce0feee147ef5ba071a9919a3fce80ef9643fd6" }
+# Seismic's attested-tls fork. The `seismic` branch carries our attestation
+# changes on top of flashbots/attested-tls main. Goal is to upstream everything and
+# eventually revert back to flashbots' attested-tls however.
+attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "604f3befc7af568a153a7c9728ef5bf800abafe6" }
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
 axum = "0.8.6"

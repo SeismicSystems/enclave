@@ -257,7 +257,7 @@ async fn verify_exchange_message(
     )
     .await?;
     println!("Verification succeeded.");
-    Ok(verified)
+    Ok(verified.attestation)
 }
 
 #[cfg(target_os = "linux")]
