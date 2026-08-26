@@ -128,10 +128,6 @@ struct CommonArgs {
     /// Optional PCCS URL for DCAP collateral, instead of the backend default.
     #[arg(long, value_name = "URL")]
     pccs_url: Option<String>,
-
-    /// Allow the backend's Azure outdated-TCB override path.
-    #[arg(long)]
-    override_azure_outdated_tcb: bool,
 }
 
 #[derive(Debug, Args)]
@@ -330,7 +326,6 @@ async fn verify_azure(
         VerifyOptions {
             pccs_url: common.pccs_url.clone(),
             dump_dcap_quotes: false,
-            override_azure_outdated_tcb: common.override_azure_outdated_tcb,
         },
     )
     .await?;

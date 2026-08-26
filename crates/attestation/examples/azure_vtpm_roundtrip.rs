@@ -137,13 +137,6 @@ struct BackendArgs {
     /// backend uses its default DCAP collateral path.
     #[arg(long)]
     pccs_url: Option<String>,
-
-    /// Allow the Azure outdated-TCB override path.
-    ///
-    /// This exists as a workaround for some Azure v6 TCB collateral. Leave false
-    /// unless you are specifically testing that environment.
-    #[arg(long)]
-    override_azure_outdated_tcb: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -259,8 +252,7 @@ async fn verify_exchange_message(
         policy,
         VerifyOptions {
             pccs_url: backend.pccs_url,
-            dump_dcap_quotes: false,
-            override_azure_outdated_tcb: backend.override_azure_outdated_tcb,
+            ..Default::default()
         },
     )
     .await?;

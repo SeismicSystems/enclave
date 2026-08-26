@@ -157,7 +157,13 @@ async fn verify_with_backend_policy(
         backend_policy,
         options.pccs_url,
         options.dump_dcap_quotes,
-        options.override_azure_outdated_tcb,
+        // The backend can rewrite one Azure FMSPC's TCB Info to clamp a
+        // component's required SVN down, so a platform behind every published
+        // TCB level matches one. No Seismic relying party asks for that: it
+        // makes a verdict depend on a caller's flag rather than on the
+        // evidence and the collateral, which is exactly what archived
+        // founding evidence must not do.
+        false,
     );
 
     let measurements = verifier
@@ -243,8 +249,6 @@ pub struct VerifyOptions {
     pub pccs_url: Option<String>,
     /// Ask the backend to log/dump DCAP quote material for debugging.
     pub dump_dcap_quotes: bool,
-    /// Allow the backend's Azure outdated-TCB override path.
-    pub override_azure_outdated_tcb: bool,
 }
 
 /// Generic verified Seismic attestation output.
