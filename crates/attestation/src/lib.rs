@@ -95,21 +95,6 @@ pub async fn verify_evidence_with_policy(
     evidence: AttestationExchangeMessage,
     expected_binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
-) -> Result<VerifiedSeismicAttestation, AttestationError> {
-    verify_evidence_with_policy_and_options(
-        evidence,
-        expected_binding,
-        policy,
-        VerifyOptions::default(),
-    )
-    .await
-}
-
-/// Same as [`verify_evidence_with_policy`], with backend operational options.
-pub async fn verify_evidence_with_policy_and_options(
-    evidence: AttestationExchangeMessage,
-    expected_binding: [u8; 64],
-    policy: SeismicMeasurementPolicy,
     options: VerifyOptions,
 ) -> Result<VerifiedSeismicAttestation, AttestationError> {
     verify_with_backend_policy(
@@ -177,7 +162,12 @@ async fn verify_with_backend_policy(
 
     let measurements = verifier
         .verify_attestation(evidence, expected_binding)
-        .await?;
+        .await?
+        // The verifier accepts evidence that declares no attestation when its
+        // policy names no attested platform, and reports that as `None`. Every
+        // Seismic relying party appraises a TEE node, so unattested evidence is
+        // refused here, before any admission predicate sees it.
+        .ok_or(AttestationError::Unattested)?;
 
     VerifiedSeismicAttestation::from_backend(attestation_type, expected_binding, measurements)
 }
@@ -192,9 +182,7 @@ async fn verify_with_backend_policy(
 /// guest is *allowed* — for example, membership of its derived admission ID in
 /// the on-chain `MeasurementRegistry`. Predicates own the entire appraisal,
 /// including which attestation types they admit: a predicate must deny
-/// [`VerifiedSeismicAttestation`] variants it does not appraise, in particular
-/// [`VerifiedSeismicAttestation::NoAttestation`], whose cryptographic
-/// verification is vacuous.
+/// [`VerifiedSeismicAttestation`] variants it does not appraise.
 pub trait AdmissionPredicate {
     /// Appraise verified measurements; any `Err` denies admission.
     fn admit(
@@ -261,27 +249,30 @@ pub struct VerifyOptions {
 
 /// Generic verified Seismic attestation output.
 ///
-/// Provider-specific measurements stay in provider-specific variants so callers
-/// cannot accidentally combine, for example, `dcap-tdx` with Azure PCRs.
+/// Every variant carries verified measurements from an attested platform.
+/// Provider-specific measurements stay in provider-specific variants so
+/// callers cannot accidentally combine, for example, `dcap-tdx` with Azure
+/// PCRs.
+///
+/// The variants mirror the verifier's [`MultiMeasurements`] paired with the
+/// [`AttestationType`] that produced them; `from_backend` is the one place
+/// the two are matched up, and a platform not mirrored here fails there as
+/// [`AttestationError::MeasurementTypeMismatch`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VerifiedSeismicAttestation {
     AzureTdx(VerifiedAzureAttestation),
     DcapTdx(VerifiedTdxAttestation),
     GcpTdx(VerifiedTdxAttestation),
-    NoAttestation { binding: [u8; 64] },
 }
 
 impl VerifiedSeismicAttestation {
     fn from_backend(
         attestation_type: AttestationType,
         binding: [u8; 64],
-        measurements: Option<MultiMeasurements>,
+        measurements: MultiMeasurements,
     ) -> Result<Self, AttestationError> {
         match (attestation_type, measurements) {
-            (AttestationType::None, None | Some(MultiMeasurements::NoAttestation)) => {
-                Ok(Self::NoAttestation { binding })
-            }
-            (AttestationType::AzureTdx, Some(MultiMeasurements::Azure(pcrs))) => {
+            (AttestationType::AzureTdx, MultiMeasurements::Azure(pcrs)) => {
                 Ok(Self::AzureTdx(VerifiedAzureAttestation {
                     binding,
                     guest_measurements: AzureGuestMeasurements {
@@ -289,27 +280,22 @@ impl VerifiedSeismicAttestation {
                     },
                 }))
             }
-            (AttestationType::DcapTdx, Some(MultiMeasurements::Dcap(measurements))) => {
+            (AttestationType::DcapTdx, MultiMeasurements::Dcap(measurements)) => {
                 Ok(Self::DcapTdx(VerifiedTdxAttestation {
                     binding,
                     measurements: measurements.into(),
                 }))
             }
-            (AttestationType::GcpTdx, Some(MultiMeasurements::Dcap(measurements))) => {
+            (AttestationType::GcpTdx, MultiMeasurements::Dcap(measurements)) => {
                 Ok(Self::GcpTdx(VerifiedTdxAttestation {
                     binding,
                     measurements: measurements.into(),
                 }))
             }
-            (attestation_type, None) => {
-                Err(AttestationError::MissingMeasurements { attestation_type })
-            }
-            (attestation_type, Some(measurements)) => {
-                Err(AttestationError::MeasurementTypeMismatch {
-                    attestation_type,
-                    measurements: Box::new(measurements),
-                })
-            }
+            (attestation_type, measurements) => Err(AttestationError::MeasurementTypeMismatch {
+                attestation_type,
+                measurements: Box::new(measurements),
+            }),
         }
     }
 
@@ -318,7 +304,6 @@ impl VerifiedSeismicAttestation {
             Self::AzureTdx(_) => AttestationType::AzureTdx,
             Self::DcapTdx(_) => AttestationType::DcapTdx,
             Self::GcpTdx(_) => AttestationType::GcpTdx,
-            Self::NoAttestation { .. } => AttestationType::None,
         }
     }
 
@@ -326,7 +311,6 @@ impl VerifiedSeismicAttestation {
         match self {
             Self::AzureTdx(verified) => &verified.binding,
             Self::DcapTdx(verified) | Self::GcpTdx(verified) => &verified.binding,
-            Self::NoAttestation { binding } => binding,
         }
     }
 }
@@ -388,8 +372,8 @@ pub enum AttestationError {
     AdmissionDenied(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("measurement policy format error: {0}")]
     PolicyFormat(#[from] MeasurementFormatError),
-    #[error("attestation backend returned no measurements for {attestation_type}")]
-    MissingMeasurements { attestation_type: AttestationType },
+    #[error("evidence declares no attestation; only attested evidence is verified")]
+    Unattested,
     #[error("backend returned measurements inconsistent with {attestation_type}: {measurements:?}")]
     MeasurementTypeMismatch {
         attestation_type: AttestationType,
@@ -474,7 +458,7 @@ mod tests {
         let verified = VerifiedSeismicAttestation::from_backend(
             AttestationType::AzureTdx,
             binding,
-            Some(MultiMeasurements::Azure(HashMap::from([(4, pcr4)]))),
+            MultiMeasurements::Azure(HashMap::from([(4, pcr4)])),
         )
         .unwrap();
 
@@ -495,10 +479,8 @@ mod tests {
         let verified = VerifiedSeismicAttestation::from_backend(
             AttestationType::DcapTdx,
             binding,
-            Some(MultiMeasurements::Dcap(
-                attestation::measurements::DcapMeasurements::new(
-                    mrtd, [0u8; 48], [1u8; 48], [2u8; 48], [3u8; 48],
-                ),
+            MultiMeasurements::Dcap(attestation::measurements::DcapMeasurements::new(
+                mrtd, [0u8; 48], [1u8; 48], [2u8; 48], [3u8; 48],
             )),
         )
         .unwrap();
@@ -522,17 +504,44 @@ mod tests {
         }
     }
 
-    #[test]
-    fn represents_verified_no_attestation() {
-        let binding = [9u8; 64];
-        let verified =
-            VerifiedSeismicAttestation::from_backend(AttestationType::None, binding, None).unwrap();
+    /// A peer that declares no attestation gets a backend policy for `none`,
+    /// which the backend accepts; the refusal has to be this crate's.
+    #[tokio::test]
+    async fn unattested_evidence_is_refused_before_admission() {
+        struct AdmitEverything;
+        impl AdmissionPredicate for AdmitEverything {
+            async fn admit(
+                &self,
+                _verified: &VerifiedSeismicAttestation,
+            ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                Ok(())
+            }
+        }
 
-        assert_eq!(verified.attestation_type(), AttestationType::None);
-        assert_eq!(verified.binding(), &binding);
-        assert_eq!(
-            verified,
-            VerifiedSeismicAttestation::NoAttestation { binding }
+        let result = verify_evidence_with_predicate(
+            AttestationExchangeMessage::without_attestation(),
+            [0u8; 64],
+            &AdmitEverything,
+        )
+        .await;
+
+        assert!(matches!(result, Err(AttestationError::Unattested)));
+    }
+
+    #[test]
+    fn rejects_measurements_inconsistent_with_attestation_type() {
+        let result = VerifiedSeismicAttestation::from_backend(
+            AttestationType::AzureTdx,
+            [9u8; 64],
+            MultiMeasurements::NoAttestation,
         );
+
+        assert!(matches!(
+            result,
+            Err(AttestationError::MeasurementTypeMismatch {
+                attestation_type: AttestationType::AzureTdx,
+                ..
+            })
+        ));
     }
 }

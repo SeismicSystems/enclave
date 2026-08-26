@@ -181,11 +181,16 @@ fn verification_failure_kind(error: &AttestationError) -> Option<DenialKind> {
             Some(denial.downcast_ref::<AdmissionDenial>()?.kind())
         }
         AttestationError::Backend(backend) => backend_failure_kind(backend),
+        // The requester sent evidence that attests nothing, so no identity
+        // came out of it. Same verdict as a quote that fails to verify: its
+        // operator fixes the attestation stack, and the network never saw an
+        // identity to accept or reject.
+        AttestationError::Unattested => Some(DenialKind::RequesterEvidenceUnusable),
         // This service's own policy document and the backend's measurement
         // output: neither party's problem, and no verdict either way.
-        AttestationError::PolicyFormat(_)
-        | AttestationError::MissingMeasurements { .. }
-        | AttestationError::MeasurementTypeMismatch { .. } => None,
+        AttestationError::PolicyFormat(_) | AttestationError::MeasurementTypeMismatch { .. } => {
+            None
+        }
     }
 }
 
@@ -372,8 +377,12 @@ mod tests {
     fn requester_verdicts_split_evidence_from_identity() {
         assert_eq!(
             refusal_of(denial_error(AdmissionDenial::UnsupportedAttestationType(
-                seismic_attestation::AttestationType::None
+                seismic_attestation::AttestationType::DcapTdx
             ))),
+            Some(RootKeyRefusal::RequesterEvidenceUnusable)
+        );
+        assert_eq!(
+            refusal_of(verify_error(AttestationError::Unattested)),
             Some(RootKeyRefusal::RequesterEvidenceUnusable)
         );
 
@@ -433,8 +442,9 @@ mod tests {
             // An unnamed backend variant must not reach a verdict.
             backend_error(BackendAttestationError::MeasurementsNotAccepted),
             // This responder's own plumbing.
-            verify_error(AttestationError::MissingMeasurements {
+            verify_error(AttestationError::MeasurementTypeMismatch {
                 attestation_type: seismic_attestation::AttestationType::AzureTdx,
+                measurements: Box::new(seismic_attestation::MultiMeasurements::NoAttestation),
             }),
             AnswerError::WrapRootKey {
                 source: seismic_custodian_ipc::IpcError::Denied("WrapRootKey".into()),
