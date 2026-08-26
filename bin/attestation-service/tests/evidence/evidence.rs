@@ -29,7 +29,7 @@ use std::{
 use crate::utils::{get_args, spawn_accepting_registry, spawn_custodian};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
-    AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy,
+    AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy, VerifyOptions,
     bindings::{binding64_from_digest32, deploy_verification_binding, tx_io_binding},
     verify_evidence_with_policy,
 };
@@ -122,6 +122,7 @@ async fn test_tx_io_evidence_relying_party() {
         response.evidence.clone(),
         expected_binding,
         test_measurement_policy(),
+        VerifyOptions::default(),
     )
     .await
     .expect("Relying client rejected valid tx-io evidence");
@@ -136,6 +137,7 @@ async fn test_tx_io_evidence_relying_party() {
             response.evidence.clone(),
             binding64_from_digest32(wrong_epoch_digest),
             test_measurement_policy(),
+            VerifyOptions::default(),
         )
         .await
         .is_err(),
@@ -157,6 +159,7 @@ async fn test_tx_io_evidence_relying_party() {
             tampered_evidence,
             expected_binding,
             test_measurement_policy(),
+            VerifyOptions::default(),
         )
         .await
         .is_err(),
@@ -191,6 +194,7 @@ async fn test_deploy_verification_relying_party() {
         response.evidence.clone(),
         expected_binding,
         test_measurement_policy(),
+        VerifyOptions::default(),
     )
     .await
     .expect("Verifier rejected valid deploy-verification evidence");
@@ -203,6 +207,7 @@ async fn test_deploy_verification_relying_party() {
             response.evidence.clone(),
             binding64_from_digest32(other_nonce_digest),
             test_measurement_policy(),
+            VerifyOptions::default(),
         )
         .await
         .is_err(),
@@ -217,6 +222,7 @@ async fn test_deploy_verification_relying_party() {
             response.evidence,
             binding64_from_digest32(other_network_digest),
             test_measurement_policy(),
+            VerifyOptions::default(),
         )
         .await
         .is_err(),

@@ -48,7 +48,7 @@ use seismic_attestation::{
     bindings::{
         binding64_from_digest32, deploy_verification_binding, founding_summit_keys_binding,
     },
-    verify_evidence_with_policy_and_options,
+    verify_evidence_with_policy,
 };
 use seismic_attestation_rpc::AttestationRpcClient as _;
 use serde::Deserialize;
@@ -323,7 +323,7 @@ async fn verify_azure(
         evidence.attestation_type().as_str(),
     );
 
-    let verified = verify_evidence_with_policy_and_options(
+    let verified = verify_evidence_with_policy(
         evidence,
         binding,
         policy,
