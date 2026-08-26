@@ -156,7 +156,8 @@ async fn main() -> anyhow::Result<()> {
             ..Default::default()
         },
     )
-    .await?;
+    .await?
+    .attestation;
     println!("Verification succeeded.");
 
     let pcrs = sorted_azure_pcrs(&verified)

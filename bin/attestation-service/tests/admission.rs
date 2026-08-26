@@ -372,7 +372,8 @@ async fn observed_pcrs() -> HashMap<u32, [u8; 32]> {
         VerifyOptions::default(),
     )
     .await
-    .expect("verifying our own quote");
+    .expect("verifying our own quote")
+    .attestation;
     match verified {
         VerifiedSeismicAttestation::AzureTdx(azure) => azure
             .guest_measurements
