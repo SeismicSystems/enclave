@@ -104,10 +104,6 @@ struct Cli {
     /// Optional PCCS URL for DCAP collateral.
     #[arg(long)]
     pccs_url: Option<String>,
-
-    /// Allow the Azure outdated-TCB override path.
-    #[arg(long)]
-    override_azure_outdated_tcb: bool,
 }
 
 #[tokio::main]
@@ -157,8 +153,7 @@ async fn main() -> anyhow::Result<()> {
         policy,
         VerifyOptions {
             pccs_url: args.pccs_url,
-            dump_dcap_quotes: false,
-            override_azure_outdated_tcb: args.override_azure_outdated_tcb,
+            ..Default::default()
         },
     )
     .await?;
