@@ -12,8 +12,9 @@
 //! through every hop (deploy artifact → node.toml embed → tdx-init → network-manifest.json).
 //! Consumers hash the bytes they read themselves rather than trusting a precomputed id.
 //!
-//! This crate deliberately implements `Deserialize` only. The deploy tool is
-//! the manifest's sole emitter; nothing on the node side may
+//! This crate deliberately implements `Deserialize` only. The manifest's sole
+//! emitter is the `seismic-manifest` crate (`bin/seismic-manifest`), which
+//! deploy tooling links or runs; nothing on the node side may
 //! parse-and-re-serialize the file, because any re-rendering risks changing the
 //! bytes and therefore the `network_id`. The emitter renders deterministically
 //! (2-space indent, key-sorted, single trailing newline); the parser accepts
@@ -260,11 +261,11 @@ fn decode_fixed_hex<'de, D: Deserializer<'de>, const N: usize>(
 mod tests {
     use super::*;
 
-    /// Rendered the way the deploy tool emits manifests: 2-space indent,
-    /// key-sorted, single trailing newline — i.e.
-    /// `json.dumps(manifest, indent=2, sort_keys=True) + "\n"`. Key order is
-    /// irrelevant to the parser but is part of the hashed bytes; regenerate
-    /// the pinned `network_id` below whenever the fixture changes.
+    /// Rendered by the canonical emitter (`bin/seismic-manifest`, whose
+    /// round-trip test holds `parse → render` to these exact bytes): 2-space
+    /// indent, key-sorted, single trailing newline. Key order is irrelevant
+    /// to the parser but is part of the hashed bytes; regenerate the pinned
+    /// `network_id` below whenever the fixture changes.
     const FIXTURE: &[u8] = include_bytes!("../fixtures/network-manifest-v1.json");
 
     #[test]

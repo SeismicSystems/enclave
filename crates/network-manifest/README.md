@@ -10,5 +10,7 @@ manifest consumer parses it with the same code:
 - `seismic-attestation` re-exports these types for node-side callers
   (the attestation service, transcript bindings);
 - `tdx-init` validates the manifest embed at boot-config POST time;
-- the deploy tool emits the manifest and pins the same golden vector as
-  `fixtures/network-manifest-v1.json`.
+- `seismic-manifest` (`bin/seismic-manifest`) renders the manifest for deploy
+  tooling — the only emitter, kept out of this crate so node builds stay
+  parse-only — and its round-trip test holds `parse → render` to the exact
+  bytes of `fixtures/network-manifest-v1.json`.
