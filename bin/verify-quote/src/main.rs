@@ -557,6 +557,31 @@ mod tests {
     const VALID_MANIFEST: &str =
         include_str!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
 
+    /// One real founding, kept verbatim: a harvest record, the collateral
+    /// snapshot its verification consumed, and the promoted policy it was
+    /// verified against. Captured on Azure TDX hardware from cohort
+    /// `tmp-devnet-1` on image `seismic-dev_2026-08-27.5c012e.vhd`,
+    /// harvested 2026-08-27T20:20:55Z and torn down the same day. The
+    /// pubkeys are a destroyed throwaway network's, so the committed archive
+    /// discloses nothing.
+    const FOUNDING_RECORD: &str = include_str!("../fixtures/founding-record-v1.json");
+    const FOUNDING_COLLATERAL: &str = include_str!("../fixtures/founding-collateral-v1.json");
+    const FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-v1.json");
+
+    /// The instant frozen into that snapshot, and the reason the fixture
+    /// cannot rot: a replay evaluates every freshness window here, not at
+    /// the wall clock.
+    const FOUNDING_VERIFIED_AT: u64 = 1787862055;
+
+    /// How many registers the Azure TDX v1 admission schema
+    /// (`seismic.azure-tdx.pcr4-pcr9-pcr11.v1`) pins: guest identity is that
+    /// tuple and nothing else, so a promoted policy carries exactly three.
+    const AZURE_TDX_V1_REGISTERS: usize = 3;
+
+    /// How many registers an Azure vTPM quote attests: PCRs 0-23, all
+    /// covered by the signed `pcrDigest` whether or not a policy pins them.
+    const AZURE_VTPM_REGISTERS: usize = 24;
+
     const NONCE_HEX: &str = "7777777777777777777777777777777777777777777777777777777777777777";
     const NODE_PK_HEX: &str = "8888888888888888888888888888888888888888888888888888888888888888";
     const CONSENSUS_PK_HEX: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999";
@@ -565,6 +590,25 @@ mod tests {
         let path = dir.path().join(name);
         std::fs::write(&path, contents).expect("writing test input");
         path
+    }
+
+    /// The registers a policy document pins, and the single value each
+    /// demands, read straight out of the JSON.
+    fn policy_registers(document: &str) -> BTreeMap<String, String> {
+        let records: serde_json::Value = serde_json::from_str(document).expect("policy document");
+        records[0]["measurements"]
+            .as_object()
+            .expect("a measurements map")
+            .iter()
+            .map(|(register, entry)| {
+                let values = entry["expected_any"].as_array().expect("expected_any");
+                assert_eq!(values.len(), 1, "{register} pins more than one value");
+                (
+                    register.clone(),
+                    values[0].as_str().expect("hex").to_string(),
+                )
+            })
+            .collect()
     }
 
     fn harvest_cli(record: &Path, policy: &Path) -> Cli {
@@ -739,6 +783,100 @@ mod tests {
             .to_string();
         assert!(error.contains("not from one harvest"), "{error}");
         assert!(error.contains(&hex::encode(other_record)), "{error}");
+    }
+
+    /// The property the founding archive exists for, over real hardware
+    /// evidence: a founding quote re-verifies against its own archived
+    /// collateral, reaching no collateral service and depending in no way on
+    /// when the test runs.
+    ///
+    /// Every other offline test here runs on fabricated collateral, which
+    /// exercises the plumbing but never a bundle Intel actually served. This
+    /// one holds the whole path to real material — the DCAP chain, the TCB
+    /// Info and QE Identity windows, both CRLs, and the Azure AK certificate
+    /// chain — at the instant the snapshot pins. A live verification of this
+    /// same record stops passing once the bundle's `nextUpdate` lapses
+    /// (2026-09-26); this one keeps passing, which is the whole point.
+    #[tokio::test]
+    async fn a_real_founding_reverifies_offline_against_its_archived_collateral() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = write_file(&dir, "founding-record.json", FOUNDING_RECORD);
+        let policy = write_file(&dir, "founding-policy.json", FOUNDING_POLICY);
+        let snapshot = write_file(&dir, "founding-collateral.json", FOUNDING_COLLATERAL);
+
+        // Asserted before verifying: a fixture re-captured without its
+        // instant should fail here, not as a puzzling expiry years from now.
+        let archived = collateral::parse(FOUNDING_COLLATERAL).expect("archived snapshot");
+        assert_eq!(archived.snapshot.at, FOUNDING_VERIFIED_AT);
+
+        let rendered = run(Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "harvest".as_ref(),
+            "--record".as_ref(),
+            record.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+            "--collateral".as_ref(),
+            snapshot.as_os_str(),
+        ])
+        .expect("well-formed argv"))
+        .await
+        .expect("the archived founding verifies offline");
+
+        let report: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+        assert_eq!(report["verified"], true);
+        assert_eq!(report["attestation_type"], "azure-tdx");
+
+        // The policy has to be one that really pins this guest: a policy
+        // whose measurements map were empty accepts any quote, and this test
+        // would pass while checking nothing. So every register it pins must
+        // come back with the value it demanded.
+        let pinned = policy_registers(FOUNDING_POLICY);
+        assert_eq!(pinned.len(), AZURE_TDX_V1_REGISTERS, "{pinned:?}");
+        let pcrs = report["pcrs"].as_object().unwrap();
+        for (register, expected) in &pinned {
+            assert_eq!(pcrs[register], *expected, "{register}");
+        }
+        // And the rest ride along as provenance, pinned by the same signed
+        // pcrDigest but constrained by no policy.
+        assert_eq!(pcrs.len(), AZURE_VTPM_REGISTERS);
+    }
+
+    /// The other half of the same property: the pinned instant is what makes
+    /// that founding verify, not the bundle alone. Move the instant past the
+    /// bundle's `nextUpdate` and the very same record and snapshot stop
+    /// verifying — which is what a live verification will do to this record
+    /// from 2026-09-26 on, and what the archive exists to avoid.
+    #[tokio::test]
+    async fn the_archived_instant_is_what_makes_the_founding_verify() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = write_file(&dir, "founding-record.json", FOUNDING_RECORD);
+        let policy = write_file(&dir, "founding-policy.json", FOUNDING_POLICY);
+
+        // 2027-01-15, months past every window in the archived bundle. Only
+        // the instant changes; the collateral is the same bytes that verify
+        // in the test above.
+        let mut document: serde_json::Value = serde_json::from_str(FOUNDING_COLLATERAL).unwrap();
+        document["verified_at"] = serde_json::json!(1_800_000_000u64);
+        let snapshot = write_file(&dir, "founding-collateral.json", &document.to_string());
+
+        let error = run(Cli::try_parse_from([
+            "verify-quote".as_ref(),
+            "harvest".as_ref(),
+            "--record".as_ref(),
+            record.as_os_str(),
+            "--policy".as_ref(),
+            policy.as_os_str(),
+            "--collateral".as_ref(),
+            snapshot.as_os_str(),
+        ])
+        .expect("well-formed argv"))
+        .await
+        .expect_err("an expired bundle must not verify");
+        assert!(
+            format!("{error:#}").contains("DCAP"),
+            "expected a DCAP freshness failure, got: {error:#}"
+        );
     }
 
     /// The dump names the record it was verified with, so the snapshot a
