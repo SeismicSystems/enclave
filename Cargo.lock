@@ -5742,6 +5742,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "seismic-manifest"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "hex",
+ "seismic-network-manifest",
+ "serde_json",
+]
+
+[[package]]
 name = "seismic-measurement-admission"
 version = "0.1.0"
 dependencies = [

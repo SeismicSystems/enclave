@@ -6,9 +6,9 @@ configuration at boot.
 
 ## Layout
 
-`bin/` holds the four deployed binaries plus `verify-quote`, which runs
-off-node in deploy's hands; every crate under `crates/` is a library they
-share.
+`bin/` holds the four deployed binaries plus `verify-quote` and
+`seismic-manifest`, which run off-node in deploy's hands; every crate under
+`crates/` is a library they share.
 
 ### Binaries (`bin/`)
 
@@ -18,6 +18,7 @@ share.
 | `attestation-service` | `seismic-attestation-service` | Network-facing JSON-RPC service (`:7878`): serves attestation evidence and purpose keys. Holds no key material — reaches the custodian over a Unix socket. |
 | `custodian-service` | `seismic-custodian-service` | Standalone service for the RAM-only root-key custodian: no network listener, minimal Unix-socket API, owns the per-boot LUKS keyfile handoff. |
 | `summit-key-holder` | `summit-key-holder` | Pre-manifest holder of a node's summit consensus keys: generates them in RAM at boot, serves `{pubkeys, quote}` over HTTP (`:7879`) for deploy's founding harvest, persists them into summit's keystore once LUKS opens. |
+| `seismic-manifest` | `seismic-manifest` | Not deployed to nodes: the network-manifest tool for deploy tooling — `render` turns a manifest document into the canonical `network-manifest.json` bytes (the manifest's sole emitter), `parse` puts an existing one through the same strict v1 parser every node reads it with. Also a library, so Rust deploy tooling links the renderer directly. |
 | `verify-quote` | `verify-quote` | Not deployed to nodes: operator relying-party CLI that DCAP-verifies node quotes against a measurement policy (JSON on stdout, exit 0 ⇔ verified). One verification path, two evidence sources: `harvest` checks a founding node's summit-keys quote from that node's archived harvest record, `deploy` challenges a freshly provisioned node's `getDeployVerificationEvidence` RPC itself. Shelled out to by deploy's tooling. |
 
 ### Libraries (`crates/`)
