@@ -1,8 +1,8 @@
-use crate::config::InitConfig;
 use crate::error::Result;
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use tdx_init_config::InitConfig;
 use tokio::fs;
 use tracing::info;
 
@@ -189,8 +189,8 @@ async fn write_with_mode(path: &Path, content: impl AsRef<[u8]>, mode: u32) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DomainConfig, NetworkConfig, NodeConfig};
     use base64::Engine as _;
+    use tdx_init_config::{DomainConfig, NetworkConfig, NodeConfig};
     use tempfile::TempDir;
 
     /// A syntactically valid enode at `host_port` (128-hex pubkey).

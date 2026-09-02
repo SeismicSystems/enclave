@@ -28,8 +28,9 @@ Behavior:
 ## InitConfig schema
 
 The HTTP receiver accepts TOML with `Content-Type: application/toml`.
-Unknown top-level sections or fields are rejected — see
-[`src/config.rs`](src/config.rs).
+Unknown top-level sections or fields are rejected. The schema is its own
+crate, [`tdx-init-config`](../../crates/tdx-init-config), so deploy tooling
+constructs the exact struct this binary deserializes.
 
 ```toml
 [network]                            # coordinator-produced; a function of the network, not of this node

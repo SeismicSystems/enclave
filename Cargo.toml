@@ -10,7 +10,7 @@ members = [
     "bin/attestation-service",   # -> seismic-attestation-service
     "bin/custodian-service",     # -> seismic-custodian-service
     "bin/summit-key-holder",     # -> summit-key-holder
-    "bin/verify-quote",          # -> verify-quote
+    "bin/verify-quote",          # -> verify-quote (+ lib: the verification)
     "bin/seismic-manifest",      # -> seismic-manifest (+ lib: the manifest renderer)
 
     "crates/attestation",
@@ -21,6 +21,7 @@ members = [
     "crates/measurement-admission",  # -> seismic-measurement-admission (CLI)
     "crates/measurement-registry-client",
     "crates/network-manifest",
+    "crates/tdx-init-config",
 ]
 
 [workspace.package]
@@ -43,6 +44,7 @@ seismic-custodian-service = { path = "bin/custodian-service" }
 seismic-measurement-admission = { path = "crates/measurement-admission" }
 seismic-measurement-registry-client = { path = "crates/measurement-registry-client" }
 seismic-network-manifest = { path = "crates/network-manifest" }
+tdx-init-config = { path = "crates/tdx-init-config" }
 
 # Other deps
 alloy = "1.0"

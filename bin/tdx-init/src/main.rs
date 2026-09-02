@@ -4,7 +4,6 @@ use std::path::Path;
 use tokio::fs;
 use tracing::info;
 
-mod config;
 mod error;
 mod manifest;
 mod peers;

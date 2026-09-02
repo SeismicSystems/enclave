@@ -1,0 +1,16 @@
+[package]
+name = "tdx-init-config"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Schema of the bootstrap config tdx-init accepts over HTTP at deploy time"
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+toml.workspace = true

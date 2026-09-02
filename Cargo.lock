@@ -6450,12 +6450,21 @@ dependencies = [
  "seismic-network-manifest",
  "serde",
  "serde_json",
+ "tdx-init-config",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tdx-init-config"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml 0.8.23",
 ]
 
 [[package]]

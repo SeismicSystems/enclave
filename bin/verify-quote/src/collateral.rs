@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 
 /// One box's archived collateral: the snapshot its verification consumed,
 /// and the `harvest_nonce` of the record it was verified with.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchivedSnapshot {
     pub harvest_nonce: [u8; 32],
     pub snapshot: CollateralSnapshot,

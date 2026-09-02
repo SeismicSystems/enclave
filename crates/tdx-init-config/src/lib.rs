@@ -1,8 +1,25 @@
+//! The bootstrap config a Seismic node accepts at deploy time: the schema of
+//! the TOML document POSTed to `tdx-init` on `:8080`, and the only definition
+//! of that wire format.
+//!
+//! It is a crate of its own so both ends of the POST hold the same types: the
+//! on-node `tdx-init` binary deserializes [`InitConfig`] and fans it out into
+//! per-service config files, and deploy tooling constructs the same struct
+//! rather than hand-assembling TOML. Nothing here does any work — no I/O, no
+//! validation beyond serde's — so linking it costs a downstream crate nothing
+//! but `serde`. Every semantic check (the manifest schema, the genesis
+//! commitments, the peer derivation) lives in `tdx-init` itself, where the
+//! POST is handled.
+//!
+//! `deny_unknown_fields` throughout: a field this build does not know is a
+//! deploy tool and a node that disagree on the format, which must be a clean
+//! `400` rather than a node silently running with defaults.
+
 use serde::{Deserialize, Serialize};
 
 /// Operator-supplied initialization config, received over HTTP at deploy
 /// time and fanned out by tdx-init into per-component config files under
-/// [`crate::CONF_DIR`].
+/// `/run/seismic/conf`.
 ///
 /// Two sections, split by provenance: `[network]` is coordinator-produced —
 /// a function of the network at POST time, never tailored to the recipient —
@@ -13,7 +30,8 @@ use serde::{Deserialize, Serialize};
 /// match across the cohort — differing bytes there mean a different network.
 /// Anything derivable from these is derived rather than delivered twice —
 /// e.g. the root-key fetch peers come from `[network].bootnodes`
-/// (`src/peers.rs`), so there is no second list that could skew from it.
+/// (`bin/tdx-init/src/peers.rs`), so there is no second list that could skew
+/// from it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InitConfig {
@@ -29,8 +47,8 @@ pub struct InitConfig {
 }
 
 /// DNS name + contact email for the Let's Encrypt cert that fronts this
-/// node's public RPC. Written by the writer module to `domain.env` under
-/// [`crate::CONF_DIR`] as `DOMAIN_NAME=...` / `DOMAIN_EMAIL=...`, which
+/// node's public RPC. Written by tdx-init to `domain.env` under
+/// `/run/seismic/conf` as `DOMAIN_NAME=...` / `DOMAIN_EMAIL=...`, which
 /// `setup-nginx-ssl` (seismic-images) sources before invoking certbot
 /// for cert issuance and renewal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,9 +63,9 @@ pub struct DomainConfig {
 /// `network_id = SHA-256(exact network-manifest.json bytes)`, so the manifest
 /// travels base64-encoded (opaque bytes) rather than as an inline string:
 /// tdx-init validates it at POST time and writes the decoded bytes verbatim
-/// to `network-manifest.json` under [`crate::CONF_DIR`], never
-/// parse-and-re-serialize. Validation lives in `src/manifest.rs` (schema in
-/// the `seismic-network-manifest` crate).
+/// to `network-manifest.json` under `/run/seismic/conf`, never
+/// parse-and-re-serialize. Validation lives in `bin/tdx-init/src/manifest.rs`
+/// (schema in the `seismic-network-manifest` crate).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
@@ -75,8 +93,8 @@ pub struct NetworkConfig {
     /// whose `eth.genesis_hash` pins its genesis block; required because a
     /// node booted without it has no chain spec and reth crash-loops.
     /// Validated at POST time against the manifest's `eth.chain_id`
-    /// (`src/reth_genesis.rs`) and written verbatim to `reth-genesis.json`
-    /// under [`crate::CONF_DIR`].
+    /// (`bin/tdx-init/src/reth_genesis.rs`) and written verbatim to
+    /// `reth-genesis.json` under `/run/seismic/conf`.
     pub reth_genesis_base64: String,
 
     /// base64 encoding of the summit genesis TOML — the consensus-layer
@@ -88,8 +106,8 @@ pub struct NetworkConfig {
     /// booted without it has no consensus genesis and its summit blocks
     /// forever — late joiners need it just as much as the founders do.
     /// Validated structurally at POST time against the manifest's
-    /// `summit.namespace` (`src/summit_genesis.rs`) and written verbatim to
-    /// `summit-genesis.toml` under [`crate::CONF_DIR`].
+    /// `summit.namespace` (`bin/tdx-init/src/summit_genesis.rs`) and written
+    /// verbatim to `summit-genesis.toml` under `/run/seismic/conf`.
     pub summit_genesis_base64: String,
 
     /// Network-wide devp2p bootnodes, as `enode://<128 hex pubkey>@host:port`
@@ -97,8 +115,9 @@ pub struct NetworkConfig {
     /// node's own entry dropped, they feed both of reth's devp2p flags
     /// (`reth-p2p.env`'s `RETH_BOOTNODES_FLAG` and `RETH_TRUSTED_PEERS_FLAG`)
     /// and, as `http://<host>:7878`, the attestation service's root-key fetch
-    /// list (`attestation.env`); the rendering lives in `src/peers.rs`, which
-    /// also documents why reth gets the list twice. The field is required,
+    /// list (`attestation.env`); the rendering lives in
+    /// `bin/tdx-init/src/peers.rs`, which also documents why reth gets the list
+    /// twice. The field is required,
     /// but an empty list is valid on the genesis node only — it has no peers
     /// to dial and mints `root_key` itself; a non-genesis POST with no usable
     /// bootnode is rejected with `400`.
@@ -116,7 +135,7 @@ pub struct NodeConfig {
     /// advertises the correct external address to peers. Also used to drop
     /// this node's own enode when deriving root-key fetch peers from
     /// `[network].bootnodes`. Validated as an `IpAddr` at POST time
-    /// (`src/peers.rs`).
+    /// (`bin/tdx-init/src/peers.rs`).
     pub external_ip: String,
 
     /// Root-key custody flag: true iff this node is the network's genesis
@@ -192,7 +211,8 @@ email = "ops@example.com"
     #[test]
     fn accepts_empty_bootnodes() {
         // The genesis node has no peers to dial: the key is required but an
-        // empty list parses fine (the genesis-only rule lives in src/peers.rs).
+        // empty list parses fine (the genesis-only rule lives in
+        // bin/tdx-init/src/peers.rs).
         let toml_input = r#"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
