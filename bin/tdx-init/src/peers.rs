@@ -25,9 +25,9 @@
 //! which would otherwise boot an attestation service with no way to obtain
 //! `root_key`.
 
-use crate::config::NodeConfig;
 use crate::error::{Result, TdxInitError};
 use std::net::{IpAddr, SocketAddr};
+use tdx_init_config::NodeConfig;
 use tracing::{info, warn};
 
 /// Number of hex chars in an enode node id: the 64-byte secp256k1 public key
@@ -201,7 +201,7 @@ fn is_self(host: &str, external_ip: IpAddr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::DomainConfig;
+    use tdx_init_config::DomainConfig;
 
     fn node(external_ip: &str, genesis_node: bool) -> NodeConfig {
         NodeConfig {

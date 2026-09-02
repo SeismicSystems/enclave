@@ -11,6 +11,7 @@ description = "Boot-time node initialization: receives node config over HTTP and
 
 [dependencies]
 seismic-network-manifest.workspace = true
+tdx-init-config.workspace = true
 
 axum.workspace = true
 base64.workspace = true

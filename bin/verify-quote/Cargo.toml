@@ -7,7 +7,11 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Operator relying-party CLI that verifies Seismic node quotes against intended image measurements"
+description = "Relying-party verification of Seismic node quotes against intended image measurements, and the CLI over it"
+
+[lib]
+name = "seismic_verify_quote"
+path = "src/lib.rs"
 
 [[bin]]
 name = "verify-quote"

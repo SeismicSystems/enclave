@@ -1,4 +1,3 @@
-use crate::config::InitConfig;
 use crate::error::{Result, TdxInitError};
 use axum::{
     Router,
@@ -9,6 +8,7 @@ use axum::{
     routing::post,
 };
 use std::sync::Arc;
+use tdx_init_config::InitConfig;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::info;
