@@ -1,4 +1,5 @@
 use crate::error::{Result, TdxInitError};
+use crate::writer;
 use axum::{
     Router,
     extract::{DefaultBodyLimit, State},
@@ -7,8 +8,10 @@ use axum::{
     response::Response,
     routing::post,
 };
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tdx_init_config::InitConfig;
+use tokio::fs;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::info;
@@ -18,13 +21,26 @@ const HTTP_PORT: u16 = 8080;
 #[derive(Clone)]
 struct AppState {
     config_sender: Arc<tokio::sync::Mutex<Option<oneshot::Sender<InitConfig>>>>,
+    conf_dir: PathBuf,
+    sentinel_file: PathBuf,
 }
 
-pub async fn run_initialization_server() -> Result<InitConfig> {
+/// Run the one-shot config HTTP server.
+///
+/// Persists service files and the sentinel **before** returning HTTP 200, so a
+/// successful response means the config is actually on disk. On persistence
+/// failure the oneshot sender is restored so the operator can POST again in the
+/// same process lifetime (see issue #265).
+pub async fn run_initialization_server(
+    conf_dir: &Path,
+    sentinel_file: &Path,
+) -> Result<InitConfig> {
     let (config_tx, config_rx) = oneshot::channel();
 
     let state = AppState {
         config_sender: Arc::new(tokio::sync::Mutex::new(Some(config_tx))),
+        conf_dir: conf_dir.to_path_buf(),
+        sentinel_file: sentinel_file.to_path_buf(),
     };
 
     let app = Router::new()
@@ -35,11 +51,13 @@ pub async fn run_initialization_server() -> Result<InitConfig> {
         .layer(DefaultBodyLimit::max(16 * 1024 * 1024))
         .with_state(state);
 
-    // This listener is unauthenticated and first-POST-wins. An attacker reaching :8080
-    // before the operator can post a malicious config. Make sure to:
+    // This listener is unauthenticated and first-POST-wins (after a successful
+    // persist). An attacker reaching :8080 before the operator can post a
+    // malicious config. Make sure to:
     // 1. Only open the port to the operator IP (eg. via firewall ACL).
     // 2. Tear down and redeploy if the POST doesn't return 200 OK
-    //    (409 Conflict or connection-refused = someone else won the race).
+    //    (409 Conflict or connection-refused = someone else won the race;
+    //     500 = persistence failed and retry is allowed).
     //
     // TODO(samlaf): move to a pull-based design to remove the inbound port. Either:
     // 1. Enclave fetches from cloud metadata (eg. UserData in Azure IMDS) - trusts cloud
@@ -83,6 +101,15 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
     let mut sender_guard = state.config_sender.lock().await;
     match sender_guard.take() {
         Some(sender) => {
+            // Persist before acknowledging. A 200 must mean files + sentinel
+            // are on disk; otherwise restore the sender so the operator can
+            // retry without restarting tdx-init.
+            if let Err(err) = persist_config(&state.conf_dir, &state.sentinel_file, &config).await
+            {
+                *sender_guard = Some(sender);
+                return Err(err);
+            }
+
             let _ = sender.send(config);
             Ok((
                 StatusCode::OK,
@@ -96,4 +123,14 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
         )
             .into_response()),
     }
+}
+
+async fn persist_config(
+    conf_dir: &Path,
+    sentinel_file: &Path,
+    config: &InitConfig,
+) -> Result<()> {
+    writer::write_service_configs(conf_dir, config).await?;
+    fs::write(sentinel_file, b"").await?;
+    Ok(())
 }
