@@ -67,11 +67,11 @@ async fn wait_for_and_persist_config() -> Result<()> {
         "no sentinel at {}; starting HTTP server on port 8080",
         SENTINEL_FILE,
     );
-    let config = server::run_initialization_server().await?;
-
     let conf_dir = Path::new(CONF_DIR);
-    writer::write_service_configs(conf_dir, &config).await?;
-    fs::write(SENTINEL_FILE, b"").await?;
+    // Persistence happens inside the HTTP handler before the 200 response
+    // (see server::handle_config) so deploy tooling never sees a false success.
+    let _config =
+        server::run_initialization_server(conf_dir, Path::new(SENTINEL_FILE)).await?;
     info!("configuration received and written under {}", CONF_DIR);
     Ok(())
 }
