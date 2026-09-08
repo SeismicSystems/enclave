@@ -18,7 +18,8 @@ name = "summit-key-holder"
 path = "src/main.rs"
 
 [dependencies]
-seismic-attestation.workspace = true
+# Generates the founding harvest quote over the summit keys, on the CVM itself.
+seismic-attestation = { workspace = true, features = ["azure-attester"] }
 
 # Summit's exact commonware pin (summit Cargo.toml, plain crates.io, no
 # [patch]): the keystore this binary writes is read back by summit's

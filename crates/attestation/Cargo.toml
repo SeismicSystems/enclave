@@ -16,21 +16,35 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-# All platforms: `azure-verifier` is pure computation over evidence bytes, so
-# Azure evidence *verification* (e.g. the verify-quote CLI) works on macOS too.
+# Verification of Azure evidence is pure computation over the evidence bytes,
+# so it is unconditional: every consumer — the node binaries, verify-quote, the
+# deploy CLI that links it — verifies, on any platform.
 attestation = { workspace = true, features = ["azure-verifier"] }
 
-# Linux-only: `azure-attester` turns on attestation *evidence generation*
-# (Intel TDX quote + Azure vTPM quote), which depends on crates that only
-# compile on Linux — notably the `tss-esapi` TPM stack.
-[target.'cfg(target_os = "linux")'.dependencies]
-attestation = { workspace = true, features = ["azure-attester"] }
+# Evidence *generation* (Intel TDX quote + Azure vTPM quote) is opt-in through
+# this crate's `azure-attester` feature, and only ever reaches the graph for the
+# one target an Azure TDX CVM is: x86_64 linux. The backend's attester reads the
+# vTPM through tss-esapi, which links the native tpm2-tss libraries and has no
+# bindings for most other tuples, and drags in a TPM/SEV stack a verifier has
+# no use for. So the same dependency is declared a second time here, optional
+# and with the attester feature, in a target table: `azure-attester` turns it
+# on, cargo drops it from the graph everywhere else, and elsewhere the feature
+# stays on but contributes nothing (the crate README says what that means at
+# runtime). The two halves are both load-bearing — the feature keeps the TPM
+# stack out of verifier-only consumers, the target table keeps `--all-features`
+# and a workspace build resolvable on macOS and aarch64. Same pattern as the
+# backend's own target gate (SeismicSystems/attested-tls, `azure-attester`);
+# once the pin includes it this table becomes redundant with the backend's and
+# can collapse to `azure-attester = ["attestation/azure-attester"]`.
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+attestation = { workspace = true, features = ["azure-attester"], optional = true }
 
-# Linux-only for the same reason: the examples here (`azure_vtpm_roundtrip`,
-# `capture_azure_tdx_fixture`) produce real Azure TDX + vTPM evidence, pulling
-# the Azure device crates (`az-tdx-vtpm`, `az-cvm-vtpm`) and `dcap-rs`, which
-# only compile on Linux.
-[target.'cfg(target_os = "linux")'.dev-dependencies]
+# The examples here (`azure_vtpm_roundtrip`, `capture_azure_tdx_fixture`)
+# produce real Azure TDX + vTPM evidence on the CVM itself, so they take the
+# Azure device crates (`az-tdx-vtpm`, `az-cvm-vtpm`) and `dcap-rs` directly,
+# and only on the target where those build. Keep this condition identical to
+# the dependency table above and to the examples' `cfg`s.
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dev-dependencies]
 anyhow.workspace = true
 az-tdx-vtpm.workspace = true
 az-cvm-vtpm.workspace = true
@@ -39,3 +53,20 @@ clap.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+
+[features]
+default = []
+# Generate Azure evidence (the node binaries). A no-op off x86_64 linux: see
+# the target table above. Verification needs no feature.
+azure-attester = ["dep:attestation"]
+
+# Both examples generate evidence, so without the feature they would only ever
+# report AttestationTypeNotSupported. In a workspace build the node binaries
+# turn the feature on, so `cargo test --workspace` still compiles them.
+[[example]]
+name = "azure_vtpm_roundtrip"
+required-features = ["azure-attester"]
+
+[[example]]
+name = "capture_azure_tdx_fixture"
+required-features = ["azure-attester"]
