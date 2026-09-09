@@ -1,27 +1,26 @@
 [workspace]
 resolver = "2"
-# The four deployed binaries live under bin/, next to `verify-quote` and
-# `seismic-manifest`, which run off-node in deploy's hands; every crates/
-# member is a library (some also build a tooling CLI behind their `cli`
-# feature). The dir name is the crate; the arrow is the binary target it
-# builds.
+# The four deployed binaries live under bin/. Every crates/ member is a
+# library (one also builds a debug CLI behind its `cli` feature); two of them,
+# `verify-quote` and `manifest`, never run on a node — the deploy CLI links
+# them. The dir name is the crate; the arrow is the binary target it builds.
 members = [
     "bin/tdx-init",              # -> tdx-init
     "bin/attestation-service",   # -> seismic-attestation-service
     "bin/custodian-service",     # -> seismic-custodian-service
     "bin/summit-key-holder",     # -> summit-key-holder
-    "bin/verify-quote",          # -> verify-quote (+ lib: the verification)
-    "bin/seismic-manifest",      # -> seismic-manifest (+ lib: the manifest renderer)
 
     "crates/attestation",
     "crates/attestation-rpc",
     "crates/crypto",
     "crates/custodian",
     "crates/custodian-ipc",          # -> custodian-ipc-cli (CLI)
-    "crates/measurement-admission",  # -> seismic-measurement-admission (CLI)
+    "crates/manifest",               # seismic-manifest: the network-manifest renderer
+    "crates/measurement-admission",
     "crates/measurement-registry-client",
     "crates/network-manifest",
     "crates/tdx-init-config",
+    "crates/verify-quote",           # seismic-verify-quote: relying-party quote verification
 ]
 
 [workspace.package]

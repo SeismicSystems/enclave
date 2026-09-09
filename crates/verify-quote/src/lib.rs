@@ -790,8 +790,7 @@ mod tests {
 
     #[tokio::test]
     async fn deploy_malformed_endpoint_is_rejected() {
-        let manifest =
-            include_str!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+        let manifest = include_str!("../../network-manifest/fixtures/network-manifest-v1.json");
         let error = verify_deploy("not a url", manifest.as_bytes(), policy(VALID_POLICY), None)
             .await
             .unwrap_err()

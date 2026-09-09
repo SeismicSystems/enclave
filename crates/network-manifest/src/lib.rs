@@ -13,8 +13,8 @@
 //! Consumers hash the bytes they read themselves rather than trusting a precomputed id.
 //!
 //! This crate deliberately implements `Deserialize` only. The manifest's sole
-//! emitter is the `seismic-manifest` crate (`bin/seismic-manifest`), which
-//! deploy tooling links or runs; nothing on the node side may
+//! emitter is the `seismic-manifest` crate (`crates/manifest`), which
+//! deploy tooling links; nothing on the node side may
 //! parse-and-re-serialize the file, because any re-rendering risks changing the
 //! bytes and therefore the `network_id`. The emitter renders deterministically
 //! (2-space indent, key-sorted, single trailing newline); the parser accepts
@@ -261,7 +261,7 @@ fn decode_fixed_hex<'de, D: Deserializer<'de>, const N: usize>(
 mod tests {
     use super::*;
 
-    /// Rendered by the canonical emitter (`bin/seismic-manifest`, whose
+    /// Rendered by the canonical emitter (`crates/manifest`, whose
     /// round-trip test holds `parse → render` to these exact bytes): 2-space
     /// indent, key-sorted, single trailing newline. Key order is irrelevant
     /// to the parser but is part of the hashed bytes; regenerate the pinned

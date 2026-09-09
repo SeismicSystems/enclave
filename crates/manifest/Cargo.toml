@@ -7,11 +7,10 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Deploy-side network-manifest tool: canonical rendering and strict schema parsing over seismic-network-manifest"
+description = "Canonical rendering of the network manifest over seismic-network-manifest, for deploy tooling to link"
 
 [dependencies]
 seismic-network-manifest.workspace = true
 
-clap.workspace = true
 hex.workspace = true
 serde_json.workspace = true

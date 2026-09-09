@@ -6,9 +6,8 @@ configuration at boot.
 
 ## Layout
 
-`bin/` holds the four deployed binaries plus `verify-quote` and
-`seismic-manifest`, which run off-node in deploy's hands; every crate under
-`crates/` is a library they share.
+`bin/` holds the four deployed binaries; every crate under `crates/` is a
+library they share, or one deploy's Rust CLI links.
 
 ### Binaries (`bin/`)
 
@@ -18,8 +17,6 @@ configuration at boot.
 | `attestation-service` | `seismic-attestation-service` | Network-facing JSON-RPC service (`:7878`): serves attestation evidence and purpose keys. Holds no key material — reaches the custodian over a Unix socket. |
 | `custodian-service` | `seismic-custodian-service` | Standalone service for the RAM-only root-key custodian: no network listener, minimal Unix-socket API, owns the per-boot LUKS keyfile handoff. |
 | `summit-key-holder` | `summit-key-holder` | Pre-manifest holder of a node's summit consensus keys: generates them in RAM at boot, serves `{pubkeys, quote}` over HTTP (`:7879`) for deploy's founding harvest, persists them into summit's keystore once LUKS opens. |
-| `seismic-manifest` | `seismic-manifest` | Not deployed to nodes: the network-manifest tool for deploy tooling — `render` turns a manifest document into the canonical `network-manifest.json` bytes (the manifest's sole emitter), `parse` puts an existing one through the same strict v1 parser every node reads it with. Also a library, so Rust deploy tooling links the renderer directly. |
-| `verify-quote` | `verify-quote` | Not deployed to nodes: operator relying-party CLI that DCAP-verifies node quotes against a measurement policy (JSON on stdout, exit 0 ⇔ verified). One verification path, two evidence sources: `harvest` checks a founding node's summit-keys quote from that node's archived harvest record, `deploy` challenges a freshly provisioned node's `getDeployVerificationEvidence` RPC itself. Also a library, so Rust deploy tooling links the verification directly; the binary is for shelling out. |
 
 ### Libraries (`crates/`)
 
@@ -31,8 +28,10 @@ configuration at boot.
 | `custodian-ipc` | Wire protocol, client, and server for the custodian Unix socket (plus a debug CLI behind the `cli` feature). |
 | `attestation` | Attestation evidence types and policy checks. |
 | `attestation-rpc` | Purpose-specific attestation JSON-RPC types. |
-| `measurement-admission` | Admission-ID derivation and measurement-policy compiler for the on-chain `MeasurementRegistry` (plus the policy-compiler CLI behind the `cli` feature). |
+| `measurement-admission` | Admission-ID derivation and measurement-policy compiler for the on-chain `MeasurementRegistry`; deploy's Rust CLI links it to promote measurements and compile the policy. |
 | `network-manifest` | Network-manifest schema (`NetworkManifestV1`) and `network_id` derivation. |
+| `manifest` | Not used on nodes: the manifest's sole emitter (`seismic-manifest`) — `render` turns a `NetworkManifestV1` into the canonical `network-manifest.json` bytes. Kept apart from the parse-only schema crate so no node build can re-serialize the file. Deploy's Rust CLI links it. |
+| `verify-quote` | Not used on nodes: relying-party verification of node quotes against a measurement policy (`seismic-verify-quote`). One verification path, two evidence sources: `verify_harvest` checks a founding node's summit-keys quote from that node's archived harvest record, `verify_deploy` challenges a freshly provisioned node's `getDeployVerificationEvidence` RPC itself. Deploy's Rust CLI links it; its `verify harvest` / `verify deploy` commands are these two functions. |
 | `measurement-registry-client` | Read-only Alloy client for the on-chain `MeasurementRegistry`. |
 | `tdx-init-config` | Schema of the bootstrap config `tdx-init` accepts over HTTP: both ends of that POST link it, so deploy tooling builds the struct the node deserializes. |
 
@@ -61,7 +60,7 @@ sequenceDiagram
     opt founding harvest — only while no manifest exists
         D->>KH: GET /v1/quote?nonce=…
         KH-->>D: {pubkeys, evidence}
-        Note over D: DCAP-verified off-node via verify-quote
+        Note over D: DCAP-verified off-node (seismic-verify-quote, linked by the deploy CLI)
     end
     D->>TI: POST node config
     TI->>TI: validate, write /run/seismic/conf/*, exit

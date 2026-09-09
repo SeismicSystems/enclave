@@ -30,7 +30,7 @@ What conforms today, and where each requirement lands:
 
 | Role | Implementation | Sections |
 | --- | --- | --- |
-| compiler, admission-ID derivation, genesis-storage derivation | this crate, as a library and as the `seismic-measurement-admission` CLI | 4-8 |
+| compiler, admission-ID derivation, genesis-storage derivation | this crate, as a library (the deploy repository's Rust CLI puts it at the command line) | 4-8 |
 | registry contract | [`MeasurementRegistry.sol`](https://github.com/SeismicSystems/seismic/blob/main/contracts/src/enclave/MeasurementRegistry.sol) in the Seismic repository | 8, 9 |
 | responder admission at join time | [`bin/attestation-service`](../../bin/attestation-service/src/admission.rs) | 11 |
 | registry read path | [`seismic-measurement-registry-client`](../measurement-registry-client/) | 9, 11 |

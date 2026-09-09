@@ -16,7 +16,8 @@
 //! - [`verify_evidence_with_policy`] to verify remote evidence against a
 //!   [`SeismicMeasurementPolicy`]. For relying parties anchored to a
 //!   measurement-policy document: clients/SDKs verifying the network's tx-io
-//!   key advertisement, and operator tooling such as `verify-quote`.
+//!   key advertisement, and operator tooling (`seismic-verify-quote`, linked
+//!   by the deploy CLI).
 //! - [`verify_evidence_with_predicate`] to verify remote evidence and appraise
 //!   the verified measurements with a caller-supplied [`AdmissionPredicate`]
 //!   (e.g. on-chain `MeasurementRegistry` membership). For nodes appraising

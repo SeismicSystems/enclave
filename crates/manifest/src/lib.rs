@@ -5,8 +5,8 @@
 //! schema crate on purpose: `seismic-network-manifest` is parse-only, so a
 //! node build (tdx-init, the attestation service) has no code path that
 //! re-serializes the file — any re-rendering would risk changing the bytes
-//! and therefore the `network_id`. Deploy tooling links this crate (or runs
-//! the `seismic-manifest` binary) to render; nodes only ever parse.
+//! and therefore the `network_id`. Deploy tooling links this crate to
+//! render; nodes only ever parse.
 //!
 //! Rendering is deterministic so the same values always name the same
 //! network: 2-space indent, keys in sorted order at every level, `": "` after
@@ -112,7 +112,7 @@ mod tests {
     use super::*;
 
     const FIXTURE: &[u8] =
-        include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+        include_bytes!("../../network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
         "0x8ef142e3f2bf15f8b201c4d8cda7848a9e846222c62b5615d4d36c7fccd98a24";
 
