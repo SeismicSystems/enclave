@@ -19,7 +19,7 @@ The crate's consumers only differ in where the accepted set comes from:
 - **joiner**: compiles the manifest-pinned bootstrap policy artifact and tests
   membership before it can read any chain state;
 - **deploy tooling**: promotes raw image measurements into the policy
-  artifact and compiles it into registry genesis storage, via the CLI.
+  artifact and compiles it into registry genesis storage, linking this crate.
 
 ```mermaid
 flowchart TD
@@ -53,26 +53,23 @@ the storage-slot formulas here are pinned by golden tests on both sides.
 Parity tests hold the compiler's accepted semantics equal to attested-tls's
 `check_measurement`.
 
-## CLI
+## Promote and compile
 
-Built with the `cli` feature (`cargo build -p seismic-measurement-admission
---features cli`):
+The two deploy-side steps are library functions, exposed at the command line
+by the [deploy repo's Rust CLI](https://github.com/SeismicSystems/deploy/tree/main/tee/cli/rust) (`seismic-tee-network tools
+admission promote|compile`), which links this crate:
 
-```console
-$ seismic-measurement-admission promote measurements.json --measurement-id seismic_2026-06-11.abc123.vhd
-$ seismic-measurement-admission compile measurement-policy.json
-$ seismic-measurement-admission admission-id --pcr4 0x… --pcr9 0x… --pcr11 0x…
-```
+- `promote_measurements` normalizes raw `make measure` output into a
+  one-record policy document binding exactly the schema registers (an
+  already-promoted record list passes through byte-verbatim), and compiles
+  its own output before returning.
+- `compile_policy` plus `CompileReport` produce the JSON report: policy hash,
+  admission IDs (total and per-record), the canonical registry runtime-code
+  hash, and the complete registry genesis storage map.
 
-`promote` normalizes raw `make measure` output into a one-record policy
-document binding exactly the schema registers (an already-promoted record
-list passes through byte-verbatim), and compiles its own output before
-returning. `compile` prints a JSON report: policy hash, admission IDs (total
-and per-record), the canonical registry runtime-code hash, and the complete
-registry genesis storage map. Both read stdin for `-`. The committed
-documents under `fixtures/golden/` are the golden vectors for the whole
-pipeline, and their compiled reports are regenerated with `compile`; the rest
-of `fixtures/` is test-harness input, not byte-pinned.
+The committed documents under `fixtures/golden/` are the golden vectors for
+the whole pipeline, and their compiled reports are regenerated with that
+`compile`; the rest of `fixtures/` is test-harness input, not byte-pinned.
 
 ## Policy review and updates
 

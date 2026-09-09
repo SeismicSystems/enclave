@@ -3,7 +3,7 @@
 //! maps, pretty-printed with a trailing newline), so a committed report is
 //! a byte-exact golden vector for every stack that touches the pipeline,
 //! including ones that cannot link this crate (Solidity tests, spec worked
-//! examples, non-Rust deploy tooling via the CLI). It also serves as the
+//! examples, deploy tooling's own tests). It also serves as the
 //! durable audit record of what a policy document compiled to and seeded
 //! at genesis.
 

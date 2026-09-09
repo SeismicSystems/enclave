@@ -42,8 +42,8 @@ This crate is responsible for:
 Verification is unconditional: the backend's `azure-verifier` is pure
 computation over evidence bytes, so every consumer of this crate verifies
 Azure evidence on any platform without a TPM stack. That is what lets
-verifier-only tooling — `verify-quote`, the deploy CLI that links it — build
-and run on macOS and aarch64 Linux.
+verifier-only tooling — the deploy CLI, linking `seismic-verify-quote` —
+build and run on macOS and aarch64 Linux.
 
 ### `azure-attester`
 

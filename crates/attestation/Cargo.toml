@@ -17,8 +17,8 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 # Verification of Azure evidence is pure computation over the evidence bytes,
-# so it is unconditional: every consumer — the node binaries, verify-quote, the
-# deploy CLI that links it — verifies, on any platform.
+# so it is unconditional: every consumer — the node binaries, the deploy CLI
+# linking seismic-verify-quote — verifies, on any platform.
 attestation = { workspace = true, features = ["azure-verifier"] }
 
 # Evidence *generation* (Intel TDX quote + Azure vTPM quote) is opt-in through

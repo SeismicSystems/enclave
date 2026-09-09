@@ -10,7 +10,8 @@
 //!   whose `report_data` is `founding_summit_keys_binding(nonce, node_pk,
 //!   consensus_pk)`. Deploy archives all three verbatim, together with the
 //!   nonce it sent, as this node's harvest record — the document
-//!   `verify-quote harvest --record` verifies. Refuses 410 once the network
+//!   `seismic-verify-quote`'s `verify_harvest` (the deploy CLI's `verify
+//!   harvest`) verifies. Refuses 410 once the network
 //!   manifest exists: attestation-service owns the TPM from the config POST
 //!   onward.
 //!
@@ -46,7 +47,7 @@ pub struct QuoteResponse {
     pub node_public_key: String,
     pub consensus_public_key: String,
     /// Stored verbatim by deploy's harvest, inside the record it hands to
-    /// `verify-quote harvest --record`.
+    /// `seismic-verify-quote`'s `verify_harvest`.
     pub evidence: AttestationExchangeMessage,
 }
 
@@ -103,7 +104,7 @@ async fn get_quote(
 }
 
 /// Parse a harvest nonce: 32 bytes of hex, `0x` optional (the same leniency
-/// as `verify-quote`'s hex record fields).
+/// as `seismic-verify-quote`'s hex record fields).
 fn parse_nonce(value: &str) -> Result<[u8; 32], HolderError> {
     let stripped = value.strip_prefix("0x").unwrap_or(value);
     let bytes =
