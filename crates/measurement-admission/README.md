@@ -56,7 +56,7 @@ Parity tests hold the compiler's accepted semantics equal to attested-tls's
 ## Promote and compile
 
 The two deploy-side steps are library functions, exposed at the command line
-by the [deploy repo's Rust CLI](https://github.com/SeismicSystems/deploy/tree/main/tee/cli/rust) (`seismic-tee-network tools
+by the [deploy repo's Rust CLI](https://github.com/SeismicSystems/deploy/tree/main/tee/cli) (`seismic-tee-network tools
 admission promote|compile`), which links this crate:
 
 - `promote_measurements` normalizes raw `make measure` output into a
