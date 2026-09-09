@@ -18,7 +18,8 @@ name = "seismic-attestation-service"
 path = "src/main.rs"
 
 [dependencies]
-seismic-attestation.workspace = true
+# Generates the node's evidence (deploy verification, the root-key handshake), on the CVM itself.
+seismic-attestation = { workspace = true, features = ["azure-attester"] }
 seismic-attestation-rpc.workspace = true
 seismic-custodian-ipc = { workspace = true, features = ["client"] }
 seismic-measurement-admission.workspace = true

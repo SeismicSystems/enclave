@@ -33,7 +33,9 @@
 //!
 //! Verification-only: nothing here touches a local TPM. Azure TDX verification
 //! is pure computation over the evidence bytes (the `azure-verifier` feature of
-//! the `attestation` backend), so it builds and runs anywhere, including macOS;
+//! the `attestation` backend; this crate never enables `seismic-attestation`'s
+//! `azure-attester`, so no TPM stack is linked), so it builds and runs
+//! anywhere, including macOS and aarch64 Linux;
 //! [`verify_deploy`] additionally makes one JSON-RPC request to the target node.
 
 pub mod collateral;

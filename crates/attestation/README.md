@@ -37,6 +37,33 @@ This crate is responsible for:
 - exposing Seismic-typed verified outputs so callers do not mix provider-specific
   measurements accidentally.
 
+## Feature flags
+
+Verification is unconditional: the backend's `azure-verifier` is pure
+computation over evidence bytes, so every consumer of this crate verifies
+Azure evidence on any platform without a TPM stack. That is what lets
+verifier-only tooling — `verify-quote`, the deploy CLI that links it — build
+and run on macOS and aarch64 Linux.
+
+### `azure-attester`
+
+Generation of Azure vTPM evidence on an Azure TDX CVM, for the node binaries
+(`summit-key-holder`, `seismic-attestation-service`). It turns on the backend's
+`azure-attester`, which reads the vTPM through `tss-esapi` and so needs the
+native tpm2-tss libraries at build time (`libtss2-dev` on Debian-based
+systems).
+
+The feature only reaches the dependency graph for x86_64 Linux targets, the
+platform an Azure TDX CVM is. Elsewhere — macOS and aarch64 Linux included — it
+stays enabled but contributes nothing: `--all-features` and a whole-workspace
+build resolve everywhere, and `generate_evidence` for `AzureTdx` fails at
+runtime with `AttestationTypeNotSupported`. The condition is on the *target*,
+so a cross build with `--target x86_64-unknown-linux-gnu` gets generation.
+
+The two examples (`azure_vtpm_roundtrip`, `capture_azure_tdx_fixture`) generate
+evidence, so they require the feature:
+`cargo run -p seismic-attestation --features azure-attester --example …`.
+
 ## Azure model
 
 On Azure TDX CVMs, Seismic guest identity is based on Azure vTPM PCR

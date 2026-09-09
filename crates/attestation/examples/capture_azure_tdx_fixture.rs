@@ -7,7 +7,7 @@
 //! `{ hcl_report, quote }` plus derived fields useful for tests.
 //!
 //! Usage:
-//!   cargo run -p seismic-attestation --example capture_azure_tdx_fixture -- \
+//!   cargo run -p seismic-attestation --features azure-attester --example capture_azure_tdx_fixture -- \
 //!     <binding-hex>
 //!
 //! If TPM access is denied, rerun with `sudo` or fix the VM's TPM device group
@@ -16,7 +16,7 @@
 //! `binding-hex` is the Seismic protocol binding to place in Azure HCL
 //! `user-data`, e.g. a 32-byte SHA-256 digest.
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use az_tdx_vtpm::{hcl::HclReport, imds, tdx, vtpm};
     use dcap_rs::types::quotes::{body::QuoteBody, version_4::QuoteV4};
@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn extract_hcl_user_data(var_data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     #[derive(serde::Deserialize)]
     struct HclVarDataUserData {
@@ -91,8 +91,8 @@ fn extract_hcl_user_data(var_data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error:
     Ok(hex::decode(parsed.user_data.trim_start_matches("0x"))?)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn main() {
-    eprintln!("capture_azure_tdx_fixture must be run on a Linux Azure TDX CVM");
+    eprintln!("capture_azure_tdx_fixture must be run on an x86_64 Linux Azure TDX CVM");
     std::process::exit(1);
 }
