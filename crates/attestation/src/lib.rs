@@ -35,6 +35,8 @@ pub mod bindings;
 pub use seismic_network_manifest as manifest;
 pub use seismic_network_manifest::{ManifestError, NetworkId, NetworkManifestV1};
 
+/// The DCAP collateral bundle type [`CollateralSnapshot`] carries.
+pub use attestation::QuoteCollateralV3;
 /// Backend measurement types returned after successful verification.
 pub use attestation::measurements::{DcapMeasurementRegister, MultiMeasurements};
 /// The backend error enum [`AttestationError::Backend`] wraps, and the two
@@ -47,12 +49,9 @@ pub use attestation::{
 };
 /// Backend evidence envelope and attestation-type enum used on the wire.
 pub use attestation::{AttestationExchangeMessage, AttestationType};
-/// Collateral types the public API leaks, through [`VerifyOptions::mode`] and
-/// [`VerifiedEvidence::collateral`].
-pub use attestation::{CollateralSnapshot, QuoteCollateralV3, VerifyMode};
 
 use attestation::{
-    AttestationGenerator, AttestationResult as BackendAttestationResult, AttestationVerifier,
+    AttestationGenerator, AttestationVerifier, EndorsementSnapshot,
     measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
 };
 use std::{collections::HashMap, path::PathBuf};
@@ -158,39 +157,64 @@ async fn verify_with_backend_policy(
     options: VerifyOptions,
 ) -> Result<VerifiedEvidence, AttestationError> {
     let attestation_type = evidence.attestation_type();
-    let verifier = AttestationVerifier::new(
-        backend_policy,
-        options.pccs_url,
-        options.dump_dcap_quotes,
+    let mut builder = AttestationVerifier::builder(backend_policy)
+        .with_dump_dcap_quotes(options.dump_dcap_quotes)
         // The backend can rewrite one Azure FMSPC's TCB Info to clamp a
         // component's required SVN down, so a platform behind every published
         // TCB level matches one. No Seismic relying party asks for that: it
         // makes a verdict depend on a caller's flag rather than on the
         // evidence and the collateral, which is exactly what archived
         // founding evidence must not do.
-        false,
-    );
+        .with_override_azure_outdated_tcb(false);
+    if let Some(url) = options.pccs_url {
+        builder = builder.with_pccs_url(url);
+    }
+    // The default cache policy: every live verification fetches its own
+    // collateral and no bundle is served from an in-process cache, so the
+    // bundle a verification hands back is the one it consumed.
+    let verifier = builder.build();
 
-    let BackendAttestationResult {
-        measurements,
-        collateral,
-        ..
-    } = verifier
-        .verify_attestation(evidence, expected_binding, options.mode)
-        .await?
-        // The verifier accepts evidence that declares no attestation when its
-        // policy names no attested platform, and reports that as `None`. Every
-        // Seismic relying party appraises a TEE node, so unattested evidence is
-        // refused here, before any admission predicate sees it.
-        .ok_or(AttestationError::Unattested)?;
+    let verified = match options.mode {
+        VerifyMode::Live => {
+            verifier
+                .verify_attestation(evidence, expected_binding)
+                .await?
+        }
+        // The backend's archived replay: the snapshot's bundle, at its
+        // instant, with nothing fetched.
+        VerifyMode::Archived(snapshot) => verifier.verify_attestation_archived(
+            evidence,
+            expected_binding,
+            &EndorsementSnapshot::dcap(snapshot.collateral, snapshot.at),
+        )?,
+    }
+    // The verifier accepts evidence that declares no attestation when its
+    // policy names no attested platform, and reports that as `None`. Every
+    // Seismic relying party appraises a TEE node, so unattested evidence is
+    // refused here, before any admission predicate sees it.
+    .ok_or(AttestationError::Unattested)?;
+
+    // The backend reports what it fetched as an `Option`: a platform may
+    // carry its own endorsements, or have no DCAP leg at all. Every platform
+    // a Seismic relying party appraises has a DCAP leg whose collateral is
+    // fetched, and a founding archive cannot be replayed without it, so its
+    // absence is a hard error here, once, and nothing below this line carries
+    // the `Option`.
+    let collateral = verified
+        .endorsements
+        .dcap
+        .ok_or(AttestationError::NoFetchedDcapCollateral)?;
 
     Ok(VerifiedEvidence {
         attestation: VerifiedSeismicAttestation::from_backend(
             attestation_type,
             expected_binding,
-            measurements,
+            verified.measurements,
         )?,
-        collateral,
+        collateral: CollateralSnapshot {
+            collateral,
+            at: verified.endorsements.at,
+        },
     })
 }
 
@@ -292,6 +316,39 @@ impl Default for VerifyOptions {
             dump_dcap_quotes: false,
         }
     }
+}
+
+/// The DCAP collateral a verification consumed, bound to the instant it was
+/// held to.
+///
+/// Everything in the bundle expires — `nextUpdate` on TCB Info, QE Identity
+/// and both CRLs, `notAfter` on the issuer chains — so a bundle answers
+/// freshness only with respect to an instant, and the two travel together.
+/// This was the backend's own type until it generalised its report into
+/// `EndorsementSnapshot`, whose bundle is optional because a platform may
+/// carry its own endorsements; every Seismic verification requires the
+/// fetched bundle, so here it stays a plain pair.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CollateralSnapshot {
+    /// The bundle the verification consumed — not a second copy, which a
+    /// cache refresh could make a different one.
+    pub collateral: QuoteCollateralV3,
+    /// Seconds since the Unix epoch: the instant every freshness check was
+    /// evaluated at.
+    pub at: u64,
+}
+
+/// Where a verification gets its DCAP collateral, and the instant it
+/// evaluates freshness at.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VerifyMode {
+    /// Fetch collateral and hold every freshness check to the wall clock: a
+    /// live challenge.
+    Live,
+    /// Replay against an archived snapshot, at the instant it was held to,
+    /// reaching no collateral service. Boxed: a bundle of Intel's material
+    /// is far larger than the other choice, which carries nothing.
+    Archived(Box<CollateralSnapshot>),
 }
 
 /// A verification's typed outcome, plus the collateral snapshot it consumed.
@@ -435,6 +492,11 @@ pub enum AttestationError {
     PolicyFormat(#[from] MeasurementFormatError),
     #[error("evidence declares no attestation; only attested evidence is verified")]
     Unattested,
+    #[error(
+        "the verification fetched no DCAP collateral; a Seismic verification requires the fetched \
+         bundle, since nothing else lets the verdict be reproduced"
+    )]
+    NoFetchedDcapCollateral,
     #[error("backend returned measurements inconsistent with {attestation_type}: {measurements:?}")]
     MeasurementTypeMismatch {
         attestation_type: AttestationType,
