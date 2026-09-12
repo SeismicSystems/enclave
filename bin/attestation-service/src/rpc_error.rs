@@ -186,11 +186,13 @@ fn verification_failure_kind(error: &AttestationError) -> Option<DenialKind> {
         // operator fixes the attestation stack, and the network never saw an
         // identity to accept or reject.
         AttestationError::Unattested => Some(DenialKind::RequesterEvidenceUnusable),
-        // This service's own policy document and the backend's measurement
-        // output: neither party's problem, and no verdict either way.
-        AttestationError::PolicyFormat(_) | AttestationError::MeasurementTypeMismatch { .. } => {
-            None
-        }
+        // This service's own policy document and the backend's output — its
+        // measurements, or a verification that fetched no DCAP bundle, which
+        // no Azure verification does: neither party's problem, and no verdict
+        // either way.
+        AttestationError::PolicyFormat(_)
+        | AttestationError::MeasurementTypeMismatch { .. }
+        | AttestationError::NoFetchedDcapCollateral => None,
     }
 }
 
@@ -216,10 +218,9 @@ fn backend_failure_kind(backend: &BackendAttestationError) -> Option<DenialKind>
         | BackendAttestationError::Maa(
             MaaError::Reqwest(_) | MaaError::DcapVerification(DcapVerificationError::Pccs(_)),
         ) => Some(DenialKind::ResponderTransient),
-        // Deployed without a collateral source, pointed at a provider URL it
-        // cannot use, or unable to read its own platform metadata.
-        BackendAttestationError::NoPccs
-        | BackendAttestationError::AttestationProviderUrl(_)
+        // Pointed at a provider URL it cannot use, or unable to read its own
+        // platform metadata.
+        BackendAttestationError::AttestationProviderUrl(_)
         | BackendAttestationError::PlatformMetadata(_) => Some(DenialKind::ResponderMisconfigured),
         // Offline appraisal of the evidence itself, whose verdict no collateral
         // source or configuration could change: the quote and its DCAP chain,
@@ -400,7 +401,6 @@ mod tests {
     #[test]
     fn collateral_infrastructure_faults_map_to_unavailable() {
         let faults = [
-            BackendAttestationError::NoPccs,
             BackendAttestationError::AttestationProvider("502 Bad Gateway".into()),
             BackendAttestationError::AttestationProviderUrl("not a URL".into()),
         ];
@@ -469,12 +469,16 @@ mod tests {
     #[test]
     fn the_same_backend_error_attributes_by_step() {
         assert_eq!(
-            refusal_of(backend_error(BackendAttestationError::NoPccs)),
+            refusal_of(backend_error(
+                BackendAttestationError::AttestationProviderUrl("not a URL".into())
+            )),
             Some(RootKeyRefusal::ResponderUnavailable)
         );
 
         let generating = root_key_answer_rpc_error(AnswerError::GenerateResponderEvidence {
-            source: AttestationError::Backend(BackendAttestationError::NoPccs),
+            source: AttestationError::Backend(BackendAttestationError::AttestationProviderUrl(
+                "not a URL".into(),
+            )),
         });
         assert_eq!(generating.code(), ErrorCode::InternalError.code());
     }

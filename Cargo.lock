@@ -1114,7 +1114,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "attest-measure"
 version = "0.0.1"
-source = "git+https://github.com/easy-tee/attest.git?rev=8206cd19d9dcb1978d85a3d8dece06a3ee7a1206#8206cd19d9dcb1978d85a3d8dece06a3ee7a1206"
+source = "git+https://github.com/easy-tee/attest.git?rev=12f1e29f6ea63ecc2f80f39c2c1f1172720bcf24#12f1e29f6ea63ecc2f80f39c2c1f1172720bcf24"
 dependencies = [
  "attest-types",
  "authenticode",
@@ -1139,7 +1139,7 @@ dependencies = [
 [[package]]
 name = "attest-types"
 version = "0.0.1"
-source = "git+https://github.com/easy-tee/attest.git?rev=8206cd19d9dcb1978d85a3d8dece06a3ee7a1206#8206cd19d9dcb1978d85a3d8dece06a3ee7a1206"
+source = "git+https://github.com/easy-tee/attest.git?rev=12f1e29f6ea63ecc2f80f39c2c1f1172720bcf24#12f1e29f6ea63ecc2f80f39c2c1f1172720bcf24"
 dependencies = [
  "parity-scale-codec",
  "serde",
@@ -1150,7 +1150,7 @@ dependencies = [
 [[package]]
 name = "attestation"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?rev=604f3befc7af568a153a7c9728ef5bf800abafe6#604f3befc7af568a153a7c9728ef5bf800abafe6"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=0079937f315cb30e678ba41e201ab692766172a8#0079937f315cb30e678ba41e201ab692766172a8"
 dependencies = [
  "anyhow",
  "attest-measure",
@@ -4531,7 +4531,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pccs"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?rev=604f3befc7af568a153a7c9728ef5bf800abafe6#604f3befc7af568a153a7c9728ef5bf800abafe6"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=0079937f315cb30e678ba41e201ab692766172a8#0079937f315cb30e678ba41e201ab692766172a8"
 dependencies = [
  "anyhow",
  "dcap-qvl",

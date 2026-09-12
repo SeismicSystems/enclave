@@ -275,7 +275,7 @@ pub async fn verify_harvest(
                 hex::encode(archived.harvest_nonce),
                 hex::encode(nonce),
             );
-            (VerifyMode::Archived(archived.snapshot), None)
+            (VerifyMode::Archived(Box::new(archived.snapshot)), None)
         }
     };
 
