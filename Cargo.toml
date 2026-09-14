@@ -55,7 +55,7 @@ anyhow = "1.0"
 # Seismic's attested-tls fork. The `seismic` branch carries our attestation
 # changes on top of flashbots/attested-tls main. Goal is to upstream everything and
 # eventually revert back to flashbots' attested-tls however.
-attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "0079937f315cb30e678ba41e201ab692766172a8" }
+attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "4eaf3239b5cd4d078fb234e3364dbe0ab2827de3" }
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
 az-tdx-vtpm = "0.7.4"
 axum = "0.8.6"
