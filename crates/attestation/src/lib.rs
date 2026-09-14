@@ -46,6 +46,51 @@ pub use attestation::{
 };
 /// Backend evidence envelope and attestation-type enum used on the wire.
 pub use attestation::{AttestationExchangeMessage, AttestationType};
+
+/// The attestation type this guest mints evidence for, resolved once.
+///
+/// `SEISMIC_ATTESTATION_TYPE` (`azure-tdx`, `gcp-tdx`, `dcap-tdx`) wins; otherwise
+/// the platform is read from DMI, falling back to Azure TDX.
+pub fn configured_attestation_type() -> AttestationType {
+    static RESOLVED: std::sync::OnceLock<AttestationType> = std::sync::OnceLock::new();
+    *RESOLVED.get_or_init(|| {
+        let resolved = match std::env::var("SEISMIC_ATTESTATION_TYPE").ok().as_deref() {
+            Some("azure-tdx") => AttestationType::AzureTdx,
+            Some("gcp-tdx") => AttestationType::GcpTdx,
+            Some("dcap-tdx") => AttestationType::DcapTdx,
+            Some(other) => {
+                tracing::warn!(value = other, "unknown SEISMIC_ATTESTATION_TYPE, using DMI");
+                platform_attestation_type()
+            }
+            None => platform_attestation_type(),
+        };
+        tracing::info!(
+            attestation_type = resolved.as_str(),
+            "attestation type resolved"
+        );
+        resolved
+    })
+}
+
+const AZURE_CHASSIS_ASSET_TAG: &str = "7783-7084-3265-9085-8269-3286-77";
+
+fn dmi(field: &str) -> String {
+    std::fs::read_to_string(format!("/sys/class/dmi/id/{field}"))
+        .map(|value| value.trim().to_string())
+        .unwrap_or_default()
+}
+
+fn platform_attestation_type() -> AttestationType {
+    if dmi("chassis_asset_tag") == AZURE_CHASSIS_ASSET_TAG {
+        AttestationType::AzureTdx
+    } else if dmi("sys_vendor").starts_with("Google") {
+        AttestationType::GcpTdx
+    } else if std::path::Path::new("/dev/tdx_guest").exists() {
+        AttestationType::DcapTdx
+    } else {
+        AttestationType::AzureTdx
+    }
+}
 /// Collateral types the public API leaks, through [`VerifyOptions::mode`] and
 /// [`VerifiedEvidence::collateral`].
 pub use attestation::{CollateralSnapshot, QuoteCollateralV3, VerifyMode};

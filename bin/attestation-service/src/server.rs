@@ -6,9 +6,10 @@
 //! key — see [`crate::join`].
 
 use crate::{
-    ATTESTATION_TYPE, Args,
+    Args,
     admission::RegistryAdmission,
     api::{AdmissionChainStatus, LuksProvisioningStatus, NodeStatusRpcServer},
+    attestation_type,
     bootstrap::{RootKeyRequest, answer_root_key_request},
     join::ensure_root_key_present,
     network::{NETWORK_MANIFEST_PATH, load_manifest},
@@ -110,7 +111,7 @@ impl AttestationRpcServer for AttestationService {
             &self.network_id,
             &mut custodian,
             &self.admission,
-            ATTESTATION_TYPE,
+            attestation_type(),
         )
         .await
         .map_err(root_key_answer_rpc_error)?;
@@ -136,7 +137,7 @@ impl AttestationRpcServer for AttestationService {
             .await
             .map_err(|error| internal_rpc_error("fetching tx-io public key", error))?;
         let binding = tx_io_binding(&self.network_id, &tx_io_pk.pk, epoch);
-        let evidence = generate_evidence(ATTESTATION_TYPE, binding64_from_digest32(binding))
+        let evidence = generate_evidence(attestation_type(), binding64_from_digest32(binding))
             .map_err(|error| internal_rpc_error("generating tx-io evidence", error))?;
 
         Ok(TxIoAttestationResponse {
@@ -157,7 +158,7 @@ impl AttestationRpcServer for AttestationService {
         deployment_nonce: [u8; 32],
     ) -> RpcResult<DeployVerificationResponse> {
         let binding = deploy_verification_binding(&self.network_id, &deployment_nonce);
-        let evidence = generate_evidence(ATTESTATION_TYPE, binding64_from_digest32(binding))
+        let evidence = generate_evidence(attestation_type(), binding64_from_digest32(binding))
             .map_err(|error| {
                 internal_rpc_error("generating deploy-verification evidence", error)
             })?;
