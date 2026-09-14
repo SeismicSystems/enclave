@@ -11,8 +11,8 @@
 //! handshake for the nodes joining after it.
 
 use crate::{
-    ATTESTATION_TYPE,
     admission::DangerouslyAdmitAnyAzureGuest,
+    attestation_type,
     bootstrap::{RootKeyResponse, build_root_key_request, verify_root_key_response},
     rpc_error::RootKeyRefusal,
 };
@@ -229,7 +229,7 @@ async fn try_fetch_root_key_from_peer(
     };
     let requester_eph_pk = PublicKey::from_slice(&attempt.requester_eph_pk)
         .context("custodian returned an invalid requester ephemeral key")?;
-    let request = build_root_key_request(network_id, &requester_eph_pk, ATTESTATION_TYPE)?;
+    let request = build_root_key_request(network_id, &requester_eph_pk, attestation_type())?;
 
     let client = HttpClientBuilder::default().build(peer)?;
     let request_bytes = serde_json::to_vec(&request)?;
