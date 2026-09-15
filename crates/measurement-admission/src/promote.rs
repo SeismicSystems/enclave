@@ -18,7 +18,7 @@
 //! result is compiled before it is returned, so a bad promotion fails at
 //! image release rather than at genesis.
 
-use crate::policy::{RawEntry, compile_policy, entry_value, parse_pcr_key};
+use crate::policy::{RawEntry, compile_policy, entry_value, entry_value_bytes, parse_pcr_key};
 use crate::{AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, PolicyError};
 use alloy_primitives::B256;
 use serde::Serialize;
@@ -67,6 +67,18 @@ struct PromotedMeasurements {
 #[derive(Serialize)]
 struct PromotedEntry {
     expected_any: [String; 1],
+}
+
+#[derive(Serialize)]
+struct PromotedGcpRecord {
+    attestation_type: String,
+    measurement_id: String,
+    measurements: PromotedGcpMeasurements,
+}
+
+#[derive(Serialize)]
+struct PromotedGcpMeasurements {
+    rtmr1: PromotedEntry,
 }
 
 fn promoted_entry(value: B256) -> PromotedEntry {
@@ -131,6 +143,10 @@ pub fn promote_measurements(
         .or(attestation_type)
         .unwrap_or(AZURE_TDX_ATTESTATION_TYPE);
 
+    if attestation_type == crate::GCP_TDX_ATTESTATION_TYPE {
+        return promote_gcp(&pcr_map, measurement_id);
+    }
+
     // Normalize keys with the compiler's own parser, rejecting aliases that
     // collapse to one index; registers outside the schema are dropped (their
     // build-time inventory check is release tooling's job, not policy).
@@ -180,6 +196,37 @@ pub fn promote_measurements(
 
     // The document seeds chain state; prove it compiles before it leaves the
     // promoter, so a bad promotion fails at image release, not at genesis.
+    compile_policy(&promoted)?;
+    Ok(promoted)
+}
+
+/// Promote a GCP measurements input: `rtmr1` becomes the record's only register.
+fn promote_gcp(
+    map: &BTreeMap<String, RawEntry>,
+    measurement_id: &str,
+) -> Result<Vec<u8>, PromoteError> {
+    let mut rtmr1 = None;
+    for (key, entry) in map {
+        if key.eq_ignore_ascii_case("rtmr1") {
+            rtmr1 = Some(entry_value_bytes(INPUT, "rtmr1", entry, 48)?);
+        }
+    }
+    let rtmr1 = rtmr1.ok_or(PolicyError::MissingGcpRegister {
+        record: INPUT.to_owned(),
+    })?;
+    let record = PromotedGcpRecord {
+        attestation_type: crate::GCP_TDX_ATTESTATION_TYPE.to_owned(),
+        measurement_id: measurement_id.to_owned(),
+        measurements: PromotedGcpMeasurements {
+            rtmr1: PromotedEntry {
+                expected_any: [hex::encode(rtmr1)],
+            },
+        },
+    };
+    let mut rendered = serde_json::to_string_pretty(&[record])
+        .expect("promoted-record serialization is infallible");
+    rendered.push('\n');
+    let promoted = rendered.into_bytes();
     compile_policy(&promoted)?;
     Ok(promoted)
 }
@@ -235,7 +282,28 @@ mod tests {
         // The promoted document compiles to the identity the raw map states.
         let compiled = compile_policy(&promoted).unwrap();
         assert_eq!(compiled.records.len(), 1);
-        assert_eq!(compiled.records[0].tuple.pcr9, B256::from([0x22; 32]));
+        let crate::SchemaTuple::AzureTdxV1(tuple) = &compiled.records[0].tuple else {
+            panic!("wrong schema");
+        };
+        assert_eq!(tuple.pcr9, B256::from([0x22; 32]));
+    }
+
+    #[test]
+    fn promotes_gcp_measurements_to_an_rtmr1_record() {
+        let rtmr1 = "69b655b5c1505ef6329f853308c87d0b8e1e0161140907664302f711438212de8dc897767a07aed93af8b84377272ecc";
+        let raw = format!(
+            r#"{{"attestation_type":"gcp-tdx","measurement_id":"seismic-dev_x.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}}}},"events":[]}}"#
+        );
+        let promoted = promote_measurements(raw.as_bytes(), None, None).unwrap();
+        let doc: serde_json::Value = serde_json::from_slice(&promoted).unwrap();
+        assert_eq!(doc[0]["attestation_type"], "gcp-tdx");
+        assert_eq!(doc[0]["measurement_id"], "seismic-dev_x.tar.gz");
+        assert_eq!(
+            doc[0]["measurements"]["rtmr1"]["expected_any"],
+            serde_json::json!([rtmr1])
+        );
+        let compiled = compile_policy(&promoted).unwrap();
+        assert_eq!(compiled.records[0].tuple.schema(), crate::GCP_TDX_V1_SCHEMA);
     }
 
     #[test]
@@ -319,13 +387,13 @@ mod tests {
             p9 = hex32(0x22),
             p11 = hex32(0x33),
         );
-        // The stamped type survives promotion and the compile-validation of
-        // the output rejects it: only the supported schema promotes.
+        // The stamped type selects the schema: a gcp-tdx input is promoted as
+        // GCP, so PCR registers do not satisfy it.
         let err =
             promote_measurements(raw.as_bytes(), Some("img.vhd"), Some("azure-tdx")).unwrap_err();
         assert!(matches!(
             err,
-            PromoteError::Policy(PolicyError::UnsupportedAttestationType { .. })
+            PromoteError::Policy(PolicyError::MissingGcpRegister { .. })
         ));
     }
 
