@@ -48,7 +48,7 @@ async fn main() {
         Ok(verified) => {
             println!("VERIFIED");
             println!("{:#?}", verified.attestation);
-            let snap = format!("{:?}", verified.collateral);
+            let snap = format!("{:?}", verified.bundle);
             println!("collateral: {}…", &snap[..snap.len().min(600)]);
         }
         Err(e) => {

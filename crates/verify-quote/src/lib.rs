@@ -45,8 +45,8 @@ pub mod archive;
 use anyhow::Context as _;
 use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_attestation::{
-    AttestationType, VerificationBundle, VerifiedAzureAttestation, VerifiedEvidence,
-    VerifiedSeismicAttestation, VerifyOptions,
+    AttestationType, VerificationBundle, VerifiedEvidence, VerifiedSeismicAttestation,
+    VerifyOptions,
     bindings::{
         binding64_from_digest32, deploy_verification_binding, founding_summit_keys_binding,
     },
@@ -103,46 +103,103 @@ pub struct HarvestRecord {
 /// because the caller keeps this as provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuoteReport {
+    /// The platform whose registers this report carries.
+    pub attestation_type: AttestationType,
+
     /// The 64-byte `report_data` bound into the quote.
     pub binding: [u8; 64],
 
-    /// Every register the quote covers, in register order.
-    pub pcrs: BTreeMap<u32, [u8; 32]>,
+    /// Every register the quote covers, in the platform's own shape.
+    pub registers: QuoteRegisters,
+}
+
+/// The registers a quote attests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuoteRegisters {
+    /// Azure vTPM PCRs, SHA-256, in register order.
+    Pcrs(BTreeMap<u32, [u8; 32]>),
+    /// TDX measurement registers, SHA-384.
+    Tdx(Box<TdxRegisters>),
+}
+
+/// A TDX guest's measurement registers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TdxRegisters {
+    pub mrtd: [u8; 48],
+    pub rtmr0: [u8; 48],
+    pub rtmr1: [u8; 48],
+    pub rtmr2: [u8; 48],
+    pub rtmr3: [u8; 48],
+}
+
+impl TdxRegisters {
+    fn to_json(self) -> serde_json::Value {
+        serde_json::json!({
+            "mrtd": hex::encode(self.mrtd),
+            "rtmr0": hex::encode(self.rtmr0),
+            "rtmr1": hex::encode(self.rtmr1),
+            "rtmr2": hex::encode(self.rtmr2),
+            "rtmr3": hex::encode(self.rtmr3),
+        })
+    }
 }
 
 impl QuoteReport {
-    /// The one platform this report describes: the registers are Azure vTPM
-    /// PCRs.
-    pub const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
-
-    fn from_verified(verified: &VerifiedAzureAttestation) -> Self {
-        Self {
-            binding: verified.binding,
-            // Register order, so archived reports diff cleanly across nodes,
-            // boots and builds: the backend hands back a `HashMap`, whose
-            // iteration order is not stable.
-            pcrs: verified
-                .guest_measurements
-                .pcrs
-                .iter()
-                .map(|(index, value)| (*index, *value))
-                .collect(),
+    fn from_verified(verified: &VerifiedSeismicAttestation) -> Self {
+        match verified {
+            VerifiedSeismicAttestation::AzureTdx(azure) => Self {
+                attestation_type: AttestationType::AzureTdx,
+                binding: azure.binding,
+                // Register order, so archived reports diff cleanly across nodes,
+                // boots and builds: the backend hands back a `HashMap`, whose
+                // iteration order is not stable.
+                registers: QuoteRegisters::Pcrs(
+                    azure
+                        .guest_measurements
+                        .pcrs
+                        .iter()
+                        .map(|(index, value)| (*index, *value))
+                        .collect(),
+                ),
+            },
+            VerifiedSeismicAttestation::GcpTdx(tdx) | VerifiedSeismicAttestation::DcapTdx(tdx) => {
+                let m = &tdx.measurements;
+                Self {
+                    attestation_type: verified.attestation_type(),
+                    binding: tdx.binding,
+                    registers: QuoteRegisters::Tdx(Box::new(TdxRegisters {
+                        mrtd: m.mrtd,
+                        rtmr0: m.rtmr0,
+                        rtmr1: m.rtmr1,
+                        rtmr2: m.rtmr2,
+                        rtmr3: m.rtmr3,
+                    })),
+                }
+            }
         }
     }
 
     /// This report as a JSON object.
     pub fn to_json(&self) -> serde_json::Value {
-        let pcrs: serde_json::Map<String, serde_json::Value> = self
-            .pcrs
-            .iter()
-            .map(|(index, value)| (format!("pcr{index}"), hex::encode(value).into()))
-            .collect();
-        serde_json::json!({
+        let mut object = serde_json::json!({
             "verified": true,
-            "attestation_type": Self::ATTESTATION_TYPE.as_str(),
+            "attestation_type": self.attestation_type.as_str(),
             "binding": hex::encode(self.binding),
-            "pcrs": pcrs,
-        })
+        });
+        let fields = object.as_object_mut().expect("a report is a JSON object");
+        match &self.registers {
+            QuoteRegisters::Pcrs(pcrs) => {
+                let pcrs: serde_json::Map<String, serde_json::Value> = pcrs
+                    .iter()
+                    .map(|(index, value)| (format!("pcr{index}"), hex::encode(value).into()))
+                    .collect();
+                fields.insert("pcrs".to_string(), pcrs.into());
+            }
+            QuoteRegisters::Tdx(registers) => {
+                fields.insert("registers".to_string(), (**registers).to_json());
+            }
+        }
+        object
     }
 }
 
@@ -242,7 +299,7 @@ pub async fn verify_harvest(
         decode_hex_field::<48>("consensus_public_key", &record.consensus_public_key)?;
     let binding = harvest_binding(&harvest_nonce, &node_public_key, &consensus_public_key);
 
-    let (verified, bundle) = verify_azure_live(record.evidence, binding, policy, pccs_url)
+    let (verified, bundle) = verify_live(record.evidence, binding, policy, pccs_url)
         .await
         .context("verifying harvest evidence")?;
     Ok(VerifiedHarvest {
@@ -277,10 +334,9 @@ pub fn verify_archived_harvest(
     archive: FoundingArchive,
     policy: SeismicMeasurementPolicy,
 ) -> anyhow::Result<VerifiedHarvest> {
-    expect_azure(&archive.bundle.evidence)?;
+    expect_supported(&archive.bundle.evidence)?;
     let verified = verify_archived_evidence_with_policy(&archive.bundle, archive.binding(), policy)
         .context("re-verifying the archived harvest evidence")?;
-    let verified = as_azure(verified)?;
     let report = QuoteReport::from_verified(&verified);
     anyhow::ensure!(
         report == archive.report,
@@ -337,7 +393,7 @@ pub async fn verify_deploy(
     let binding = deploy_binding(&network_id, &deployment_nonce);
     // The bundle goes unarchived here: a live challenge is fresh evidence,
     // judged against fresh collateral at the wall clock.
-    let (verified, _bundle) = verify_azure_live(response.evidence, binding, policy, pccs_url)
+    let (verified, _bundle) = verify_live(response.evidence, binding, policy, pccs_url)
         .await
         .context("verifying deploy-verification evidence")?;
     Ok(VerifiedDeploy {
@@ -361,15 +417,15 @@ pub fn deploy_binding(network_id: &NetworkId, deployment_nonce: &[u8; 32]) -> [u
     binding64_from_digest32(deploy_verification_binding(network_id, deployment_nonce))
 }
 
-/// Verify Azure TDX evidence against `binding` and `policy`, live, returning
-/// the verified output and the bundle the verification consumed.
-async fn verify_azure_live(
+/// Verify TDX evidence against `binding` and `policy`, live, returning the
+/// verified output and the bundle the verification consumed.
+async fn verify_live(
     evidence: AttestationExchangeMessage,
     binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
     pccs_url: Option<String>,
-) -> anyhow::Result<(VerifiedAzureAttestation, VerificationBundle)> {
-    expect_azure(&evidence)?;
+) -> anyhow::Result<(VerifiedSeismicAttestation, VerificationBundle)> {
+    expect_supported(&evidence)?;
     let VerifiedEvidence {
         attestation,
         bundle,
@@ -383,29 +439,23 @@ async fn verify_azure_live(
         },
     )
     .await?;
-    Ok((as_azure(attestation)?, bundle))
+    Ok((attestation, bundle))
 }
 
-/// Reject wrong-platform evidence on the claimed type, before verification:
-/// DCAP verification costs collateral round-trips, and this policy format
-/// cannot pin a non-Azure platform's measurements anyway.
-fn expect_azure(evidence: &AttestationExchangeMessage) -> anyhow::Result<()> {
+/// Reject evidence from a platform without an admission schema on the claimed
+/// type, before verification: DCAP verification costs collateral round-trips.
+fn expect_supported(evidence: &AttestationExchangeMessage) -> anyhow::Result<()> {
     anyhow::ensure!(
-        evidence.attestation_type() == AttestationType::AzureTdx,
-        "expected {} evidence, got {}",
+        matches!(
+            evidence.attestation_type(),
+            AttestationType::AzureTdx | AttestationType::GcpTdx
+        ),
+        "expected {} or {} evidence, got {}",
         AttestationType::AzureTdx.as_str(),
+        AttestationType::GcpTdx.as_str(),
         evidence.attestation_type().as_str(),
     );
     Ok(())
-}
-
-fn as_azure(attestation: VerifiedSeismicAttestation) -> anyhow::Result<VerifiedAzureAttestation> {
-    let VerifiedSeismicAttestation::AzureTdx(verified) = attestation else {
-        anyhow::bail!(
-            "verified output is not azure-tdx despite azure-tdx evidence: {attestation:?}"
-        );
-    };
-    Ok(verified)
 }
 
 /// Decode one fixed-length hex field of the record, naming the field in every
@@ -430,6 +480,7 @@ fn decode_hex_field<const N: usize>(field: &str, value: &str) -> anyhow::Result<
 mod tests {
     use super::*;
     use seismic_attestation::AzureGuestMeasurements;
+    use seismic_attestation::VerifiedAzureAttestation;
     use std::collections::HashMap;
 
     /// One real founding, kept verbatim as its archive: a harvest record, the
@@ -655,14 +706,14 @@ mod tests {
         .await
         .unwrap_err();
         assert!(
-            format!("{error:#}").contains("expected azure-tdx evidence"),
+            format!("{error:#}").contains("expected azure-tdx or gcp-tdx evidence"),
             "{error:#}"
         );
 
         let error = verify_archived_harvest(archive::fabricated_archive(), policy(VALID_POLICY))
             .unwrap_err();
         assert!(
-            format!("{error:#}").contains("expected azure-tdx evidence"),
+            format!("{error:#}").contains("expected azure-tdx or gcp-tdx evidence"),
             "{error:#}"
         );
     }
@@ -771,7 +822,8 @@ mod tests {
             },
         };
 
-        let report = QuoteReport::from_verified(&verified).to_json();
+        let report =
+            QuoteReport::from_verified(&VerifiedSeismicAttestation::AzureTdx(verified)).to_json();
 
         assert_eq!(report["verified"], true);
         assert_eq!(report["attestation_type"], "azure-tdx");
@@ -799,8 +851,9 @@ mod tests {
         let deployment_nonce = [0x66u8; 32];
         let verified = VerifiedDeploy {
             report: QuoteReport {
+                attestation_type: AttestationType::AzureTdx,
                 binding: deploy_binding(&network_id, &deployment_nonce),
-                pcrs: BTreeMap::from([(4, [0x44; 32])]),
+                registers: QuoteRegisters::Pcrs(BTreeMap::from([(4, [0x44; 32])])),
             },
             network_id,
             deployment_nonce,
