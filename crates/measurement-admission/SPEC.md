@@ -158,6 +158,34 @@ reinterpret v1. Adding SecureBoot coverage, for example, means
 opaque IDs, a new schema costs new IDs and one policy revision. It never
 costs a contract change.
 
+### 3.1 GCP TDX v1 schema
+
+```text
+schema name: seismic.gcp-tdx.rtmr1.v1
+attestation type: gcp-tdx
+fields: rtmr1: bytes48
+schema ID: keccak256(schema name)
+         = 0x921bff6d1bdda3591c79251b61add9e7fd5878ea328a0e692d351e48baf74980
+```
+
+A GCP TDX guest has no vTPM binding in its quote; its identity is the TDX
+runtime measurement registers. One of them moves with a Seismic release:
+
+| Register | Covers |
+| --- | --- |
+| rtmr1 | The boot application path: the UKI's authenticode hash, the embedded kernel's authenticode hash, the boot disk's GPT, and the firmware's fixed boot-action strings. |
+
+`mrtd` and `rtmr0` are Google's firmware, its configuration, and the VM's
+boot variables; `rtmr2` and `rtmr3` are not extended on this boot path.
+None of them contribute to identity under this schema. systemd-stub's
+section and command-line measurements land in the guest's vTPM, not in a
+TDX register; with Secure Boot disabled a runtime-supplied command line is
+therefore invisible to this schema. Closing that is a v2 concern.
+
+`rtmr1` is reproducible from the build artifact alone by replaying the
+seven firmware events; seismic-images' `make measure-gcp` does so.
+
+
 ## 4. Policy document
 
 The document is a record list in the format Seismic's attestation stack
@@ -223,6 +251,12 @@ or through the deprecated scalar `expected`.
 Normalization unifies IDs, not bytes: two documents that differ only in key
 spelling or value case compile to the same accepted set, and still hash
 differently, because the hash covers the exact bytes (section 6).
+
+For a `gcp-tdx` record the only register key is `rtmr1` (case-insensitive),
+and its value is 48 bytes (96 hex characters) of bare lowercase hex. Any
+other key is an error. A document pins one attestation type: records of
+different types in one document MUST be rejected.
+
 
 ### 4.2 A compiler MUST reject
 
@@ -294,6 +328,34 @@ Rules for deriving an ID from evidence:
 - keccak-256 is the only hash in the ID path, because the ID keys Solidity
   mapping storage. SHA-256 covers documents and transcripts, which never key
   chain state.
+
+### 5.1 GCP TDX v1
+
+```text
+schemaId = keccak256("seismic.gcp-tdx.rtmr1.v1")
+
+preimage = schemaId || rtmr1                     (32 + 48 = 80 bytes)
+
+admissionId = keccak256(preimage)
+```
+
+`rtmr1` is not a 32-byte word, so the preimage is plain concatenation, not
+`abi.encode`. Worked example, the GCP golden fixture
+(`fixtures/golden/measurement-policy-v1.gcp.json`, RTMR1 of
+`seismic-dev_2026-08-27.5c012e` booted on a `c3-standard-4` TDX guest):
+
+```text
+schemaId = 0x921bff6d1bdda3591c79251b61add9e7fd5878ea328a0e692d351e48baf74980
+rtmr1    = 0x69b655b5c1505ef6329f853308c87d0b...
+
+admissionId = 0xe0f782e58ff0db9a08a3dff592c96ad0c8fff0abb401045e1d53ac9e683438f0
+policy hash = 0xb2172c6b347082338bb9de40ef51325db43d7201e2c719af307ee0a52de031da
+```
+
+The rules above apply unchanged: the register comes from verified
+measurements, a quote without it fails closed, and every other register is
+ignored.
+
 
 ## 6. Policy hash
 

@@ -17,7 +17,11 @@
 //! binding a single 32-byte value. Parity tests hold the accepted semantics
 //! equal to `check_measurement` for every document this compiler accepts.
 
-use crate::{AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, AdmissionId, AzureTdxV1Measurements};
+use crate::{
+    AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, AZURE_TDX_V1_SCHEMA, AdmissionId,
+    AzureTdxV1Measurements, GCP_TDX_ATTESTATION_TYPE, GCP_TDX_V1_SCHEMA, GcpTdxV1Measurements,
+    azure_tdx_v1_schema_id, gcp_tdx_v1_schema_id,
+};
 use alloy_primitives::B256;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -37,13 +41,43 @@ pub struct CompiledPolicy {
     pub admission_ids: Vec<AdmissionId>,
 }
 
+/// A record's measurement tuple under the schema its attestation type selects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SchemaTuple {
+    AzureTdxV1(AzureTdxV1Measurements),
+    GcpTdxV1(GcpTdxV1Measurements),
+}
+
+impl SchemaTuple {
+    pub fn admission_id(&self) -> AdmissionId {
+        match self {
+            Self::AzureTdxV1(tuple) => tuple.admission_id(),
+            Self::GcpTdxV1(tuple) => tuple.admission_id(),
+        }
+    }
+
+    pub fn schema(&self) -> &'static str {
+        match self {
+            Self::AzureTdxV1(_) => AZURE_TDX_V1_SCHEMA,
+            Self::GcpTdxV1(_) => GCP_TDX_V1_SCHEMA,
+        }
+    }
+
+    pub fn schema_id(&self) -> B256 {
+        match self {
+            Self::AzureTdxV1(_) => azure_tdx_v1_schema_id(),
+            Self::GcpTdxV1(_) => gcp_tdx_v1_schema_id(),
+        }
+    }
+}
+
 /// One record's compiled form: the concrete guest identity it admits.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompiledRecord {
     /// The record's human audit label; not part of guest identity.
     pub measurement_id: String,
     /// The record's measurement tuple.
-    pub tuple: AzureTdxV1Measurements,
+    pub tuple: SchemaTuple,
 }
 
 impl CompiledRecord {
@@ -62,11 +96,38 @@ pub enum PolicyError {
     Empty,
     #[error(
         "{record}: unsupported attestation_type {attestation_type:?} \
-         (supported: {AZURE_TDX_ATTESTATION_TYPE:?})"
+         (supported: {AZURE_TDX_ATTESTATION_TYPE:?}, {GCP_TDX_ATTESTATION_TYPE:?})"
     )]
     UnsupportedAttestationType {
         record: String,
         attestation_type: String,
+    },
+    #[error(
+        "{record}: attestation_type differs from the document's first record; a policy document pins one attestation type"
+    )]
+    MixedAttestationTypes { record: String },
+    #[error(
+        "{record}: register key {key:?} is not an admission register of this schema (expected \"rtmr1\")"
+    )]
+    UnexpectedGcpRegister { record: String, key: String },
+    #[error("{record}: missing required register rtmr1")]
+    MissingGcpRegister { record: String },
+    #[error("{record}: {register} sets both expected and expected_any")]
+    BothValueForms { record: String, register: String },
+    #[error("{record}: {register} sets neither expected nor expected_any")]
+    NoValueForm { record: String, register: String },
+    #[error("{record}: {register} must bind exactly one accepted value, got {count}")]
+    NotExactlyOneValue {
+        record: String,
+        register: String,
+        count: usize,
+    },
+    #[error("{record}: {register} value {value:?} is not {len} bytes of bare hex")]
+    BadValueLength {
+        record: String,
+        register: String,
+        value: String,
+        len: usize,
     },
     #[error("{record}: measurement_id duplicates an earlier record's")]
     DuplicateMeasurementId { record: String },
@@ -138,14 +199,28 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
     for (position, raw) in raw_records.iter().enumerate() {
         let record = format!("record {position} ({:?})", raw.measurement_id);
 
-        if raw.attestation_type != AZURE_TDX_ATTESTATION_TYPE {
+        if raw.attestation_type != AZURE_TDX_ATTESTATION_TYPE
+            && raw.attestation_type != GCP_TDX_ATTESTATION_TYPE
+        {
             return Err(PolicyError::UnsupportedAttestationType {
                 record,
                 attestation_type: raw.attestation_type.clone(),
             });
         }
+        if raw.attestation_type != raw_records[0].attestation_type {
+            return Err(PolicyError::MixedAttestationTypes { record });
+        }
         if !seen_measurement_ids.insert(&raw.measurement_id) {
             return Err(PolicyError::DuplicateMeasurementId { record });
+        }
+        if raw.attestation_type == GCP_TDX_ATTESTATION_TYPE {
+            let tuple = compile_gcp_record(&record, &raw.measurements)?;
+            unique_ids.insert(tuple.admission_id());
+            records.push(CompiledRecord {
+                measurement_id: raw.measurement_id.clone(),
+                tuple: SchemaTuple::GcpTdxV1(tuple),
+            });
+            continue;
         }
 
         // Normalize register keys, rejecting aliases that collapse to the
@@ -183,7 +258,7 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
         unique_ids.insert(tuple.admission_id());
         records.push(CompiledRecord {
             measurement_id: raw.measurement_id.clone(),
-            tuple,
+            tuple: SchemaTuple::AzureTdxV1(tuple),
         });
     }
 
@@ -192,6 +267,79 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
         records,
         admission_ids: unique_ids.into_iter().collect(),
     })
+}
+
+/// Compile one `gcp-tdx` record: exactly the `rtmr1` register, one 48-byte value.
+fn compile_gcp_record(
+    record: &str,
+    measurements: &BTreeMap<String, RawEntry>,
+) -> Result<GcpTdxV1Measurements, PolicyError> {
+    let mut rtmr1 = None;
+    for (key, entry) in measurements {
+        if !key.eq_ignore_ascii_case("rtmr1") {
+            return Err(PolicyError::UnexpectedGcpRegister {
+                record: record.to_owned(),
+                key: key.clone(),
+            });
+        }
+        if rtmr1.is_some() {
+            return Err(PolicyError::UnexpectedGcpRegister {
+                record: record.to_owned(),
+                key: key.clone(),
+            });
+        }
+        rtmr1 = Some(entry_value_bytes(record, "rtmr1", entry, 48)?);
+    }
+    let rtmr1 = rtmr1.ok_or_else(|| PolicyError::MissingGcpRegister {
+        record: record.to_owned(),
+    })?;
+    Ok(GcpTdxV1Measurements {
+        rtmr1: rtmr1.try_into().expect("length checked"),
+    })
+}
+
+/// `expected` / `expected_any` binding exactly one bare-hex value of `len` bytes.
+pub(crate) fn entry_value_bytes(
+    record: &str,
+    register: &str,
+    entry: &RawEntry,
+    len: usize,
+) -> Result<Vec<u8>, PolicyError> {
+    let value = match (&entry.expected, &entry.expected_any) {
+        (Some(_), Some(_)) => {
+            return Err(PolicyError::BothValueForms {
+                record: record.to_owned(),
+                register: register.to_owned(),
+            });
+        }
+        (None, None) => {
+            return Err(PolicyError::NoValueForm {
+                record: record.to_owned(),
+                register: register.to_owned(),
+            });
+        }
+        (Some(value), None) => value,
+        (None, Some(values)) => {
+            if values.len() != 1 {
+                return Err(PolicyError::NotExactlyOneValue {
+                    record: record.to_owned(),
+                    register: register.to_owned(),
+                    count: values.len(),
+                });
+            }
+            &values[0]
+        }
+    };
+    let bad = || PolicyError::BadValueLength {
+        record: record.to_owned(),
+        register: register.to_owned(),
+        value: value.clone(),
+        len,
+    };
+    if value.len() != len * 2 || value.starts_with("0x") {
+        return Err(bad());
+    }
+    hex::decode(value).map_err(|_| bad())
 }
 
 /// Normalize a register key: a bare index (`"4"`) or a case-insensitive
@@ -294,6 +442,35 @@ mod tests {
     }
 
     #[test]
+    fn compiles_a_gcp_record_under_the_gcp_schema() {
+        let rtmr1 = "69b655b5c1505ef6329f853308c87d0b8e1e0161140907664302f711438212de8dc897767a07aed93af8b84377272ecc";
+        let doc = format!(
+            r#"[{{"attestation_type":"gcp-tdx","measurement_id":"img.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}}}}}}]"#
+        );
+        let compiled = compile_policy(doc.as_bytes()).unwrap();
+        let SchemaTuple::GcpTdxV1(tuple) = &compiled.records[0].tuple else {
+            panic!("wrong schema");
+        };
+        assert_eq!(hex::encode(tuple.rtmr1), rtmr1);
+        assert_eq!(compiled.records[0].tuple.schema(), GCP_TDX_V1_SCHEMA);
+
+        let extra = doc.replace(r#""rtmr1":"#, r#""rtmr0":{"expected":"00"},"rtmr1":"#);
+        assert!(matches!(
+            compile_policy(extra.as_bytes()),
+            Err(PolicyError::UnexpectedGcpRegister { .. })
+        ));
+        let mixed = format!(
+            r#"[{{"attestation_type":"azure-tdx","measurement_id":"a.vhd","measurements":{{"pcr4":{{"expected":"{z}"}},"pcr9":{{"expected":"{z}"}},"pcr11":{{"expected":"{z}"}}}}}},{}]"#,
+            &doc[1..doc.len() - 1],
+            z = "00".repeat(32)
+        );
+        assert!(matches!(
+            compile_policy(mixed.as_bytes()),
+            Err(PolicyError::MixedAttestationTypes { .. })
+        ));
+    }
+
+    #[test]
     fn compiles_one_record_to_one_id_with_record_correlation() {
         let doc = two_record_policy();
         let compiled = compile_policy(doc.as_bytes()).unwrap();
@@ -301,19 +478,19 @@ mod tests {
         assert_eq!(compiled.records.len(), 2);
         assert_eq!(
             compiled.records[0].tuple,
-            AzureTdxV1Measurements {
+            SchemaTuple::AzureTdxV1(AzureTdxV1Measurements {
                 pcr4: b256(0x11),
                 pcr9: b256(0x22),
                 pcr11: b256(0x33),
-            }
+            })
         );
         assert_eq!(
             compiled.records[1].tuple,
-            AzureTdxV1Measurements {
+            SchemaTuple::AzureTdxV1(AzureTdxV1Measurements {
                 pcr4: b256(0xa1),
                 pcr9: b256(0xb1),
                 pcr11: b256(0xc1),
-            }
+            })
         );
 
         // 2 unique IDs, sorted ascending, no cross-record flattening: image
@@ -462,9 +639,14 @@ mod tests {
                 "BadRegisterKey",
             ),
             (
-                r#"[{"attestation_type":"gcp-tdx","measurement_id":"x","measurements":{}}]"#
+                r#"[{"attestation_type":"dcap-tdx","measurement_id":"x","measurements":{}}]"#
                     .to_owned(),
                 "UnsupportedAttestationType",
+            ),
+            (
+                r#"[{"attestation_type":"gcp-tdx","measurement_id":"x","measurements":{}}]"#
+                    .to_owned(),
+                "MissingGcpRegister",
             ),
             (
                 r#"[{"attestation_type":"azure-tdx","measurement_id":"x"}]"#.to_owned(),

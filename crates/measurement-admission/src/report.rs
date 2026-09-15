@@ -7,7 +7,7 @@
 //! durable audit record of what a policy document compiled to and seeded
 //! at genesis.
 
-use crate::{AZURE_TDX_V1_SCHEMA, AdmissionId, CompiledPolicy, azure_tdx_v1_schema_id, genesis};
+use crate::{AdmissionId, CompiledPolicy, genesis};
 use alloy_primitives::B256;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -46,8 +46,8 @@ pub struct RecordReport {
 impl CompileReport {
     pub fn new(policy: &CompiledPolicy) -> Self {
         Self {
-            schema: AZURE_TDX_V1_SCHEMA,
-            schema_id: azure_tdx_v1_schema_id(),
+            schema: policy.records[0].tuple.schema(),
+            schema_id: policy.records[0].tuple.schema_id(),
             policy_hash: policy.policy_hash,
             accepted_count: policy.admission_ids.len(),
             admission_ids: policy.admission_ids.clone(),

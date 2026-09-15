@@ -11,7 +11,7 @@
 //! handshake for the nodes joining after it.
 
 use crate::{
-    admission::DangerouslyAdmitAnyAzureGuest,
+    admission::DangerouslyAdmitAnyTdxGuest,
     attestation_type,
     bootstrap::{RootKeyResponse, build_root_key_request, verify_root_key_response},
     rpc_error::RootKeyRefusal,
@@ -237,12 +237,12 @@ async fn try_fetch_root_key_from_peer(
     let response: RootKeyResponse = serde_json::from_slice(&response_bytes)?;
 
     // The joiner's appraisal of the responder is intentionally permissive for
-    // now; see [`DangerouslyAdmitAnyAzureGuest`].
+    // now; see [`DangerouslyAdmitAnyTdxGuest`].
     let request_binding = verify_root_key_response(
         &response,
         &request,
         network_id,
-        &DangerouslyAdmitAnyAzureGuest,
+        &DangerouslyAdmitAnyTdxGuest,
     )
     .await?;
 

@@ -18,6 +18,16 @@ const IMAGE_B_POLICY: &[u8] =
 const IMAGE_B_COMPILED: &str =
     include_str!("../fixtures/golden/measurement-policy-v1.image-b.compiled.json");
 
+const GCP_POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.gcp.json");
+const GCP_COMPILED: &str =
+    include_str!("../fixtures/golden/measurement-policy-v1.gcp.compiled.json");
+
+#[test]
+fn gcp_fixture_compiles_to_committed_report() {
+    let compiled = compile_policy(GCP_POLICY).expect("gcp fixture compiles");
+    assert_eq!(CompileReport::new(&compiled).to_json(), GCP_COMPILED);
+}
+
 #[test]
 fn fixture_compiles_to_committed_report() {
     let compiled = compile_policy(POLICY).expect("fixture compiles");
