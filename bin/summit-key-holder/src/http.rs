@@ -25,15 +25,13 @@ use axum::extract::{Query, State};
 use axum::response::Json;
 use axum::routing::get;
 use seismic_attestation::bindings::{binding64_from_digest32, founding_summit_keys_binding};
-use seismic_attestation::{AttestationExchangeMessage, AttestationType, generate_evidence};
+use seismic_attestation::{
+    AttestationExchangeMessage, configured_attestation_type, generate_evidence,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::error::HolderError;
 use crate::state::Holder;
-
-/// Attestation type this build mints evidence for. Azure TDX + vTPM is the
-/// only supported type today (mirrors attestation-service).
-const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
 
 #[derive(Serialize, Deserialize)]
 pub struct KeysResponse {
@@ -89,11 +87,12 @@ async fn get_quote(
     // IMDS round-trip) and must not overlap itself, so gate it and push it
     // off the async runtime.
     let _gate = holder.quote_gate.lock().await;
-    let evidence =
-        tokio::task::spawn_blocking(move || generate_evidence(ATTESTATION_TYPE, binding))
-            .await
-            .map_err(|e| HolderError::Attestation(format!("evidence task panicked: {e}")))?
-            .map_err(|e| HolderError::Attestation(e.to_string()))?;
+    let evidence = tokio::task::spawn_blocking(move || {
+        generate_evidence(configured_attestation_type(), binding)
+    })
+    .await
+    .map_err(|e| HolderError::Attestation(format!("evidence task panicked: {e}")))?
+    .map_err(|e| HolderError::Attestation(e.to_string()))?;
 
     Ok(Json(QuoteResponse {
         node_public_key: keys.node_hex(),
