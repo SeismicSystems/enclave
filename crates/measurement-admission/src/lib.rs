@@ -33,7 +33,7 @@ pub mod policy;
 pub mod promote;
 pub mod report;
 
-pub use policy::{CompiledPolicy, CompiledRecord, PolicyError, compile_policy};
+pub use policy::{CompiledPolicy, CompiledRecord, PolicyError, SchemaTuple, compile_policy};
 pub use promote::{PromoteError, promote_measurements};
 pub use report::CompileReport;
 
@@ -160,6 +160,44 @@ impl AzureTdxV1Measurements {
 #[error("verified measurements are missing pcr{0}, required by {AZURE_TDX_V1_SCHEMA}")]
 pub struct MissingPcr(pub u32);
 
+/// GCP TDX v1 admission schema: a Seismic guest image on GCP is identified by
+/// `RTMR1`, the register TDVF extends with the UKI and kernel authenticode hashes.
+pub const GCP_TDX_V1_SCHEMA: &str = "seismic.gcp-tdx.rtmr1.v1";
+
+/// The `attestation_type` value whose records compile under [`GCP_TDX_V1_SCHEMA`].
+pub const GCP_TDX_ATTESTATION_TYPE: &str = "gcp-tdx";
+
+/// Domain-separation word for GCP TDX v1 admission preimages: `keccak256(GCP_TDX_V1_SCHEMA)`.
+pub fn gcp_tdx_v1_schema_id() -> B256 {
+    keccak256(GCP_TDX_V1_SCHEMA.as_bytes())
+}
+
+/// One GCP TDX v1 measurement: the guest's RTMR1, a SHA-384 digest.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GcpTdxV1Measurements {
+    pub rtmr1: [u8; 48],
+}
+
+impl std::fmt::Debug for GcpTdxV1Measurements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "GcpTdxV1Measurements {{ rtmr1: 0x{} }}",
+            hex::encode(self.rtmr1)
+        )
+    }
+}
+
+impl GcpTdxV1Measurements {
+    /// This measurement's [`AdmissionId`]: `keccak256(schemaId || rtmr1)`, 80 bytes.
+    pub fn admission_id(&self) -> AdmissionId {
+        let mut preimage = [0u8; 80];
+        preimage[..32].copy_from_slice(gcp_tdx_v1_schema_id().as_slice());
+        preimage[32..].copy_from_slice(&self.rtmr1);
+        AdmissionId(keccak256(preimage))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,6 +239,43 @@ mod tests {
         pcrs.insert(0, [0xaa; 32]);
         pcrs.insert(7, [0xbb; 32]);
         assert_eq!(AzureTdxV1Measurements::from_pcrs(&pcrs), Ok(GOLDEN_TUPLE));
+    }
+
+    // Live vector: RTMR1 of seismic-dev_2026-08-27.5c012e booted on a GCP
+    // c3-standard-4 TDX guest (2026-09-14), reproduced from the build by
+    // seismic-images' predictor.
+    const GCP_SCHEMA_ID: B256 =
+        b256!("0x921bff6d1bdda3591c79251b61add9e7fd5878ea328a0e692d351e48baf74980");
+    const GCP_LIVE_RTMR1_HEX: &str = "69b655b5c1505ef6329f853308c87d0b8e1e0161140907664302f711438212de8dc897767a07aed93af8b84377272ecc";
+
+    fn gcp_live_rtmr1() -> [u8; 48] {
+        hex::decode(GCP_LIVE_RTMR1_HEX).unwrap().try_into().unwrap()
+    }
+    const GCP_GOLDEN_ADMISSION_ID: B256 =
+        b256!("0xe0f782e58ff0db9a08a3dff592c96ad0c8fff0abb401045e1d53ac9e683438f0");
+
+    #[test]
+    fn gcp_schema_id_golden() {
+        assert_eq!(gcp_tdx_v1_schema_id(), GCP_SCHEMA_ID);
+    }
+
+    #[test]
+    fn gcp_admission_id_golden() {
+        let tuple = GcpTdxV1Measurements {
+            rtmr1: gcp_live_rtmr1(),
+        };
+        assert_eq!(
+            tuple.admission_id(),
+            AdmissionId::from(GCP_GOLDEN_ADMISSION_ID)
+        );
+    }
+
+    #[test]
+    fn gcp_and_azure_ids_never_collide_on_shared_bytes() {
+        let mut rtmr1 = [0u8; 48];
+        rtmr1[..32].copy_from_slice(GOLDEN_TUPLE.pcr4.as_slice());
+        let gcp = GcpTdxV1Measurements { rtmr1 }.admission_id();
+        assert_ne!(gcp, GOLDEN_TUPLE.admission_id());
     }
 
     #[test]

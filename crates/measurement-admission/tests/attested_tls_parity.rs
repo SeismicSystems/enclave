@@ -28,7 +28,7 @@ fn every_compiled_tuple_is_accepted_by_attested_tls() {
     let policy = MeasurementPolicy::from_json_bytes(POLICY.to_vec()).unwrap();
     for record in &compiled.records {
         policy
-            .check_measurement(&as_azure_evidence(&record.tuple), None)
+            .check_measurement(&as_azure_evidence(azure_tuple(&record.tuple)), None)
             .unwrap_or_else(|e| {
                 panic!(
                     "attested-tls rejected the compiled tuple of {:?}: {e:?}",
@@ -46,9 +46,9 @@ fn cross_record_flattening_is_rejected_by_both() {
     // Record 0's PCR4 with record 1's PCR9/PCR11 is a synthetic image
     // neither side may admit.
     let flattened = AzureTdxV1Measurements {
-        pcr4: compiled.records[0].tuple.pcr4,
-        pcr9: compiled.records[1].tuple.pcr9,
-        pcr11: compiled.records[1].tuple.pcr11,
+        pcr4: azure_tuple(&compiled.records[0].tuple).pcr4,
+        pcr9: azure_tuple(&compiled.records[1].tuple).pcr9,
+        pcr11: azure_tuple(&compiled.records[1].tuple).pcr11,
     };
     assert!(!compiled.admission_ids.contains(&flattened.admission_id()));
     assert!(
@@ -70,7 +70,7 @@ fn deprecated_expected_form_matches_on_both_sides() {
     let compiled = compile_policy(doc.as_bytes()).unwrap();
     let policy = MeasurementPolicy::from_json_bytes(doc.into_bytes()).unwrap();
     assert_eq!(compiled.admission_ids.len(), 1);
-    let tuple = &compiled.records[0].tuple;
+    let tuple = azure_tuple(&compiled.records[0].tuple);
     assert!(
         policy
             .check_measurement(&as_azure_evidence(tuple), None)
@@ -95,4 +95,11 @@ fn multi_value_records_are_rejected_here_but_parse_upstream() {
     );
     assert!(MeasurementPolicy::from_json_bytes(doc.clone().into_bytes()).is_ok());
     assert!(compile_policy(doc.as_bytes()).is_err());
+}
+
+fn azure_tuple(tuple: &seismic_measurement_admission::SchemaTuple) -> &AzureTdxV1Measurements {
+    match tuple {
+        seismic_measurement_admission::SchemaTuple::AzureTdxV1(tuple) => tuple,
+        other => panic!("expected an azure-tdx record, got {other:?}"),
+    }
 }

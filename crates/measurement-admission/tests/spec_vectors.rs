@@ -12,12 +12,14 @@ use seismic_measurement_admission::{
         admission_status_slot,
     },
 };
+use seismic_measurement_admission::{SchemaTuple, gcp_tdx_v1_schema_id};
 
 const SPEC: &str = include_str!("../SPEC.md");
 
 const POLICY_A: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.image-a.json");
 const POLICY_AB: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.json");
 const POLICY_B: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.image-b.json");
+const POLICY_GCP: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.gcp.json");
 
 /// Lowercase, unprefixed hex of one 32-byte value.
 fn hex32(word: impl Into<alloy_primitives::B256>) -> String {
@@ -51,10 +53,25 @@ fn derived_values() -> Vec<String> {
             values.push(hex32(admission_status_slot(*id)));
         }
         for record in &compiled.records {
-            values.push(hex32(record.tuple.pcr4));
-            values.push(hex32(record.tuple.pcr9));
-            values.push(hex32(record.tuple.pcr11));
+            let tuple = azure_tuple(&record.tuple);
+            values.push(hex32(tuple.pcr4));
+            values.push(hex32(tuple.pcr9));
+            values.push(hex32(tuple.pcr11));
         }
+    }
+
+    values.push(hex32(gcp_tdx_v1_schema_id()));
+    let gcp = compile_policy(POLICY_GCP).expect("gcp fixture compiles");
+    values.push(hex32(gcp.policy_hash));
+    for id in &gcp.admission_ids {
+        values.push(id_hex(*id));
+        values.push(hex32(admission_status_slot(*id)));
+    }
+    for record in &gcp.records {
+        let SchemaTuple::GcpTdxV1(tuple) = &record.tuple else {
+            panic!("gcp fixture compiled under the wrong schema");
+        };
+        values.push(hex::encode(tuple.rtmr1));
     }
 
     for tuple in flattened_tuples() {
@@ -85,7 +102,14 @@ fn flattened_tuples() -> [AzureTdxV1Measurements; 2] {
 
 fn tuple_of(single_record_document: &[u8]) -> AzureTdxV1Measurements {
     let compiled = compile_single(single_record_document);
-    compiled.records[0].tuple
+    *azure_tuple(&compiled.records[0].tuple)
+}
+
+fn azure_tuple(tuple: &SchemaTuple) -> &AzureTdxV1Measurements {
+    match tuple {
+        SchemaTuple::AzureTdxV1(tuple) => tuple,
+        other => panic!("expected an azure-tdx record, got {other:?}"),
+    }
 }
 
 fn compile_single(document: &[u8]) -> CompiledPolicy {
@@ -172,7 +196,7 @@ fn every_hex_value_in_the_spec_is_derived() {
 #[test]
 fn spec_quotes_every_document_hash_and_admission_id() {
     let spec = SPEC.to_ascii_lowercase();
-    for document in [POLICY_A, POLICY_AB, POLICY_B] {
+    for document in [POLICY_A, POLICY_AB, POLICY_B, POLICY_GCP] {
         let compiled = compile_policy(document).unwrap();
         let hash = hex32(compiled.policy_hash);
         assert!(
@@ -194,6 +218,7 @@ fn spec_quotes_the_layout_constants_and_excluded_ids() {
     let spec = SPEC.to_ascii_lowercase();
     for value in [
         hex32(azure_tdx_v1_schema_id()),
+        hex32(gcp_tdx_v1_schema_id()),
         hex32(REGISTRY_STORAGE_LOCATION),
         hex32(REGISTRY_RUNTIME_CODE_HASH),
     ] {
