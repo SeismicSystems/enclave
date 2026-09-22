@@ -14,10 +14,10 @@ env:
 
 jobs:
   rustfmt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
@@ -25,10 +25,10 @@ jobs:
         run: cargo +nightly fmt --all --check
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install TPM build dependencies
@@ -41,10 +41,10 @@ jobs:
   # seismic repo's main branch — never a built artifact. Keeping built
   # artifacts out is what lets this job serve as the required per-PR check.
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The node binaries opt into seismic-attestation's `azure-attester`, whose
@@ -59,7 +59,7 @@ jobs:
       # the copied fixtures by this one; each side checks out the other's
       # committed file rather than trusting a local copy to stay current.
       - name: Check out seismic contracts artifact and fixture copies
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: SeismicSystems/seismic
           ref: main
@@ -107,10 +107,10 @@ jobs:
   # release binary. Its own job — outside the required `tests` check — so a
   # lagging or broken nightly surfaces here without blocking enclave merges.
   measurement_admission_tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install TPM build dependencies
@@ -141,7 +141,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
