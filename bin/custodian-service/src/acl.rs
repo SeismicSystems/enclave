@@ -17,7 +17,7 @@ use std::ffi::CString;
 /// Single source for both the `--allow` help text and the grant-parse error,
 /// so the two stay in lockstep.
 pub const VALID_PURPOSES: &str = "tx-io, tx-io-public, rng, snapshot, \
-     create-root-key-bootstrap-attempt, wrap-root-key, \
+     create-root-key-bootstrap-attempt, wrap-root-key, retire-founding-policy, \
      install-root-key-from-verified-bootstrap-response";
 
 /// Build the socket ACL from repeated `--allow` values. No specs yields the
@@ -48,6 +48,7 @@ fn build_acl(specs: &[String], resolve: ResolveUid) -> Result<MethodAcl> {
                 "snapshot" => &mut acl.snapshot,
                 "create-root-key-bootstrap-attempt" => &mut acl.create_root_key_bootstrap_attempt,
                 "wrap-root-key" => &mut acl.wrap_root_key,
+                "retire-founding-policy" => &mut acl.retire_founding_policy,
                 "install-root-key-from-verified-bootstrap-response" => {
                     &mut acl.install_root_key_from_verified_bootstrap_response
                 }
@@ -129,7 +130,8 @@ mod tests {
             &[
                 "reth:tx-io,rng".to_string(),
                 "attestation:tx-io-public,create-root-key-bootstrap-attempt,\
-                 wrap-root-key,install-root-key-from-verified-bootstrap-response"
+                 wrap-root-key,retire-founding-policy,\
+                 install-root-key-from-verified-bootstrap-response"
                     .to_string(),
             ],
             fake_resolve,
@@ -143,6 +145,8 @@ mod tests {
 
         assert!(acl.allows(1002, &Request::GetTxIoPublicKey { epoch: 0 }));
         assert!(acl.allows(1002, &Request::CreateRootKeyBootstrapAttempt));
+        assert!(acl.allows(1002, &Request::RetireFoundingPolicy));
+        assert!(!acl.allows(1001, &Request::RetireFoundingPolicy));
         assert!(!acl.allows(1002, &Request::GetTxIoKeypair { epoch: 0 }));
 
         // Ping stays open even to ungranted UIDs.

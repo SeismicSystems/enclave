@@ -48,6 +48,10 @@ pub struct MethodAcl {
     /// UIDs allowed to request root-key wraps. A caller here is trusted to
     /// have verified peer attestation first — confine to attestation-service.
     pub wrap_root_key: HashSet<u32>,
+    /// UIDs allowed to retire the founding policy. Retiring only ever narrows
+    /// who can be wrapped for, but it spends the minting custodian's founding
+    /// role for good — confine to attestation-service.
+    pub retire_founding_policy: HashSet<u32>,
     /// UIDs trusted to have verified a responder and install its wrapped root
     /// key. Confine to attestation-service.
     pub install_root_key_from_verified_bootstrap_response: HashSet<u32>,
@@ -68,6 +72,7 @@ impl MethodAcl {
             snapshot: own.clone(),
             create_root_key_bootstrap_attempt: own.clone(),
             wrap_root_key: own.clone(),
+            retire_founding_policy: own.clone(),
             install_root_key_from_verified_bootstrap_response: own,
         }
     }
@@ -83,6 +88,7 @@ impl MethodAcl {
                 self.create_root_key_bootstrap_attempt.contains(&uid)
             }
             Request::WrapRootKey { .. } => self.wrap_root_key.contains(&uid),
+            Request::RetireFoundingPolicy => self.retire_founding_policy.contains(&uid),
             Request::InstallRootKeyFromVerifiedBootstrapResponse { .. } => self
                 .install_root_key_from_verified_bootstrap_response
                 .contains(&uid),
@@ -305,6 +311,7 @@ mod tests {
             snapshot: own.clone(),
             create_root_key_bootstrap_attempt: own.clone(),
             wrap_root_key: own.clone(),
+            retire_founding_policy: own.clone(),
             install_root_key_from_verified_bootstrap_response: own,
         }
     }
@@ -367,18 +374,21 @@ mod tests {
         assert!(!reth_like.allows(UID, &Request::GetSnapshotKey { epoch: 0 }));
         assert!(!reth_like.allows(UID, &Request::CreateRootKeyBootstrapAttempt));
         assert!(!reth_like.allows(UID, &wrap_request()));
+        assert!(!reth_like.allows(UID, &Request::RetireFoundingPolicy));
         assert!(!reth_like.allows(UID, &install_request()));
 
         let attestation_like = MethodAcl {
             tx_io_public: HashSet::from([UID]),
             create_root_key_bootstrap_attempt: HashSet::from([UID]),
             wrap_root_key: HashSet::from([UID]),
+            retire_founding_policy: HashSet::from([UID]),
             install_root_key_from_verified_bootstrap_response: HashSet::from([UID]),
             ..MethodAcl::default()
         };
         assert!(attestation_like.allows(UID, &Request::GetTxIoPublicKey { epoch: 0 }));
         assert!(attestation_like.allows(UID, &Request::CreateRootKeyBootstrapAttempt));
         assert!(attestation_like.allows(UID, &wrap_request()));
+        assert!(attestation_like.allows(UID, &Request::RetireFoundingPolicy));
         assert!(attestation_like.allows(UID, &install_request()));
         assert!(!attestation_like.allows(UID, &Request::GetTxIoKeypair { epoch: 0 }));
         assert!(!attestation_like.allows(UID, &Request::GetRngIkm { epoch: 0 }));
@@ -392,6 +402,7 @@ mod tests {
         Request::WrapRootKey {
             root_key_request_binding: [0; 32],
             peer_eph_pk: [0; 33],
+            admitted_on: crate::messages::AdmittedOn::LivePolicy,
         }
     }
 

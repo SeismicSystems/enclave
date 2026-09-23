@@ -12,11 +12,18 @@
 //! install — write the LUKS keyfile before the key is observable, so a
 //! present root key always implies the handoff to `setup-persistent-luks`
 //! has happened.
+//!
+//! The two ways also differ in one respect that outlives them: only the
+//! custodian that minted the root key may release it to a peer admitted on
+//! the founding policy, the chain's block-0 policy ([`FoundingPolicy`]). That
+//! state is held here, next to the key, so the only way to reset it is to lose
+//! the key.
 
 use anyhow::{Context as _, Result, anyhow};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_custodian::{Custodian, EphemeralKeypair, unwrap_root_key};
+use seismic_custodian_ipc::AdmittedOn;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tracing::info;
@@ -35,7 +42,36 @@ enum RootKeyState {
     /// No root key yet (a joining node): only the bootstrap methods act.
     Absent { attempt: Option<PendingAttempt> },
     /// Root key held: derivations and wraps are served.
-    Present(Custodian),
+    Present {
+        custodian: Custodian,
+        founding_policy: FoundingPolicy,
+    },
+}
+
+/// Whether this custodian wraps the root key for a peer admitted on the
+/// founding policy — the founding accepted set, read at block 0 — rather than
+/// on a fresh view of the live policy.
+///
+/// A chain view at block 0 is host-supplied and indistinguishable from a
+/// withheld chain, so the host must not be able to bring the founding policy
+/// back. Only the custodian that minted the root key starts out honoring it,
+/// and it retires it once — when the chain is seen past genesis — for the rest
+/// of that key's lifetime. Undoing that means restarting this process, which
+/// loses the key; the node then rejoins with an installed key, which never
+/// honors the founding policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FoundingPolicy {
+    Honored,
+    Retired,
+}
+
+/// Outcome of [`CustodianState::with_custodian_for_wrap`].
+pub enum WrapGate<T> {
+    Allowed(T),
+    RootKeyAbsent,
+    /// A founding-policy wrap, refused because the founding policy is
+    /// retired.
+    FoundingPolicyRetired,
 }
 
 /// One requester-side bootstrap attempt: the ephemeral secret retained for
@@ -79,12 +115,18 @@ impl CustodianState {
         }
     }
 
+    /// A custodian holding the root key it just minted, so it starts out
+    /// honoring the founding policy.
+    ///
     /// Errors if the LUKS keyfile write fails: a root key is never present
     /// without the handoff done.
     pub fn new_with_root_key(custodian: Custodian, luks_keyfile: PathBuf) -> Result<Self> {
         write_luks_keyfile(&custodian, &luks_keyfile)?;
         Ok(Self {
-            inner: Mutex::new(RootKeyState::Present(custodian)),
+            inner: Mutex::new(RootKeyState::Present {
+                custodian,
+                founding_policy: FoundingPolicy::Honored,
+            }),
             luks_keyfile,
         })
     }
@@ -93,8 +135,43 @@ impl CustodianState {
     /// (callers answer `RootKeyAbsent`).
     pub fn with_custodian<T>(&self, f: impl FnOnce(&Custodian) -> T) -> Option<T> {
         match &*self.lock() {
-            RootKeyState::Present(custodian) => Some(f(custodian)),
+            RootKeyState::Present { custodian, .. } => Some(f(custodian)),
             RootKeyState::Absent { .. } => None,
+        }
+    }
+
+    /// Run the wrap `f` against the custodian, unless the peer was admitted on
+    /// the founding policy and it is retired. The check
+    /// and the wrap share one lock, so a retire cannot land between them.
+    pub fn with_custodian_for_wrap<T>(
+        &self,
+        admitted_on: AdmittedOn,
+        f: impl FnOnce(&Custodian) -> T,
+    ) -> WrapGate<T> {
+        match &*self.lock() {
+            RootKeyState::Absent { .. } => WrapGate::RootKeyAbsent,
+            RootKeyState::Present {
+                founding_policy: FoundingPolicy::Retired,
+                ..
+            } if admitted_on == AdmittedOn::FoundingPolicy => WrapGate::FoundingPolicyRetired,
+            RootKeyState::Present { custodian, .. } => WrapGate::Allowed(f(custodian)),
+        }
+    }
+
+    /// Retire the founding policy, one way. `None` while no root key is
+    /// present: there is no founding policy to retire without a key.
+    pub fn retire_founding_policy(&self) -> Option<()> {
+        match &mut *self.lock() {
+            RootKeyState::Absent { .. } => None,
+            RootKeyState::Present {
+                founding_policy, ..
+            } => {
+                if *founding_policy == FoundingPolicy::Honored {
+                    info!("retired the founding policy for this root key's lifetime");
+                    *founding_policy = FoundingPolicy::Retired;
+                }
+                Some(())
+            }
         }
     }
 
@@ -103,7 +180,7 @@ impl CustodianState {
     /// fresh ephemeral key per exchange.
     pub fn create_bootstrap_attempt(&self) -> CreateAttemptOutcome {
         match &mut *self.lock() {
-            RootKeyState::Present(_) => CreateAttemptOutcome::RootKeyAlreadyPresent,
+            RootKeyState::Present { .. } => CreateAttemptOutcome::RootKeyAlreadyPresent,
             RootKeyState::Absent { attempt } => {
                 let mut id = [0u8; 32];
                 OsRng
@@ -122,7 +199,8 @@ impl CustodianState {
 
     /// Open a verified, wrapped bootstrap response with the retained attempt's
     /// ephemeral secret and install the recovered root key, writing the LUKS
-    /// keyfile as part of the transition.
+    /// keyfile as part of the transition. An installed key never honors the
+    /// founding policy: only the minter admits on it.
     ///
     /// The caller asserts, via its ACL grant, that the responder's evidence
     /// over this exact response transcript has been verified — mirroring
@@ -137,7 +215,7 @@ impl CustodianState {
     ) -> InstallOutcome {
         let mut state = self.lock();
         let attempt = match &mut *state {
-            RootKeyState::Present(_) => return InstallOutcome::RootKeyAlreadyPresent,
+            RootKeyState::Present { .. } => return InstallOutcome::RootKeyAlreadyPresent,
             // take_if: consume the attempt only on an id match — a stale id
             // must not invalidate a newer live attempt.
             RootKeyState::Absent { attempt } => {
@@ -169,7 +247,10 @@ impl CustodianState {
                 if let Err(e) = write_luks_keyfile(&custodian, &self.luks_keyfile) {
                     return InstallOutcome::LuksKeyfileWriteFailed(e);
                 }
-                *state = RootKeyState::Present(custodian);
+                *state = RootKeyState::Present {
+                    custodian,
+                    founding_policy: FoundingPolicy::Retired,
+                };
                 InstallOutcome::Installed
             }
             Err(e) => InstallOutcome::InstallFailed(e),
@@ -370,6 +451,64 @@ mod tests {
             InstallOutcome::UnknownAttempt
         ));
         assert!(state.with_custodian(|_| ()).is_none());
+    }
+
+    /// Whether a founding-policy wrap would be served right now.
+    fn wraps_on_founding_policy(state: &CustodianState) -> bool {
+        match state.with_custodian_for_wrap(AdmittedOn::FoundingPolicy, |_| ()) {
+            WrapGate::Allowed(()) => true,
+            WrapGate::FoundingPolicyRetired => false,
+            WrapGate::RootKeyAbsent => panic!("expected a present root key"),
+        }
+    }
+
+    fn wraps_on_live_policy(state: &CustodianState) -> bool {
+        matches!(
+            state.with_custodian_for_wrap(AdmittedOn::LivePolicy, |_| ()),
+            WrapGate::Allowed(())
+        )
+    }
+
+    #[test]
+    fn the_minting_custodian_honors_the_founding_policy_until_retired() {
+        let (_dir, luks) = tmp_luks();
+        let state = with_root_key(&luks);
+        assert!(wraps_on_founding_policy(&state));
+
+        assert_eq!(state.retire_founding_policy(), Some(()));
+        assert!(!wraps_on_founding_policy(&state));
+        assert!(wraps_on_live_policy(&state));
+
+        // One way: retiring again changes nothing, and nothing brings it back.
+        assert_eq!(state.retire_founding_policy(), Some(()));
+        assert!(!wraps_on_founding_policy(&state));
+    }
+
+    #[test]
+    fn an_installed_root_key_never_honors_the_founding_policy() {
+        let (_dir, luks) = tmp_luks();
+        let responder = Custodian::new(ROOT_KEY);
+        let state = awaiting(&luks);
+        let (attempt_id, requester_eph_pk) = created(&state);
+        let (responder_eph_pk, wrapped) = wrap_for(&responder, requester_eph_pk);
+        assert!(matches!(
+            state.install_root_key(attempt_id, BINDING, responder_eph_pk, &wrapped),
+            InstallOutcome::Installed
+        ));
+
+        assert!(!wraps_on_founding_policy(&state));
+        assert!(wraps_on_live_policy(&state));
+    }
+
+    #[test]
+    fn no_root_key_means_no_founding_policy_to_retire() {
+        let (_dir, luks) = tmp_luks();
+        let state = awaiting(&luks);
+        assert_eq!(state.retire_founding_policy(), None);
+        assert!(matches!(
+            state.with_custodian_for_wrap(AdmittedOn::FoundingPolicy, |_| ()),
+            WrapGate::RootKeyAbsent
+        ));
     }
 
     #[test]

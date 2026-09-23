@@ -22,6 +22,10 @@ pub enum IpcError {
     /// was present in its memory.
     #[error("custodian root key is absent")]
     RootKeyAbsent,
+    /// The custodian refused a founding-policy wrap: it has retired the
+    /// founding policy ([`crate::Response::FoundingPolicyRetired`]).
+    #[error("custodian has retired the founding policy")]
+    FoundingPolicyRetired,
     /// The custodian answered, but with a variant that doesn't match the
     /// request — a protocol bug on one side or the other.
     #[error("unexpected response variant to {method}: received {received}")]

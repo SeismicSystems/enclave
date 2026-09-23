@@ -7,7 +7,7 @@
 //! onto the custodian state, including the bootstrap transitions through
 //! which a joining node acquires its root key.
 
-use crate::state::{CreateAttemptOutcome, CustodianState, InstallOutcome};
+use crate::state::{CreateAttemptOutcome, CustodianState, InstallOutcome, WrapGate};
 use anyhow::Context as _;
 use seismic_custodian::{Custodian, VerifiedPeerAuthorization};
 use seismic_custodian_ipc::{
@@ -68,12 +68,17 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
         Request::WrapRootKey {
             root_key_request_binding,
             peer_eph_pk,
-        } => match state.with_custodian(|custodian| {
+            admitted_on,
+        } => match state.with_custodian_for_wrap(admitted_on, |custodian| {
             wrap_root_key(custodian, root_key_request_binding, &peer_eph_pk)
         }) {
-            None => Response::RootKeyAbsent,
-            Some(Ok(wrapped)) => Response::WrappedRootKey(wrapped),
-            Some(Err(error)) => {
+            WrapGate::RootKeyAbsent => Response::RootKeyAbsent,
+            WrapGate::FoundingPolicyRetired => {
+                warn!("refused a founding-policy wrap: the founding policy is retired");
+                Response::FoundingPolicyRetired
+            }
+            WrapGate::Allowed(Ok(wrapped)) => Response::WrappedRootKey(wrapped),
+            WrapGate::Allowed(Err(error)) => {
                 // Detailed failures stay local to the key-holding process.
                 // The wire response is stable and cannot accidentally include
                 // key bytes from a future lower-level error implementation.
@@ -82,6 +87,10 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
                     message: "root-key wrap failed".to_string(),
                 }
             }
+        },
+        Request::RetireFoundingPolicy => match state.retire_founding_policy() {
+            Some(()) => Response::FoundingPolicyRetired,
+            None => Response::RootKeyAbsent,
         },
         Request::InstallRootKeyFromVerifiedBootstrapResponse {
             attempt_id,
@@ -144,6 +153,7 @@ fn wrap_root_key(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use seismic_custodian_ipc::AdmittedOn;
     use std::os::unix::fs::PermissionsExt as _;
     use std::path::{Path, PathBuf};
 
@@ -211,7 +221,9 @@ mod tests {
             Request::WrapRootKey {
                 root_key_request_binding: BINDING,
                 peer_eph_pk: [0; 33],
+                admitted_on: AdmittedOn::LivePolicy,
             },
+            Request::RetireFoundingPolicy,
         ] {
             let method = request.method();
             assert!(
@@ -241,6 +253,7 @@ mod tests {
             Request::WrapRootKey {
                 root_key_request_binding: BINDING,
                 peer_eph_pk: attempt.requester_eph_pk,
+                admitted_on: AdmittedOn::FoundingPolicy,
             },
         ) else {
             panic!("expected a wrapped root key");
@@ -327,6 +340,7 @@ mod tests {
             Request::WrapRootKey {
                 root_key_request_binding: [0u8; 32],
                 peer_eph_pk: [0u8; 33],
+                admitted_on: AdmittedOn::LivePolicy,
             },
         );
         let Response::Error { message } = response else {
@@ -395,7 +409,11 @@ mod tests {
             // and computing the transcript binding — is opaque to both
             // custodians; any 32 bytes stand in for the binding here.
             let wrapped = genesis
-                .wrap_root_key(BINDING, attempt.requester_eph_pk)
+                .wrap_root_key(
+                    BINDING,
+                    attempt.requester_eph_pk,
+                    AdmittedOn::FoundingPolicy,
+                )
                 .await
                 .expect("wrap root key");
 
@@ -433,6 +451,53 @@ mod tests {
                 probe,
                 CreateRootKeyBootstrapAttemptResult::RootKeyAlreadyPresent
             ));
+
+            // The joiner holds an installed key, so it never honors the founding policy.
+            let error = joiner
+                .wrap_root_key(
+                    BINDING,
+                    attempt.requester_eph_pk,
+                    AdmittedOn::FoundingPolicy,
+                )
+                .await
+                .expect_err("an installed key must refuse a founding-policy wrap");
+            assert!(matches!(error, IpcError::FoundingPolicyRetired));
+        }
+
+        /// The attestation service holds no admission state, so its restart is
+        /// a fresh connection from a caller that remembers nothing. The founding
+        /// policy one connection retired stays retired for the next.
+        #[tokio::test]
+        async fn the_founding_policy_stays_retired_across_callers() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let socket = spawn_host(with_root_key(&dir.path().join("luks-keys")), &dir);
+            let peer_eph_pk = seismic_custodian::EphemeralKeypair::generate().pk_compressed();
+
+            let mut before = CustodianClient::connect(&socket).await.expect("connect");
+            before
+                .wrap_root_key(BINDING, peer_eph_pk, AdmittedOn::FoundingPolicy)
+                .await
+                .expect("the minting custodian honors the founding policy until retired");
+            before
+                .retire_founding_policy()
+                .await
+                .expect("retire the founding policy");
+            drop(before);
+
+            let mut after = CustodianClient::connect(&socket).await.expect("connect");
+            let error = after
+                .wrap_root_key(BINDING, peer_eph_pk, AdmittedOn::FoundingPolicy)
+                .await
+                .expect_err("a retired founding policy must stay retired for a new caller");
+            assert!(matches!(error, IpcError::FoundingPolicyRetired));
+            after
+                .wrap_root_key(BINDING, peer_eph_pk, AdmittedOn::LivePolicy)
+                .await
+                .expect("live-policy wraps are unaffected");
+            after
+                .retire_founding_policy()
+                .await
+                .expect("retiring again is idempotent");
         }
     }
 }
