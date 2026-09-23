@@ -30,9 +30,9 @@
 //! served from block 0 but stays on the genesis block until the chain is
 //! ~64 blocks deep, so the genesis timestamp is stamped to now — in
 //! milliseconds, the chain's timestamp convention — to keep that view inside
-//! the freshness bound; and at block 0 the gate's genesis window admits
-//! unconditionally, so every rejection scenario first waits for the chain to
-//! advance.
+//! the freshness bound; and at block 0 a minting responder admits on the
+//! founding policy with no freshness check, so every rejection scenario first
+//! waits for the chain to advance.
 //!
 //! TPM discipline is the same as the `evidence` target: quote generation
 //! opens the raw single-open TPM device, so every test carries
@@ -619,9 +619,9 @@ fn install_manifest_pinning(genesis_hash: B256) -> Vec<u8> {
     bytes
 }
 
-/// Wait until `latest` is past block 0: the admission gate's genesis window
-/// admits unconditionally at block 0, so every rejection scenario starts
-/// after the chain has advanced.
+/// Wait until `latest` is past block 0: at block 0 a minting responder admits
+/// on the founding policy with no freshness check, so every rejection scenario
+/// starts after the chain has advanced.
 async fn wait_past_genesis(provider: &RootProvider) {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {

@@ -60,7 +60,7 @@ use seismic_attestation::{
     bindings::{binding64_from_digest32, root_key_request_binding, root_key_response_binding},
     generate_evidence, verify_evidence_with_predicate,
 };
-use seismic_custodian_ipc::{CustodianClient, IpcError};
+use seismic_custodian_ipc::{AdmittedOn, CustodianClient, IpcError, WrappedRootKeyBytes};
 use serde::{Deserialize, Serialize};
 
 /// The requester's half of the handshake: a fresh nonce + ephemeral pubkey,
@@ -136,6 +136,11 @@ pub enum AnswerError {
         #[source]
         source: AttestationError,
     },
+    /// The requester was admitted on the founding policy, and this custodian
+    /// does not honor it: it did not mint `root_key`, or it has seen the chain
+    /// past genesis. Only the minting custodian admits on it.
+    #[error("admitted on the founding policy, which the custodian has retired")]
+    FoundingPolicyRetired,
     /// The custodian would not wrap the root key.
     #[error("wrapping root key for peer: {source}")]
     WrapRootKey {
@@ -169,7 +174,7 @@ pub async fn answer_root_key_request(
     request: &RootKeyRequest,
     network_id: &NetworkId,
     custodian: &mut CustodianClient,
-    admission: &impl AdmissionPredicate,
+    admission: &impl AdmissionPredicate<Admitted = AdmittedOn>,
     attestation_type: AttestationType,
 ) -> Result<RootKeyResponse, AnswerError> {
     // 1. Verify the requester's quote and appraise its measurements,
@@ -177,7 +182,7 @@ pub async fn answer_root_key_request(
     //    request's claimed fields.
     let expected =
         root_key_request_binding(network_id, &request.nonce_b, &request.eph_pk_b.serialize());
-    verify_evidence_with_predicate(
+    let (_, admitted_on) = verify_evidence_with_predicate(
         request.evidence.clone(),
         binding64_from_digest32(expected),
         admission,
@@ -185,14 +190,14 @@ pub async fn answer_root_key_request(
     .await
     .map_err(|source| AnswerError::VerifyRequester { source })?;
 
-    // 2. Verification succeeded: authorize the custodian to wrap the root key
-    //    to the requester's attested ephemeral key, with the verified request
-    //    binding as the AEAD AAD. Calling `WrapRootKey` *is* the authorization
-    //    assertion — the custodian's ACL confines it to this service.
-    let wrap = custodian
-        .wrap_root_key(expected, request.eph_pk_b.serialize())
-        .await
-        .map_err(|source| AnswerError::WrapRootKey { source })?;
+    // 2. Verification succeeded: authorize the custodian to wrap the root key.
+    let wrap = wrap_for_admitted_requester(
+        custodian,
+        admitted_on,
+        expected,
+        request.eph_pk_b.serialize(),
+    )
+    .await?;
     let eph_pk_a = PublicKey::from_slice(&wrap.responder_eph_pk)
         .map_err(|source| AnswerError::ResponderEphemeralKey { source })?;
 
@@ -213,6 +218,28 @@ pub async fn answer_root_key_request(
     })
 }
 
+/// Have the custodian wrap the root key to an admitted requester's attested
+/// ephemeral key, with the verified request binding as the AEAD AAD. Calling
+/// `WrapRootKey` *is* the authorization assertion — the custodian's ACL
+/// confines it to this service.
+///
+/// Which policy admitted the requester travels with the wrap, because the
+/// custodian has the final say on the founding policy.
+pub(crate) async fn wrap_for_admitted_requester(
+    custodian: &mut CustodianClient,
+    admitted_on: AdmittedOn,
+    request_binding: [u8; 32],
+    requester_eph_pk: [u8; 33],
+) -> Result<WrappedRootKeyBytes, AnswerError> {
+    custodian
+        .wrap_root_key(request_binding, requester_eph_pk, admitted_on)
+        .await
+        .map_err(|source| match source {
+            IpcError::FoundingPolicyRetired => AnswerError::FoundingPolicyRetired,
+            source => AnswerError::WrapRootKey { source },
+        })
+}
+
 /// Requester step 2: verify the responder's evidence over the response
 /// transcript.
 ///
@@ -227,7 +254,7 @@ pub async fn verify_root_key_response(
     response: &RootKeyResponse,
     request: &RootKeyRequest,
     network_id: &NetworkId,
-    admission: &impl AdmissionPredicate,
+    admission: &impl AdmissionPredicate<Admitted = ()>,
 ) -> Result<[u8; 32]> {
     // Verify the responder's quote: recompute the response binding from our
     // own network_id + the nonce we chose + the responder's ephemeral key +

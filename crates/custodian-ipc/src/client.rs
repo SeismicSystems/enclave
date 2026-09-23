@@ -8,7 +8,7 @@
 use crate::error::IpcError;
 use crate::framing::{read_frame, write_frame};
 use crate::messages::{
-    Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
+    AdmittedOn, Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
     TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
 };
 use std::path::Path;
@@ -100,20 +100,35 @@ impl CustodianClient {
         }
     }
 
+    /// `admitted_on`: which policy admitted the peer. A custodian that no
+    /// longer honors the founding policy refuses a founding-policy wrap
+    /// ([`IpcError::FoundingPolicyRetired`]).
     pub async fn wrap_root_key(
         &mut self,
         root_key_request_binding: [u8; 32],
         peer_eph_pk: [u8; 33],
+        admitted_on: AdmittedOn,
     ) -> Result<WrappedRootKeyBytes, IpcError> {
         match self
             .call(&Request::WrapRootKey {
                 root_key_request_binding,
                 peer_eph_pk,
+                admitted_on,
             })
             .await?
         {
             Response::WrappedRootKey(wrapped) => Ok(wrapped),
+            Response::FoundingPolicyRetired => Err(IpcError::FoundingPolicyRetired),
             response => Err(unexpected_response("wrap_root_key", &response)),
+        }
+    }
+
+    /// Retire the custodian's founding policy. Idempotent: a custodian that
+    /// already retired it, or never honored it, answers the same.
+    pub async fn retire_founding_policy(&mut self) -> Result<(), IpcError> {
+        match self.call(&Request::RetireFoundingPolicy).await? {
+            Response::FoundingPolicyRetired => Ok(()),
+            response => Err(unexpected_response("retire_founding_policy", &response)),
         }
     }
 

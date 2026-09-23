@@ -201,12 +201,13 @@ pub fn verify_archived_evidence_with_policy(
 /// evidence's attestation type, and the predicate then decides whether the
 /// verified guest is admitted. Evidence whose measurements the predicate
 /// denies fails with [`AttestationError::AdmissionDenied`]; there is no way to
-/// obtain the verified output without the predicate passing.
-pub async fn verify_evidence_with_predicate(
+/// obtain the verified output without the predicate passing. The predicate's
+/// own verdict ([`AdmissionPredicate::Admitted`]) comes back with it.
+pub async fn verify_evidence_with_predicate<P: AdmissionPredicate>(
     evidence: AttestationExchangeMessage,
     expected_binding: [u8; 64],
-    admission: &impl AdmissionPredicate,
-) -> Result<VerifiedSeismicAttestation, AttestationError> {
+    admission: &P,
+) -> Result<(VerifiedSeismicAttestation, P::Admitted), AttestationError> {
     // Backend appraisal pinned to the evidence's own attestation type is
     // cryptographic verification only — admissibility (including which
     // attestation types are acceptable at all) is the predicate's job.
@@ -221,11 +222,11 @@ pub async fn verify_evidence_with_predicate(
     .await?
     .attestation;
 
-    admission
+    let admitted = admission
         .admit(&verified)
         .await
         .map_err(AttestationError::AdmissionDenied)?;
-    Ok(verified)
+    Ok((verified, admitted))
 }
 
 async fn verify_with_backend_policy(
@@ -308,11 +309,16 @@ fn backend_verifier(
 /// including which attestation types they admit: a predicate must deny
 /// [`VerifiedSeismicAttestation`] variants it does not appraise.
 pub trait AdmissionPredicate {
+    /// What an admission established beyond the verified measurements, for the
+    /// caller to act on (e.g. the chain state it was decided at); `()` for a
+    /// predicate with nothing to add.
+    type Admitted: Send;
+
     /// Appraise verified measurements; any `Err` denies admission.
     fn admit(
         &self,
         verified: &VerifiedSeismicAttestation,
-    ) -> impl Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send;
+    ) -> impl Future<Output = Result<Self::Admitted, Box<dyn std::error::Error + Send + Sync>>> + Send;
 }
 
 /// Seismic-safe wrapper around the attestation backend's measurement policy.
@@ -788,6 +794,8 @@ mod tests {
     async fn unattested_evidence_is_refused_before_admission() {
         struct AdmitEverything;
         impl AdmissionPredicate for AdmitEverything {
+            type Admitted = ();
+
             async fn admit(
                 &self,
                 _verified: &VerifiedSeismicAttestation,

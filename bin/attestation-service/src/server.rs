@@ -199,6 +199,19 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // never observe a listener whose key operations cannot succeed yet.
     ensure_root_key_present(&args.custodian_socket, &args.peers, &network_id).await?;
 
+    // Retire the custodian's founding policy at block 1, whether or not a join
+    // arrives to see it. A custodian that did not mint the root key never
+    // honored it, and retiring it again is a no-op.
+    tokio::spawn({
+        let admission = admission.clone();
+        let custodian_socket = args.custodian_socket.clone();
+        async move {
+            admission
+                .retire_founding_policy_past_block_zero(&custodian_socket)
+                .await
+        }
+    });
+
     let server = ServerBuilder::default().build(addr).await?;
 
     let service = AttestationService::new(args.custodian_socket, network_id, admission);

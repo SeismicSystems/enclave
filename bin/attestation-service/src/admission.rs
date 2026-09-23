@@ -33,9 +33,12 @@
 //! chain `network_id` commits to, at a finalized block whose timestamp is
 //! recent. Two residuals survive, both accepted host influence under the TEE
 //! threat model — a host that eclipses the guest *and* controls its clock, and
-//! a host that rewinds the guest's chain view to block 0, where the genesis
-//! window applies and no timestamp check bites. The pinned-genesis check
-//! bounds the second to the network's founding accepted set.
+//! the genesis node's own host holding its chain view at block 0 from birth,
+//! where the founding policy applies and no timestamp check bites. Only the
+//! minting custodian honors the founding policy, and it retires it for good at
+//! block 1 (see [`AdmittedOn`]), so rewinding any other node's chain view, or
+//! the genesis node's after block 1, brings nothing back; the pinned-genesis
+//! check bounds what remains to the network's founding accepted set.
 
 use crate::api::AdmissionChainStatus;
 use alloy::{
@@ -46,16 +49,14 @@ use alloy::{
 };
 use alloy_primitives::{Address, B256};
 use seismic_attestation::{AdmissionPredicate, AttestationType, VerifiedSeismicAttestation};
+use seismic_custodian_ipc::{AdmittedOn, CustodianClient};
 use seismic_measurement_admission::{AdmissionId, AzureTdxV1Measurements, MissingPcr};
 use seismic_measurement_registry_client::MeasurementRegistry::{self, MeasurementRegistryInstance};
 use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Why a bootstrap admission predicate denied a verified guest.
 #[derive(Debug, thiserror::Error)]
@@ -89,8 +90,6 @@ pub(crate) enum AdmissionDenial {
         age_secs: u64,
         max_age_secs: u64,
     },
-    #[error("local reth is at genesis after chain progress was observed")]
-    ChainRegressedToGenesis,
     #[error(
         "local reth serves genesis {found}, not the {expected} this node's \
          network_id commits to; its chain is not this network's chain"
@@ -116,10 +115,11 @@ pub(crate) enum DenialKind {
     /// admission ID, and the network does not accept it. Its own operator
     /// launches a guest whose admission ID the registry accepts.
     RequesterIdentityNotAccepted,
-    /// The responder cannot decide, and no waiting changes that: it reads a
-    /// chain the network manifest does not commit to until an operator gives
-    /// it the right one. The requester's evidence is not what failed, so its
-    /// move is another peer.
+    /// The responder cannot answer, and no retry inside the handshake changes
+    /// that: it reads a chain the network manifest does not commit to until an
+    /// operator gives it the right one, or it admitted on the founding policy,
+    /// which its custodian has retired or never honored. The requester's
+    /// evidence is not what failed, so its move is another peer.
     ResponderMisconfigured,
     /// The responder cannot decide right now: a reth that is restarting,
     /// resyncing, or catching back under the freshness bound answers the same
@@ -151,8 +151,7 @@ impl AdmissionDenial {
             Self::RegistryQueryFailed { .. }
             | Self::ChainQueryFailed { .. }
             | Self::ChainBlockMissing { .. }
-            | Self::ChainStale { .. }
-            | Self::ChainRegressedToGenesis => DenialKind::ResponderTransient,
+            | Self::ChainStale { .. } => DenialKind::ResponderTransient,
         }
     }
 }
@@ -182,6 +181,18 @@ fn azure_admission_id(
 /// refused during a brief stall simply retries.
 const MAX_POLICY_AGE: Duration = Duration::from_secs(60);
 
+/// Local reth's chain, checked against the pinned genesis.
+enum ChainView {
+    /// Still at block 0, whose hash is the pinned genesis.
+    AtGenesis(B256),
+    /// Past block 0, on the pinned chain.
+    PastGenesis,
+}
+
+/// How often the genesis watcher asks local reth whether the chain has left
+/// block 0.
+const GENESIS_WATCH_INTERVAL: Duration = Duration::from_secs(2);
+
 /// Responder-side admission: registry membership of the requester's
 /// admission ID, decided at fresh local chain state.
 #[derive(Clone)]
@@ -194,11 +205,6 @@ pub(crate) struct RegistryAdmission {
     /// Bound on the finalized-block age this admission accepts; defaults to
     /// [`MAX_POLICY_AGE`].
     max_policy_age: Duration,
-    /// Latched once any admission observes the chain past genesis. The
-    /// genesis admission window (see `fresh_policy_block`) never reopens
-    /// within this process: a reth back at block 0 after progress was
-    /// observed has been wiped or replaced, and must not admit on its say-so.
-    chain_has_advanced: Arc<AtomicBool>,
 }
 
 impl RegistryAdmission {
@@ -219,7 +225,6 @@ impl RegistryAdmission {
             registry: MeasurementRegistry::new(registry, provider),
             pinned_genesis,
             max_policy_age: MAX_POLICY_AGE,
-            chain_has_advanced: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -250,24 +255,15 @@ impl RegistryAdmission {
     /// Admitting there reads the policy `network_id` itself commits to — the
     /// pinned-genesis check is what makes that equivalence hold — and no
     /// deprecation can predate the chain, so this is what lets the founding
-    /// cohort join before consensus starts. The window latches shut for the
-    /// rest of the process once the chain is seen past genesis; a host that
-    /// restarts the service on a wiped reth reopens it, bounded by the pin to
-    /// the founding accepted set.
-    async fn fresh_policy_block(&self) -> Result<B256, AdmissionDenial> {
-        let latest = self.block_by_tag(BlockNumberOrTag::Latest).await?;
-        if latest.header.inner.number == 0 {
-            // At genesis the block the policy is read at *is* block 0, so the
-            // pin is checked on it directly rather than queried again.
-            self.check_pinned_genesis(latest.header.hash)?;
-            if self.chain_has_advanced.load(Ordering::Relaxed) {
-                return Err(AdmissionDenial::ChainRegressedToGenesis);
-            }
-            return Ok(latest.header.hash);
+    /// cohort join before consensus starts. Whether this node may act on such
+    /// a verdict is not decided here: a chain view at block 0 is host-supplied,
+    /// so the founding policy's standing is held by the custodian, honored only
+    /// by the one that minted `root_key` and retired there for good once the
+    /// chain is seen past genesis.
+    async fn fresh_policy_block(&self) -> Result<(B256, AdmittedOn), AdmissionDenial> {
+        if let ChainView::AtGenesis(genesis) = self.chain_view().await? {
+            return Ok((genesis, AdmittedOn::FoundingPolicy));
         }
-        let genesis = self.block_by_tag(BlockNumberOrTag::Earliest).await?;
-        self.check_pinned_genesis(genesis.header.hash)?;
-        self.chain_has_advanced.store(true, Ordering::Relaxed);
 
         let finalized = self.block_by_tag(BlockNumberOrTag::Finalized).await?;
         // Seismic header timestamps are milliseconds: summit proposes payload
@@ -285,7 +281,56 @@ impl RegistryAdmission {
                 max_age_secs: self.max_policy_age.as_secs(),
             });
         }
-        Ok(finalized.header.hash)
+        Ok((finalized.header.hash, AdmittedOn::LivePolicy))
+    }
+
+    /// Where local reth's chain stands, on the pinned chain or not at all.
+    async fn chain_view(&self) -> Result<ChainView, AdmissionDenial> {
+        let latest = self.block_by_tag(BlockNumberOrTag::Latest).await?;
+        if latest.header.inner.number == 0 {
+            // At genesis `latest` *is* block 0, so the pin is checked on it
+            // directly rather than queried again.
+            self.check_pinned_genesis(latest.header.hash)?;
+            return Ok(ChainView::AtGenesis(latest.header.hash));
+        }
+        let genesis = self.block_by_tag(BlockNumberOrTag::Earliest).await?;
+        self.check_pinned_genesis(genesis.header.hash)?;
+        Ok(ChainView::PastGenesis)
+    }
+
+    /// Wait until local reth is past block 0 on the pinned chain, then retire
+    /// the custodian's founding policy and return.
+    ///
+    /// The only thing that retires it, so it happens at block 1 whether or not
+    /// any join arrives. A reth that is down, still at genesis, or on a
+    /// foreign chain only keeps this polling.
+    pub(crate) async fn retire_founding_policy_past_block_zero(&self, custodian_socket: &Path) {
+        loop {
+            match self.chain_view().await {
+                Ok(ChainView::PastGenesis) => break,
+                Ok(ChainView::AtGenesis(_)) => {}
+                Err(denial) => debug!("genesis watcher: {denial}"),
+            }
+            tokio::time::sleep(GENESIS_WATCH_INTERVAL).await;
+        }
+        loop {
+            let retired = async {
+                CustodianClient::connect(custodian_socket)
+                    .await?
+                    .retire_founding_policy()
+                    .await
+            };
+            match retired.await {
+                Ok(()) => {
+                    info!("chain is past genesis: retired the custodian's founding policy");
+                    return;
+                }
+                Err(error) => {
+                    warn!("genesis watcher: retiring the founding policy: {error}")
+                }
+            }
+            tokio::time::sleep(GENESIS_WATCH_INTERVAL).await;
+        }
     }
 
     /// Deny unless local reth's genesis is the one the network manifest pins.
@@ -312,10 +357,9 @@ impl RegistryAdmission {
     /// with a class the wire deliberately does not name, so this is where the
     /// operator who can repair it reads what is wrong.
     ///
-    /// Strictly a read: it asks block 0 and nothing else, so it never advances
-    /// the genesis-window latch and can never change a decision. A reth that
-    /// does not answer reports as unreachable, never as a mismatch — the two
-    /// have different operator responses.
+    /// Strictly a read: it asks block 0 and nothing else, so it can never
+    /// change a decision. A reth that does not answer reports as unreachable,
+    /// never as a mismatch — the two have different operator responses.
     pub(crate) async fn chain_status(&self) -> AdmissionChainStatus {
         let found = match self.block_by_tag(BlockNumberOrTag::Earliest).await {
             Ok(genesis) => genesis.header.hash,
@@ -350,8 +394,8 @@ impl RegistryAdmission {
 
     /// One attempt at the chain-backed decision: fresh policy block, then the
     /// registry's verdict for `admission_id` at exactly that block.
-    async fn decide(&self, admission_id: AdmissionId) -> Result<(), AdmissionDenial> {
-        let policy_block = self.fresh_policy_block().await?;
+    async fn decide(&self, admission_id: AdmissionId) -> Result<AdmittedOn, AdmissionDenial> {
+        let (policy_block, admitted_on) = self.fresh_policy_block().await?;
         let accepted = self
             .registry
             .isAccepted(admission_id.into())
@@ -367,9 +411,9 @@ impl RegistryAdmission {
         }
         info!(
             "bootstrap: MeasurementRegistry accepted admission ID {admission_id} \
-             at block {policy_block}"
+             at block {policy_block} ({admitted_on:?})"
         );
-        Ok(())
+        Ok(admitted_on)
     }
 }
 
@@ -385,10 +429,12 @@ const DECIDE_ATTEMPTS: u32 = 3;
 const DECIDE_RETRY_DELAY: Duration = Duration::from_secs(2);
 
 impl AdmissionPredicate for RegistryAdmission {
+    type Admitted = AdmittedOn;
+
     async fn admit(
         &self,
         verified: &VerifiedSeismicAttestation,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<AdmittedOn, Box<dyn std::error::Error + Send + Sync>> {
         let admission_id = azure_admission_id(verified)?;
         let mut attempt = 1;
         loop {
@@ -420,6 +466,8 @@ impl AdmissionPredicate for RegistryAdmission {
 pub(crate) struct DangerouslyAdmitAnyAzureGuest;
 
 impl AdmissionPredicate for DangerouslyAdmitAnyAzureGuest {
+    type Admitted = ();
+
     async fn admit(
         &self,
         verified: &VerifiedSeismicAttestation,
@@ -440,12 +488,19 @@ impl AdmissionPredicate for DangerouslyAdmitAnyAzureGuest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bootstrap::{AnswerError, wrap_for_admitted_requester};
     use alloy::{rpc::client::RpcClient, transports::mock::Asserter};
     use alloy_primitives::{Bytes, b256};
     use seismic_attestation::{
         AzureGuestMeasurements, TdxMeasurements, VerifiedAzureAttestation, VerifiedTdxAttestation,
     };
-    use std::collections::HashMap;
+    use seismic_custodian::{Custodian, EphemeralKeypair};
+    use seismic_custodian_ipc::{
+        Request, Response, WrappedRootKeyBytes,
+        server::{MethodAcl, bind, serve},
+    };
+    use seismic_custodian_service::{dispatch::dispatch, state::CustodianState};
+    use std::{collections::HashMap, path::PathBuf};
 
     // The golden Azure v1 vector pinned in `seismic-measurement-admission`:
     // this tuple's admission ID must match that crate's derivation exactly.
@@ -776,45 +831,196 @@ mod tests {
             .expect("a transient chain failure must be retried, not surfaced");
     }
 
+    // The founding policy is decided in two places: the gate says whether it
+    // admitted on it, and the custodian says whether it may act on that.
+    // The tests below serve a real custodian over a socket, so the second half
+    // is the custodian's own state, not a stand-in.
+
+    /// How the served custodian came to hold `root_key`.
+    enum KeyOrigin {
+        /// Generated here: the genesis node, which starts out honoring the
+        /// founding policy.
+        Minted,
+        /// Received from a peer: a joined node, which never honors it.
+        Installed,
+    }
+
+    /// A custodian served over a Unix socket the way the service binary runs
+    /// it; the socket lives as long as the value.
+    struct ServedCustodian {
+        _dir: tempfile::TempDir,
+        socket: PathBuf,
+    }
+
+    fn serve_custodian(origin: KeyOrigin) -> ServedCustodian {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let minted = |name: &str| {
+            CustodianState::new_with_root_key(Custodian::new([7u8; 32]), dir.path().join(name))
+                .expect("write LUKS keyfile")
+        };
+        let state = match origin {
+            KeyOrigin::Minted => minted("luks-keys"),
+            KeyOrigin::Installed => {
+                let minter = minted("minter-luks-keys");
+                let joiner = CustodianState::new_awaiting_root_key(dir.path().join("luks-keys"));
+                let Response::RootKeyBootstrapAttemptCreated(attempt) =
+                    dispatch(&joiner, Request::CreateRootKeyBootstrapAttempt)
+                else {
+                    panic!("expected a created attempt");
+                };
+                let Response::WrappedRootKey(wrapped) = dispatch(
+                    &minter,
+                    Request::WrapRootKey {
+                        root_key_request_binding: [0x33; 32],
+                        peer_eph_pk: attempt.requester_eph_pk,
+                        admitted_on: AdmittedOn::LivePolicy,
+                    },
+                ) else {
+                    panic!("expected a wrapped root key");
+                };
+                let installed = dispatch(
+                    &joiner,
+                    Request::InstallRootKeyFromVerifiedBootstrapResponse {
+                        attempt_id: attempt.attempt_id,
+                        root_key_request_binding: [0x33; 32],
+                        responder_eph_pk: wrapped.responder_eph_pk,
+                        wrapped_root_key: wrapped.wrapped,
+                    },
+                );
+                assert!(matches!(installed, Response::RootKeyInstalled));
+                joiner
+            }
+        };
+        let socket = dir.path().join("custodian.sock");
+        let listener = bind(&socket).expect("bind custodian socket");
+        std::thread::spawn(move || {
+            serve(listener, MethodAcl::own_uid_only(), move |request| {
+                dispatch(&state, request)
+            })
+        });
+        ServedCustodian { _dir: dir, socket }
+    }
+
+    /// Release `root_key` to a requester admitted at `admitted_on`, over a
+    /// fresh connection — the step the responder takes once evidence verified.
+    async fn release(
+        custodian: &ServedCustodian,
+        admitted_on: AdmittedOn,
+    ) -> Result<WrappedRootKeyBytes, AnswerError> {
+        let mut client = CustodianClient::connect(&custodian.socket)
+            .await
+            .expect("connect to custodian");
+        wrap_for_admitted_requester(
+            &mut client,
+            admitted_on,
+            [0x33; 32],
+            EphemeralKeypair::generate().pk_compressed(),
+        )
+        .await
+    }
+
+    /// Queue one admission at block 0 on the pinned chain: `latest` is block
+    /// 0 itself, then the registry's verdict.
+    fn push_genesis_chain(asserter: &Asserter) {
+        asserter.push_success(&rpc_block(0, 1_000));
+        asserter.push_success(&abi_bool(true));
+    }
+
     #[tokio::test]
-    async fn genesis_window_admits_at_block_zero() {
-        // The genesis timestamp is far in the past; the window ignores it. Only
+    async fn founding_policy_admits_at_block_zero() {
+        // The genesis timestamp is far in the past; the founding policy ignores it. Only
         // two responses are queued, so the pin is checked on `latest` itself
         // here — a second block query would surface as a missing response.
         let asserter = Asserter::new();
-        asserter.push_success(&rpc_block(0, 1_000));
-        asserter.push_success(&abi_bool(true));
+        push_genesis_chain(&asserter);
         let admission = mocked_registry(&asserter);
 
-        admission
+        let admitted_on = admission
             .admit(&verified_azure(golden_pcr_bank()))
             .await
             .expect("an accepted tuple must be admitted while the chain is at genesis");
+        assert_eq!(admitted_on, AdmittedOn::FoundingPolicy);
+        release(&serve_custodian(KeyOrigin::Minted), admitted_on)
+            .await
+            .expect("the minting custodian releases on a founding-policy admission");
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn genesis_window_never_reopens_after_progress() {
+    #[tokio::test]
+    async fn founding_policy_stays_retired_after_progress() {
+        let custodian = serve_custodian(KeyOrigin::Minted);
+        let watched = Asserter::new();
+        watched.push_success(&rpc_block(7, now_millis()));
+        watched.push_success(&rpc_block(0, 1_000));
+        mocked_registry(&watched)
+            .retire_founding_policy_past_block_zero(&custodian.socket)
+            .await;
+
+        // Rewound to block 0, the gate reads the founding set again; the
+        // custodian, which saw the chain past it, refuses to act on that. The
+        // service keeps no admission state, so a fresh gate here is also what a
+        // restarted service on a wiped reth would be.
+        let rewound = Asserter::new();
+        push_genesis_chain(&rewound);
+        let admitted_on = mocked_registry(&rewound)
+            .admit(&verified_azure(golden_pcr_bank()))
+            .await
+            .expect("the gate admits on the founding policy; the custodian decides");
+        assert_eq!(admitted_on, AdmittedOn::FoundingPolicy);
+        let error = release(&custodian, admitted_on)
+            .await
+            .expect_err("a rewound chain must not bring the founding policy back");
+        assert!(
+            matches!(error, AnswerError::FoundingPolicyRetired),
+            "{error}"
+        );
+        release(&custodian, AdmittedOn::LivePolicy)
+            .await
+            .expect("live-policy admissions are unaffected");
+    }
+
+    #[tokio::test]
+    async fn an_installed_root_key_denies_at_block_zero() {
+        // A joined node held at block 0 by its host: the gate admits on the
+        // founding set, and the custodian, which never minted, refuses.
         let asserter = Asserter::new();
-        push_fresh_chain(&asserter);
-        asserter.push_success(&abi_bool(true));
-        let admission = mocked_registry(&asserter);
-        admission
+        push_genesis_chain(&asserter);
+        let admitted_on = mocked_registry(&asserter)
             .admit(&verified_azure(golden_pcr_bank()))
             .await
-            .expect("fresh chain past genesis must admit");
-
-        for _ in 0..DECIDE_ATTEMPTS {
-            asserter.push_success(&rpc_block(0, now_millis()));
-        }
-        let error = admission
-            .admit(&verified_azure(golden_pcr_bank()))
+            .expect("the gate admits on the founding policy; the custodian decides");
+        let error = release(&serve_custodian(KeyOrigin::Installed), admitted_on)
             .await
-            .expect_err("a chain back at genesis after progress must deny");
-        assert!(error.to_string().contains("genesis"), "{error}");
+            .expect_err("only the minting custodian honors the founding policy");
+        assert!(
+            matches!(error, AnswerError::FoundingPolicyRetired),
+            "{error}"
+        );
     }
 
     #[tokio::test(start_paused = true)]
-    async fn foreign_genesis_is_denied_past_the_window() {
+    async fn the_watcher_retires_the_founding_policy_with_no_admissions() {
+        let custodian = serve_custodian(KeyOrigin::Minted);
+        let asserter = Asserter::new();
+        // One poll still at genesis, then one past it on the pinned chain.
+        asserter.push_success(&rpc_block(0, 1_000));
+        asserter.push_success(&rpc_block(1, now_millis()));
+        asserter.push_success(&rpc_block(0, 1_000));
+
+        mocked_registry(&asserter)
+            .retire_founding_policy_past_block_zero(&custodian.socket)
+            .await;
+
+        let error = release(&custodian, AdmittedOn::FoundingPolicy)
+            .await
+            .expect_err("the founding policy retired at block 1 without any join");
+        assert!(
+            matches!(error, AnswerError::FoundingPolicyRetired),
+            "{error}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn foreign_genesis_is_denied_on_the_live_policy() {
         // One round of chain responses and no registry response: a retry or a
         // policy read would surface as a missing response rather than the
         // mismatch, so this also pins the denial as final and as taken before
@@ -840,8 +1046,8 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn foreign_genesis_is_denied_inside_the_window() {
-        // The genesis window is the one branch that admits on an arbitrarily
+    async fn foreign_genesis_is_denied_on_the_founding_policy() {
+        // The founding policy is the one branch that admits on an arbitrarily
         // old timestamp, so it is the branch a forged genesis aims at.
         let asserter = Asserter::new();
         asserter.push_success(&foreign_block(0, now_millis()));
@@ -878,7 +1084,7 @@ mod tests {
     #[tokio::test]
     async fn chain_status_reports_a_foreign_genesis_with_both_halves() {
         // One response and no more: the status is a single block-0 read, so it
-        // cannot advance the genesis-window latch or touch the registry.
+        // cannot touch the registry.
         let asserter = Asserter::new();
         asserter.push_success(&foreign_block(0, now_millis()));
         let admission = mocked_registry(&asserter);
@@ -892,7 +1098,6 @@ mod tests {
                 found: foreign_block(0, 0).header.hash,
             }
         );
-        assert!(!admission.chain_has_advanced.load(Ordering::Relaxed));
     }
 
     #[tokio::test]

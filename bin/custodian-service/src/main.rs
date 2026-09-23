@@ -31,7 +31,8 @@ struct Args {
 
     /// Generate a fresh network root key at startup instead of awaiting one
     /// via the bootstrap methods. Set on exactly one node in the deployment;
-    /// setting it on multiple nodes causes a silent network split.
+    /// setting it on multiple nodes causes a silent network split. Only this
+    /// node honors the founding policy, and only until the chain passes block 0.
     #[arg(long, env = "SEISMIC_CUSTODIAN_GENESIS_NODE", default_value_t = false)]
     genesis_node: bool,
 
@@ -50,7 +51,8 @@ struct Args {
              The two intended callers and their grants:\n  \
              --allow reth:tx-io,rng\n  \
              --allow attestation:tx-io-public,create-root-key-bootstrap-attempt,\
-             wrap-root-key,install-root-key-from-verified-bootstrap-response",
+             wrap-root-key,retire-founding-policy,\
+             install-root-key-from-verified-bootstrap-response",
             acl::VALID_PURPOSES
         )
     )]

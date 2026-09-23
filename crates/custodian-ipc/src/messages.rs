@@ -60,7 +60,16 @@ pub enum Request {
         /// Peer's ephemeral ECDH public key, 33-byte compressed SEC1.
         #[serde(with = "serde_bytes")]
         peer_eph_pk: [u8; 33],
+        /// Which policy admitted the peer. The custodian wraps for
+        /// [`AdmittedOn::FoundingPolicy`] only while it honors the founding
+        /// policy, and answers [`Response::FoundingPolicyRetired`] otherwise.
+        admitted_on: AdmittedOn,
     },
+    /// Retire this custodian's founding policy for the rest of its root key's
+    /// lifetime: from here on it refuses every founding-policy wrap. Only
+    /// the custodian that minted the root key starts out honoring it; retiring
+    /// is one-way and idempotent.
+    RetireFoundingPolicy,
     /// Install a root key from a verified bootstrap response.
     ///
     /// Verify the responder's evidence and response transcript before calling
@@ -87,6 +96,18 @@ pub enum Request {
     },
 }
 
+/// Which policy admitted the peer a [`Request::WrapRootKey`] is for, and so
+/// whether the custodian has the final say on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AdmittedOn {
+    /// The founding policy: the founding accepted set, read at block 0 with no
+    /// freshness check possible. Only the custodian that minted `root_key`
+    /// wraps on it, and only until the chain has been seen past block 0.
+    FoundingPolicy,
+    /// The live policy, read at a fresh finalized block. Final.
+    LivePolicy,
+}
+
 impl Request {
     /// Stable method label for ACL decisions and log lines.
     pub fn method(&self) -> &'static str {
@@ -98,6 +119,7 @@ impl Request {
             Request::GetSnapshotKey { .. } => "get_snapshot_key",
             Request::CreateRootKeyBootstrapAttempt => "create_root_key_bootstrap_attempt",
             Request::WrapRootKey { .. } => "wrap_root_key",
+            Request::RetireFoundingPolicy => "retire_founding_policy",
             Request::InstallRootKeyFromVerifiedBootstrapResponse { .. } => {
                 "install_root_key_from_verified_bootstrap_response"
             }
@@ -126,6 +148,10 @@ pub enum Response {
     /// The requested derivation/wrap needs `root_key`, but none is present in
     /// the custodian's memory.
     RootKeyAbsent,
+    /// The founding policy is retired: the answer to
+    /// [`Request::RetireFoundingPolicy`], and the refusal of a
+    /// [`Request::WrapRootKey`] for a peer admitted on the founding policy.
+    FoundingPolicyRetired,
     /// The ACL refused this peer the method; the handler never saw the
     /// request. Retrying cannot succeed until the node's ACL changes.
     Denied {
@@ -156,6 +182,7 @@ impl Response {
             Response::RootKeyInstalled => "root_key_installed",
             Response::RootKeyAlreadyPresent => "root_key_already_present",
             Response::RootKeyAbsent => "root_key_absent",
+            Response::FoundingPolicyRetired => "founding_policy_retired",
             Response::Denied { .. } => "denied",
             Response::Error { .. } => "error",
         }
@@ -272,7 +299,9 @@ mod tests {
             Request::WrapRootKey {
                 root_key_request_binding: [0xAB; 32],
                 peer_eph_pk: [0xCD; 33],
+                admitted_on: AdmittedOn::FoundingPolicy,
             },
+            Request::RetireFoundingPolicy,
             Request::InstallRootKeyFromVerifiedBootstrapResponse {
                 attempt_id: [0x11; 32],
                 root_key_request_binding: [0xAB; 32],
@@ -331,6 +360,7 @@ mod tests {
             Response::RootKeyInstalled,
             Response::RootKeyAlreadyPresent,
             Response::RootKeyAbsent,
+            Response::FoundingPolicyRetired,
         ] {
             let expected_kind = response.kind();
             let decoded: Response = from_cbor(&to_cbor(&response));
@@ -355,6 +385,7 @@ mod tests {
         let encoded = to_cbor(&Request::WrapRootKey {
             root_key_request_binding: [0xAB; 32],
             peer_eph_pk: [0xCD; 33],
+            admitted_on: AdmittedOn::LivePolicy,
         });
         let marker = [0x58, 0x20, 0xAB, 0xAB];
         assert!(

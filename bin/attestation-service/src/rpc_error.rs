@@ -164,6 +164,11 @@ pub(crate) fn root_key_answer_rpc_error(error: AnswerError) -> ErrorObjectOwned 
 fn answer_failure_kind(error: &AnswerError) -> Option<DenialKind> {
     match error {
         AnswerError::VerifyRequester { source } => verification_failure_kind(source),
+        // Admitted on the founding policy by a node that may not act on it: a
+        // joined node, or one whose chain has been seen past block 0 and now
+        // reads block 0 again. The requester's evidence is not what failed,
+        // retrying here cannot change it, and the genesis node answers instead.
+        AnswerError::FoundingPolicyRetired => Some(DenialKind::ResponderMisconfigured),
         AnswerError::WrapRootKey { .. }
         | AnswerError::ResponderEphemeralKey { .. }
         | AnswerError::GenerateResponderEvidence { .. } => None,
@@ -355,8 +360,10 @@ mod tests {
 
     #[test]
     fn responder_chain_faults_map_to_unavailable() {
+        // A node that may not admit at block 0 sends the joiner on to the one
+        // that may.
         assert_eq!(
-            refusal_of(denial_error(AdmissionDenial::ChainRegressedToGenesis)),
+            refusal_of(AnswerError::FoundingPolicyRetired),
             Some(RootKeyRefusal::ResponderUnavailable)
         );
 
