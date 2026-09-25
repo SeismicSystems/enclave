@@ -85,5 +85,9 @@ pub(crate) fn signed_fetch(
     let payload = seismic_council_delivery::observer_fetch_signing_payload(nonce, &request)
         .expect("encode fetch payload");
     let signature = signer.sign(&payload);
-    seismic_council_delivery::CouncilRequest::ObserverFetch { request, signature }
+    seismic_council_delivery::CouncilRequest::ObserverFetch {
+        nonce: *nonce,
+        request,
+        signature,
+    }
 }

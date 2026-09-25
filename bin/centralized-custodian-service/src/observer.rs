@@ -5,8 +5,8 @@
 //! (exactly as a summit observer node does) and authenticates by signing
 //! fetches with a child key derived from it — the parent verifies against
 //! the child pubkey it derives from its own key. Every exchange is
-//! challenge-response over the parent's council port: request a single-use
-//! nonce, sign `domain || nonce || request`, fetch.
+//! challenge-response over the parent's HTTP endpoint: request an expiring
+//! single-use nonce, sign `domain || nonce || request`, then fetch on any connection.
 //!
 //! Trust boundary: envelopes from the parent are NEVER trusted as-is — each
 //! one goes through [`CentralizedCustodianState::deliver`], which re-verifies
@@ -18,26 +18,18 @@
 
 use crate::root_key_file;
 use crate::state::CentralizedCustodianState;
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, bail};
+use seismic_council_delivery::http::CouncilHttpClient;
 use seismic_council_delivery::{
     CouncilRequest, CouncilResponse, ObserverFetchRequest, ObserverQuery,
     observer_fetch_signing_payload,
 };
-use seismic_custodian_ipc::{read_frame_blocking, write_frame_blocking};
 use seismic_network_manifest::NetworkId;
 use seismic_observer_key::ObserverSigner;
-use std::net::{TcpStream, ToSocketAddrs as _};
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::Duration;
 use tracing::{info, warn};
 use zeroize::Zeroizing;
-
-/// Bounded so a hung parent can never hang this custodian's Unix-socket
-/// clients: an on-demand fetch fails within these and the caller gets the
-/// typed `EpochKeyUnavailable`.
-pub const PARENT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-pub const PARENT_IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct ParentFetcher {
     parent_addr: String,
@@ -73,33 +65,19 @@ impl ParentFetcher {
         }
     }
 
-    fn connect(&self) -> Result<TcpStream> {
-        let addr = self
-            .parent_addr
-            .to_socket_addrs()
-            .with_context(|| format!("resolving parent custodian {}", self.parent_addr))?
-            .next()
-            .ok_or_else(|| anyhow!("parent custodian {} resolves to nothing", self.parent_addr))?;
-        let stream = TcpStream::connect_timeout(&addr, PARENT_CONNECT_TIMEOUT)
-            .with_context(|| format!("connecting to parent custodian {addr}"))?;
-        stream.set_read_timeout(Some(PARENT_IO_TIMEOUT))?;
-        stream.set_write_timeout(Some(PARENT_IO_TIMEOUT))?;
-        Ok(stream)
-    }
-
-    /// One challenge → sign → fetch exchange on an open connection. Each
-    /// nonce is single-use, so paging loops call this once per batch.
+    /// Two independent HTTP requests: nonce authorization is not tied to a
+    /// transport connection. Each page obtains and signs a fresh challenge.
     fn signed_fetch(
         &self,
-        stream: &mut TcpStream,
+        client: &CouncilHttpClient,
         query: ObserverQuery,
     ) -> Result<CouncilResponse> {
-        write_frame_blocking(stream, &CouncilRequest::ObserverChallenge)
-            .context("requesting challenge")?;
-        let nonce = match read_frame_blocking(stream).context("reading challenge")? {
-            Some(CouncilResponse::Challenge { nonce }) => nonce,
-            Some(other) => bail!("parent refused the challenge: {}", describe(&other)),
-            None => bail!("parent closed the connection on the challenge"),
+        let nonce = match client
+            .call(&CouncilRequest::ObserverChallenge)
+            .context("requesting challenge")?
+        {
+            CouncilResponse::Challenge { nonce } => nonce,
+            other => bail!("parent refused the challenge: {}", describe(&other)),
         };
 
         let request = ObserverFetchRequest {
@@ -110,21 +88,19 @@ impl ParentFetcher {
         let payload = observer_fetch_signing_payload(&nonce, &request)
             .context("encoding fetch for signing")?;
         let signature = self.signer.sign(&payload);
-        write_frame_blocking(
-            stream,
-            &CouncilRequest::ObserverFetch { request, signature },
-        )
-        .context("sending fetch")?;
-        match read_frame_blocking(stream).context("reading fetch response")? {
-            Some(response) => Ok(response),
-            None => bail!("parent closed the connection on the fetch"),
-        }
+        client
+            .call(&CouncilRequest::ObserverFetch {
+                nonce,
+                request,
+                signature,
+            })
+            .context("fetching from parent custodian")
     }
 
     /// Fetch the parent's root key.
     pub fn fetch_root_key(&self) -> Result<Zeroizing<[u8; 32]>> {
-        let mut stream = self.connect()?;
-        match self.signed_fetch(&mut stream, ObserverQuery::RootKey)? {
+        let client = CouncilHttpClient::new(&self.parent_addr)?;
+        match self.signed_fetch(&client, ObserverQuery::RootKey)? {
             CouncilResponse::RootKey(root) => Ok(Zeroizing::new(root.key)),
             other => bail!("parent refused the root key: {}", describe(&other)),
         }
@@ -135,11 +111,11 @@ impl ParentFetcher {
     /// the council signature and persists). Returns the parent's highest
     /// delivered epoch.
     fn sync(&self, state: &CentralizedCustodianState) -> Result<u64> {
-        let mut stream = self.connect()?;
+        let client = CouncilHttpClient::new(&self.parent_addr)?;
         loop {
             let local = state.status().epoch;
             let response = self.signed_fetch(
-                &mut stream,
+                &client,
                 ObserverQuery::Envelopes {
                     from_epoch: local + 1,
                 },
@@ -284,13 +260,13 @@ mod tests {
     use std::sync::Arc;
 
     /// A live parent custodian on 127.0.0.1: state + observer serving over
-    /// real TCP. The returned state handle can keep receiving council
+    /// real HTTP. The returned state handle can keep receiving council
     /// deliveries mid-test.
     fn spawn_parent(dir: &Path) -> (SocketAddr, Arc<CentralizedCustodianState>) {
         let state = Arc::new(build_state(dir));
         let serving = Arc::new(observer_serving(dir));
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind parent port");
-        let addr = listener.local_addr().expect("parent addr");
+        let listener = tiny_http::Server::http("127.0.0.1:0").expect("bind parent port");
+        let addr = listener.server_addr().to_ip().expect("parent addr");
         let council_state = state.clone();
         std::thread::spawn(move || serve_council(listener, council_state, Some(serving)));
         (addr, state)
@@ -301,7 +277,7 @@ mod tests {
             &MASTER_SEED,
             &observer_namespace_from_chain_id(CHAIN_ID),
             index,
-            parent_addr.to_string(),
+            format!("http://{parent_addr}"),
             network_id(),
         )
     }
@@ -438,7 +414,7 @@ mod tests {
             &MASTER_SEED,
             &observer_namespace_from_chain_id(CHAIN_ID),
             0,
-            "127.0.0.1:1".to_string(),
+            "http://127.0.0.1:1".to_string(),
             network_id(),
         );
         let response =
@@ -479,7 +455,7 @@ mod tests {
             &MASTER_SEED,
             &observer_namespace_from_chain_id(CHAIN_ID),
             0,
-            "127.0.0.1:1".to_string(),
+            "http://127.0.0.1:1".to_string(),
             network_id(),
         );
         let dir = tempfile::tempdir().unwrap();

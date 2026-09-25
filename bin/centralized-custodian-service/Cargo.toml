@@ -14,7 +14,7 @@ description = "Centralized custodian: security-council-delivered epoch keys serv
 # state, dispatch, and council handler in-process.
 
 [dependencies]
-seismic-council-delivery.workspace = true
+seismic-council-delivery = { workspace = true, features = ["http-client"] }
 seismic-custodian.workspace = true
 # Reused as a library only for its --allow grant parsing (`acl`); this
 # standalone service has no bootstrap flow or LUKS handoff, so the base
@@ -36,6 +36,7 @@ clap.workspace = true
 hex.workspace = true
 rand.workspace = true
 secp256k1.workspace = true
+tiny_http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zeroize.workspace = true
@@ -46,3 +47,5 @@ zeroize.workspace = true
 seismic-custodian-ipc = { workspace = true, features = ["client"] }
 tempfile = "3.17.1"
 tokio.workspace = true
+# Limit the real custodian subprocess in oversized-body crash regression tests.
+libc.workspace = true

@@ -261,7 +261,7 @@ mod tests {
         );
     }
 
-    /// Coverage over real sockets: the council delivers over TCP, then the
+    /// Coverage over real sockets: the council delivers over HTTP, then the
     /// custodian's async client fetches the delivered epoch over the served
     /// unix socket — exactly the two wire paths the shipped binary runs.
     /// Needs an environment permitting `AF_UNIX`/TCP bind; in a sandbox that
@@ -270,23 +270,21 @@ mod tests {
         use super::*;
         use crate::council::serve_council;
         use crate::test_support::build_state;
+        use seismic_council_delivery::http::CouncilHttpClient;
         use seismic_council_delivery::{CouncilRequest, CouncilResponse};
         use seismic_custodian_ipc::server::{MethodAcl, bind};
-        use seismic_custodian_ipc::{
-            CustodianClient, IpcError, read_frame_blocking, write_frame_blocking,
-        };
+        use seismic_custodian_ipc::{CustodianClient, IpcError};
         use std::sync::Arc;
 
         fn council_call(addr: std::net::SocketAddr, request: &CouncilRequest) -> CouncilResponse {
-            let mut stream = std::net::TcpStream::connect(addr).expect("connect council port");
-            write_frame_blocking(&mut stream, request).expect("send council request");
-            read_frame_blocking(&mut stream)
-                .expect("read council response")
-                .expect("council response frame")
+            CouncilHttpClient::new(&format!("http://{addr}"))
+                .unwrap()
+                .call(request)
+                .unwrap()
         }
 
         #[tokio::test]
-        async fn delivery_over_tcp_serves_over_the_unix_socket() {
+        async fn delivery_over_http_serves_over_the_unix_socket() {
             let dir = tempfile::tempdir().expect("tempdir");
             let state = Arc::new(build_state(dir.path()));
 
@@ -301,9 +299,8 @@ mod tests {
                 )
             });
 
-            let tcp_listener =
-                std::net::TcpListener::bind("127.0.0.1:0").expect("bind council port");
-            let council_addr = tcp_listener.local_addr().expect("council addr");
+            let tcp_listener = tiny_http::Server::http("127.0.0.1:0").expect("bind HTTP endpoint");
+            let council_addr = tcp_listener.server_addr().to_ip().expect("council addr");
             let council_state = state.clone();
             std::thread::spawn(move || serve_council(tcp_listener, council_state, None));
 
@@ -351,7 +348,7 @@ mod tests {
         }
 
         /// The full observer topology: council delivers to the PARENT over
-        /// TCP; the OBSERVER boots against it (root key fetched + persisted,
+        /// HTTP; the OBSERVER boots against it (root key fetched + persisted,
         /// envelope backfill) and serves over its own unix socket, fetching
         /// later epochs from the parent on demand.
         #[tokio::test]
@@ -360,14 +357,13 @@ mod tests {
             use crate::test_support::{CHAIN_ID, MASTER_SEED, network_id, observer_serving};
             use seismic_observer_key::observer_namespace_from_chain_id;
 
-            // Parent: state + observer serving on a real TCP port; the
+            // Parent: state + observer serving on a real HTTP endpoint; the
             // council delivers epoch 1 before the observer boots.
             let parent_dir = tempfile::tempdir().expect("tempdir");
             let parent = Arc::new(build_state(parent_dir.path()));
             let serving = Arc::new(observer_serving(parent_dir.path()));
-            let tcp_listener =
-                std::net::TcpListener::bind("127.0.0.1:0").expect("bind council port");
-            let parent_addr = tcp_listener.local_addr().expect("parent addr");
+            let tcp_listener = tiny_http::Server::http("127.0.0.1:0").expect("bind HTTP endpoint");
+            let parent_addr = tcp_listener.server_addr().to_ip().expect("parent addr");
             let parent_council = parent.clone();
             std::thread::spawn(move || serve_council(tcp_listener, parent_council, Some(serving)));
             let response = council_call(
@@ -383,7 +379,7 @@ mod tests {
                 &MASTER_SEED,
                 &observer_namespace_from_chain_id(CHAIN_ID),
                 0,
-                parent_addr.to_string(),
+                format!("http://{parent_addr}"),
                 network_id(),
             ));
             let root_key_path = observer_dir.path().join("root.key");

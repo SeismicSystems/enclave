@@ -3,7 +3,7 @@
 //! An observer custodian authenticates to its parent by signing with an
 //! ed25519 child key derived from the parent's own master node key (the
 //! derivation lives in `seismic-observer-key`; this module only defines what
-//! the child key signs). The payload binds a domain tag, a connection-local
+//! the child key signs). The payload binds a domain tag, an expiring
 //! single-use nonce handed out by the parent (`CouncilResponse::Challenge`),
 //! and the canonical CBOR of the request — fixed-length fields before the
 //! variable tail, the repo's binding layout rule. The nonce is what makes a

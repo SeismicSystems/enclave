@@ -1,8 +1,7 @@
 //! Message types for the council delivery port.
 //!
-//! Everything crosses the wire as CBOR over the same 4-byte length-prefixed
-//! framing as the custodian Unix socket; byte fields are tagged `serde_bytes`
-//! so they encode as native byte strings.
+//! Each HTTP body is one CBOR message, without the Unix socket's length prefix.
+//! Byte fields use `serde_bytes` to encode as native byte strings.
 //!
 //! A delivery rotates the ROOT key: one envelope carries the 32-byte root
 //! key for one epoch, and every purpose key of that epoch (tx-io, rng,
@@ -72,12 +71,12 @@ pub enum ObserverQuery {
     Envelopes { from_epoch: u64 },
 }
 
-/// Caps one `Envelopes` response well under the 64 KiB frame limit
+/// Caps one `Envelopes` response well under the 64 KiB HTTP body limit
 /// (an envelope is ~180 bytes of CBOR; pinned by test).
 pub const MAX_ENVELOPES_PER_FETCH: usize = 64;
 
 /// The signed portion of an observer fetch: everything the child key attests
-/// to. The signature additionally covers a connection-local single-use nonce
+/// to. The signature additionally covers a expiring single-use nonce
 /// (see `observer_fetch_signing_payload`), which is what makes a captured
 /// request worthless to replay.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,6 +119,8 @@ pub enum ObserverRejectCode {
     /// No unconsumed challenge on this connection: ask for one first (each
     /// nonce authorizes exactly one fetch).
     MissingChallenge,
+    /// The bounded challenge store is full; retry after existing challenges expire.
+    TooManyChallenges,
     WrongNetwork,
     BadSignature,
 }
@@ -135,14 +136,17 @@ pub enum CouncilRequest {
     /// Install one epoch root key. Authentication is the signature inside
     /// the envelope, not the transport.
     DeliverEpochKey(SignedDeliveryEnvelope),
-    /// Ask for a single-use nonce to sign into the next `ObserverFetch` on
-    /// this connection.
+    /// Ask for an expiring single-use nonce to sign into an `ObserverFetch`.
+    /// It is independent of HTTP connections and must be returned in the fetch.
     ObserverChallenge,
     /// Fetch the epoch-0 root key or delivered envelopes, signed by a child
     /// key derived from the parent's master node key. Authentication is the
     /// ed25519 signature over the challenge nonce and the request, not the
     /// transport.
     ObserverFetch {
+        /// The server-issued nonce signed together with `request`.
+        #[serde(with = "serde_bytes")]
+        nonce: [u8; 32],
         request: ObserverFetchRequest,
         #[serde(with = "serde_bytes")]
         signature: [u8; 64],
@@ -207,7 +211,7 @@ pub enum CouncilResponse {
         code: RejectCode,
         message: String,
     },
-    /// A single-use nonce for the next `ObserverFetch` on this connection.
+    /// An expiring single-use nonce for an `ObserverFetch` on any connection.
     Challenge {
         #[serde(with = "serde_bytes")]
         nonce: [u8; 32],
@@ -292,12 +296,10 @@ mod tests {
         assert!(!debug.contains("165"), "key leaked: {debug}");
     }
 
-    /// A full envelope batch must fit one frame: MAX_ENVELOPES_PER_FETCH is
-    /// only a valid cap if the worst-case `Envelopes` response encodes under
-    /// the 64 KiB frame body limit shared with custodian-ipc.
+    /// The maximum envelope batch must fit the council HTTP body limit.
     #[test]
-    fn max_envelope_batch_fits_one_frame() {
-        const MAX_FRAME_BODY_LEN: usize = 64 * 1024; // custodian-ipc framing cap
+    fn max_envelope_batch_fits_one_http_body() {
+        use crate::http::MAX_BODY_BYTES;
         let envelope = SignedDeliveryEnvelope {
             payload: DeliveryPayload {
                 network_id: [0xFF; 32],
@@ -313,10 +315,10 @@ mod tests {
         let mut wire = Vec::new();
         ciborium::into_writer(&response, &mut wire).unwrap();
         assert!(
-            wire.len() < MAX_FRAME_BODY_LEN,
-            "max batch is {} bytes, frame cap is {}",
+            wire.len() < MAX_BODY_BYTES,
+            "max batch is {} bytes, HTTP body cap is {}",
             wire.len(),
-            MAX_FRAME_BODY_LEN
+            MAX_BODY_BYTES
         );
     }
 }

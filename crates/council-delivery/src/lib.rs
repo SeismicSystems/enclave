@@ -1,8 +1,8 @@
 //! Wire types, digests, and envelope signing for security-council epoch-key
 //! deliveries to the centralized custodian.
 //!
-//! One envelope carries one 32-byte purpose key for one `(purpose, epoch)`
-//! pair, in plaintext, under an Ethereum-wallet signature over the EIP-712
+//! One envelope carries one 32-byte root key for one epoch,
+//! in plaintext, under an Ethereum-wallet signature over the EIP-712
 //! typed-data digest of the payload ([`eip712`] — the key appears only as
 //! its keccak-256 commitment, so wallets never see it). Confidentiality is
 //! the transport's job: the centralized phase runs among known operators
@@ -18,6 +18,7 @@
 mod bindings;
 mod eip712;
 mod envelope;
+pub mod http;
 mod messages;
 mod observer;
 

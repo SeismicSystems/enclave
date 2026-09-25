@@ -29,24 +29,18 @@ zeroize = { workspace = true, features = ["derive"] }
 # `cli` feature: the council-signer ceremony tool.
 clap = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
-# TLS client so the tool can reach nodes fronted by a TLS terminator
-# (nginx `stream`, stunnel). Off-node tooling only — nothing key-holding
-# links these.
-rustls = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
-webpki-roots = { workspace = true, optional = true }
-# Raw path dep so default features (tokio via `client`) stay off; only the
-# core wire framing is linked.
-seismic-custodian-ipc = { path = "../custodian-ipc", default-features = false, optional = true }
+# Shared synchronous client, also used by observer custodians.
+ureq = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [features]
+http-client = ["dep:ureq", "dep:url"]
 cli = [
     "dep:clap",
     "dep:rand",
-    "dep:rustls",
     "dep:toml",
-    "dep:webpki-roots",
-    "dep:seismic-custodian-ipc",
+    "http-client",
 ]
 
 [[bin]]
@@ -55,3 +49,8 @@ required-features = ["cli"]
 
 [dev-dependencies]
 serde_json.workspace = true
+tiny_http.workspace = true
+tempfile = "3.17.1"
+# Local HTTPS fixture: prove the production client rejects untrusted certificates.
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

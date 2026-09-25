@@ -3,16 +3,15 @@
 //! inside TEEs.
 //!
 //! Serves the same Unix-socket API as `seismic-custodian-service` for
-//! epoch 0, but epochs >= 1 arrive as signed, encrypted deliveries from a
-//! security council over a TCP port instead of being derived. Runs with no
+//! epoch 0, but epochs >= 1 arrive as signed root-key deliveries from a
+//! security council over HTTP behind a TLS terminator. Runs with no
 //! other Seismic binaries: the root key persists in a local keyfile (no
 //! attested bootstrap, no LUKS handoff), and the delivery store is a plain
 //! directory scanned at startup.
 //!
-//! The port speaks only the small framed council protocol (64 KiB frame
-//! cap, capped connections, I/O timeouts), every delivery is
-//! signature-checked before any state or disk is touched, and reachability
-//! should be confined by the deployment's firewall.
+//! The endpoint accepts bounded CBOR bodies with a fixed application worker
+//! pool. Every delivery is signature-checked before installation. The backend
+//! defaults to loopback; the proxy must enforce connection limits and timeouts.
 //!
 //! Two roles beyond the plain custodian, both keyed by `--summit-key-dir`
 //! (a summit keystore holding the node's ed25519 `node_key.pem`):
@@ -20,7 +19,7 @@
 //! - **Parent**: with a key dir, the council port additionally answers
 //!   signed fetches from observer custodians — requests signed by child
 //!   keys derived from this node's own master key.
-//! - **Observer** (`--observer <index>` + `--parent-custodian <host:port>`):
+//! - **Observer** (`--observer <index>` + `--parent-custodian <https-url>`):
 //!   the key dir holds a copy of the parent's node key; the custodian
 //!   derives the child signer, fetches the root key and delivered envelopes
 //!   from the parent at boot, and fetches missing epochs on demand. Front
@@ -46,10 +45,10 @@ use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 /// Default council listen address. 7878 is the attestation service.
-const DEFAULT_COUNCIL_LISTEN_ADDR: &str = "0.0.0.0:7876";
+const DEFAULT_COUNCIL_LISTEN_ADDR: &str = "127.0.0.1:7876";
 /// Default state directory: the root keyfile and delivery envelopes live
-/// here. The operator backs this up; nothing in it is plaintext except the
-/// root key itself.
+/// here. Both the keyfile and council envelopes contain plaintext root keys;
+/// the operator protects and backs them up.
 const DEFAULT_ROOT_KEY_PATH: &str = "/var/lib/seismic/custodian/root.key";
 const DEFAULT_DELIVERY_DIR: &str = "/var/lib/seismic/custodian/deliveries";
 
@@ -75,7 +74,7 @@ struct Args {
     #[arg(long, value_name = "USER:PURPOSES")]
     allow: Vec<String>,
 
-    /// TCP address the council delivery port binds.
+    /// HTTP backend listen address. Keep it behind a TLS proxy; defaults to loopback.
     #[arg(long, env = "SEISMIC_COUNCIL_LISTEN_ADDR", default_value = DEFAULT_COUNCIL_LISTEN_ADDR)]
     council_listen: SocketAddr,
 
@@ -86,14 +85,14 @@ struct Args {
     council_address: CouncilAddress,
 
     /// The EVM chain id this custodian serves. Derives the network
-    /// identifier that scopes every council signature and ciphertext, so
+    /// identifier that scopes every council signature, so
     /// the council tool must be run with the same value. Also derives the
     /// namespace that scopes observer child keys.
     #[arg(long, env = "SEISMIC_CHAIN_ID")]
     chain_id: u64,
 
     /// Directory where delivery envelopes persist. Envelopes contain the
-    /// plaintext purpose keys (council-signed), so this directory is itself
+    /// plaintext epoch root keys (council-signed), so this directory is itself
     /// secret: protect it like the root keyfile.
     #[arg(long, default_value = DEFAULT_DELIVERY_DIR)]
     delivery_dir: PathBuf,
@@ -111,10 +110,9 @@ struct Args {
     #[arg(long, value_name = "INDEX", requires = "parent_custodian")]
     observer: Option<u32>,
 
-    /// host:port of the parent custodian's council port. Front it with TLS
-    /// or a tunnel: the root key and plaintext envelopes transit this
-    /// connection.
-    #[arg(long, value_name = "HOST:PORT", requires = "observer")]
+    /// Parent's HTTPS base URL, optionally with a proxy prefix. /v1/council
+    /// is appended. Plain HTTP is allowed only on loopback (local secure tunnel).
+    #[arg(long, value_name = "URL", requires = "observer")]
     parent_custodian: Option<String>,
 }
 
@@ -142,6 +140,8 @@ fn main() -> Result<()> {
     // (or cross-checked against) the parent. Otherwise the keyfile path.
     let fetcher = match (&args.observer, &args.parent_custodian) {
         (Some(index), Some(parent_addr)) => {
+            seismic_council_delivery::http::endpoint_url(parent_addr)
+                .context("invalid --parent-custodian URL")?;
             let key_dir = args.summit_key_dir.as_ref().expect("checked above");
             let seed = seismic_observer_key::load_node_seed(key_dir)
                 .with_context(|| format!("loading summit keystore {}", key_dir.display()))?;
@@ -195,13 +195,17 @@ fn main() -> Result<()> {
 
     let unix_listener = bind(&args.socket)
         .with_context(|| format!("binding custodian socket {}", args.socket.display()))?;
-    let tcp_listener = std::net::TcpListener::bind(args.council_listen)
-        .with_context(|| format!("binding council port {}", args.council_listen))?;
+    let http_server = tiny_http::Server::http(args.council_listen).map_err(|err| {
+        anyhow!(
+            "binding council HTTP endpoint {}: {err}",
+            args.council_listen
+        )
+    })?;
 
     let council_state = state.clone();
     std::thread::Builder::new()
         .name("council-port".to_string())
-        .spawn(move || council::serve_council(tcp_listener, council_state, observer_serving))
+        .spawn(move || council::serve_council(http_server, council_state, observer_serving))
         .context("spawning council port thread")?;
 
     serve(unix_listener, method_acl, move |request| {

@@ -1,7 +1,7 @@
 //! `council-signer` — the security council's key-delivery tool.
 //!
-//! Speaks the centralized custodian's council port (length-prefixed CBOR
-//! over TCP — NOT HTTP) and performs the whole rotation ceremony: generate a
+//! Speaks the centralized custodian's HTTP council endpoint (CBOR bodies)
+//! and performs the whole rotation ceremony: generate a
 //! key, check a node's status, sign a delivery (with a locally held council
 //! key, or by emitting EIP-712 typed data for an external wallet like `cast`
 //! or MetaMask and attaching its signature), and deliver.
@@ -9,23 +9,19 @@
 //! Deliveries carry the epoch root key in PLAINTEXT: only ever connect
 //! through the deployment's TLS terminator or tunnel, never a bare
 //! untrusted wire.
-//! `--node tls://host[:port]` speaks TLS directly to a terminator that
-//! proxies raw TCP to the council port (nginx `stream`, stunnel, haproxy
-//! `mode tcp`). An HTTP reverse-proxy location with a URL path cannot front
-//! this protocol.
+//! `--node https://host/custodian` uses an HTTP reverse proxy; the client
+//! appends `/v1/council`. Plain HTTP is allowed only on loopback for local
+//! services or secure tunnels.
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
+use seismic_council_delivery::http::{CouncilHttpClient, endpoint_url};
 use seismic_council_delivery::{
     CouncilRequest, CouncilResponse, DeliveryPayload, SignedDeliveryEnvelope,
     canonical_envelope_bytes, envelope_from_bytes, network_id_from_chain_id, seal_delivery,
     typed_data_json,
 };
-use seismic_custodian_ipc::{read_frame_blocking, write_frame_blocking};
-use std::io::{Read, Write};
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Parser)]
 #[command(
@@ -93,16 +89,16 @@ enum Command {
 /// Where to send: one node, or every node in a TOML file. Exactly one.
 #[derive(clap::Args)]
 struct Target {
-    /// One node's council port: `host:port` for plain TCP (a tunnel), or
-    /// `tls://host[:port]` for a TLS terminator (default port 443).
+    /// Council HTTPS base URL, optionally including a proxy prefix.
+    /// `/v1/council` is appended. HTTP is allowed only on loopback.
     #[arg(
         long,
         required_unless_present = "nodes_file",
         conflicts_with = "nodes_file"
     )]
     node: Option<String>,
-    /// TOML file listing every node's council port, in --node syntax:
-    /// `nodes = ["10.0.0.1:7876", "tls://node-1.example.com:7443"]`.
+    /// TOML file listing council base URLs, in --node syntax:
+    /// `nodes = ["https://node-1.example.com/custodian"]`.
     /// The command runs against each node in order, continues past
     /// per-node failures, and exits non-zero if any node failed.
     #[arg(long)]
@@ -132,7 +128,7 @@ impl Target {
             _ => unreachable!("clap enforces exactly one of --node/--nodes-file"),
         };
         for node in &nodes {
-            NodeSpec::parse(node).with_context(|| format!("invalid node '{node}'"))?;
+            endpoint_url(node).context("invalid council base URL in target list")?;
         }
         Ok(nodes)
     }
@@ -278,12 +274,11 @@ fn main() -> Result<()> {
     }
 }
 
-/// Bring one node from its current epoch to the latest saved envelope, over
-/// a single connection (the port serves many requests per connection).
+/// Bring one node from its current epoch to the latest saved envelope via HTTP.
 fn batch_to(node: &str, envelopes: &[SignedDeliveryEnvelope], dir: &Path) -> Result<()> {
     let latest = envelopes.last().expect("checked non-empty").payload.epoch;
-    let mut stream = NodeSpec::parse(node)?.connect()?;
-    let CouncilResponse::Status(status) = exchange(&mut stream, &CouncilRequest::GetStatus)? else {
+    let client = CouncilHttpClient::new(node)?;
+    let CouncilResponse::Status(status) = client.call(&CouncilRequest::GetStatus)? else {
         bail!("unexpected response to GetStatus");
     };
     if status.epoch >= latest {
@@ -305,10 +300,7 @@ fn batch_to(node: &str, envelopes: &[SignedDeliveryEnvelope], dir: &Path) -> Res
                     dir.display()
                 )
             })?;
-        match exchange(
-            &mut stream,
-            &CouncilRequest::DeliverEpochKey(envelope.clone()),
-        )? {
+        match client.call(&CouncilRequest::DeliverEpochKey(envelope.clone()))? {
             CouncilResponse::Delivered { epoch } => {
                 println!("{node}: delivered root key for epoch {epoch}");
             }
@@ -410,113 +402,10 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     file.sync_all()
 }
 
-/// One request/response exchange on an already-open connection.
-fn exchange(stream: &mut Box<dyn ReadWrite>, request: &CouncilRequest) -> Result<CouncilResponse> {
-    write_frame_blocking(stream, request).context("sending request")?;
-    read_frame_blocking(stream)
-        .context("reading response")?
-        .ok_or_else(|| anyhow!("node closed the connection without a response"))
-}
-
-/// One request/response exchange over the council port.
+/// One bounded, authenticated-by-envelope HTTP exchange.
 fn call(node: &str, request: &CouncilRequest) -> Result<CouncilResponse> {
-    let mut stream = NodeSpec::parse(node)?.connect()?;
-    write_frame_blocking(&mut stream, request).context("sending request")?;
-    read_frame_blocking(&mut stream)
-        .context("reading response")?
-        .ok_or_else(|| anyhow!("node closed the connection without a response"))
+    CouncilHttpClient::new(node)?.call(request)
 }
-
-/// How to reach a node's council port. The protocol is length-prefixed CBOR
-/// over a byte stream — plain TCP through a tunnel, or TLS straight to a
-/// terminator that proxies raw TCP (nginx `stream`, stunnel, haproxy
-/// `mode tcp`). It is not HTTP, so URL paths have nowhere to go.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum NodeSpec {
-    Tcp { host_port: String },
-    Tls { host: String, port: u16 },
-}
-
-impl NodeSpec {
-    fn parse(node: &str) -> Result<Self> {
-        if let Some(rest) = node.strip_prefix("http://").or_else(|| {
-            node.strip_prefix("https://")
-                .filter(|rest| rest.contains('/'))
-        }) {
-            let host = rest.split(['/', ':']).next().unwrap_or(rest);
-            bail!(
-                "the council protocol is raw TCP, not HTTP — an HTTP reverse-proxy \
-                 URL (http://, or a path like /custodian) cannot front it. \
-                 Terminate TLS with an nginx `stream` block (or stunnel/haproxy \
-                 `mode tcp`) that proxies raw TCP to the node's council port, then \
-                 use --node tls://{host}:<port>"
-            );
-        }
-        if let Some(rest) = node
-            .strip_prefix("tls://")
-            .or_else(|| node.strip_prefix("https://"))
-        {
-            let rest = rest.strip_suffix('/').unwrap_or(rest);
-            let (host, port) = match rest.rsplit_once(':') {
-                Some((host, port)) => (
-                    host,
-                    port.parse::<u16>()
-                        .with_context(|| format!("invalid port in '{node}'"))?,
-                ),
-                None => (rest, 443),
-            };
-            if host.is_empty() {
-                bail!("missing host in '{node}'");
-            }
-            return Ok(NodeSpec::Tls {
-                host: host.to_string(),
-                port,
-            });
-        }
-        if let Some(rest) = node.strip_prefix("tcp://") {
-            return Ok(NodeSpec::Tcp {
-                host_port: rest.to_string(),
-            });
-        }
-        if !node.contains(':') {
-            bail!(
-                "'{node}' has no port: use host:port for plain TCP, or \
-                 tls://host[:port] for a TLS terminator"
-            );
-        }
-        Ok(NodeSpec::Tcp {
-            host_port: node.to_string(),
-        })
-    }
-
-    fn connect(&self) -> Result<Box<dyn ReadWrite>> {
-        match self {
-            NodeSpec::Tcp { host_port } => {
-                let stream = TcpStream::connect(host_port)
-                    .with_context(|| format!("connecting to {host_port}"))?;
-                Ok(Box::new(stream))
-            }
-            NodeSpec::Tls { host, port } => {
-                let roots = rustls::RootCertStore {
-                    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-                };
-                let config = rustls::ClientConfig::builder()
-                    .with_root_certificates(roots)
-                    .with_no_client_auth();
-                let server_name = rustls::pki_types::ServerName::try_from(host.clone())
-                    .with_context(|| format!("'{host}' is not a valid TLS server name"))?;
-                let connection = rustls::ClientConnection::new(Arc::new(config), server_name)
-                    .context("initializing TLS")?;
-                let tcp = TcpStream::connect((host.as_str(), *port))
-                    .with_context(|| format!("connecting to {host}:{port}"))?;
-                Ok(Box::new(rustls::StreamOwned::new(connection, tcp)))
-            }
-        }
-    }
-}
-
-trait ReadWrite: Read + Write {}
-impl<T: Read + Write> ReadWrite for T {}
 
 fn parse_hex32(value: &str) -> Result<[u8; 32]> {
     let hex_str = value
@@ -546,55 +435,6 @@ mod tests {
     #[test]
     fn cli_parses() {
         Cli::command().debug_assert();
-    }
-
-    #[test]
-    fn node_spec_parses() {
-        assert_eq!(
-            NodeSpec::parse("10.0.0.1:7876").unwrap(),
-            NodeSpec::Tcp {
-                host_port: "10.0.0.1:7876".to_string()
-            }
-        );
-        assert_eq!(
-            NodeSpec::parse("tcp://node.example.com:7876").unwrap(),
-            NodeSpec::Tcp {
-                host_port: "node.example.com:7876".to_string()
-            }
-        );
-        assert_eq!(
-            NodeSpec::parse("tls://node.example.com:7443").unwrap(),
-            NodeSpec::Tls {
-                host: "node.example.com".to_string(),
-                port: 7443
-            }
-        );
-        // TLS defaults to 443; https:// without a path is accepted as TLS.
-        for spec in ["tls://node.example.com", "https://node.example.com"] {
-            assert_eq!(
-                NodeSpec::parse(spec).unwrap(),
-                NodeSpec::Tls {
-                    host: "node.example.com".to_string(),
-                    port: 443
-                }
-            );
-        }
-
-        // HTTP URLs (and https with a path) get the explanatory error.
-        for bad in [
-            "https://internal-0.seismictest.net/custodian",
-            "http://node.example.com:7876",
-        ] {
-            let error = NodeSpec::parse(bad).unwrap_err().to_string();
-            assert!(error.contains("raw TCP, not HTTP"), "{bad}: {error}");
-            assert!(error.contains("tls://"), "{bad}: {error}");
-        }
-
-        // Bare host without a port stays an error, with guidance.
-        let error = NodeSpec::parse("node.example.com").unwrap_err().to_string();
-        assert!(error.contains("has no port"), "{error}");
-        assert!(NodeSpec::parse("tls://node.example.com:notaport").is_err());
-        assert!(NodeSpec::parse("tls://:443").is_err());
     }
 
     #[test]
@@ -683,8 +523,10 @@ mod tests {
     #[test]
     fn target_resolves_single_node_and_nodes_file() {
         assert_eq!(
-            target(Some("10.0.0.1:7876"), None).resolve().unwrap(),
-            vec!["10.0.0.1:7876".to_string()]
+            target(Some("http://127.0.0.1:7876"), None)
+                .resolve()
+                .unwrap(),
+            vec!["http://127.0.0.1:7876".to_string()]
         );
 
         let dir = temp_dir("nodes");
@@ -694,8 +536,8 @@ mod tests {
             r#"
 # fleet
 nodes = [
-    "10.0.0.1:7876",
-    "tls://node-1.example.com:7443",
+    "http://127.0.0.1:7876",
+    "https://node-1.example.com/custodian",
 ]
 "#,
         )
@@ -703,19 +545,16 @@ nodes = [
         assert_eq!(
             target(None, Some(path.clone())).resolve().unwrap(),
             vec![
-                "10.0.0.1:7876".to_string(),
-                "tls://node-1.example.com:7443".to_string()
+                "http://127.0.0.1:7876".to_string(),
+                "https://node-1.example.com/custodian".to_string()
             ]
         );
 
         // An invalid node spec anywhere in the file fails upfront, before
         // anything would be sent.
-        std::fs::write(&path, r#"nodes = ["https://x.example.com/custodian"]"#).unwrap();
+        std::fs::write(&path, r#"nodes = ["tls://x.example.com:7443"]"#).unwrap();
         let error = target(None, Some(path.clone())).resolve().unwrap_err();
-        assert!(
-            format!("{error:#}").contains("raw TCP, not HTTP"),
-            "{error:#}"
-        );
+        assert!(format!("{error:#}").contains("use HTTPS"), "{error:#}");
 
         // An empty list is an error, as is a malformed file.
         std::fs::write(&path, "nodes = []").unwrap();

@@ -5,221 +5,258 @@ to decentralized TEEs. It runs standalone — no attestation service, no
 tdx-init, no setup-persistent-luks — and serves the same Unix-socket API as
 `seismic-custodian-service`, with one difference: at epochs `>= 1` the ROOT
 key itself rotates. Each rotation is **one 32-byte root key signed by a
-security council's Ethereum wallet** delivered over a TCP port, and every
-purpose key of that epoch (tx-io, rng, snapshot) is HKDF-derived from the
-delivered root — the same derivation epoch 0 applies to the local keyfile.
-Asking for an epoch the council has not delivered answers the typed
-`EpochKeyUnavailable` error instead of deriving — making the council the
-network's actual rotation authority, one signature per rotation.
+security council's Ethereum wallet** delivered over HTTP, and every purpose
+key of that epoch (tx-io, rng, snapshot) is HKDF-derived from the delivered
+root. An undelivered epoch answers `EpochKeyUnavailable`, never a derivation
+from an earlier root. Epoch 0 uses the local keyfile and the TDX custodian's
+HKDF paths. The attested root-key bootstrap methods are unavailable here.
 
-Epoch-0 derivations use the same HKDF paths as the TDX custodian, so
-consumers see identical bytes when the network later migrates. The root-key
-bootstrap methods answer a stable error: there is no attested bootstrap
-here.
+An **observer custodian** fetches the epoch-0 root and council-delivered
+envelopes from its parent at boot and on demand. The council delivers to
+validator custodians; correctly configured observers sync from their parents.
 
-The binary also has an **observer mode** for the custodians of summit
-observer nodes (non-validators running with a copy of a validator's master
-`node_key.pem`): an observer custodian fetches its root key and all
-council-delivered envelopes from its **parent custodian** at boot, and
-fetches epochs it doesn't have on demand — authenticating with an ed25519
-child key derived from the parent's own node key. See "Observer custodians"
-below.
+## HTTP transport and confidentiality
 
-## Transport security is the deployment's job
+The backend is synchronous `tiny_http`, with no TLS features and no async
+runtime. It defaults to **`127.0.0.1:7876`** and exposes:
 
-Delivery envelopes carry the epoch root key **in plaintext** under the
-council signature. This service deliberately contains no TLS and no envelope
-encryption: the centralized phase runs among known operators, who must front
-the council port with a TLS terminator or tunnel (nginx, WireGuard, SSH —
-whatever the ops stack uses) so key material is never plaintext on an
-untrusted wire. The port itself must never be reachable directly from
-untrusted networks.
-
-The council protocol is **raw framed TCP, not HTTP**, so an nginx HTTP
-`location` (a URL with a path) cannot front it. Terminate TLS with an nginx
-`stream` block that proxies raw TCP:
-
-```nginx
-stream {
-    server {
-        listen 7443 ssl;                    # own port; HTTP vhosts can't share it by path
-        ssl_certificate     /etc/ssl/custodian.crt;
-        ssl_certificate_key /etc/ssl/custodian.key;
-        proxy_pass 127.0.0.1:7876;          # the custodian's --council-listen
-    }
-}
+```http
+POST /v1/council
+Content-Type: application/cbor
+Accept: application/cbor
 ```
 
-`council-signer` then connects with `--node tls://host:7443` (plain
-`host:port` still works through a tunnel). The same applies to
-`--parent-custodian` for observer custodians — the binary itself speaks
-plain TCP, so give it a tunnel-local endpoint (stunnel/WireGuard/SSH -L)
-rather than an HTTPS URL.
+Each body is exactly one `CouncilRequest` or `CouncilResponse` encoded as
+CBOR, **without** the Unix socket's four-byte length prefix. The body limit
+is 64 KiB in both directions. The methods are `Ping`, `GetStatus`,
+`DeliverEpochKey`, `ObserverChallenge`, and `ObserverFetch`. Valid protocol
+replies, including typed delivery/observer rejections, return HTTP 200.
+Transport errors use 400 (invalid CBOR or unsupported protocol upgrade), 404
+(path), 405 (method), 413 (body limit/read failure, including premature EOF),
+415 (content type), or 500 (response encoding failure). Unsupported HTTP versions
+are rejected by the parser with HTTP/1.1 505 and connection closure.
+Responses carry `Cache-Control: no-store`; no keys belong in URLs or logs.
+Transport errors close the connection without draining an unread body.
+
+The workspace uses a pinned, locally patched `tiny_http` (see
+[`vendor/tiny_http/LOCAL_PATCH.md`](../../vendor/tiny_http/LOCAL_PATCH.md)).
+Upstream 0.12.0 allocates from an unread `Content-Length` when dropping a
+rejected request, even after HTTP 413, and ignores response-side
+`Connection: close` headers. The patch bounds cleanup buffers and provides
+an explicit respond-and-close API that cancels body reads and closes the
+socket before request destruction. It also rejects unsupported HTTP versions
+without leaking parser tasks, and treats truncated fixed-length/chunked bodies
+as errors rather than complete messages. The council endpoint rejects protocol
+upgrades so their raw-reader path cannot bypass framing checks. Do not substitute
+the unpatched crate.
+
+**Delivery envelopes and observer responses contain plaintext root keys.**
+Serve the backend through an HTTPS reverse proxy, or use a secure tunnel.
+Do not expose the HTTP backend to untrusted networks. TLS authenticates the
+server and encrypts the transport; council and observer signatures authorize
+individual operations. HTTP itself adds no encryption. Proxy configuration
+is outside this repository's scope.
+
+Clients accept an **HTTPS base URL** with an optional proxy path prefix:
+
+```text
+https://node.example.com/custodian
+    -> POST https://node.example.com/custodian/v1/council
+```
+
+The proxy must strip its prefix before forwarding to `/v1/council`. Plain
+`http://` is accepted only for loopback hosts (`localhost`, `127.0.0.0/8`,
+`::1`), for local access or secure tunnels. Bare `host:port`, `tcp://`, and
+`tls://` are no longer accepted. Credentials, query parameters, and fragments
+in base URLs are rejected.
+
+The shared synchronous HTTPS client uses `ureq`/Rustls, validates certificates,
+does not follow redirects, and ignores environment proxy settings. Each
+exchange has a 5-second connect timeout and a 10-second overall timeout,
+including the response body. Compression is not enabled. The HTTP client
+is feature-gated in `seismic-council-delivery`; both the CLI and observer
+custodian use it. The custodian's **server** remains TLS-free.
+
+The application has 16 HTTP workers and a bounded challenge store. Unlike
+the old raw TCP server, **tiny_http does not expose socket deadlines or a
+connection cap**. The fronting proxy must bound idle/slow connections,
+request duration, connection count, request/header sizes and request rates.
+A worker cap is not a network connection cap. Unauthenticated challenge
+issuance also needs access/rate controls: a bounded nonce store limits memory,
+not an attacker's ability to exhaust its slots. Keep the backend loopback-only
+and prevent the proxy from caching, logging, or spilling secret bodies to
+temporary files.
 
 ## State on disk
 
 Two things persist, both under `/var/lib/seismic/custodian/` by default:
 
-- **The root keyfile** (`--root-key-file`, 32 raw bytes, mode 0600). If
-  absent at first boot, the **publicly known shared default** (a hash of a
-  fixed label in `root_key_file.rs`) is pinned there, so every node agrees
-  on epoch-0 keys with zero coordination. The trade is explicit: epoch 0
-  provides **no confidentiality** — treat it as a placeholder and have the
-  council deliver epoch 1 immediately after launch (the service warns on
-  every boot while the default is in use). An operator who wants a secret
-  root key pre-places 32 random bytes before first boot.
-- **Delivery envelopes** (`--delivery-dir`, `<epoch>.cbor`, dir 0700 /
-  files 0600): accepted deliveries stored verbatim, written durably
-  **before** the epoch becomes observable. The files contain the plaintext
-  epoch root keys — the directory is as secret as the keys themselves.
-  Every boot re-verifies each envelope's council signature; a corrupt file
-  stops the scan at the last good epoch, and redelivering the epoch heals
-  it.
+- **Root keyfile** (`--root-key-file`, 32 raw bytes, mode 0600). If absent
+  at first boot, a **publicly known shared default** is pinned there so all
+  nodes agree on epoch-0 keys. Epoch 0 then provides **no confidentiality**;
+  deliver epoch 1 promptly. To use a secret epoch-0 root, pre-place the same
+  securely provisioned 32 bytes on the network's custodians.
+- **Delivery envelopes** (`--delivery-dir`, `<epoch>.cbor`, directory 0700,
+  files 0600). Accepted envelopes are persisted durably **before** the epoch
+  becomes observable. These files contain plaintext epoch roots. Every boot
+  re-verifies their council signatures. A corrupt file stops loading at the
+  last good epoch; redelivering the missing epoch heals the gap.
 
-Both are checked eagerly at startup: an unusable delivery directory or
-malformed keyfile fails the boot before any socket binds.
+An unusable delivery directory or malformed keyfile fails startup. Protect
+and back up both the root keyfile and envelope archive.
 
-## The delivery protocol
+## Council CLI and fleet delivery
 
-The council port (default `0.0.0.0:7876`) speaks length-prefixed CBOR — the
-same framing as the custodian socket — with five methods: `Ping`,
-`GetStatus`, `DeliverEpochKey`, and the observer pair
-`ObserverChallenge`/`ObserverFetch`. Envelope construction, the EIP-712
-digest, and the message types live in `crates/council-delivery`, shared with
-off-node council signer tooling.
+Build the ceremony tool:
 
-The ceremony tool is `council-signer`
-(`cargo build --release -p seismic-council-delivery --features cli`), with
-`gen-key`, `status`, `typed-data`, `deliver`, and `deliver-batch`
-subcommands covering the whole rotation flow for both a locally held
-council key and an external wallet.
+```bash
+cargo build --release -p seismic-council-delivery --features cli --bin council-signer
+```
 
-**Bootstrapping a new node:** `deliver --save-dir <dir>` (env
-`COUNCIL_ENVELOPE_DIR`) also writes each sealed envelope as `<epoch>.cbor`
-into the council's own archive (dir 0700, files 0600 — they contain the
-plaintext root keys). When a node joins later,
-`deliver-batch --node <addr> --envelope-dir <dir>` asks the node its
-current epoch and replays every missing envelope in order over one
-connection, bringing it to the latest epoch in one command. Envelopes are
-deterministic and redelivery is idempotent, so re-running a batch is
-harmless.
-
-**Fleet operations:** `status`, `deliver`, and `deliver-batch` all accept
-`--nodes-file <path>` instead of `--node` — a TOML file listing every
-node's council port in `--node` syntax:
+It provides `gen-key`, `status`, `typed-data`, `deliver`, and `deliver-batch`.
+Targets are either `--node <base-url>` or `--nodes-file <path>`:
 
 ```toml
+# fleet.toml: validator custodians' HTTPS base URLs, not Reth RPC URLs.
 nodes = [
-    "10.0.0.1:7876",
-    "tls://node-1.example.com:7443",
+    "https://node-1.example.com/custodian",
+    "https://node-2.example.com/custodian",
 ]
 ```
 
-One `deliver --nodes-file fleet.toml --epoch N` rotates the whole network.
-Every entry is validated before anything is sent; a down node is reported
-and skipped (the rest of the fleet still advances) and the command exits
-non-zero naming the failures — re-running the same command (or a
-`deliver-batch --nodes-file`) heals the stragglers, since redelivery is
-idempotent.
+```bash
+council-signer status --nodes-file fleet.toml
+```
 
-One envelope carries the 32-byte root key for one epoch, **signed with an
-ordinary Ethereum wallet**: the 65-byte `r || s || v` signature is EIP-712
-typed data (`RootKeyDelivery(uint64 epoch,bytes32 keyCommitment)`; the
-crate's `typed_data_json` emits the `eth_signTypedData_v4` JSON for
-MetaMask, `cast wallet sign --data`, or hardware wallets), verified by
-recovering the signer and comparing it to `--council-address`. The wallet
-signs the key's **keccak-256 commitment**, never the key itself, so the
-secret doesn't pass through wallet UIs — while the signature still binds
-the exact key bytes. The network id — derived from `--chain-id`
-(`network_id_from_chain_id`, domain-separated SHA-256; no manifest artifact
-needed in the centralized phase) — rides in the EIP-712 domain as `salt`,
-so a signature can never replay onto another chain. Wallet approval screens
-show the fields: epoch, commitment.
+Check the reported next-delivery epoch and select the correct chain ID.
+The custodian's delivered-epoch counter is **not** the active on-chain epoch.
+For example, for a fresh epoch-1 delivery (replace the chain ID):
 
-Epochs are sequential: the first delivery is epoch 1 (epoch 0 is forever
-keyfile-sourced), and epoch N+1 is accepted only once N exists. A delivered
-root is validated to derive cleanly for every purpose before it installs.
-Sealing is deterministic (RFC 6979, no randomness), so re-sealing the same
-payload reproduces the byte-identical envelope: redelivery is naturally
-idempotent (`AlreadyDelivered`), and only a *different key* at an existing
-epoch is an `EpochConflict`.
+```bash
+set +x
+umask 077
+export SEISMIC_CHAIN_ID=5124
+EPOCH=1
+mkdir -p council-private
+chmod 700 council-private
+
+# Generate once; refuse to overwrite an existing epoch key.
+(set -o noclobber; council-signer gen-key > "council-private/${EPOCH}.key")
+# Stop if generation failed or the file already exists; investigate before proceeding.
+export COUNCIL_ROOT_KEY="$(< "council-private/${EPOCH}.key")"
+
+council-signer typed-data --epoch "$EPOCH" > "council-private/${EPOCH}.json"
+SIGNATURE="$(scast wallet sign --data --from-file --interactive "council-private/${EPOCH}.json")"
+unset COUNCIL_SIGNER_KEY
+council-signer deliver --nodes-file fleet.toml --epoch "$EPOCH" \
+  --signature "$SIGNATURE" --save-dir council-private/envelopes
+unset COUNCIL_ROOT_KEY
+council-signer status --nodes-file fleet.toml
+```
+
+The interactive prompt is for the **council signing wallet**, not the new
+epoch root. It must match `--council-address`, an EOA (EIP-1271 contract
+wallets are not supported). It need not be the on-chain rotation admin.
+The wallet signs EIP-712 `RootKeyDelivery(uint64 epoch,bytes32 keyCommitment)`;
+only the root's keccak-256 commitment is shown to the wallet. The network
+identifier derived from `--chain-id` scopes the signature against cross-chain
+replay. `--council-key` / `COUNCIL_SIGNER_KEY` is an alternative to an external
+signature, not something to combine with `--signature`.
+
+`--save-dir` (or `COUNCIL_ENVELOPE_DIR`) saves the signed envelope **before**
+network delivery, with private permissions. Fleet delivery validates all
+URLs first, attempts every node, and exits nonzero if any fail. Successful
+nodes are not rolled back. Retry the **same** envelope/root, never generate
+a different root for an already delivered epoch:
+
+```bash
+council-signer deliver-batch --nodes-file fleet.toml \
+  --envelope-dir council-private/envelopes
+```
+
+Batch delivery asks each node for its current epoch and replays missing
+envelopes in sequence. Retain the complete archive for later joining nodes.
+The signature and envelope storage formats are unchanged by HTTP.
+
+Epochs are sequential; the first delivery is epoch 1. Identical envelope
+redelivery is idempotent (`AlreadyDelivered`); conflicting material at an
+existing epoch is rejected. Root derivation is validated before installation.
+Once delivery readiness is verified, separately announce the matching epoch's
+activation block on chain. **Delivering a root does not activate it.**
 
 ## Observer custodians
 
-A summit **observer** is a non-validator identity additively derived from a
-validator's master ed25519 node key; its operator runs with a copy of the
-validator's `node_key.pem`. The observer's custodian must serve the same
-keys as the validator's ("parent") custodian, but the council only delivers
-to the parent — so the observer custodian syncs from its parent instead:
+A summit observer holds a copy of its parent's master `node_key.pem`.
+`--summit-key-dir` enables parent-side observer serving; only the master
+public key is retained for signature checks. Any correctly derived child
+index can authenticate. Observer mode additionally requires `--observer
+<index>` and `--parent-custodian <https-base-url>`.
 
-- **Parent role** (`--summit-key-dir` alone): the council port additionally
-  answers signed observer fetches. Verification derives the child public key
-  from this node's own master key (`seismic-observer-key`, a byte-exact port
-  of summit's derivation) — *any* derivation index is accepted, because only
-  the master-key holder can sign as any child. Only the master *public* key
-  is retained; the seed is dropped at boot.
-- **Observer role** (`--observer <index>` + `--parent-custodian` +
-  `--summit-key-dir`): at boot the custodian fetches the parent's root key
-  (persisting it to `--root-key-file`; a pre-existing local root key that
-  differs from the parent's is **boot-fatal**) and backfills all delivered
-  envelopes; at runtime, a request for an epoch it doesn't have triggers an
-  on-demand fetch (bounded by 5 s connect / 10 s I/O timeouts) before
-  answering `EpochKeyUnavailable`. An observer never pins the public default
-  root key.
+At boot the observer fetches the parent's epoch-0 root, persists it, and
+backfills signed envelopes. An existing local root that disagrees with the
+parent is boot-fatal. If the parent is unavailable but a local root exists,
+startup retains that local root and warns. An observer never installs the
+public default root. Missing epochs trigger bounded HTTP fetches from the
+parent before returning `EpochKeyUnavailable`.
 
-Every fetch is challenge-response: the observer requests a single-use nonce,
-then signs `domain || nonce || request` with the derived child key
-(deterministic ed25519). One nonce authorizes exactly one fetch, so captured
-requests can't replay. The derivation namespace comes from `--chain-id`
-(domain-separated, distinct from summit's genesis-digest chain domain), so
-custodian observer identities are scoped per deployment and separate from
-the node's P2P observer identities.
+Each fetch uses two independent HTTP requests:
 
-Envelopes fetched from the parent are **never trusted as-is**: each one
-re-verifies the council signature against the observer's own
-`--council-address` and persists through the normal delivery path. The root
-key has no council signature, so for it the parent is authenticated only by
-address plus the fronting TLS/tunnel — which must also cover the observer
-connection, since the root key and plaintext envelopes transit it.
+1. `ObserverChallenge` returns a random nonce.
+2. `ObserverFetch { nonce, request, signature }` returns that nonce and an
+   Ed25519 signature over `domain || nonce || request` from the derived child.
 
-Ops helper: `observer-keytool`
-(`cargo build --release -p seismic-observer-key --features cli`) prints the
-master (`master-pub`) and derived child (`child-pub`) public keys for a
-keystore, to confirm a parent and observer hold the same node key.
+Nonces are process-wide, expire after 30 seconds, and are removed atomically
+before verification. Each authorizes at most one attempt, including across
+connections and concurrent replays. The store caps outstanding challenges at
+1,024 (`TooManyChallenges` on exhaustion); expired entries are reclaimed on
+issuance. Proxies need not preserve TCP affinity, but requests must reach the
+same custodian instance, not be balanced among independent custodians.
 
-## Security posture
+Fetched envelopes always pass local council verification and durable storage.
+The epoch-0 root has no council signature: authenticated HTTPS to the intended
+parent (or a correctly configured secure tunnel) is therefore essential.
 
-An open TCP port in the key-holding process is a deliberate, council-scoped
-exception to the "no network listeners near keys" rule. Mitigations: the
-64 KiB frame cap, a 16-connection cap, 30-second I/O timeouts, signature
-verification before any state or disk write, and sanitized wire errors.
-Transport-level authentication and confidentiality are the fronting
-TLS/tunnel's job — authentication of *deliveries* is the per-envelope
-council signature, and of *observer fetches* the per-nonce child-key
-signature; `Ping`/`GetStatus` reveal only epoch counters, and observer
-responses (the root key, envelopes) go only to verified child-key holders.
+## Migration and validation
 
-The council must be an EOA — contract accounts (e.g. a Safe) sign via
-EIP-1271, which cannot be verified off-chain by recovery. Rotating the
-council key orphans persisted envelopes (they re-verify against the
-currently configured `--council-address` on every boot); redeliver under the
-new key to recover.
+This is a coordinated wire-protocol migration; there is **no raw-TCP fallback**.
+Update the custodian, `council-signer`, observer parent URLs, fleet URLs and
+HTTP proxy routing together. The old `tls://` scheme described raw CBOR over
+TLS, not HTTPS. Reth's Unix socket, derivation rules, signed envelopes,
+on-disk archives and on-chain registry remain unchanged.
+
+Tests include real CLI processes against HTTP fixtures, captured observer
+requests with a proxy prefix and asserted connection changes, server validation,
+replay/expiry/concurrency tests, error/redirect/body-limit/deadline handling,
+and HTTP delivery followed by key retrieval through the real Unix socket.
+Linux rejection regressions run the actual binary under an address-space
+limit, require socket closure for incomplete/oversized requests, and verify
+continued HTTP and Unix-socket availability. Additional regressions check
+parser thread/FD recovery after unsupported HTTP versions, and verify that
+truncated signed deliveries (including upgrade attempts) cannot dispatch, advance
+the epoch or persist an envelope; complete copies of the same deliveries succeed:
+
+```bash
+cargo test -p seismic-council-delivery --features cli
+cargo test -p seismic-centralized-custodian-service
+```
 
 ## Flags
 
 | flag | env | default |
 |---|---|---|
 | `--socket` | — | `/run/seismic/custodian/custodian.sock` |
-| `--root-key-file` | `SEISMIC_ROOT_KEY_FILE` | `/var/lib/seismic/custodian/root.key` (absent → pins the public shared default) |
+| `--root-key-file` | `SEISMIC_ROOT_KEY_FILE` | `/var/lib/seismic/custodian/root.key` |
 | `--allow USER:PURPOSES` (repeatable) | — | deny-all |
-| `--council-listen` | `SEISMIC_COUNCIL_LISTEN_ADDR` | `0.0.0.0:7876` |
-| `--council-address` (required) | `SEISMIC_COUNCIL_ADDRESS` | — (`0x` + 20-byte Ethereum address hex) |
-| `--chain-id` (required) | `SEISMIC_CHAIN_ID` | — (u64; council tooling must use the same value) |
-| `--delivery-dir` | — | `/var/lib/seismic/custodian/deliveries` (contains plaintext keys; protect it) |
-| `--summit-key-dir` | `SEISMIC_SUMMIT_KEY_DIR` | — (summit keystore with `node_key.pem`; enables serving observers, required in observer mode) |
-| `--observer INDEX` | — | — (observer mode; requires `--parent-custodian` and `--summit-key-dir`) |
-| `--parent-custodian HOST:PORT` | — | — (the parent's council port; front with TLS/tunnel) |
+| `--council-listen` | `SEISMIC_COUNCIL_LISTEN_ADDR` | `127.0.0.1:7876` (HTTP backend) |
+| `--council-address` (required) | `SEISMIC_COUNCIL_ADDRESS` | — |
+| `--chain-id` (required) | `SEISMIC_CHAIN_ID` | — |
+| `--delivery-dir` | — | `/var/lib/seismic/custodian/deliveries` |
+| `--summit-key-dir` | `SEISMIC_SUMMIT_KEY_DIR` | — |
+| `--observer INDEX` | — | — |
+| `--parent-custodian URL` | — | — (HTTPS base URL; HTTP only on loopback) |
 
-Like the TDX custodian, this binary links no async runtime; that guarantee
-only holds when it is built in its own cargo invocation (see the
-feature-unification note in `crates/custodian-ipc/Cargo.toml`).
+Like the TDX custodian, this binary links no async runtime. Build it separately:
+Cargo feature unification with IPC async-client consumers can otherwise pull
+Tokio into the binary (see `crates/custodian-ipc/Cargo.toml`). Rotating the
+council signing address invalidates verification of archived envelopes unless
+they are re-signed and redelivered under the new authority.

@@ -1,7 +1,7 @@
 //! Building blocks of the standalone centralized custodian service:
 //! council-delivered epoch keys over a keyfile-persisted root key
 //! ([`state`], [`root_key_file`]), the epoch-aware socket dispatch
-//! ([`dispatch`]), the council TCP port ([`council`]), and the
+//! ([`dispatch`]), the council HTTP endpoint ([`council`]), and the
 //! observer-custodian sides of that port — parent verification
 //! ([`observer_serving`]) and the fetching client ([`observer`]). The
 //! shipped binary (`main.rs`) is a thin CLI over these modules; they are
