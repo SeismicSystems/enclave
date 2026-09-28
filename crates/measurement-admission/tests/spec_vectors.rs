@@ -72,6 +72,7 @@ fn derived_values() -> Vec<String> {
             panic!("gcp fixture compiled under the wrong schema");
         };
         values.push(hex::encode(tuple.rtmr1));
+        values.push(hex::encode(tuple.rtmr2));
     }
 
     for tuple in flattened_tuples() {

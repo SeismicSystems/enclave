@@ -169,6 +169,7 @@ fn admission_id_of(verified: &VerifiedSeismicAttestation) -> Result<AdmissionId,
         }
         VerifiedSeismicAttestation::GcpTdx(gcp) => Ok(GcpTdxV1Measurements {
             rtmr1: gcp.measurements.rtmr1,
+            rtmr2: gcp.measurements.rtmr2,
         }
         .admission_id()),
         other => Err(AdmissionDenial::UnsupportedAttestationType(

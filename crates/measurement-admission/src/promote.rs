@@ -79,6 +79,7 @@ struct PromotedGcpRecord {
 #[derive(Serialize)]
 struct PromotedGcpMeasurements {
     rtmr1: PromotedEntry,
+    rtmr2: PromotedEntry,
 }
 
 fn promoted_entry(value: B256) -> PromotedEntry {
@@ -200,27 +201,30 @@ pub fn promote_measurements(
     Ok(promoted)
 }
 
-/// Promote a GCP measurements input: `rtmr1` becomes the record's only register.
+/// Promote a GCP measurements input: `rtmr1` and `rtmr2` become the record's registers.
 fn promote_gcp(
     map: &BTreeMap<String, RawEntry>,
     measurement_id: &str,
 ) -> Result<Vec<u8>, PromoteError> {
-    let mut rtmr1 = None;
-    for (key, entry) in map {
-        if key.eq_ignore_ascii_case("rtmr1") {
-            rtmr1 = Some(entry_value_bytes(INPUT, "rtmr1", entry, 48)?);
-        }
-    }
-    let rtmr1 = rtmr1.ok_or(PolicyError::MissingGcpRegister {
-        record: INPUT.to_owned(),
-    })?;
+    let register = |name: &'static str| -> Result<PromotedEntry, PromoteError> {
+        let entry = map
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, entry)| entry)
+            .ok_or(PolicyError::MissingGcpRegister {
+                record: INPUT.to_owned(),
+                register: name,
+            })?;
+        Ok(PromotedEntry {
+            expected_any: [hex::encode(entry_value_bytes(INPUT, name, entry, 48)?)],
+        })
+    };
     let record = PromotedGcpRecord {
         attestation_type: crate::GCP_TDX_ATTESTATION_TYPE.to_owned(),
         measurement_id: measurement_id.to_owned(),
         measurements: PromotedGcpMeasurements {
-            rtmr1: PromotedEntry {
-                expected_any: [hex::encode(rtmr1)],
-            },
+            rtmr1: register("rtmr1")?,
+            rtmr2: register("rtmr2")?,
         },
     };
     let mut rendered = serde_json::to_string_pretty(&[record])
@@ -289,10 +293,11 @@ mod tests {
     }
 
     #[test]
-    fn promotes_gcp_measurements_to_an_rtmr1_record() {
-        let rtmr1 = "69b655b5c1505ef6329f853308c87d0b8e1e0161140907664302f711438212de8dc897767a07aed93af8b84377272ecc";
+    fn promotes_gcp_measurements_to_an_rtmr_record() {
+        let rtmr1 = "762d5dc2b8dcd950b77ba759e2321a865a7a1fcdeb1f5d879f3e31e974c9697fa4171d92e08c2243a91af3027ad08cb0";
+        let rtmr2 = "85bc309a887ad0277ea50d47aacb850d080c498e2e713eeab0d035085acbd6d47ac06f276ae4284c828dc199e6845031";
         let raw = format!(
-            r#"{{"attestation_type":"gcp-tdx","measurement_id":"seismic-dev_x.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}}}},"events":[]}}"#
+            r#"{{"attestation_type":"gcp-tdx","measurement_id":"seismic-dev_x.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}},"rtmr2":{{"expected":"{rtmr2}"}}}},"events":[]}}"#
         );
         let promoted = promote_measurements(raw.as_bytes(), None, None).unwrap();
         let doc: serde_json::Value = serde_json::from_slice(&promoted).unwrap();
@@ -301,6 +306,10 @@ mod tests {
         assert_eq!(
             doc[0]["measurements"]["rtmr1"]["expected_any"],
             serde_json::json!([rtmr1])
+        );
+        assert_eq!(
+            doc[0]["measurements"]["rtmr2"]["expected_any"],
+            serde_json::json!([rtmr2])
         );
         let compiled = compile_policy(&promoted).unwrap();
         assert_eq!(compiled.records[0].tuple.schema(), crate::GCP_TDX_V1_SCHEMA);
