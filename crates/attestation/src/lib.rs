@@ -146,10 +146,12 @@ fn platform_attestation_type(
     }
 }
 
+mod google;
 use attestation::{
     AttestationGenerator, AttestationVerifier, EndorsementSnapshot,
     measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
 };
+pub use google::GoogleEndorsementError;
 use sha2::{Digest as _, Sha256};
 use std::{collections::HashMap, fmt, path::PathBuf};
 use thiserror::Error;
@@ -241,11 +243,26 @@ pub fn verify_archived_evidence_with_policy(
     let verified = verifier
         .verify_attestation_archived(bundle.evidence.clone(), expected_binding, &endorsements)?
         .ok_or(AttestationError::Unattested)?;
-    VerifiedSeismicAttestation::from_backend(
+    let attestation = VerifiedSeismicAttestation::from_backend(
         attestation_type,
         expected_binding,
         verified.measurements,
-    )
+    )?;
+    // The backend's host-registry check has no archived form (the registry is
+    // unsigned), so the archive carries Google's signed firmware endorsement
+    // instead, held to the pinned root at the archive's own instant.
+    if let VerifiedSeismicAttestation::GcpTdx(tdx) = &attestation {
+        let endorsement = bundle
+            .gcp_firmware_endorsement
+            .as_deref()
+            .ok_or(AttestationError::GcpFirmwareEndorsementMissing)?;
+        google::verify_endorsement(endorsement, tdx.measurements.mrtd, bundle.verified_at)
+            .map_err(|source| AttestationError::GcpFirmwareNotEndorsed {
+                mrtd: hex::encode(tdx.measurements.mrtd),
+                source,
+            })?;
+    }
+    Ok(attestation)
 }
 
 /// Verify remote attestation evidence with the backend and appraise the
@@ -319,17 +336,35 @@ async fn verify_with_backend_policy(
         .dcap
         .ok_or(AttestationError::NoFetchedDcapCollateral)?;
 
+    let attestation = VerifiedSeismicAttestation::from_backend(
+        attestation_type,
+        expected_binding,
+        verified.measurements,
+    )?;
+    // Google's endorsement of the firmware that extended a GCP guest's
+    // registers: required here, and archived so a replay can require it too.
+    let gcp_firmware_endorsement = match &attestation {
+        VerifiedSeismicAttestation::GcpTdx(tdx) => Some(
+            google::endorsement_for(tdx.measurements.mrtd, verified.endorsements.at)
+                .await
+                .map_err(|source| AttestationError::GcpFirmwareNotEndorsed {
+                    mrtd: hex::encode(tdx.measurements.mrtd),
+                    source,
+                })?
+                .as_ref()
+                .clone(),
+        ),
+        _ => None,
+    };
+
     Ok(VerifiedEvidence {
-        attestation: VerifiedSeismicAttestation::from_backend(
-            attestation_type,
-            expected_binding,
-            verified.measurements,
-        )?,
+        attestation,
         bundle: VerificationBundle {
             evidence,
             verified_at: verified.endorsements.at,
             dcap_collateral,
             trust_anchors: TrustAnchors::compiled_in(),
+            gcp_firmware_endorsement,
         },
     })
 }
@@ -481,6 +516,9 @@ pub struct VerificationBundle {
     pub dcap_collateral: QuoteCollateralV3,
     /// Digests of the trust anchors compiled into the verifying build.
     pub trust_anchors: TrustAnchors,
+    /// Google's signed endorsement of the firmware a `gcp-tdx` quote's MRTD
+    /// names, verbatim; `None` for every other platform.
+    pub gcp_firmware_endorsement: Option<Vec<u8>>,
 }
 
 /// The trust anchors compiled into a verifying build, as digests.
@@ -508,6 +546,10 @@ pub struct TrustAnchors {
     /// digest like [`Self::azure_vtpm_roots`] and retire the version
     /// stand-in along with `build.rs`.
     pub dcap_qvl_version: String,
+    /// The Google root a `gcp-tdx` firmware endorsement's certificate is
+    /// verified against, as the SHA-256 of its DER; `None` in archives from
+    /// before the endorsement was archived.
+    pub gcp_firmware_root: Option<AnchorDigest>,
 }
 
 impl TrustAnchors {
@@ -523,18 +565,28 @@ impl TrustAnchors {
                 .collect(),
             // Read from the lockfile by build.rs; see there.
             dcap_qvl_version: env!("SEISMIC_DCAP_QVL_VERSION").to_string(),
+            gcp_firmware_root: Some(AnchorDigest {
+                name: google::GCE_CC_TCB_ROOT_NAME.to_string(),
+                sha256: Sha256::digest(google::GCE_CC_TCB_ROOT_DER).into(),
+            }),
         }
     }
 
     /// How these anchors (an archive's) differ from `current` (a replaying
-    /// build's); `None` when they are the same set.
+    /// build's); `None` when they are the same set. An archive that recorded
+    /// no Google firmware root verified nothing against one, so that anchor
+    /// is compared only when the archive carries it.
     ///
     /// Drift is information, not a verdict: the replay's cryptographic check
     /// against the current anchors is what decides whether the evidence still
     /// verifies. A caller reports drift so that a verdict reached under other
     /// anchors than the founding's is never mistaken for the founding's own.
     pub fn drift_from(&self, current: &Self) -> Option<AnchorDrift> {
-        (self != current).then(|| AnchorDrift {
+        let same = self.azure_vtpm_roots == current.azure_vtpm_roots
+            && self.dcap_qvl_version == current.dcap_qvl_version
+            && (self.gcp_firmware_root.is_none()
+                || self.gcp_firmware_root == current.gcp_firmware_root);
+        (!same).then(|| AnchorDrift {
             archived: self.clone(),
             current: current.clone(),
         })
@@ -581,6 +633,19 @@ impl fmt::Display for AnchorDrift {
                 "Azure vTPM roots were [{}] at verification, [{}] in this build",
                 list(&self.archived.azure_vtpm_roots),
                 list(&self.current.azure_vtpm_roots)
+            ));
+        }
+        if self.archived.gcp_firmware_root.is_some()
+            && self.archived.gcp_firmware_root != self.current.gcp_firmware_root
+        {
+            let one = |root: &Option<AnchorDigest>| match root {
+                Some(root) => format!("{}={}", root.name, hex::encode(root.sha256)),
+                None => "none".to_string(),
+            };
+            lines.push(format!(
+                "Google firmware root was {} at verification, {} in this build",
+                one(&self.archived.gcp_firmware_root),
+                one(&self.current.gcp_firmware_root)
             ));
         }
         f.write_str(&lines.join("; "))
@@ -724,12 +789,19 @@ pub enum AttestationError {
         attestation_type: AttestationType,
         measurements: Box<MultiMeasurements>,
     },
+    #[error("gcp-tdx firmware {mrtd} is not a build Google has endorsed: {source}")]
+    GcpFirmwareNotEndorsed {
+        mrtd: String,
+        #[source]
+        source: GoogleEndorsementError,
+    },
+    #[error("the archive carries no Google firmware endorsement for its gcp-tdx evidence")]
+    GcpFirmwareEndorsementMissing,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn the_platform_is_read_from_dmi_and_never_guessed() {
         assert_eq!(
@@ -913,6 +985,16 @@ mod tests {
     /// backend compiles in, digested from the same bytes it verifies with,
     /// plus the version of the crate carrying Intel's root.
     #[test]
+    fn the_google_root_is_a_compiled_in_anchor() {
+        let root = TrustAnchors::compiled_in().gcp_firmware_root.unwrap();
+        assert_eq!(root.name, google::GCE_CC_TCB_ROOT_NAME);
+        assert_eq!(
+            hex::encode(root.sha256),
+            "e876bc6978bf4f3da445f98a0a82363c8c0bae5a1fc033c6df65846a6cb0f18c"
+        );
+    }
+
+    #[test]
     fn compiled_in_anchors_are_the_backends() {
         let anchors = TrustAnchors::compiled_in();
 
@@ -973,5 +1055,24 @@ mod tests {
         assert!(drift.contains("azure-virtual-tpm-root-2031"), "{drift}");
         assert!(drift.contains(&hex::encode([0x31; 32])), "{drift}");
         assert!(!drift.contains("dcap-qvl"), "{drift}");
+
+        let mut before_the_google_root = founding.clone();
+        before_the_google_root.gcp_firmware_root = None;
+        assert_eq!(before_the_google_root.drift_from(&founding), None);
+
+        let mut other_google_root = founding.clone();
+        other_google_root.gcp_firmware_root = Some(AnchorDigest {
+            name: "GCE-cc-tcb-root_2".to_string(),
+            sha256: [0x02; 32],
+        });
+        let drift = founding.drift_from(&other_google_root).unwrap().to_string();
+        assert!(drift.contains("Google firmware root"), "{drift}");
+        assert!(drift.contains("GCE-cc-tcb-root_2"), "{drift}");
+        assert!(!drift.contains("Azure vTPM roots"), "{drift}");
+        let drift = founding
+            .drift_from(&before_the_google_root)
+            .unwrap()
+            .to_string();
+        assert!(drift.contains("none in this build"), "{drift}");
     }
 }

@@ -35,8 +35,12 @@
 //!   renders their bytes as thousand-element integer arrays;
 //!   `pck_certificate_chain` is absent when the fetch left it unset, which is
 //!   the normal case;
-//! - `trust_anchors`: the [`TrustAnchors`] of the verifying build, each root
-//!   by name and SHA-256 hex, and the `dcap-qvl` version;
+//! - `trust_anchors`: the [`TrustAnchors`] of the verifying build, each Azure
+//!   vTPM root and the Google firmware root by name and SHA-256 hex, and the
+//!   `dcap-qvl` version;
+//! - `gcp_firmware_endorsement`: for `gcp-tdx` evidence, Google's signed
+//!   endorsement of the quoted firmware, hex of the protobuf as published;
+//!   absent for other platforms, and a `gcp-tdx` replay without it fails;
 //! - `report`: what the verification established, the binding and every
 //!   quoted register; a replay checks that it reproduces this, so an edited
 //!   report fails rather than misdescribing the quote.
@@ -110,6 +114,8 @@ struct ArchivedFoundingV1 {
     verified_at: u64,
     dcap_collateral: ArchivedCollateral,
     trust_anchors: ArchivedTrustAnchors,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gcp_firmware_endorsement: Option<String>,
     report: ArchivedReport,
 }
 
@@ -140,6 +146,8 @@ struct ArchivedCollateral {
 struct ArchivedTrustAnchors {
     azure_vtpm_roots: Vec<ArchivedAnchorDigest>,
     dcap_qvl_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gcp_firmware_root: Option<ArchivedAnchorDigest>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -225,6 +233,7 @@ impl From<&FoundingArchive> for ArchivedFoundingV1 {
             verified_at: bundle.verified_at,
             dcap_collateral: ArchivedCollateral::from(&bundle.dcap_collateral),
             trust_anchors: ArchivedTrustAnchors::from(&bundle.trust_anchors),
+            gcp_firmware_endorsement: bundle.gcp_firmware_endorsement.as_ref().map(hex::encode),
             report: ArchivedReport::from(&archive.report),
         }
     }
@@ -250,6 +259,14 @@ impl TryFrom<ArchivedFoundingV1> for FoundingArchive {
                 verified_at: archived.verified_at,
                 dcap_collateral: archived.dcap_collateral.try_into()?,
                 trust_anchors: archived.trust_anchors.try_into()?,
+                gcp_firmware_endorsement: archived
+                    .gcp_firmware_endorsement
+                    .as_deref()
+                    .map(|endorsement| {
+                        hex::decode(endorsement)
+                            .map_err(|e| anyhow::anyhow!("gcp_firmware_endorsement: {e}"))
+                    })
+                    .transpose()?,
             },
             report: archived.report.try_into()?,
         })
@@ -307,6 +324,12 @@ impl From<&TrustAnchors> for ArchivedTrustAnchors {
                 })
                 .collect(),
             dcap_qvl_version: anchors.dcap_qvl_version.clone(),
+            gcp_firmware_root: anchors.gcp_firmware_root.as_ref().map(|root| {
+                ArchivedAnchorDigest {
+                    name: root.name.clone(),
+                    sha256: hex::encode(root.sha256),
+                }
+            }),
         }
     }
 }
@@ -330,6 +353,15 @@ impl TryFrom<ArchivedTrustAnchors> for TrustAnchors {
                 })
                 .collect::<anyhow::Result<_>>()?,
             dcap_qvl_version: archived.dcap_qvl_version,
+            gcp_firmware_root: archived
+                .gcp_firmware_root
+                .map(|root| {
+                    Ok::<_, anyhow::Error>(AnchorDigest {
+                        sha256: decode_hex("trust_anchors.gcp_firmware_root.sha256", &root.sha256)?,
+                        name: root.name,
+                    })
+                })
+                .transpose()?,
         })
     }
 }
@@ -480,6 +512,7 @@ pub fn fabricated_archive() -> FoundingArchive {
             verified_at: FABRICATED_AT,
             dcap_collateral: fabricated_collateral(),
             trust_anchors: fabricated_anchors(),
+            gcp_firmware_endorsement: None,
         },
         report: QuoteReport {
             attestation_type: AttestationType::AzureTdx,
@@ -524,6 +557,10 @@ pub fn fabricated_anchors() -> TrustAnchors {
             },
         ],
         dcap_qvl_version: "9.9.9".to_string(),
+        gcp_firmware_root: Some(AnchorDigest {
+            name: "fabricated-google-root".to_string(),
+            sha256: [0xc3; 32],
+        }),
     }
 }
 

@@ -21,6 +21,13 @@ thiserror.workspace = true
 # so it is unconditional: every consumer — the node binaries, the deploy CLI
 # linking seismic-verify-quote — verifies, on any platform.
 attestation = { workspace = true, features = ["azure-verifier"] }
+# Google's firmware endorsements: fetched for live gcp-tdx evidence, archived
+# with it, re-verified on replay.
+prost.workspace = true
+reqwest.workspace = true
+rsa.workspace = true
+x509-parser.workspace = true
+tokio.workspace = true
 
 # Evidence *generation* (Intel TDX quote + Azure vTPM quote) is opt-in through
 # this crate's `azure-attester` feature, and only ever reaches the graph for the
@@ -53,7 +60,6 @@ dcap-rs.workspace = true
 clap.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
 
 [features]
 default = []
