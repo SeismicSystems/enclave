@@ -196,6 +196,16 @@ so it changes `rtmr2` and the guest is not admitted either.
 Both registers are reproducible from the build artifact alone by replaying
 the boot's events; seismic-images' `make measure-gcp` does so.
 
+The registers are extended by the guest firmware, so they identify the image
+only if the firmware is honest. A `gcp-tdx` verification therefore requires,
+before the schema is applied, that the quote's `mrtd` is a firmware build
+Google has endorsed: the signed golden measurement Google publishes for it,
+under its `GCE-cc-tcb-root` CA. The endorsement is fetched live, archived
+with the evidence, and re-verified on replay; a `gcp-tdx` archive without
+one fails. A live verification also requires that the quote's platform is
+in Google's confidential-host registry. Neither is part of identity: a
+firmware roll changes `mrtd` and no admission ID.
+
 
 ## 4. Policy document
 

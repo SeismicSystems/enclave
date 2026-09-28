@@ -23,7 +23,8 @@ use crate::{
 };
 use jsonrpsee::types::{ErrorCode, ErrorObjectOwned};
 use seismic_attestation::{
-    AttestationError, BackendAttestationError, DcapVerificationError, MaaError,
+    AttestationError, BackendAttestationError, DcapVerificationError, GoogleEndorsementError,
+    MaaError,
 };
 use std::fmt::Debug;
 use tracing::{error, warn};
@@ -198,6 +199,19 @@ fn verification_failure_kind(error: &AttestationError) -> Option<DenialKind> {
         AttestationError::PolicyFormat(_)
         | AttestationError::MeasurementTypeMismatch { .. }
         | AttestationError::NoFetchedDcapCollateral => None,
+        // Google's endorsement of the requester's firmware. The endpoint
+        // answers an unendorsed MRTD and a network fault the same way, so a
+        // failed fetch carries no verdict; an endorsement that was fetched
+        // and does not hold is the requester's firmware. A missing archived
+        // endorsement is an archive defect, never a live denial.
+        AttestationError::GcpFirmwareNotEndorsed {
+            source: GoogleEndorsementError::Fetch(_),
+            ..
+        }
+        | AttestationError::GcpFirmwareEndorsementMissing => None,
+        AttestationError::GcpFirmwareNotEndorsed { .. } => {
+            Some(DenialKind::RequesterEvidenceUnusable)
+        }
     }
 }
 
@@ -467,6 +481,32 @@ mod tests {
                 "an unattributed failure must not arrive as a refusal"
             );
         }
+    }
+
+    /// Google's firmware endorsement: an endorsement that does not hold is the
+    /// requester's firmware, and a fetch that failed says nothing.
+    #[test]
+    fn the_firmware_endorsement_attributes_by_what_failed() {
+        let not_endorsed = |source| AttestationError::GcpFirmwareNotEndorsed {
+            mrtd: "ab".into(),
+            source,
+        };
+        assert_eq!(
+            verification_failure_kind(&not_endorsed(GoogleEndorsementError::MrtdNotEndorsed(
+                "ab".into()
+            ))),
+            Some(DenialKind::RequesterEvidenceUnusable)
+        );
+        assert_eq!(
+            verification_failure_kind(&not_endorsed(GoogleEndorsementError::Signature)),
+            Some(DenialKind::RequesterEvidenceUnusable)
+        );
+        assert_eq!(
+            verification_failure_kind(&not_endorsed(GoogleEndorsementError::Fetch(
+                "offline".into()
+            ))),
+            None
+        );
     }
 
     /// The step is what attributes, not the error inside it: the very variant

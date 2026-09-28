@@ -81,6 +81,19 @@ set is canonical for Seismic images, where accepted policies live
 (deployment artifact, genesis storage, on-chain registry, or all of them), and
 how policy updates are authorized.
 
+## GCP model
+
+On GCP TDX VMs there is no vTPM in the evidence: guest identity is the TDX
+registers `rtmr1` and `rtmr2` of a boot with the vTPM disabled, verified
+through DCAP. Those registers are extended by Google's guest firmware, so a
+`gcp-tdx` verification requires that the quote's `mrtd` is a firmware build
+Google has endorsed: the signed golden measurement Google publishes for it,
+verified against the pinned `GCE-cc-tcb-root_1`. A live verification fetches
+the endorsement and stores it in the bundle; a replay verifies the archived
+one at the archived instant and refuses a `gcp-tdx` archive without it. A
+live verification also requires that the quote's platform is in Google's
+confidential-host registry, which is unsigned and has no archived form.
+
 ## Evidence bindings
 
 All Seismic evidence is bound to an explicit protocol digest. Callers should

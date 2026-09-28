@@ -1,0 +1,18 @@
+[
+  {
+    "attestation_type": "gcp-tdx",
+    "measurement_id": "seismic-dev_2026-09-28.2f3cd0.tar.gz",
+    "measurements": {
+      "rtmr1": {
+        "expected_any": [
+          "85c22cccd610f9c282a3fc0487ebce770c88228f85fa619c01fc8ceaf628b7404644752f267b33f1bd1b5875fcfc84b5"
+        ]
+      },
+      "rtmr2": {
+        "expected_any": [
+          "abf1c0be51eff7a596459fc56c22952104e3c18707cf3ff0c5c2e88d9d6c416f6fe22e7583aa12b1f0fafac6ed3b07dd"
+        ]
+      }
+    }
+  }
+]

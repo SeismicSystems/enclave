@@ -497,6 +497,18 @@ mod tests {
     const FOUNDING_ARCHIVE: &str = include_str!("../fixtures/founding-archive-v1.json");
     const FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-v1.json");
 
+    /// The same for GCP TDX: cohort `tmp-multicloud` on image
+    /// `seismic-dev_2026-09-28.2f3cd0.tar.gz`, a c3-standard-4 with the vTPM
+    /// off, harvested 2026-10-01T04:14:33Z and torn down the same day, with
+    /// Google's endorsement of its firmware as published for that MRTD.
+    const GCP_FOUNDING_ARCHIVE: &str = include_str!("../fixtures/founding-archive-gcp-v1.json");
+    const GCP_FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-gcp-v1.json");
+    const GCP_FOUNDING_VERIFIED_AT: u64 = 1790873673;
+
+    /// How many registers the GCP TDX v1 admission schema
+    /// (`seismic.gcp-tdx.rtmr1-rtmr2.v1`) pins.
+    const GCP_TDX_V1_REGISTERS: usize = 2;
+
     /// The instant frozen into that archive, and the reason the fixture
     /// cannot rot: a replay evaluates every freshness window here, not at
     /// the wall clock.
@@ -556,7 +568,19 @@ mod tests {
     }
 
     fn mutated_archive(mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
-        let mut document: serde_json::Value = serde_json::from_str(FOUNDING_ARCHIVE).unwrap();
+        mutated(FOUNDING_ARCHIVE, mutate)
+    }
+
+    fn gcp_founding_archive() -> FoundingArchive {
+        archive::parse(GCP_FOUNDING_ARCHIVE).expect("the committed GCP founding archive parses")
+    }
+
+    fn mutated_gcp_archive(mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
+        mutated(GCP_FOUNDING_ARCHIVE, mutate)
+    }
+
+    fn mutated(archive: &str, mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
+        let mut document: serde_json::Value = serde_json::from_str(archive).unwrap();
         mutate(&mut document);
         archive::parse(&document.to_string()).expect("the mutated archive still parses")
     }
@@ -693,6 +717,75 @@ mod tests {
         let drift = verified.anchor_drift.expect("drift").to_string();
         assert!(drift.contains("dcap-qvl"), "{drift}");
         assert!(drift.contains("0.0.1"), "{drift}");
+    }
+
+    /// The GCP founding verifies offline the same way, and the policy's two
+    /// registers come back with the values it pinned.
+    #[test]
+    fn a_real_gcp_founding_reverifies_offline_from_its_archive() {
+        let archive = gcp_founding_archive();
+        assert_eq!(archive.bundle.verified_at, GCP_FOUNDING_VERIFIED_AT);
+
+        let verified = verify_archived_harvest(archive, policy(GCP_FOUNDING_POLICY))
+            .expect("the archived GCP founding verifies offline");
+        assert_eq!(verified.anchor_drift, None);
+
+        let report = verified.report().to_json();
+        assert_eq!(report["attestation_type"], "gcp-tdx");
+        let pinned = policy_registers(GCP_FOUNDING_POLICY);
+        assert_eq!(pinned.len(), GCP_TDX_V1_REGISTERS, "{pinned:?}");
+        let registers = report["registers"].as_object().unwrap();
+        for (register, expected) in &pinned {
+            assert_eq!(registers[register], *expected, "{register}");
+        }
+    }
+
+    #[test]
+    fn the_committed_gcp_archive_is_canonical() {
+        assert_eq!(
+            archive::render(&gcp_founding_archive()).unwrap(),
+            GCP_FOUNDING_ARCHIVE
+        );
+    }
+
+    /// A GCP quote proves its registers, not that Google's firmware produced
+    /// them: that is the endorsement's job. Without one, or with one that
+    /// does not hold, the replay refuses the archive even though the quote
+    /// itself verifies.
+    #[test]
+    fn a_gcp_archive_is_refused_without_a_holding_firmware_endorsement() {
+        let unendorsed = mutated_gcp_archive(|document| {
+            document
+                .as_object_mut()
+                .unwrap()
+                .remove("gcp_firmware_endorsement");
+        });
+        let error = verify_archived_harvest(unendorsed, policy(GCP_FOUNDING_POLICY))
+            .expect_err("a GCP archive without its endorsement must not verify");
+        assert!(
+            format!("{error:#}").contains("no Google firmware endorsement"),
+            "{error:#}"
+        );
+
+        let tampered = mutated_gcp_archive(|document| {
+            let endorsement = document["gcp_firmware_endorsement"].as_str().unwrap();
+            let mut bytes = hex::decode(endorsement).unwrap();
+            let last = bytes.len() - 1;
+            bytes[last] ^= 1;
+            document["gcp_firmware_endorsement"] = serde_json::json!(hex::encode(bytes));
+        });
+        let error = verify_archived_harvest(tampered, policy(GCP_FOUNDING_POLICY))
+            .expect_err("a GCP archive whose endorsement does not hold must not verify");
+        assert!(
+            format!("{error:#}").contains("not a build Google has endorsed"),
+            "{error:#}"
+        );
+
+        let other_firmware = mutated_gcp_archive(|document| {
+            document["report"]["registers"]["mrtd"] = serde_json::json!("11".repeat(48));
+        });
+        verify_archived_harvest(other_firmware, policy(GCP_FOUNDING_POLICY))
+            .expect_err("a report the quote does not prove");
     }
 
     const NO_ATTESTATION: &str = r#"{ "attestation_evidence": null }"#;
