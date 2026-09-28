@@ -161,8 +161,10 @@ impl AzureTdxV1Measurements {
 pub struct MissingPcr(pub u32);
 
 /// GCP TDX v1 admission schema: a Seismic guest image on GCP is identified by
-/// `RTMR1`, the register TDVF extends with the UKI and kernel authenticode hashes.
-pub const GCP_TDX_V1_SCHEMA: &str = "seismic.gcp-tdx.rtmr1.v1";
+/// `RTMR1`, which the firmware extends with the UKI and kernel authenticode
+/// hashes, and `RTMR2`, which systemd-stub extends with the UKI's sections and
+/// the kernel's EFI stub with the command line and initrd it booted with.
+pub const GCP_TDX_V1_SCHEMA: &str = "seismic.gcp-tdx.rtmr1-rtmr2.v1";
 
 /// The `attestation_type` value whose records compile under [`GCP_TDX_V1_SCHEMA`].
 pub const GCP_TDX_ATTESTATION_TYPE: &str = "gcp-tdx";
@@ -172,28 +174,31 @@ pub fn gcp_tdx_v1_schema_id() -> B256 {
     keccak256(GCP_TDX_V1_SCHEMA.as_bytes())
 }
 
-/// One GCP TDX v1 measurement: the guest's RTMR1, a SHA-384 digest.
+/// One GCP TDX v1 measurement: the guest's RTMR1 and RTMR2, SHA-384 digests.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GcpTdxV1Measurements {
     pub rtmr1: [u8; 48],
+    pub rtmr2: [u8; 48],
 }
 
 impl std::fmt::Debug for GcpTdxV1Measurements {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "GcpTdxV1Measurements {{ rtmr1: 0x{} }}",
-            hex::encode(self.rtmr1)
+            "GcpTdxV1Measurements {{ rtmr1: 0x{}, rtmr2: 0x{} }}",
+            hex::encode(self.rtmr1),
+            hex::encode(self.rtmr2)
         )
     }
 }
 
 impl GcpTdxV1Measurements {
-    /// This measurement's [`AdmissionId`]: `keccak256(schemaId || rtmr1)`, 80 bytes.
+    /// This measurement's [`AdmissionId`]: `keccak256(schemaId || rtmr1 || rtmr2)`, 128 bytes.
     pub fn admission_id(&self) -> AdmissionId {
-        let mut preimage = [0u8; 80];
+        let mut preimage = [0u8; 128];
         preimage[..32].copy_from_slice(gcp_tdx_v1_schema_id().as_slice());
-        preimage[32..].copy_from_slice(&self.rtmr1);
+        preimage[32..80].copy_from_slice(&self.rtmr1);
+        preimage[80..].copy_from_slice(&self.rtmr2);
         AdmissionId(keccak256(preimage))
     }
 }
@@ -241,18 +246,26 @@ mod tests {
         assert_eq!(AzureTdxV1Measurements::from_pcrs(&pcrs), Ok(GOLDEN_TUPLE));
     }
 
-    // Live vector: RTMR1 of seismic-dev_2026-08-27.5c012e booted on a GCP
-    // c3-standard-4 TDX guest (2026-09-14), reproduced from the build by
-    // seismic-images' predictor.
+    // Live vectors: RTMR1 and RTMR2 of seismic-dev_2026-09-28.932757 booted on a GCP
+    // c3-standard-4 TDX guest with the vTPM disabled (2026-09-28), reproduced
+    // from the build by seismic-images' predictor.
     const GCP_SCHEMA_ID: B256 =
-        b256!("0x921bff6d1bdda3591c79251b61add9e7fd5878ea328a0e692d351e48baf74980");
-    const GCP_LIVE_RTMR1_HEX: &str = "69b655b5c1505ef6329f853308c87d0b8e1e0161140907664302f711438212de8dc897767a07aed93af8b84377272ecc";
+        b256!("0x8ec2bafae2e27f3779142d18c29e5c2077eb38b009f5efa060d90d17d67ee133");
+    const GCP_LIVE_RTMR1_HEX: &str = "762d5dc2b8dcd950b77ba759e2321a865a7a1fcdeb1f5d879f3e31e974c9697fa4171d92e08c2243a91af3027ad08cb0";
+    const GCP_LIVE_RTMR2_HEX: &str = "85bc309a887ad0277ea50d47aacb850d080c498e2e713eeab0d035085acbd6d47ac06f276ae4284c828dc199e6845031";
 
-    fn gcp_live_rtmr1() -> [u8; 48] {
-        hex::decode(GCP_LIVE_RTMR1_HEX).unwrap().try_into().unwrap()
+    fn gcp_live_register(hex: &str) -> [u8; 48] {
+        hex::decode(hex).unwrap().try_into().unwrap()
+    }
+
+    fn gcp_live_tuple() -> GcpTdxV1Measurements {
+        GcpTdxV1Measurements {
+            rtmr1: gcp_live_register(GCP_LIVE_RTMR1_HEX),
+            rtmr2: gcp_live_register(GCP_LIVE_RTMR2_HEX),
+        }
     }
     const GCP_GOLDEN_ADMISSION_ID: B256 =
-        b256!("0xe0f782e58ff0db9a08a3dff592c96ad0c8fff0abb401045e1d53ac9e683438f0");
+        b256!("0x518a6a72083a7db27660a91fd8fc9733ac58eab7d37596b0b161e91cc0681674");
 
     #[test]
     fn gcp_schema_id_golden() {
@@ -261,20 +274,30 @@ mod tests {
 
     #[test]
     fn gcp_admission_id_golden() {
-        let tuple = GcpTdxV1Measurements {
-            rtmr1: gcp_live_rtmr1(),
-        };
         assert_eq!(
-            tuple.admission_id(),
+            gcp_live_tuple().admission_id(),
             AdmissionId::from(GCP_GOLDEN_ADMISSION_ID)
         );
+    }
+
+    #[test]
+    fn gcp_id_binds_both_registers() {
+        let live = gcp_live_tuple();
+        let mut other = live;
+        other.rtmr2[0] ^= 1;
+        assert_ne!(other.admission_id(), live.admission_id());
+        other = live;
+        other.rtmr1[0] ^= 1;
+        assert_ne!(other.admission_id(), live.admission_id());
     }
 
     #[test]
     fn gcp_and_azure_ids_never_collide_on_shared_bytes() {
         let mut rtmr1 = [0u8; 48];
         rtmr1[..32].copy_from_slice(GOLDEN_TUPLE.pcr4.as_slice());
-        let gcp = GcpTdxV1Measurements { rtmr1 }.admission_id();
+        let mut rtmr2 = [0u8; 48];
+        rtmr2[..32].copy_from_slice(GOLDEN_TUPLE.pcr9.as_slice());
+        let gcp = GcpTdxV1Measurements { rtmr1, rtmr2 }.admission_id();
         assert_ne!(gcp, GOLDEN_TUPLE.admission_id());
     }
 

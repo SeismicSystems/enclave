@@ -107,11 +107,14 @@ pub enum PolicyError {
     )]
     MixedAttestationTypes { record: String },
     #[error(
-        "{record}: register key {key:?} is not an admission register of this schema (expected \"rtmr1\")"
+        "{record}: register key {key:?} is not an admission register of this schema (expected \"rtmr1\" and \"rtmr2\")"
     )]
     UnexpectedGcpRegister { record: String, key: String },
-    #[error("{record}: missing required register rtmr1")]
-    MissingGcpRegister { record: String },
+    #[error("{record}: missing required register {register}")]
+    MissingGcpRegister {
+        record: String,
+        register: &'static str,
+    },
     #[error("{record}: {register} sets both expected and expected_any")]
     BothValueForms { record: String, register: String },
     #[error("{record}: {register} sets neither expected nor expected_any")]
@@ -269,32 +272,45 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
     })
 }
 
-/// Compile one `gcp-tdx` record: exactly the `rtmr1` register, one 48-byte value.
+/// Compile one `gcp-tdx` record: exactly the `rtmr1` and `rtmr2` registers, 48-byte values.
 fn compile_gcp_record(
     record: &str,
     measurements: &BTreeMap<String, RawEntry>,
 ) -> Result<GcpTdxV1Measurements, PolicyError> {
     let mut rtmr1 = None;
+    let mut rtmr2 = None;
     for (key, entry) in measurements {
-        if !key.eq_ignore_ascii_case("rtmr1") {
+        let (slot, register) = if key.eq_ignore_ascii_case("rtmr1") {
+            (&mut rtmr1, "rtmr1")
+        } else if key.eq_ignore_ascii_case("rtmr2") {
+            (&mut rtmr2, "rtmr2")
+        } else {
+            return Err(PolicyError::UnexpectedGcpRegister {
+                record: record.to_owned(),
+                key: key.clone(),
+            });
+        };
+        if slot.is_some() {
             return Err(PolicyError::UnexpectedGcpRegister {
                 record: record.to_owned(),
                 key: key.clone(),
             });
         }
-        if rtmr1.is_some() {
-            return Err(PolicyError::UnexpectedGcpRegister {
-                record: record.to_owned(),
-                key: key.clone(),
-            });
-        }
-        rtmr1 = Some(entry_value_bytes(record, "rtmr1", entry, 48)?);
+        *slot = Some(entry_value_bytes(record, register, entry, 48)?);
     }
-    let rtmr1 = rtmr1.ok_or_else(|| PolicyError::MissingGcpRegister {
+    let missing = |register| PolicyError::MissingGcpRegister {
         record: record.to_owned(),
-    })?;
+        register,
+    };
     Ok(GcpTdxV1Measurements {
-        rtmr1: rtmr1.try_into().expect("length checked"),
+        rtmr1: rtmr1
+            .ok_or_else(|| missing("rtmr1"))?
+            .try_into()
+            .expect("length checked"),
+        rtmr2: rtmr2
+            .ok_or_else(|| missing("rtmr2"))?
+            .try_into()
+            .expect("length checked"),
     })
 }
 
@@ -443,16 +459,27 @@ mod tests {
 
     #[test]
     fn compiles_a_gcp_record_under_the_gcp_schema() {
-        let rtmr1 = "69b655b5c1505ef6329f853308c87d0b8e1e0161140907664302f711438212de8dc897767a07aed93af8b84377272ecc";
+        let rtmr1 = "762d5dc2b8dcd950b77ba759e2321a865a7a1fcdeb1f5d879f3e31e974c9697fa4171d92e08c2243a91af3027ad08cb0";
+        let rtmr2 = "85bc309a887ad0277ea50d47aacb850d080c498e2e713eeab0d035085acbd6d47ac06f276ae4284c828dc199e6845031";
         let doc = format!(
-            r#"[{{"attestation_type":"gcp-tdx","measurement_id":"img.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}}}}}}]"#
+            r#"[{{"attestation_type":"gcp-tdx","measurement_id":"img.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}},"rtmr2":{{"expected":"{rtmr2}"}}}}}}]"#
         );
         let compiled = compile_policy(doc.as_bytes()).unwrap();
         let SchemaTuple::GcpTdxV1(tuple) = &compiled.records[0].tuple else {
             panic!("wrong schema");
         };
         assert_eq!(hex::encode(tuple.rtmr1), rtmr1);
+        assert_eq!(hex::encode(tuple.rtmr2), rtmr2);
         assert_eq!(compiled.records[0].tuple.schema(), GCP_TDX_V1_SCHEMA);
+
+        let only_rtmr1 = doc.replace(&format!(r#","rtmr2":{{"expected":"{rtmr2}"}}"#), "");
+        assert!(matches!(
+            compile_policy(only_rtmr1.as_bytes()),
+            Err(PolicyError::MissingGcpRegister {
+                register: "rtmr2",
+                ..
+            })
+        ));
 
         let extra = doc.replace(r#""rtmr1":"#, r#""rtmr0":{"expected":"00"},"rtmr1":"#);
         assert!(matches!(
