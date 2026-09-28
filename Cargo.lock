@@ -5366,6 +5366,9 @@ dependencies = [
  "clap",
  "dcap-rs",
  "hex",
+ "prost",
+ "reqwest 0.12.28",
+ "rsa",
  "seismic-network-manifest",
  "serde",
  "serde_json",
@@ -5373,6 +5376,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "x509-parser 0.18.1",
 ]
 
 [[package]]
