@@ -281,8 +281,17 @@ Normalization unifies IDs, not bytes: two documents that differ only in key
 spelling or value case compile to the same accepted set, and still hash
 differently, because the hash covers the exact bytes (section 6).
 
-A document pins one attestation type: records of different types in one
-document MUST be rejected.
+Records of different attestation types may share one document. Each
+compiles under its own schema into the one accepted set, which is how a
+network spanning clouds is founded: one document, one record per image.
+The compiled report's `schema` and `schema_id` are `null` for such a
+document. Worked example, `fixtures/golden/measurement-policy-v1.mixed.json`
+(image A's Azure record beside the GCP record), whose two admission IDs are
+those of the two records' own documents:
+
+```text
+policy hash = 0x3e03f6adb33a8458f016e5b8d318f60ec3b77d24958a515b03589cef3df82d16
+```
 
 
 ### 4.4 A compiler MUST reject
@@ -673,6 +682,10 @@ specification can assert the same files.
 | `measurement-policy-v1.compiled.json` | Its compiled report: hashes, IDs, per-record IDs, runtime code hash, complete genesis storage. |
 | `measurement-policy-v1.image-b.json` | The image-B-only document: revision 3. |
 | `measurement-policy-v1.image-b.compiled.json` | Its compiled report. |
+| `measurement-policy-v1.gcp.json` | The one-record GCP document: a live c3-standard-4 boot without a vTPM. |
+| `measurement-policy-v1.gcp.compiled.json` | Its compiled report. |
+| `measurement-policy-v1.mixed.json` | Image A's Azure record beside the GCP record: the multi-cloud shape. |
+| `measurement-policy-v1.mixed.compiled.json` | Its compiled report, with `schema` and `schema_id` null. |
 
 A compiled report is deterministic: fixed field order, sorted maps,
 2-space JSON, one trailing newline. A deliberate change to any rule this

@@ -103,10 +103,6 @@ pub enum PolicyError {
         attestation_type: String,
     },
     #[error(
-        "{record}: attestation_type differs from the document's first record; a policy document pins one attestation type"
-    )]
-    MixedAttestationTypes { record: String },
-    #[error(
         "{record}: register key {key:?} is not an admission register of this schema (expected \"rtmr1\" and \"rtmr2\")"
     )]
     UnexpectedGcpRegister { record: String, key: String },
@@ -215,9 +211,6 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
                 record,
                 attestation_type: raw.attestation_type.clone(),
             });
-        }
-        if raw.attestation_type != raw_records[0].attestation_type {
-            return Err(PolicyError::MixedAttestationTypes { record });
         }
         if !seen_measurement_ids.insert(&raw.measurement_id) {
             return Err(PolicyError::DuplicateMeasurementId { record });
@@ -510,10 +503,19 @@ mod tests {
             &doc[1..doc.len() - 1],
             z = "00".repeat(32)
         );
+        let compiled = compile_policy(mixed.as_bytes()).unwrap();
+        assert_eq!(compiled.admission_ids.len(), 2);
         assert!(matches!(
-            compile_policy(mixed.as_bytes()),
-            Err(PolicyError::MixedAttestationTypes { .. })
+            compiled.records[0].tuple,
+            SchemaTuple::AzureTdxV1(_)
         ));
+        assert!(matches!(
+            compiled.records[1].tuple,
+            SchemaTuple::GcpTdxV1(_)
+        ));
+        let report = crate::CompileReport::new(&compiled);
+        assert_eq!(report.schema, None);
+        assert_eq!(report.schema_id, None);
     }
 
     #[test]
