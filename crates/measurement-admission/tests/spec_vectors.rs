@@ -20,6 +20,7 @@ const POLICY_A: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1
 const POLICY_AB: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.json");
 const POLICY_B: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.image-b.json");
 const POLICY_GCP: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.gcp.json");
+const POLICY_MIXED: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.mixed.json");
 
 /// Lowercase, unprefixed hex of one 32-byte value.
 fn hex32(word: impl Into<alloy_primitives::B256>) -> String {
@@ -74,6 +75,9 @@ fn derived_values() -> Vec<String> {
         values.push(hex::encode(tuple.rtmr1));
         values.push(hex::encode(tuple.rtmr2));
     }
+
+    let mixed = compile_policy(POLICY_MIXED).expect("mixed fixture compiles");
+    values.push(hex32(mixed.policy_hash));
 
     for tuple in flattened_tuples() {
         values.push(id_hex(tuple.admission_id()));
@@ -197,7 +201,7 @@ fn every_hex_value_in_the_spec_is_derived() {
 #[test]
 fn spec_quotes_every_document_hash_and_admission_id() {
     let spec = SPEC.to_ascii_lowercase();
-    for document in [POLICY_A, POLICY_AB, POLICY_B, POLICY_GCP] {
+    for document in [POLICY_A, POLICY_AB, POLICY_B, POLICY_GCP, POLICY_MIXED] {
         let compiled = compile_policy(document).unwrap();
         let hash = hex32(compiled.policy_hash);
         assert!(
