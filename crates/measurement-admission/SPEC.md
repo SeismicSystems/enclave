@@ -126,7 +126,13 @@ deterministic machine artifact: implementations regenerate it from the
 document on demand rather than author it, and nothing commits to it but the
 golden vectors of section 12.
 
-## 3. Azure TDX v1 schema
+## 3. Admission schemas
+
+A schema names the registers that identify a guest on one platform and the
+rule that hashes them into an admission ID (section 5). One exists per
+platform.
+
+### 3.1 Azure TDX v1
 
 ```text
 schema name: seismic.azure-tdx.pcr4-pcr9-pcr11.v1
@@ -158,7 +164,7 @@ reinterpret v1. Adding SecureBoot coverage, for example, means
 opaque IDs, a new schema costs new IDs and one policy revision. It never
 costs a contract change.
 
-### 3.1 GCP TDX v1 schema
+### 3.2 GCP TDX v1
 
 ```text
 schema name: seismic.gcp-tdx.rtmr1-rtmr2.v1
@@ -243,7 +249,7 @@ carries as one hash rather than a delta. Two revisions MAY publish identical
 bytes: reinstating an earlier accepted set republishes that document and
 reuses its hash.
 
-### 4.1 Register keys and values
+### 4.1 Azure TDX v1 records
 
 A register key is a bare index (`"4"`) or a `pcr` prefix in any case
 (`"pcr4"`, `"PCR4"`), for an index 0-23. Keys normalize to the index, so
@@ -253,23 +259,29 @@ A register value is exactly 64 hexadecimal characters, case-insensitive,
 with no `0x` prefix. A value binds through `expected_any` with one element,
 or through the deprecated scalar `expected`.
 
+### 4.2 GCP TDX v1 records
+
+For a `gcp-tdx` record the register keys are `rtmr1` and `rtmr2`
+(case-insensitive), each a 48-byte value (96 hex characters) of bare
+lowercase hex. Any other key, or a missing one, is an error.
+
+### 4.3 Normalization and mixing
+
 Normalization unifies IDs, not bytes: two documents that differ only in key
 spelling or value case compile to the same accepted set, and still hash
 differently, because the hash covers the exact bytes (section 6).
 
-For a `gcp-tdx` record the register keys are `rtmr1` and `rtmr2`
-(case-insensitive), each a 48-byte value (96 hex characters) of bare
-lowercase hex. Any other key, or a missing one, is an error. A document pins one attestation type: records of
-different types in one document MUST be rejected.
+A document pins one attestation type: records of different types in one
+document MUST be rejected.
 
 
-### 4.2 A compiler MUST reject
+### 4.4 A compiler MUST reject
 
 | Condition | Error |
 | --- | --- |
 | Not a JSON record list, or a record with an unknown field | `Json` |
 | Zero records | `Empty` |
-| `attestation_type` other than `azure-tdx` | `UnsupportedAttestationType` |
+| `attestation_type` other than `azure-tdx` or `gcp-tdx` | `UnsupportedAttestationType` |
 | Two records with the same `measurement_id` | `DuplicateMeasurementId` |
 | A key that is not a PCR index 0-23 | `BadRegisterKey` |
 | Two keys that normalize to one index | `DuplicateRegister` |
@@ -297,6 +309,19 @@ they compile to one ID.
 
 ## 5. Admission ID
 
+Rules for deriving an ID from evidence, under any schema:
+
+- an implementation MUST extract the tuple from measurements that
+  cryptographic verification already authenticated;
+- a bank missing any schema register MUST fail closed. A partial tuple is
+  not an identity;
+- registers outside the schema MUST be ignored;
+- keccak-256 is the only hash in the ID path, because the ID keys Solidity
+  mapping storage. SHA-256 covers documents and transcripts, which never key
+  chain state.
+
+### 5.1 Azure TDX v1
+
 ```text
 schemaId = keccak256("seismic.azure-tdx.pcr4-pcr9-pcr11.v1")
 
@@ -323,18 +348,7 @@ B uses synthetic values (`0x4a4a...`, `0x9a9a...`, `0x1a1a...`), so the second
 identity is unmistakable in test output. Neither document is a production
 network's policy.
 
-Rules for deriving an ID from evidence:
-
-- an implementation MUST extract the tuple from measurements that
-  cryptographic verification already authenticated;
-- a bank missing any schema register MUST fail closed. A partial tuple is
-  not an identity;
-- registers outside the schema MUST be ignored;
-- keccak-256 is the only hash in the ID path, because the ID keys Solidity
-  mapping storage. SHA-256 covers documents and transcripts, which never key
-  chain state.
-
-### 5.1 GCP TDX v1
+### 5.2 GCP TDX v1
 
 ```text
 schemaId = keccak256("seismic.gcp-tdx.rtmr1-rtmr2.v1")
