@@ -115,6 +115,12 @@ pub enum PolicyError {
         record: String,
         register: &'static str,
     },
+    #[error("{record}: register key {key:?} duplicates {register} after normalization")]
+    DuplicateGcpRegister {
+        record: String,
+        key: String,
+        register: &'static str,
+    },
     #[error("{record}: {register} sets both expected and expected_any")]
     BothValueForms { record: String, register: String },
     #[error("{record}: {register} sets neither expected nor expected_any")]
@@ -291,9 +297,10 @@ fn compile_gcp_record(
             });
         };
         if slot.is_some() {
-            return Err(PolicyError::UnexpectedGcpRegister {
+            return Err(PolicyError::DuplicateGcpRegister {
                 record: record.to_owned(),
                 key: key.clone(),
+                register,
             });
         }
         *slot = Some(entry_value_bytes(record, register, entry, 48)?);
@@ -471,6 +478,18 @@ mod tests {
         assert_eq!(hex::encode(tuple.rtmr1), rtmr1);
         assert_eq!(hex::encode(tuple.rtmr2), rtmr2);
         assert_eq!(compiled.records[0].tuple.schema(), GCP_TDX_V1_SCHEMA);
+
+        let twice = doc.replace(
+            r#""rtmr2":"#,
+            &format!(r#""RTMR1":{{"expected":"{rtmr1}"}},"rtmr2":"#),
+        );
+        assert!(matches!(
+            compile_policy(twice.as_bytes()),
+            Err(PolicyError::DuplicateGcpRegister {
+                register: "rtmr1",
+                ..
+            })
+        ));
 
         let only_rtmr1 = doc.replace(&format!(r#","rtmr2":{{"expected":"{rtmr2}"}}"#), "");
         assert!(matches!(
