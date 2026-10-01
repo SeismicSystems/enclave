@@ -88,12 +88,13 @@ async fn get_quote(
     // IMDS round-trip) and must not overlap itself, so gate it and push it
     // off the async runtime.
     let _gate = holder.quote_gate.lock().await;
-    let evidence = tokio::task::spawn_blocking(move || {
-        generate_evidence(configured_attestation_type(), binding)
-    })
-    .await
-    .map_err(|e| HolderError::Attestation(format!("evidence task panicked: {e}")))?
-    .map_err(|e| HolderError::Attestation(e.to_string()))?;
+    let attestation_type =
+        configured_attestation_type().map_err(|e| HolderError::Attestation(e.to_string()))?;
+    let evidence =
+        tokio::task::spawn_blocking(move || generate_evidence(attestation_type, binding))
+            .await
+            .map_err(|e| HolderError::Attestation(format!("evidence task panicked: {e}")))?
+            .map_err(|e| HolderError::Attestation(e.to_string()))?;
 
     Ok(Json(QuoteResponse {
         node_public_key: keys.node_hex(),
