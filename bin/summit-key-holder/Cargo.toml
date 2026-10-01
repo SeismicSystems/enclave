@@ -32,14 +32,11 @@ seismic-attestation = { workspace = true, features = ["azure-attester"] }
 # (filenames + read/write + re-exported key types), and depend on that instead.
 # Caveat: a git dep does not inherit summit's Cargo.lock, so exact commonware pins (there or
 # here) and the golden-vector test stay necessary either way.
-#
-# The `rand` 0.8 line exists only because commonware's keygen takes a
-# rand_core 0.6 `CryptoRngCore`; the workspace `rand` is 0.9.
-commonware-codec = "=2026.4.0"
-commonware-cryptography = "=2026.4.0"
-commonware-math = "=2026.4.0"
-commonware-utils = "=2026.4.0"
-rand_08 = { package = "rand", version = "0.8.5" }
+commonware-codec = "=2026.9.0"
+commonware-cryptography = "=2026.9.0"
+commonware-formatting = "=2026.9.0"
+commonware-math = "=2026.9.0"
+commonware-utils = "=2026.9.0"
 
 anyhow.workspace = true
 axum.workspace = true
