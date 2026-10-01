@@ -207,14 +207,19 @@ fn promote_gcp(
     measurement_id: &str,
 ) -> Result<Vec<u8>, PromoteError> {
     let register = |name: &'static str| -> Result<PromotedEntry, PromoteError> {
-        let entry = map
-            .iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(name))
-            .map(|(_, entry)| entry)
-            .ok_or(PolicyError::MissingGcpRegister {
+        let mut named = map.iter().filter(|(key, _)| key.eq_ignore_ascii_case(name));
+        let (_, entry) = named.next().ok_or(PolicyError::MissingGcpRegister {
+            record: INPUT.to_owned(),
+            register: name,
+        })?;
+        if let Some((key, _)) = named.next() {
+            return Err(PolicyError::DuplicateGcpRegister {
                 record: INPUT.to_owned(),
+                key: key.clone(),
                 register: name,
-            })?;
+            }
+            .into());
+        }
         Ok(PromotedEntry {
             expected_any: [hex::encode(entry_value_bytes(INPUT, name, entry, 48)?)],
         })
@@ -313,6 +318,19 @@ mod tests {
         );
         let compiled = compile_policy(&promoted).unwrap();
         assert_eq!(compiled.records[0].tuple.schema(), crate::GCP_TDX_V1_SCHEMA);
+
+        let other = "0".repeat(96);
+        let twice = raw.replace(
+            r#""rtmr2":"#,
+            &format!(r#""RTMR1":{{"expected":"{other}"}},"rtmr2":"#),
+        );
+        assert!(matches!(
+            promote_measurements(twice.as_bytes(), None, None),
+            Err(PromoteError::Policy(PolicyError::DuplicateGcpRegister {
+                register: "rtmr1",
+                ..
+            }))
+        ));
     }
 
     #[test]

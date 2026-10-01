@@ -291,6 +291,9 @@ document MUST be rejected.
 | Neither form on one register | `NoExpectedValue` |
 | An `expected_any` list whose length is not 1 | `SingleValueRequired` |
 | A value that is not 32 bytes of bare hex | `BadValue` |
+| A `gcp-tdx` record's key other than `rtmr1` or `rtmr2` | `UnexpectedGcpRegister` |
+| A `gcp-tdx` record naming `rtmr1` or `rtmr2` twice after case folding | `DuplicateGcpRegister` |
+| A `gcp-tdx` record without `rtmr1` or `rtmr2` | `MissingGcpRegister` |
 
 A record without `measurements` is the permissive format's accept-anything
 form. It MUST fail as a missing field. An admission policy has no wildcard
