@@ -10,9 +10,11 @@ pub mod rpc_error;
 mod server;
 pub mod utils;
 
-/// Attestation type this node mints evidence for and requests from peers.
+/// Attestation type this node mints evidence for and requests from peers;
+/// `start` refuses to run a service that has none.
 pub(crate) fn attestation_type() -> seismic_attestation::AttestationType {
     seismic_attestation::configured_attestation_type()
+        .expect("the attestation type is resolved before the service starts")
 }
 
 /// Both listeners default to loopback as the safe choice; a node binds
@@ -77,6 +79,7 @@ pub struct Args {
 
 impl Args {
     pub async fn start(self) -> Result<()> {
+        seismic_attestation::configured_attestation_type()?;
         // Quote verification's collateral fetching (attested-tls) builds
         // rustls-backed HTTP clients, which need a process-level crypto
         // provider that only the application can choose. Install it before
