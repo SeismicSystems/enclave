@@ -5,7 +5,7 @@
 //! byte: `node_key.pem` and `consensus_key.pem`, each the bare lowercase
 //! hex of the commonware-codec key encoding (64 chars — both private keys
 //! are 32-byte scalars), no `0x`, no trailing newline, file mode 0600 in a
-//! 0700 directory. Summit's reader is lenient (`from_hex_formatted`), but
+//! 0700 directory. Summit's reader is lenient (`from_hex`), but
 //! its own writer emits exactly this, and the golden-vector test below pins
 //! us to a keystore summit's `keys generate` produced.
 //!
@@ -42,8 +42,8 @@ impl HeldKeys {
     /// Generate a fresh keypair set from the OS RNG.
     pub fn generate() -> Self {
         Self {
-            node: ed25519::PrivateKey::random(&mut rand_08::rngs::OsRng),
-            consensus: bls12381::PrivateKey::random(&mut rand_08::rngs::OsRng),
+            node: ed25519::PrivateKey::random(commonware_utils::sys_rng()),
+            consensus: bls12381::PrivateKey::random(commonware_utils::sys_rng()),
         }
     }
 
@@ -79,11 +79,11 @@ impl PublicKeys {
     }
 
     pub fn node_hex(&self) -> String {
-        commonware_utils::hex(&self.node)
+        commonware_formatting::hex(&self.node)
     }
 
     pub fn consensus_hex(&self) -> String {
-        commonware_utils::hex(&self.consensus)
+        commonware_formatting::hex(&self.consensus)
     }
 }
 
@@ -129,7 +129,7 @@ pub fn partial_matches_held(dir: &Path, keys: &HeldKeys) -> bool {
         !path.is_file()
             || fs::read_to_string(&path)
                 .ok()
-                .and_then(|encoded| commonware_utils::from_hex_formatted(&encoded))
+                .and_then(|encoded| commonware_formatting::from_hex(&encoded))
                 .is_some_and(|raw| raw.as_slice() == held_encoding)
     };
     file_matches(NODE_KEY_FILE, keys.node.encode().as_ref())
@@ -149,11 +149,11 @@ pub fn write_keystore(dir: &Path, keys: &HeldKeys) -> Result<(), HolderError> {
     })?;
     write_key_file(
         &dir.join(NODE_KEY_FILE),
-        &commonware_utils::hex(&keys.node.encode()),
+        &commonware_formatting::hex(&keys.node.encode()),
     )?;
     write_key_file(
         &dir.join(CONSENSUS_KEY_FILE),
-        &commonware_utils::hex(&keys.consensus.encode()),
+        &commonware_formatting::hex(&keys.consensus.encode()),
     )?;
     Ok(())
 }
@@ -172,7 +172,7 @@ pub fn read_keystore_public_keys(dir: &Path) -> Result<PublicKeys, HolderError> 
 fn read_key_file<K: commonware_codec::DecodeExt<()>>(path: &Path) -> Result<K, HolderError> {
     let encoded = fs::read_to_string(path)
         .map_err(|e| HolderError::Keystore(format!("reading {}: {e}", path.display())))?;
-    let raw = commonware_utils::from_hex_formatted(&encoded)
+    let raw = commonware_formatting::from_hex(&encoded)
         .ok_or_else(|| HolderError::Keystore(format!("{} is not hex", path.display())))?;
     K::decode(raw.as_ref())
         .map_err(|e| HolderError::Keystore(format!("decoding {}: {e}", path.display())))
@@ -275,13 +275,13 @@ mod tests {
         // and require the exact file bytes back: this is the byte-parity pin
         // on the wire format (bare lowercase hex, no 0x, no newline).
         let node = ed25519::PrivateKey::decode(
-            commonware_utils::from_hex(SUMMIT_NODE_KEY_FILE)
+            commonware_formatting::from_hex(SUMMIT_NODE_KEY_FILE)
                 .unwrap()
                 .as_ref(),
         )
         .unwrap();
         let consensus = bls12381::PrivateKey::decode(
-            commonware_utils::from_hex(SUMMIT_CONSENSUS_KEY_FILE)
+            commonware_formatting::from_hex(SUMMIT_CONSENSUS_KEY_FILE)
                 .unwrap()
                 .as_ref(),
         )
