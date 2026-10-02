@@ -34,8 +34,8 @@
 //!   renders their bytes as thousand-element integer arrays;
 //!   `pck_certificate_chain` is absent when the fetch left it unset, which is
 //!   the normal case;
-//! - `trust_anchors`: the [`TrustAnchors`] of the verifying build, each Azure
-//!   root by name and SHA-256 hex, and the `dcap-qvl` version;
+//! - `trust_anchors`: the [`TrustAnchors`] of the verifying build, each root
+//!   by name and SHA-256 hex, and the `dcap-qvl` version;
 //! - `report`: what the verification established, the binding and every
 //!   quoted register; a replay checks that it reproduces this, so an edited
 //!   report fails rather than misdescribing the quote.
