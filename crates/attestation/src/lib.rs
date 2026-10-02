@@ -92,7 +92,7 @@ pub struct UnknownPlatform(String);
 
 /// The attestation type this guest mints evidence for, resolved once.
 ///
-/// `SEISMIC_ATTESTATION_TYPE` (`azure-tdx`, `gcp-tdx`, `dcap-tdx`) wins; otherwise
+/// `SEISMIC_ATTESTATION_TYPE` (`azure-tdx` or `gcp-tdx`) wins; otherwise
 /// the platform is read from DMI. A guest that neither names its type nor
 /// matches a known platform fails closed rather than being guessed at.
 pub fn configured_attestation_type() -> Result<AttestationType, UnknownPlatform> {
@@ -103,9 +103,8 @@ pub fn configured_attestation_type() -> Result<AttestationType, UnknownPlatform>
             let resolved = match std::env::var("SEISMIC_ATTESTATION_TYPE").ok().as_deref() {
                 Some("azure-tdx") => Ok(AttestationType::AzureTdx),
                 Some("gcp-tdx") => Ok(AttestationType::GcpTdx),
-                Some("dcap-tdx") => Ok(AttestationType::DcapTdx),
                 Some(other) => Err(UnknownPlatform(format!(
-                    "SEISMIC_ATTESTATION_TYPE={other:?} is not azure-tdx, gcp-tdx or dcap-tdx"
+                    "SEISMIC_ATTESTATION_TYPE={other:?} is not azure-tdx or gcp-tdx"
                 ))),
                 None => platform_attestation_type(&dmi("chassis_asset_tag"), &dmi("sys_vendor")),
             };
@@ -142,7 +141,7 @@ fn platform_attestation_type(
     } else {
         Err(UnknownPlatform(format!(
             "no known platform in DMI (chassis_asset_tag {chassis_asset_tag:?}, sys_vendor \
-             {sys_vendor:?}); set SEISMIC_ATTESTATION_TYPE to azure-tdx, gcp-tdx or dcap-tdx"
+             {sys_vendor:?}); set SEISMIC_ATTESTATION_TYPE to azure-tdx or gcp-tdx"
         )))
     }
 }
