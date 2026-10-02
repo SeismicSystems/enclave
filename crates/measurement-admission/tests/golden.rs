@@ -21,6 +21,24 @@ const IMAGE_B_COMPILED: &str =
 const GCP_POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.gcp.json");
 const GCP_COMPILED: &str =
     include_str!("../fixtures/golden/measurement-policy-v1.gcp.compiled.json");
+const MIXED_POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.mixed.json");
+const MIXED_COMPILED: &str =
+    include_str!("../fixtures/golden/measurement-policy-v1.mixed.compiled.json");
+
+/// The multi-cloud document: image A's Azure record beside the GCP record,
+/// each under its own schema, one accepted set.
+#[test]
+fn mixed_fixture_compiles_to_committed_report() {
+    let compiled = compile_policy(MIXED_POLICY).expect("mixed fixture compiles");
+    let report = CompileReport::new(&compiled);
+    assert_eq!(report.schema, None);
+    assert_eq!(report.to_json(), MIXED_COMPILED);
+    let azure = compile_policy(IMAGE_A_POLICY).unwrap().admission_ids;
+    let gcp = compile_policy(GCP_POLICY).unwrap().admission_ids;
+    let mut both = [azure, gcp].concat();
+    both.sort();
+    assert_eq!(compiled.admission_ids, both);
+}
 
 #[test]
 fn gcp_fixture_compiles_to_committed_report() {
