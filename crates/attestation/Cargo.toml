@@ -10,6 +10,7 @@ readme = "README.md"
 description = "Seismic attestation evidence types and policy checks"
 
 [dependencies]
+tracing.workspace = true
 hex.workspace = true
 seismic-network-manifest.workspace = true
 serde.workspace = true

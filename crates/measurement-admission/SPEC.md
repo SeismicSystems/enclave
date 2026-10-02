@@ -43,8 +43,8 @@ network's tooling — conforms by satisfying the same sections.
 
 | Term | Meaning |
 | --- | --- |
-| register | One vTPM PCR: an index 0-23 and a SHA-256 digest. |
-| tuple | The register values a schema binds, in schema order. For Azure TDX v1: `(pcr4, pcr9, pcr11)`. |
+| register | One measurement register of the guest's platform: an Azure vTPM PCR (index 0-23, SHA-256 digest) or a TDX RTMR (index 0-3, SHA-384 digest). |
+| tuple | The register values a schema binds, in schema order. For Azure TDX v1: `(pcr4, pcr9, pcr11)`; for GCP TDX v1: `(rtmr1, rtmr2)`. |
 | guest identity | One tuple. Every machine that boots the same measured image observes the same tuple. |
 | schema | A named register set plus the rule that turns its tuple into an admission ID (section 5). The schema name is domain-separated into every ID it produces. |
 | admission ID | `bytes32` key of one guest identity: `keccak256(abi.encode(schemaId, <tuple>))`. |
@@ -67,7 +67,7 @@ dashed arrow is a read: it consumes an artifact without producing one.
 
 ```mermaid
 flowchart LR
-    raw["raw PCR map<br/>(all registers of<br/>one image build)"]
+    raw["raw register map<br/>(all registers of<br/>one image build)"]
     doc["bootstrap document<br/>(the founding accepted set,<br/>one record per identity)"]
     set["accepted set<br/>(one admission ID<br/>per record)"]
     hash["policy hash<br/>(SHA-256 of the<br/>exact document bytes)"]
@@ -96,7 +96,7 @@ document beside the records already accepted.
 
 ```mermaid
 flowchart LR
-    raw2["raw PCR map<br/>(the new image build)"]
+    raw2["raw register map<br/>(the new image build)"]
     promoted["promoted document<br/>(the new image,<br/>one record)"]
     active["active document<br/>(the accepted set<br/>on chain now)"]
     next["next document<br/>(the whole new<br/>accepted set)"]
@@ -120,13 +120,19 @@ revision that moves no ID. A label fix therefore lands alongside the next
 change to the accepted set, and until then `activePolicyHash` names the
 bytes that authorized the set on chain.
 
-The raw PCR map is audit material. The document is what governance reviews
+The raw register map is audit material. The document is what governance reviews
 and what the network manifest hash-commits to. The compiled report is a
 deterministic machine artifact: implementations regenerate it from the
 document on demand rather than author it, and nothing commits to it but the
 golden vectors of section 12.
 
-## 3. Azure TDX v1 schema
+## 3. Admission schemas
+
+A schema names the registers that identify a guest on one platform and the
+rule that hashes them into an admission ID (section 5). One exists per
+platform.
+
+### 3.1 Azure TDX v1
 
 ```text
 schema name: seismic.azure-tdx.pcr4-pcr9-pcr11.v1
@@ -157,6 +163,39 @@ reinterpret v1. Adding SecureBoot coverage, for example, means
 `seismic.azure-tdx.pcr4-pcr7-pcr9-pcr11.v2`. Because the registry stores
 opaque IDs, a new schema costs new IDs and one policy revision. It never
 costs a contract change.
+
+### 3.2 GCP TDX v1
+
+```text
+schema name: seismic.gcp-tdx.rtmr1-rtmr2.v1
+attestation type: gcp-tdx
+fields: rtmr1: bytes48, rtmr2: bytes48
+schema ID: keccak256(schema name)
+         = 0x8ec2bafae2e27f3779142d18c29e5c2077eb38b009f5efa060d90d17d67ee133
+```
+
+A GCP TDX guest has no vTPM binding in its quote; its identity is the TDX
+runtime measurement registers. Two of them move with a Seismic release:
+
+| Register | Covers |
+| --- | --- |
+| rtmr1 | The boot application path: the UKI's authenticode hash, the embedded kernel's authenticode hash, the boot disk's GPT, and the firmware's fixed boot-action strings. |
+| rtmr2 | What booted: the UKI's sections as systemd-stub measures them, then the command line and initrd the kernel's own EFI stub received. |
+
+`mrtd` and `rtmr0` are Google's firmware, its configuration, and the VM's
+boot variables; `rtmr3` is not extended on this boot path. None of them
+contribute to identity under this schema.
+
+The kernel's EFI stub measures into the TDX registers only when the guest
+has no vTPM to measure into instead, so the schema's `rtmr2` is the value of
+a boot with the vTPM disabled. A guest booted with a vTPM has a different
+`rtmr2` and is not admitted. With Secure Boot disabled a runtime-supplied
+command line replaces the UKI's; the kernel measures the one it received,
+so it changes `rtmr2` and the guest is not admitted either.
+
+Both registers are reproducible from the build artifact alone by replaying
+the boot's events; seismic-images' `make measure-gcp` does so.
+
 
 ## 4. Policy document
 
@@ -210,7 +249,7 @@ carries as one hash rather than a delta. Two revisions MAY publish identical
 bytes: reinstating an earlier accepted set republishes that document and
 reuses its hash.
 
-### 4.1 Register keys and values
+### 4.1 Azure TDX v1 records
 
 A register key is a bare index (`"4"`) or a `pcr` prefix in any case
 (`"pcr4"`, `"PCR4"`), for an index 0-23. Keys normalize to the index, so
@@ -220,19 +259,31 @@ A register value is exactly 64 hexadecimal characters, case-insensitive,
 with no `0x` prefix. A value binds through `expected_any` with one element,
 or through the deprecated scalar `expected`.
 
+### 4.2 GCP TDX v1 records
+
+For a `gcp-tdx` record the register keys are `rtmr1` and `rtmr2`
+(case-insensitive), each a 48-byte value (96 hex characters) of bare
+lowercase hex. Any other key, or a missing one, is an error.
+
+### 4.3 Normalization and mixing
+
 Normalization unifies IDs, not bytes: two documents that differ only in key
 spelling or value case compile to the same accepted set, and still hash
 differently, because the hash covers the exact bytes (section 6).
 
-### 4.2 A compiler MUST reject
+A document pins one attestation type: records of different types in one
+document MUST be rejected.
+
+
+### 4.4 A compiler MUST reject
 
 | Condition | Error |
 | --- | --- |
 | Not a JSON record list, or a record with an unknown field | `Json` |
 | Zero records | `Empty` |
-| `attestation_type` other than `azure-tdx` | `UnsupportedAttestationType` |
+| `attestation_type` other than `azure-tdx` or `gcp-tdx` | `UnsupportedAttestationType` |
 | Two records with the same `measurement_id` | `DuplicateMeasurementId` |
-| A key that is not a PCR index 0-23 | `BadRegisterKey` |
+| An `azure-tdx` record's key that is not a PCR index 0-23 | `BadRegisterKey` |
 | Two keys that normalize to one index | `DuplicateRegister` |
 | A register outside the schema tuple | `UnexpectedRegister` |
 | A schema register absent from the record | `MissingRegister` |
@@ -240,6 +291,9 @@ differently, because the hash covers the exact bytes (section 6).
 | Neither form on one register | `NoExpectedValue` |
 | An `expected_any` list whose length is not 1 | `SingleValueRequired` |
 | A value that is not 32 bytes of bare hex | `BadValue` |
+| A `gcp-tdx` record's key other than `rtmr1` or `rtmr2` | `UnexpectedGcpRegister` |
+| A `gcp-tdx` record naming `rtmr1` or `rtmr2` twice after case folding | `DuplicateGcpRegister` |
+| A `gcp-tdx` record without `rtmr1` or `rtmr2` | `MissingGcpRegister` |
 
 A record without `measurements` is the permissive format's accept-anything
 form. It MUST fail as a missing field. An admission policy has no wildcard
@@ -257,6 +311,19 @@ ID. Two records with different labels and identical tuples are legal, and
 they compile to one ID.
 
 ## 5. Admission ID
+
+Rules for deriving an ID from evidence, under any schema:
+
+- an implementation MUST extract the tuple from measurements that
+  cryptographic verification already authenticated;
+- a bank missing any schema register MUST fail closed. A partial tuple is
+  not an identity;
+- registers outside the schema MUST be ignored;
+- keccak-256 is the only hash in the ID path, because the ID keys Solidity
+  mapping storage. SHA-256 covers documents and transcripts, which never key
+  chain state.
+
+### 5.1 Azure TDX v1
 
 ```text
 schemaId = keccak256("seismic.azure-tdx.pcr4-pcr9-pcr11.v1")
@@ -284,16 +351,35 @@ B uses synthetic values (`0x4a4a...`, `0x9a9a...`, `0x1a1a...`), so the second
 identity is unmistakable in test output. Neither document is a production
 network's policy.
 
-Rules for deriving an ID from evidence:
+### 5.2 GCP TDX v1
 
-- an implementation MUST extract the tuple from measurements that
-  cryptographic verification already authenticated;
-- a bank missing any schema register MUST fail closed. A partial tuple is
-  not an identity;
-- registers outside the schema MUST be ignored;
-- keccak-256 is the only hash in the ID path, because the ID keys Solidity
-  mapping storage. SHA-256 covers documents and transcripts, which never key
-  chain state.
+```text
+schemaId = keccak256("seismic.gcp-tdx.rtmr1-rtmr2.v1")
+
+preimage = schemaId || rtmr1 || rtmr2            (32 + 48 + 48 = 128 bytes)
+
+admissionId = keccak256(preimage)
+```
+
+The registers are not 32-byte words, so the preimage is plain concatenation,
+not `abi.encode`. Worked example, the GCP golden fixture
+(`fixtures/golden/measurement-policy-v1.gcp.json`, RTMR1 and RTMR2 of
+`seismic-dev_2026-09-28.932757` booted on a `c3-standard-4` TDX guest with the
+vTPM disabled):
+
+```text
+schemaId = 0x8ec2bafae2e27f3779142d18c29e5c2077eb38b009f5efa060d90d17d67ee133
+rtmr1    = 0x762d5dc2b8dcd950b77ba759e2321a86...
+rtmr2    = 0x85bc309a887ad0277ea50d47aacb850d...
+
+admissionId = 0x518a6a72083a7db27660a91fd8fc9733ac58eab7d37596b0b161e91cc0681674
+policy hash = 0x3df8bf9da68d3f7d9b6615b5b06897876913719e3cb456afbfb40c9e02364980
+```
+
+The rules above apply unchanged: the registers come from verified
+measurements, a quote without them fails closed, and every other register is
+ignored.
+
 
 ## 6. Policy hash
 
@@ -386,8 +472,8 @@ Complete genesis storage for `measurement-policy-v1.json`, as committed in
 | `0xc9bd227613139b7d38f8720e88b201789f224276070dce926fb7d30019e638b4` | `1` | `statuses[image A]` |
 | `0xc7337a5eeddbfaf538e46562c34392a79810d4d27ebe8dc1150a60c140124770` | `1` | `statuses[image B]` |
 
-`0x...0b0N` abbreviates the namespace base above. The chain never sees a PCR
-value or a JSON byte: only keccak keys and status words.
+`0x...0b0N` abbreviates the namespace base above. The chain never sees a
+register value or a JSON byte: only keccak keys and status words.
 
 The slot formulas are meaningful only for the contract build they were
 frozen against, so a compiled report also carries

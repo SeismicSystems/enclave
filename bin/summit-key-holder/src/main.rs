@@ -72,7 +72,10 @@ async fn main() -> anyhow::Result<()> {
             keystore_dir,
             control_socket,
             network_manifest,
-        } => serve(listen, keystore_dir, control_socket, network_manifest).await,
+        } => {
+            seismic_attestation::configured_attestation_type()?;
+            serve(listen, keystore_dir, control_socket, network_manifest).await
+        }
         Command::PersistWait { control_socket } => {
             let response = control::persist_wait(&control_socket).await?;
             info!("persist complete: {response:?}");

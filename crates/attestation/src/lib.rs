@@ -85,6 +85,67 @@ pub use attestation::{
 /// Backend evidence envelope and attestation-type enum used on the wire.
 pub use attestation::{AttestationExchangeMessage, AttestationType};
 
+/// This guest's platform could not be determined, so no attestation type is.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0}")]
+pub struct UnknownPlatform(String);
+
+/// The attestation type this guest mints evidence for, resolved once.
+///
+/// `SEISMIC_ATTESTATION_TYPE` (`azure-tdx` or `gcp-tdx`) wins; otherwise
+/// the platform is read from DMI. A guest that neither names its type nor
+/// matches a known platform fails closed rather than being guessed at.
+pub fn configured_attestation_type() -> Result<AttestationType, UnknownPlatform> {
+    static RESOLVED: std::sync::OnceLock<Result<AttestationType, UnknownPlatform>> =
+        std::sync::OnceLock::new();
+    RESOLVED
+        .get_or_init(|| {
+            let resolved = match std::env::var("SEISMIC_ATTESTATION_TYPE").ok().as_deref() {
+                Some("azure-tdx") => Ok(AttestationType::AzureTdx),
+                Some("gcp-tdx") => Ok(AttestationType::GcpTdx),
+                Some(other) => Err(UnknownPlatform(format!(
+                    "SEISMIC_ATTESTATION_TYPE={other:?} is not azure-tdx or gcp-tdx"
+                ))),
+                None => platform_attestation_type(&dmi("chassis_asset_tag"), &dmi("sys_vendor")),
+            };
+            match &resolved {
+                Ok(resolved) => tracing::info!(
+                    attestation_type = resolved.as_str(),
+                    "attestation type resolved"
+                ),
+                Err(error) => tracing::error!(%error, "attestation type unresolved"),
+            }
+            resolved
+        })
+        .clone()
+}
+
+const AZURE_CHASSIS_ASSET_TAG: &str = "7783-7084-3265-9085-8269-3286-77";
+
+fn dmi(field: &str) -> String {
+    std::fs::read_to_string(format!("/sys/class/dmi/id/{field}"))
+        .map(|value| value.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// The platform DMI describes: Azure by its fixed chassis asset tag, GCE by
+/// its system vendor. Anything else is unknown.
+fn platform_attestation_type(
+    chassis_asset_tag: &str,
+    sys_vendor: &str,
+) -> Result<AttestationType, UnknownPlatform> {
+    if chassis_asset_tag == AZURE_CHASSIS_ASSET_TAG {
+        Ok(AttestationType::AzureTdx)
+    } else if sys_vendor.starts_with("Google") {
+        Ok(AttestationType::GcpTdx)
+    } else {
+        Err(UnknownPlatform(format!(
+            "no known platform in DMI (chassis_asset_tag {chassis_asset_tag:?}, sys_vendor \
+             {sys_vendor:?}); set SEISMIC_ATTESTATION_TYPE to azure-tdx or gcp-tdx"
+        )))
+    }
+}
+
 use attestation::{
     AttestationGenerator, AttestationVerifier, EndorsementSnapshot,
     measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
@@ -668,6 +729,23 @@ pub enum AttestationError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_platform_is_read_from_dmi_and_never_guessed() {
+        assert_eq!(
+            platform_attestation_type(AZURE_CHASSIS_ASSET_TAG, "Microsoft Corporation"),
+            Ok(AttestationType::AzureTdx)
+        );
+        assert_eq!(
+            platform_attestation_type("", "Google"),
+            Ok(AttestationType::GcpTdx)
+        );
+        let unknown = platform_attestation_type("", "QEMU").unwrap_err();
+        assert!(
+            unknown.to_string().contains("SEISMIC_ATTESTATION_TYPE"),
+            "{unknown}"
+        );
+    }
 
     #[test]
     fn backend_policy_parses_flashbots_measurement_json_and_preserves_record_correlation() {
