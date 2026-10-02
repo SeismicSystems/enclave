@@ -43,8 +43,8 @@ network's tooling — conforms by satisfying the same sections.
 
 | Term | Meaning |
 | --- | --- |
-| register | One vTPM PCR: an index 0-23 and a SHA-256 digest. |
-| tuple | The register values a schema binds, in schema order. For Azure TDX v1: `(pcr4, pcr9, pcr11)`. |
+| register | One measurement register of the guest's platform: an Azure vTPM PCR (index 0-23, SHA-256 digest) or a TDX RTMR (index 0-3, SHA-384 digest). |
+| tuple | The register values a schema binds, in schema order. For Azure TDX v1: `(pcr4, pcr9, pcr11)`; for GCP TDX v1: `(rtmr1, rtmr2)`. |
 | guest identity | One tuple. Every machine that boots the same measured image observes the same tuple. |
 | schema | A named register set plus the rule that turns its tuple into an admission ID (section 5). The schema name is domain-separated into every ID it produces. |
 | admission ID | `bytes32` key of one guest identity: `keccak256(abi.encode(schemaId, <tuple>))`. |
@@ -67,7 +67,7 @@ dashed arrow is a read: it consumes an artifact without producing one.
 
 ```mermaid
 flowchart LR
-    raw["raw PCR map<br/>(all registers of<br/>one image build)"]
+    raw["raw register map<br/>(all registers of<br/>one image build)"]
     doc["bootstrap document<br/>(the founding accepted set,<br/>one record per identity)"]
     set["accepted set<br/>(one admission ID<br/>per record)"]
     hash["policy hash<br/>(SHA-256 of the<br/>exact document bytes)"]
@@ -96,7 +96,7 @@ document beside the records already accepted.
 
 ```mermaid
 flowchart LR
-    raw2["raw PCR map<br/>(the new image build)"]
+    raw2["raw register map<br/>(the new image build)"]
     promoted["promoted document<br/>(the new image,<br/>one record)"]
     active["active document<br/>(the accepted set<br/>on chain now)"]
     next["next document<br/>(the whole new<br/>accepted set)"]
@@ -120,7 +120,7 @@ revision that moves no ID. A label fix therefore lands alongside the next
 change to the accepted set, and until then `activePolicyHash` names the
 bytes that authorized the set on chain.
 
-The raw PCR map is audit material. The document is what governance reviews
+The raw register map is audit material. The document is what governance reviews
 and what the network manifest hash-commits to. The compiled report is a
 deterministic machine artifact: implementations regenerate it from the
 document on demand rather than author it, and nothing commits to it but the
@@ -283,7 +283,7 @@ document MUST be rejected.
 | Zero records | `Empty` |
 | `attestation_type` other than `azure-tdx` or `gcp-tdx` | `UnsupportedAttestationType` |
 | Two records with the same `measurement_id` | `DuplicateMeasurementId` |
-| A key that is not a PCR index 0-23 | `BadRegisterKey` |
+| An `azure-tdx` record's key that is not a PCR index 0-23 | `BadRegisterKey` |
 | Two keys that normalize to one index | `DuplicateRegister` |
 | A register outside the schema tuple | `UnexpectedRegister` |
 | A schema register absent from the record | `MissingRegister` |
@@ -472,8 +472,8 @@ Complete genesis storage for `measurement-policy-v1.json`, as committed in
 | `0xc9bd227613139b7d38f8720e88b201789f224276070dce926fb7d30019e638b4` | `1` | `statuses[image A]` |
 | `0xc7337a5eeddbfaf538e46562c34392a79810d4d27ebe8dc1150a60c140124770` | `1` | `statuses[image B]` |
 
-`0x...0b0N` abbreviates the namespace base above. The chain never sees a PCR
-value or a JSON byte: only keccak keys and status words.
+`0x...0b0N` abbreviates the namespace base above. The chain never sees a
+register value or a JSON byte: only keccak keys and status words.
 
 The slot formulas are meaningful only for the contract build they were
 frozen against, so a compiled report also carries
