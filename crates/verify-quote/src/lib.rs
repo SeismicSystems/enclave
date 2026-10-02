@@ -148,8 +148,8 @@ impl TdxRegisters {
 }
 
 impl QuoteReport {
-    fn from_verified(verified: &VerifiedSeismicAttestation) -> Self {
-        match verified {
+    fn from_verified(verified: &VerifiedSeismicAttestation) -> anyhow::Result<Self> {
+        Ok(match verified {
             VerifiedSeismicAttestation::AzureTdx(azure) => Self {
                 attestation_type: AttestationType::AzureTdx,
                 binding: azure.binding,
@@ -165,10 +165,10 @@ impl QuoteReport {
                         .collect(),
                 ),
             },
-            VerifiedSeismicAttestation::GcpTdx(tdx) | VerifiedSeismicAttestation::DcapTdx(tdx) => {
+            VerifiedSeismicAttestation::GcpTdx(tdx) => {
                 let m = &tdx.measurements;
                 Self {
-                    attestation_type: verified.attestation_type(),
+                    attestation_type: AttestationType::GcpTdx,
                     binding: tdx.binding,
                     registers: QuoteRegisters::Tdx(Box::new(TdxRegisters {
                         mrtd: m.mrtd,
@@ -179,7 +179,10 @@ impl QuoteReport {
                     })),
                 }
             }
-        }
+            VerifiedSeismicAttestation::DcapTdx(_) => anyhow::bail!(
+                "dcap-tdx evidence has no report: only azure-tdx and gcp-tdx are supported"
+            ),
+        })
     }
 
     /// This report as a JSON object.
@@ -321,7 +324,7 @@ pub async fn verify_harvest(
             consensus_public_key,
             candidate_tx_io_public_key,
             bundle,
-            report: QuoteReport::from_verified(&verified),
+            report: QuoteReport::from_verified(&verified)?,
         },
         anchor_drift: None,
     })
@@ -350,7 +353,7 @@ pub fn verify_archived_harvest(
     expect_supported(&archive.bundle.evidence)?;
     let verified = verify_archived_evidence_with_policy(&archive.bundle, archive.binding(), policy)
         .context("re-verifying the archived harvest evidence")?;
-    let report = QuoteReport::from_verified(&verified);
+    let report = QuoteReport::from_verified(&verified)?;
     anyhow::ensure!(
         report == archive.report,
         "the archived report is not what the archived evidence proves; the document was edited \
@@ -410,7 +413,7 @@ pub async fn verify_deploy(
         .await
         .context("verifying deploy-verification evidence")?;
     Ok(VerifiedDeploy {
-        report: QuoteReport::from_verified(&verified),
+        report: QuoteReport::from_verified(&verified)?,
         network_id,
         deployment_nonce,
     })
@@ -873,8 +876,9 @@ mod tests {
             },
         };
 
-        let report =
-            QuoteReport::from_verified(&VerifiedSeismicAttestation::AzureTdx(verified)).to_json();
+        let report = QuoteReport::from_verified(&VerifiedSeismicAttestation::AzureTdx(verified))
+            .unwrap()
+            .to_json();
 
         assert_eq!(report["verified"], true);
         assert_eq!(report["attestation_type"], "azure-tdx");

@@ -372,7 +372,6 @@ impl TryFrom<ArchivedReport> for QuoteReport {
         let attestation_type = match archived.attestation_type.as_str() {
             "azure-tdx" => AttestationType::AzureTdx,
             "gcp-tdx" => AttestationType::GcpTdx,
-            "dcap-tdx" => AttestationType::DcapTdx,
             other => anyhow::bail!(
                 "report.attestation_type {other:?} is not a platform this reader knows"
             ),
@@ -389,7 +388,7 @@ impl TryFrom<ArchivedReport> for QuoteReport {
                     })
                     .collect::<anyhow::Result<_>>()?,
             ),
-            (AttestationType::GcpTdx | AttestationType::DcapTdx, None, Some(tdx)) => {
+            (AttestationType::GcpTdx, None, Some(tdx)) => {
                 QuoteRegisters::Tdx(Box::new(TdxRegisters {
                     mrtd: decode_hex("report.registers.mrtd", &tdx.mrtd)?,
                     rtmr0: decode_hex("report.registers.rtmr0", &tdx.rtmr0)?,
@@ -400,7 +399,7 @@ impl TryFrom<ArchivedReport> for QuoteReport {
             }
             _ => anyhow::bail!(
                 "report registers do not match report.attestation_type {:?}: azure-tdx carries \
-                 `pcrs`, TDX platforms carry `registers`",
+                 `pcrs`, gcp-tdx carries `registers`",
                 archived.attestation_type
             ),
         };
