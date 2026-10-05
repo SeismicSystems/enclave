@@ -71,7 +71,7 @@ const QUOTE_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 /// facts a harvest quote is verified against, in one JSON document.
 ///
 /// This is the live input to [`verify_harvest`]: deploy builds one such
-/// document per node from what the node's key holder served. What gets
+/// document per node from what the node's harvest endpoint served. What gets
 /// archived is not this document but the [`FoundingArchive`] the verification
 /// hands back, which carries these four fields beside everything the verdict
 /// rested on.
@@ -84,14 +84,14 @@ pub struct HarvestRecord {
     /// The nonce the quote was requested with (32 bytes hex).
     pub harvest_nonce: String,
 
-    /// The ed25519 node pubkey the key holder served (32 bytes hex).
+    /// The ed25519 node pubkey the harvest endpoint served (32 bytes hex).
     pub node_public_key: String,
 
-    /// The BLS12-381 MinPk consensus pubkey the key holder served
+    /// The BLS12-381 MinPk consensus pubkey the harvest endpoint served
     /// (48 bytes hex).
     pub consensus_public_key: String,
 
-    /// The evidence the key holder served, verbatim.
+    /// The evidence the harvest endpoint served, verbatim.
     pub evidence: AttestationExchangeMessage,
 }
 

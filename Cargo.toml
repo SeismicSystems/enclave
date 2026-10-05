@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-# The four deployed binaries live under bin/. Every crates/ member is a
+# The three deployed binaries live under bin/. Every crates/ member is a
 # library (one also builds a debug CLI behind its `cli` feature); two of them,
 # `verify-quote` and `manifest`, never run on a node — the deploy CLI links
 # them. The dir name is the crate; the arrow is the binary target it builds.
@@ -8,7 +8,6 @@ members = [
     "bin/tdx-init",              # -> tdx-init
     "bin/attestation-service",   # -> seismic-attestation-service
     "bin/custodian-service",     # -> seismic-custodian-service
-    "bin/summit-key-holder",     # -> summit-key-holder
 
     "crates/attestation",
     "crates/attestation-rpc",

@@ -85,8 +85,8 @@ pub fn deploy_verification_binding(
 /// quotes over its own binding, so an N-node ceremony yields N distinct digests
 /// and deploy harvests each node separately.
 ///
-/// The pre-manifest `summit-key-holder` generates both keys in RAM and quotes
-/// over this binding; deploy's harvest recomputes it from the nonce it sent and
+/// The attestation service's founding harvest quotes over this binding, from
+/// the pubkeys of the keys the image's `summit-keygen` generated at boot; deploy's harvest recomputes it from the nonce it sent and
 /// the pubkeys it got back, then re-checks it at assemble time against that
 /// node's pinned pubkeys. `harvest_nonce` is fresh per request, so an earlier
 /// harvest's quote can't be replayed.

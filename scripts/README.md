@@ -45,16 +45,17 @@ a `seismic-reth` binary (`SEISMIC_RETH_BIN`).
 
 - An Azure TDX CVM with vTPM and IMDS access.
 - Network access for attestation collateral/certificate retrieval.
-- Root privileges for the TEE devices and `/run/seismic` runtime files.
+- Root privileges for the TEE devices.
 - The image's resident node service stopped before the test takes over the
   TPM. On the CI image, the script asks Supervisor to stop it if present.
 - A Rust toolchain.
 
-Each script prepares the `/run/seismic/conf` handoff directory, builds its
-test binary as the runner user, and executes it with `sudo`. The evidence
-script installs the checked-in network-manifest fixture there; the admission
-tests write their own manifest, because a network's identity commits to its
-genesis hash and each of those tests mints a fresh genesis.
+Each script builds its test binary as the runner user and executes it with
+`sudo`. Every node under test gets its own conf dir (`--conf-dir`), written
+the way tdx-init writes a node's: the network manifest, the root-key peers,
+and the done marker. The evidence suite uses the checked-in network-manifest
+fixture; the admission tests render their own, because a network's identity
+commits to its genesis hash and each of those tests mints a fresh genesis.
 
 ## Running
 

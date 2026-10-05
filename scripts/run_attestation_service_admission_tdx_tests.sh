@@ -3,7 +3,7 @@
 # Self-hosted runner for the attestation service's reth-backed admission
 # test suite
 # (bin/attestation-service/tests/admission.rs). The tests need direct TPM
-# access, the image's /run/seismic layout, and a seismic-reth binary
+# access and a seismic-reth binary
 # (SEISMIC_RETH_BIN — CI installs it via setup-sreth), so build as the runner
 # user and execute the resulting test binary with sudo.
 
@@ -13,12 +13,6 @@ export RUST_BACKTRACE=1
 export RUST_LOG=info
 
 echo "🚀 Starting attestation-service admission tests..."
-
-# The image service normally creates these runtime directories. Ensure they
-# also exist when the test job starts from a clean runner boot. The manifest
-# that lands here is written by the tests themselves: each one pins the genesis
-# of the node it just generated, so only the test can render it.
-sudo install -d -m 0755 /run/seismic/conf
 
 # Free the TPM before the tests start their handshakes: quote generation
 # opens the raw TPM device (/dev/tpm0), which the kernel hands to one process

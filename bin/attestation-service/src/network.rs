@@ -1,8 +1,9 @@
 //! Startup load of the network manifest: this node's [`NetworkId`] plus the
 //! parsed manifest fields the service consumes (the registry address).
 //!
-//! tdx-init writes the network's `network-manifest.json` verbatim to
-//! [`NETWORK_MANIFEST_PATH`] (tmpfs, re-supplied every boot by deploy tooling).
+//! tdx-init writes the network's `network-manifest.json` verbatim into its
+//! conf dir (tmpfs, re-supplied every boot by deploy tooling; see
+//! [`crate::conf`]).
 //! The enclave hashes *those exact bytes* — `network_id = SHA-256(file bytes)`
 //! — and threads the result through every attestation binding, so a quote
 //! minted on one network can never satisfy a handshake on a clone.
@@ -13,21 +14,19 @@
 //! actionable error on a malformed or wrong-version manifest, but the id
 //! always comes from [`NetworkId::from_manifest_bytes`] over the file bytes.
 
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use seismic_attestation::{NetworkId, NetworkManifestV1};
 
-/// Where tdx-init drops the verbatim manifest. Mirrors tdx-init's
-/// `CONF_DIR`/`network-manifest.json`; see that crate's README.
-pub const NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
-
 /// Read the manifest from `path`, strictly parse it as v1, and derive the
 /// [`NetworkId`] from the exact file bytes.
-pub fn load_manifest(path: &str) -> Result<(NetworkManifestV1, NetworkId)> {
-    let bytes =
-        std::fs::read(path).with_context(|| format!("reading network manifest from {path}"))?;
+pub fn load_manifest(path: &Path) -> Result<(NetworkManifestV1, NetworkId)> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("reading network manifest from {}", path.display()))?;
 
     let manifest = NetworkManifestV1::from_json_bytes(&bytes)
-        .with_context(|| format!("parsing network manifest at {path}"))?;
+        .with_context(|| format!("parsing network manifest at {}", path.display()))?;
 
     Ok((manifest, NetworkId::from_manifest_bytes(&bytes)))
 }
@@ -44,9 +43,7 @@ mod tests {
     fn derives_network_id_and_manifest_from_file() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         tmp.write_all(FIXTURE).unwrap();
-        let path = tmp.path().to_str().unwrap();
-
-        let (manifest, network_id) = load_manifest(path).unwrap();
+        let (manifest, network_id) = load_manifest(tmp.path()).unwrap();
         // Same vector as seismic-attestation's manifest test over the fixture.
         assert_eq!(network_id, NetworkId::from_manifest_bytes(FIXTURE));
         assert_eq!(
@@ -59,11 +56,11 @@ mod tests {
     fn rejects_malformed_manifest() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         tmp.write_all(b"{ not valid json").unwrap();
-        assert!(load_manifest(tmp.path().to_str().unwrap()).is_err());
+        assert!(load_manifest(tmp.path()).is_err());
     }
 
     #[test]
     fn errors_when_manifest_missing() {
-        assert!(load_manifest("/nonexistent/network-manifest.json").is_err());
+        assert!(load_manifest(Path::new("/nonexistent/network-manifest.json")).is_err());
     }
 }

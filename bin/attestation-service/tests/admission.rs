@@ -38,14 +38,13 @@
 //! opens the raw single-open TPM device, so every test carries
 //! `serial(attestation_evidence)` and runs its handshakes sequentially.
 //!
-//! Requires sudo (TPM access, and the `/run/seismic` handoff directory the
-//! suite writes each network's manifest into) plus a `seismic-reth` binary
+//! Requires sudo (TPM access) plus a `seismic-reth` binary
 //! (`SEISMIC_RETH_BIN`, `$PATH`, or a sibling checkout's target directory).
 
 use std::{
     collections::HashMap,
     env, fs,
-    net::TcpListener,
+    net::{SocketAddr, TcpListener},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
@@ -73,6 +72,7 @@ use seismic_attestation_service::{
     Args,
     api::{AdmissionChainStatus, NodeStatusRpcClient as _},
     bootstrap::build_root_key_request,
+    conf,
     rpc_error::RootKeyRefusal,
     utils::{init_tracing, is_sudo},
 };
@@ -92,12 +92,10 @@ use seismic_measurement_registry_client::{MEASUREMENT_REGISTRY_ADDRESS, Measurem
 /// The fixture is a template here: a network's identity commits to its genesis
 /// block, and this suite mints a fresh genesis per test — the seeded policy and
 /// the stamped timestamp both move its hash — so `eth.genesis_hash` is filled
-/// in from the live node by [`install_network_manifest`].
+/// in from the live node by [`render_network_manifest`].
 const NETWORK_MANIFEST_TEMPLATE: &[u8] =
     include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
 
-/// Where the image drops the manifest and the service reads it from.
-const NETWORK_MANIFEST_PATH: &str = "/run/seismic/conf/network-manifest.json";
 /// A genesis hash no seeded node here can serve, so a manifest pinning it
 /// names a chain the responder's local reth is not on.
 const FOREIGN_GENESIS: B256 = B256::repeat_byte(0xef);
@@ -159,14 +157,15 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
         .as_b256();
     let node = launch_seeded_reth("suite-observed", &pcrs);
     let provider = wait_for_rpc(&node).await;
-    let manifest = install_network_manifest(&provider).await;
+    let manifest = render_network_manifest(&provider).await;
     wait_past_genesis(&provider).await;
 
-    let responder = start_service("responder", 30, None, &node.http_url, None).await;
+    let responder = start_service("responder", 30, None, &manifest, &node.http_url, None).await;
     let joiner = start_service(
         "joiner",
         31,
         Some(vec![responder.url.clone()]),
+        &manifest,
         &node.http_url,
         None,
     )
@@ -246,10 +245,10 @@ async fn test_unknown_tuple_is_denied_and_reth_outage_fails_closed() {
     // match these values, so the runner's admission ID is unknown on chain.
     let mut node = launch_seeded_reth("suite-synthetic", &synthetic_pcrs());
     let provider = wait_for_rpc(&node).await;
-    let manifest = install_network_manifest(&provider).await;
+    let manifest = render_network_manifest(&provider).await;
     wait_past_genesis(&provider).await;
 
-    let responder = start_service("responder", 32, None, &node.http_url, None).await;
+    let responder = start_service("responder", 32, None, &manifest, &node.http_url, None).await;
     let denied = request_root_key(&responder.url, &manifest).await;
     assert_eq!(
         denial_refusal(denied),
@@ -282,13 +281,14 @@ async fn test_stale_policy_view_fails_closed() {
     let pcrs = observed_pcrs().await;
     let node = launch_seeded_reth("suite-observed", &pcrs);
     let provider = wait_for_rpc(&node).await;
-    let manifest = install_network_manifest(&provider).await;
+    let manifest = render_network_manifest(&provider).await;
     wait_past_genesis(&provider).await;
 
     let responder = start_service(
         "responder",
         33,
         None,
+        &manifest,
         &node.http_url,
         Some(STALE_MAX_POLICY_AGE),
     )
@@ -321,12 +321,12 @@ async fn test_foreign_pinned_genesis_fails_closed() {
     let pcrs = observed_pcrs().await;
     let node = launch_seeded_reth("suite-observed", &pcrs);
     let provider = wait_for_rpc(&node).await;
-    let manifest = install_manifest_pinning(FOREIGN_GENESIS);
+    let manifest = manifest_pinning(FOREIGN_GENESIS);
     // Past genesis the gate reads block 0 through a query of its own, the
     // branch a forged chain with a progressing head aims at.
     wait_past_genesis(&provider).await;
 
-    let responder = start_service("responder", 34, None, &node.http_url, None).await;
+    let responder = start_service("responder", 34, None, &manifest, &node.http_url, None).await;
     let unavailable = request_root_key(&responder.url, &manifest).await;
     assert_eq!(
         denial_refusal(unavailable),
@@ -583,16 +583,16 @@ async fn wait_for_rpc(node: &RethNode) -> RootProvider {
     }
 }
 
-/// Render the manifest for the chain `provider` serves, drop it at the
-/// service's handoff path, and return the exact bytes written.
+/// Render the manifest for the chain `provider` serves, as the exact bytes
+/// each service's conf dir gets.
 ///
 /// Pinning `eth.genesis_hash` to this node's block 0 is what lets the
 /// responder's admission read its registry at all: the gate refuses to answer
 /// on a chain the manifest does not commit to. `network_id` is SHA-256 over the
 /// file's bytes, so callers must hash the returned bytes rather than
 /// re-serialize the manifest.
-async fn install_network_manifest(provider: &RootProvider) -> Vec<u8> {
-    install_manifest_pinning(genesis_hash(provider).await)
+async fn render_network_manifest(provider: &RootProvider) -> Vec<u8> {
+    manifest_pinning(genesis_hash(provider).await)
 }
 
 /// The block-0 hash the live dev node serves: the chain a status read finds,
@@ -607,16 +607,12 @@ async fn genesis_hash(provider: &RootProvider) -> B256 {
         .hash
 }
 
-/// Render the manifest that pins `genesis_hash`, drop it at the service's
-/// handoff path, and return the exact bytes written.
-fn install_manifest_pinning(genesis_hash: B256) -> Vec<u8> {
+/// Render the manifest that pins `genesis_hash`.
+fn manifest_pinning(genesis_hash: B256) -> Vec<u8> {
     let mut manifest: serde_json::Value =
         serde_json::from_slice(NETWORK_MANIFEST_TEMPLATE).expect("manifest template JSON");
     manifest["eth"]["genesis_hash"] = serde_json::Value::from(format!("{genesis_hash:#x}"));
-    let bytes = serde_json::to_vec_pretty(&manifest).expect("serialize manifest");
-    fs::write(NETWORK_MANIFEST_PATH, &bytes)
-        .unwrap_or_else(|e| panic!("writing {NETWORK_MANIFEST_PATH}: {e}"));
-    bytes
+    serde_json::to_vec_pretty(&manifest).expect("serialize manifest")
 }
 
 /// Wait until `latest` is past block 0: at block 0 a minting responder admits
@@ -688,7 +684,8 @@ async fn wait_finalized_older_than(provider: &RootProvider, age: Duration) {
 /// the custodian's `WrapRootKey` dispatches — each count is one root-key
 /// release this responder authorized.
 struct ServiceNode {
-    /// Owns the runtime directory (custodian socket, LUKS keyfile path).
+    /// Owns the runtime directory (custodian socket, LUKS keyfile path, conf
+    /// dir).
     _runtime: tempfile::TempDir,
     url: String,
     client: HttpClient,
@@ -696,8 +693,8 @@ struct ServiceNode {
     wrap_count: Arc<AtomicUsize>,
 }
 
-/// Start a custodian/attestation-service pair against `reth_rpc_url` and
-/// wait until its RPC listener is healthy.
+/// Start a custodian/attestation-service pair on `manifest` against
+/// `reth_rpc_url` and wait until its RPC listener is healthy.
 ///
 /// `peers: None` starts a responder (genesis custodian, fresh root key);
 /// `Some(urls)` starts a joiner whose custodian acquires the root key from
@@ -708,6 +705,7 @@ async fn start_service(
     label: &'static str,
     n: u16,
     peers: Option<Vec<String>>,
+    manifest: &[u8],
     reth_rpc_url: &str,
     max_policy_age: Option<Duration>,
 ) -> ServiceNode {
@@ -724,16 +722,20 @@ async fn start_service(
         CustodianState::new_awaiting_root_key(luks_keyfile)
     };
     let wrap_count = spawn_counting_custodian(state, &socket);
+    let conf_dir = runtime.path().join("conf");
+    write_conf_dir(&conf_dir, manifest, &peers.unwrap_or_default());
 
     let args = Args {
-        ip: "0.0.0.0".to_string(),
-        port: 7878 + n,
-        peers: peers.unwrap_or_default(),
+        peer_listen: SocketAddr::from(([0, 0, 0, 0], 7878 + n)),
+        // Port 0: the harvest is up in every test, never called, and must
+        // not collide across the nodes a test runs.
+        operator_listen: SocketAddr::from(([127, 0, 0, 1], 0)),
+        conf_dir,
         custodian_socket: socket,
         reth_rpc_url: reth_rpc_url.parse().expect("valid reth RPC URL"),
         max_policy_age,
     };
-    let url = format!("http://localhost:{}", args.port);
+    let url = format!("http://localhost:{}", args.peer_listen.port());
     let mut handle = tokio::spawn(args.start());
     let client = HttpClientBuilder::default()
         .build(url.clone())
@@ -747,6 +749,16 @@ async fn start_service(
         handle,
         wrap_count,
     }
+}
+
+/// Stand in for tdx-init: write the files the service reads from its conf
+/// dir, the done marker last.
+fn write_conf_dir(conf_dir: &Path, manifest: &[u8], peers: &[String]) {
+    fs::create_dir_all(conf_dir).expect("create conf dir");
+    fs::write(conf_dir.join(conf::NETWORK_MANIFEST), manifest).expect("write manifest");
+    let env = format!("SEISMIC_ROOT_KEY_PEERS={}\n", peers.join(","));
+    fs::write(conf_dir.join(conf::ATTESTATION_ENV), env).expect("write attestation.env");
+    fs::write(conf_dir.join(conf::TDX_INIT_DONE_MARKER), b"").expect("write done marker");
 }
 
 /// Serve `state` over a custodian socket from a dedicated thread — the same

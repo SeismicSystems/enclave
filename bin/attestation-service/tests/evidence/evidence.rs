@@ -1,8 +1,7 @@
 //! Live-TEE coverage of the evidence layer — attested transcripts, quote
 //! verification, and the key flows built on them — run through
 //! `scripts/run_attestation_service_evidence_tdx_tests.sh`. The script
-//! prepares the runtime manifest, frees the TPM, and executes these tests
-//! with the required privileges.
+//! frees the TPM and executes these tests with the required privileges.
 //!
 //! Each node here answers admission reads from a permissive mock registry
 //! (see `utils::spawn_accepting_registry`), isolating what evidence
@@ -26,7 +25,7 @@ use std::{
     time::Duration,
 };
 
-use crate::utils::{get_args, spawn_accepting_registry, spawn_custodian};
+use crate::utils::{get_args, spawn_accepting_registry, spawn_custodian, write_conf_dir};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, NetworkManifestV1, SeismicMeasurementPolicy, VerifyOptions,
@@ -44,11 +43,11 @@ use seismic_custodian::Custodian;
 use seismic_custodian_ipc::CustodianClient;
 use seismic_custodian_service::state::CustodianState;
 
-// The server reads its manifest through the same fixed `/run/seismic` handoff
-// used in production, which keeps these tests covering the tdx-init →
-// attestation-service startup contract. This fixture is the manifest trusted by the
-// relying client; the test script installs the same fixture for the server, and
-// evidence verification confirms that both sides use the same network ID.
+// Each node reads this manifest from its own conf dir, written the way
+// tdx-init writes a node's, which keeps these tests covering the tdx-init →
+// attestation-service startup contract. The relying client trusts the same
+// fixture, and evidence verification confirms that both sides use the same
+// network ID.
 const EXPECTED_NETWORK_MANIFEST: &[u8] =
     include_bytes!("../../../../crates/network-manifest/fixtures/network-manifest-v1.json");
 const NODE_STARTUP_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -368,7 +367,8 @@ async fn wait_for_health(
 }
 
 /// One logical node under test: the custodian/attestation-service process
-/// pair over a real socket, with its own runtime directory and HTTP port.
+/// pair over a real socket, with its own runtime directory (custodian socket,
+/// LUKS keyfile, conf dir) and HTTP port.
 struct NodePair {
     label: &'static str,
     runtime: tempfile::TempDir,
@@ -402,8 +402,14 @@ async fn start_node(label: &'static str, n: u16, peers: Option<Vec<String>>) -> 
 
     // Each node answers admission reads from its own accepting mock registry.
     let registry_url = spawn_accepting_registry().await;
-    let args = get_args(n, peers.unwrap_or_default(), socket.clone(), &registry_url);
-    let url = format!("http://localhost:{}", args.port);
+    let conf_dir = runtime.path().join("conf");
+    write_conf_dir(
+        &conf_dir,
+        EXPECTED_NETWORK_MANIFEST,
+        &peers.unwrap_or_default(),
+    );
+    let args = get_args(n, conf_dir, socket.clone(), &registry_url);
+    let url = format!("http://localhost:{}", args.peer_listen.port());
     let mut handle = tokio::spawn(args.start());
     let client = HttpClientBuilder::default()
         .build(url.clone())
