@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Self-hosted runner for the attestation service's evidence test suite. The
-# tests need direct TPM access plus the image's /run/seismic layout, so build
-# as the runner user and execute the resulting test binary with sudo.
+# tests need direct TPM access, so build as the runner user and execute the
+# resulting test binary with sudo.
 
 set -e
 
@@ -10,13 +10,6 @@ export RUST_BACKTRACE=1
 export RUST_LOG=info
 
 echo "🚀 Starting attestation-service evidence tests..."
-
-# The image service normally creates these runtime directories. Ensure they
-# also exist when the test job starts from a clean runner boot.
-sudo install -d -m 0755 /run/seismic/conf
-sudo install -m 0644 \
-    crates/network-manifest/fixtures/network-manifest-v1.json \
-    /run/seismic/conf/network-manifest.json
 
 # Free the TPM before the tests start their node pairs: quote generation
 # opens the raw TPM device (/dev/tpm0), which the kernel hands to one process

@@ -10,8 +10,9 @@ use crate::{
     admission::RegistryAdmission,
     api::{AdmissionChainStatus, LuksProvisioningStatus, NodeStatusRpcServer},
     bootstrap::{RootKeyRequest, answer_root_key_request},
+    conf,
     join::ensure_root_key_present,
-    network::{NETWORK_MANIFEST_PATH, load_manifest},
+    network::load_manifest,
     rpc_error::{
         internal_rpc_error, invalid_root_key_request_rpc_error, root_key_answer_rpc_error,
     },
@@ -166,12 +167,16 @@ impl AttestationRpcServer for AttestationService {
     }
 }
 
-pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
+pub async fn start_server(addr: SocketAddr, args: Args, peers: &[String]) -> anyhow::Result<()> {
     // Derive this node's network identity from the manifest tdx-init dropped on
     // tmpfs. Fatal if absent/malformed: without it every attestation binding is
     // unscoped, so we refuse to serve rather than fall back to an unbound quote.
-    let (manifest, network_id) = load_manifest(NETWORK_MANIFEST_PATH)?;
-    info!("Derived network_id {network_id} from {NETWORK_MANIFEST_PATH}");
+    let manifest_path = args.conf_dir.join(conf::NETWORK_MANIFEST);
+    let (manifest, network_id) = load_manifest(&manifest_path)?;
+    info!(
+        "Derived network_id {network_id} from {}",
+        manifest_path.display()
+    );
 
     // Joining peers are admitted by the live on-chain policy: the manifest
     // names the registry and the genesis that identifies the chain to read it
@@ -197,7 +202,7 @@ pub async fn start_server(addr: SocketAddr, args: Args) -> anyhow::Result<()> {
     // no network listener; every key operation goes through its Unix socket.
     // Serve only once the custodian holds the root key, so peers and reth
     // never observe a listener whose key operations cannot succeed yet.
-    ensure_root_key_present(&args.custodian_socket, &args.peers, &network_id).await?;
+    ensure_root_key_present(&args.custodian_socket, peers, &network_id).await?;
 
     // Retire the custodian's founding policy at block 1, whether or not a join
     // arrives to see it. A custodian that did not mint the root key never

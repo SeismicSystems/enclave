@@ -1,21 +1,35 @@
 use alloy_primitives::B256;
 use jsonrpsee::{RpcModule, server::ServerBuilder};
 use seismic_attestation::NetworkManifestV1;
-use seismic_attestation_service::Args;
+use seismic_attestation_service::{Args, conf};
 use seismic_custodian_ipc::server::{MethodAcl, bind, serve};
 use seismic_custodian_service::{dispatch::dispatch, state::CustodianState};
-use std::path::{Path, PathBuf};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
-pub fn get_args(n: u16, peers: Vec<String>, custodian_socket: PathBuf, reth_rpc_url: &str) -> Args {
-    let port = 7878 + n;
+pub fn get_args(n: u16, conf_dir: PathBuf, custodian_socket: PathBuf, reth_rpc_url: &str) -> Args {
     Args {
-        ip: "0.0.0.0".to_string(),
-        port,
-        peers,
+        peer_listen: SocketAddr::from(([0, 0, 0, 0], 7878 + n)),
+        // Port 0: the harvest is up in every test, never called, and must
+        // not collide across the nodes a test runs.
+        operator_listen: SocketAddr::from(([127, 0, 0, 1], 0)),
+        conf_dir,
         custodian_socket,
         reth_rpc_url: reth_rpc_url.parse().expect("valid mock registry URL"),
         max_policy_age: None,
     }
+}
+
+/// Stand in for tdx-init: write the files the service reads from its conf
+/// dir, the done marker last.
+pub fn write_conf_dir(conf_dir: &Path, manifest: &[u8], peers: &[String]) {
+    std::fs::create_dir_all(conf_dir).expect("create conf dir");
+    std::fs::write(conf_dir.join(conf::NETWORK_MANIFEST), manifest).expect("write manifest");
+    let env = format!("SEISMIC_ROOT_KEY_PEERS={}\n", peers.join(","));
+    std::fs::write(conf_dir.join(conf::ATTESTATION_ENV), env).expect("write attestation.env");
+    std::fs::write(conf_dir.join(conf::TDX_INIT_DONE_MARKER), b"").expect("write done marker");
 }
 
 /// The genesis block the fixture manifest commits to, read from the fixture

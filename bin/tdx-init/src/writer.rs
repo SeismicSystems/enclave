@@ -108,9 +108,9 @@ async fn write_custodian_env(conf_dir: &Path, config: &InitConfig) -> Result<()>
     Ok(())
 }
 
-/// The attestation service's systemd unit loads this via `EnvironmentFile=`;
-/// the binary reads `SEISMIC_ROOT_KEY_PEERS` (where to fetch the root key when
-/// the local custodian starts without one) through clap `env=`. The peer list
+/// The attestation service reads this in-process once the sentinel appears:
+/// `SEISMIC_ROOT_KEY_PEERS` is where to fetch the root key when the local
+/// custodian starts without one. The peer list
 /// is not a config field: it is derived from `[network].bootnodes` in
 /// `crate::peers`.
 async fn write_attestation_svc_env(conf_dir: &Path, root_key_peers: &[String]) -> Result<()> {

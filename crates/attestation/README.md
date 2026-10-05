@@ -47,8 +47,8 @@ build and run on macOS and aarch64 Linux.
 
 ### `azure-attester`
 
-Generation of Azure vTPM evidence on an Azure TDX CVM, for the node binaries
-(`summit-key-holder`, `seismic-attestation-service`). It turns on the backend's
+Generation of Azure vTPM evidence on an Azure TDX CVM, for
+`seismic-attestation-service`, the node's only TPM user. It turns on the backend's
 `azure-attester`, which reads the vTPM through `tss-esapi` and so needs the
 native tpm2-tss libraries at build time (`libtss2-dev` on Debian-based
 systems).

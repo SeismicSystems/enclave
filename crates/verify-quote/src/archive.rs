@@ -65,9 +65,9 @@ use std::collections::BTreeMap;
 pub struct FoundingArchive {
     /// The nonce the quote was requested with.
     pub harvest_nonce: [u8; 32],
-    /// The ed25519 node pubkey the key holder served.
+    /// The ed25519 node pubkey the harvest endpoint served.
     pub node_public_key: [u8; 32],
-    /// The BLS12-381 MinPk consensus pubkey the key holder served.
+    /// The BLS12-381 MinPk consensus pubkey the harvest endpoint served.
     pub consensus_public_key: [u8; 48],
     /// The evidence and everything the verdict on it rested on.
     pub bundle: VerificationBundle,

@@ -21,6 +21,8 @@ Behavior:
   an `InitConfig` TOML. On receipt: validates the schema, writes
   per-service config files under `/run/seismic/conf/`, touches the
   sentinel `/run/seismic/conf/.tdx-init-done`, exits.
+- The sentinel is written last, so its presence means every file is in
+  place: the attestation service, up since boot, waits on it.
 - The sentinel lives on tmpfs and is wiped on reboot, so the binary
   blocks for a fresh POST every boot. It still gates against multiple
   POSTs within a single boot (e.g. manual `systemctl restart`).
@@ -123,7 +125,7 @@ After validation, tdx-init writes:
 |---|---|---|
 | `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
 | `/run/seismic/conf/custodian.env` | `SEISMIC_CUSTODIAN_GENESIS_NODE=...` | `custodian.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-custodian-service`](../custodian-service) reads the genesis flag through clap `env=` |
-| `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | `attestation.service` (seismic-images) — loaded via `EnvironmentFile=`; [`seismic-attestation-service`](../attestation-service) reads the peer list through clap `env=`. Derived from `[network].bootnodes`, not a config field |
+| `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | [`seismic-attestation-service`](../attestation-service) — read in-process once the sentinel appears. Derived from `[network].bootnodes`, not a config field |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
 | `/run/seismic/conf/summit-genesis.toml` | verbatim summit genesis bytes | `summit.service` (seismic-images) — passed to `summit --genesis-path` |
