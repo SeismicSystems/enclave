@@ -6,13 +6,6 @@ use tdx_init_config::InitConfig;
 use tokio::fs;
 use tracing::info;
 
-// TODO: ownership and permissions on these files should be a seismic-images
-// concern (User= + ExecStartPre/Post in tdx-init.service or tmpfiles.d), not
-// baked into the binary. Today tdx-init runs as root and we explicitly
-// chmod 0o644; the cleaner shape is to run tdx-init as a tdx-init:eth
-// system user, let the default umask produce 0o644, and stop setting mode
-// here. Each per-component file's group/other bits should be tightened in
-// seismic-images so only the relevant service user can read it.
 pub const DEFAULT_FILE_MODE: u32 = 0o644;
 
 /// Translate the operator-supplied [`InitConfig`] into per-service config
