@@ -21,14 +21,16 @@
 //!
 //! Validation is structural, so a malformed enode or IP fails the deploy POST
 //! with `400` rather than surfacing when reth parses its flags at boot and
-//! crash-loops — likewise a non-genesis node left with no usable bootnode,
-//! which would otherwise boot an attestation service with no way to obtain
-//! `root_key`.
+//! crash-loops — likewise a node left with no usable bootnode whose candidate
+//! root key the manifest does not pin, which would otherwise boot an
+//! attestation service with no way to obtain `root_key`.
 
 use crate::error::{Result, TdxInitError};
+use seismic_custodian_ipc::candidate_tx_io_pk;
 use std::net::{IpAddr, SocketAddr};
+use std::path::Path;
 use tdx_init_config::NodeConfig;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Number of hex chars in an enode node id: the 64-byte secp256k1 public key
 /// (uncompressed, without the 0x04 prefix), hex-encoded.
@@ -77,9 +79,14 @@ pub struct PeerLists {
 /// every bootnode must be a well-formed `enode://` URL. The node's own enode
 /// (host == `external_ip`) is dropped — after the founding ceremony the
 /// persisted bootnode set includes every founding node, this one included, and
-/// a node has no reason to reach itself. A non-genesis node must end up with at
-/// least one peer, or it has no source for `root_key`.
-pub fn validate_and_derive_peers(node: &NodeConfig, bootnodes: &[String]) -> Result<PeerLists> {
+/// a node has no reason to reach itself. A node that does not hold the pinned
+/// candidate ([`holds_pinned_candidate`]) must end up with at least one peer,
+/// or it has no source for `root_key`.
+pub fn validate_and_derive_peers(
+    node: &NodeConfig,
+    bootnodes: &[String],
+    holds_pinned_candidate: bool,
+) -> Result<PeerLists> {
     let external_ip = parse_external_ip(&node.external_ip)?;
     let mut derived = PeerLists {
         peer_enodes: Vec::new(),
@@ -96,13 +103,6 @@ pub fn validate_and_derive_peers(node: &NodeConfig, bootnodes: &[String]) -> Res
             derived.root_key_urls.push(peer);
         }
     }
-    if !node.genesis_node && derived.root_key_urls.is_empty() {
-        return Err(TdxInitError::InvalidPeers(
-            "non-genesis node has no source for root_key: [network].bootnodes \
-             must name at least one machine other than this node"
-                .to_string(),
-        ));
-    }
     info!(
         "peer config valid: {} bootnode(s), {} peer enode(s), {} root-key peer(s), external_ip={}",
         bootnodes.len(),
@@ -110,18 +110,32 @@ pub fn validate_and_derive_peers(node: &NodeConfig, bootnodes: &[String]) -> Res
         derived.root_key_urls.len(),
         node.external_ip,
     );
-    // Only a genesis node reaches this empty (a joiner without peers already
-    // failed above), and its two readings look identical from here: correct at
-    // founding, a stale peer list on any boot after joiners arrived.
-    if derived.peer_enodes.is_empty() {
-        warn!(
-            "[network].bootnodes names no machine other than this node: reth starts with \
-             neither bootnodes nor trusted peers, so this node joins no gossip mesh. \
-             Expected for the genesis node at founding; on a later boot it means the \
-             delivered peer list is stale."
+    if derived.root_key_urls.is_empty() {
+        if !holds_pinned_candidate {
+            return Err(TdxInitError::InvalidPeers(
+                "this node must fetch root_key from a peer, since the manifest does not pin \
+                 its custodian's current candidate root key, but [network].bootnodes names no \
+                 machine other than this node. List a peer that holds root_key. If no other \
+                 node holds it, the pinned candidate was lost to a custodian restart or a \
+                 reboot: found the network again."
+                    .to_string(),
+            ));
+        }
+        info!(
+            "[network].bootnodes names no machine other than this node, which holds the \
+             pinned root key: it founds the network, and reth starts with neither bootnodes \
+             nor trusted peers"
         );
     }
     Ok(derived)
+}
+
+/// Whether the custodian's candidate, as its candidate tx_io_pk file names it,
+/// is the key the manifest pins. A missing file reads as `false`: the harvest
+/// cannot quote a box without one, so assemble cannot have pinned it.
+pub fn holds_pinned_candidate(candidate_tx_io_pk_path: &Path, pin: &[u8; 33]) -> Result<bool> {
+    Ok(candidate_tx_io_pk::read(candidate_tx_io_pk_path)?
+        .is_some_and(|candidate| candidate == *pin))
 }
 
 /// Check that `enode` matches `enode://<128 hex pubkey>@host:port` and return
@@ -203,15 +217,19 @@ mod tests {
     use super::*;
     use tdx_init_config::DomainConfig;
 
-    fn node(external_ip: &str, genesis_node: bool) -> NodeConfig {
+    fn node(external_ip: &str) -> NodeConfig {
         NodeConfig {
             external_ip: external_ip.to_string(),
-            genesis_node,
             domain: DomainConfig {
                 email: "ops@example.com".to_string(),
                 name: "node1.example.com".to_string(),
             },
         }
+    }
+
+    /// Peer validation for a node whose candidate the manifest does not pin.
+    fn unpinned(node: &NodeConfig, bootnodes: &[String]) -> Result<PeerLists> {
+        validate_and_derive_peers(node, bootnodes, false)
     }
 
     /// A syntactically valid enode at `host_port` (128-hex pubkey).
@@ -221,8 +239,8 @@ mod tests {
 
     #[test]
     fn derives_peers_from_bootnodes() {
-        let peers = validate_and_derive_peers(
-            &node("203.0.113.7", false),
+        let peers = unpinned(
+            &node("203.0.113.7"),
             &[enode("10.0.0.1:30303"), enode("10.0.0.2:30303")],
         )
         .unwrap()
@@ -232,8 +250,8 @@ mod tests {
 
     #[test]
     fn drops_own_enode() {
-        let peers = validate_and_derive_peers(
-            &node("10.0.0.1", false),
+        let peers = unpinned(
+            &node("10.0.0.1"),
             &[enode("10.0.0.1:30303"), enode("10.0.0.2:30303")],
         )
         .unwrap()
@@ -245,8 +263,8 @@ mod tests {
     fn drops_own_enode_by_ip_equality_not_string_equality() {
         // A non-canonical IPv6 spelling of this node's own address still
         // counts as self.
-        let peers = validate_and_derive_peers(
-            &node("2001:db8::1", false),
+        let peers = unpinned(
+            &node("2001:db8::1"),
             &[
                 enode("[2001:0db8:0:0:0:0:0:1]:30303"),
                 enode("10.0.0.2:30303"),
@@ -259,21 +277,17 @@ mod tests {
 
     #[test]
     fn keeps_bracketed_ipv6_peer_hosts() {
-        let peers =
-            validate_and_derive_peers(&node("10.0.0.1", false), &[enode("[2001:db8::1]:30303")])
-                .unwrap()
-                .root_key_urls;
+        let peers = unpinned(&node("10.0.0.1"), &[enode("[2001:db8::1]:30303")])
+            .unwrap()
+            .root_key_urls;
         assert_eq!(peers, vec!["http://[2001:db8::1]:7878"]);
     }
 
     #[test]
     fn keeps_dns_peer_hosts() {
-        let peers = validate_and_derive_peers(
-            &node("10.0.0.1", false),
-            &[enode("node2.example.com:30303")],
-        )
-        .unwrap()
-        .root_key_urls;
+        let peers = unpinned(&node("10.0.0.1"), &[enode("node2.example.com:30303")])
+            .unwrap()
+            .root_key_urls;
         assert_eq!(peers, vec!["http://node2.example.com:7878"]);
     }
 
@@ -283,8 +297,8 @@ mod tests {
         // stay peer enodes: reth keys peers by node id, not by address.
         let mut second = enode("10.0.0.2:30303");
         second = second.replacen('a', "b", 1);
-        let derived = validate_and_derive_peers(
-            &node("10.0.0.1", false),
+        let derived = unpinned(
+            &node("10.0.0.1"),
             &[enode("10.0.0.2:30303"), second.clone()],
         )
         .unwrap();
@@ -294,8 +308,8 @@ mod tests {
 
     #[test]
     fn keeps_peer_enodes_in_order_without_self() {
-        let derived = validate_and_derive_peers(
-            &node("10.0.0.1", false),
+        let derived = unpinned(
+            &node("10.0.0.1"),
             &[
                 enode("10.0.0.1:30303"),
                 enode("10.0.0.2:30303"),
@@ -310,26 +324,46 @@ mod tests {
     }
 
     #[test]
-    fn genesis_node_may_have_no_bootnodes() {
-        // The greenfield genesis node has no peers to dial and mints
-        // root_key itself.
-        let derived = validate_and_derive_peers(&node("10.0.0.1", true), &[]).unwrap();
+    fn the_pinned_box_may_have_no_bootnodes() {
+        // The pinned box at founding has no peers to dial and keeps its
+        // candidate root_key.
+        let derived = validate_and_derive_peers(&node("10.0.0.1"), &[], true).unwrap();
+        assert!(derived.root_key_urls.is_empty());
+        assert!(derived.peer_enodes.is_empty());
+
+        let derived =
+            validate_and_derive_peers(&node("10.0.0.1"), &[enode("10.0.0.1:30303")], true).unwrap();
         assert!(derived.root_key_urls.is_empty());
         assert!(derived.peer_enodes.is_empty());
     }
 
     #[test]
-    fn rejects_joiner_without_bootnodes() {
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[]).unwrap_err();
-        assert!(matches!(err, TdxInitError::InvalidPeers(_)));
-        assert!(err.to_string().contains("root_key"), "{err}");
+    fn rejects_an_unpinned_node_without_a_peer() {
+        for bootnodes in [vec![], vec![enode("10.0.0.1:30303")]] {
+            let err = unpinned(&node("10.0.0.1"), &bootnodes).unwrap_err();
+            assert!(
+                matches!(&err, TdxInitError::InvalidPeers(msg) if msg.contains("fetch root_key")),
+                "{bootnodes:?}: {err}"
+            );
+        }
     }
 
     #[test]
-    fn rejects_joiner_whose_only_bootnode_is_itself() {
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[enode("10.0.0.1:30303")])
-            .unwrap_err();
-        assert!(err.to_string().contains("root_key"), "{err}");
+    fn holds_the_pinned_candidate_only_when_the_file_names_the_pin() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("candidate-tx-io-pk");
+        let pin = [0x02; 33];
+
+        assert!(!holds_pinned_candidate(&path, &pin).unwrap(), "no file");
+        candidate_tx_io_pk::write(&path, &[0x03; 33]).unwrap();
+        assert!(!holds_pinned_candidate(&path, &pin).unwrap(), "another key");
+        candidate_tx_io_pk::write(&path, &pin).unwrap();
+        assert!(holds_pinned_candidate(&path, &pin).unwrap());
+        std::fs::write(&path, "not json").unwrap();
+        assert!(matches!(
+            holds_pinned_candidate(&path, &pin),
+            Err(TdxInitError::CandidateTxIoPk(_))
+        ));
     }
 
     #[test]
@@ -337,13 +371,13 @@ mod tests {
         let id = "AbCdEf".repeat(ENODE_ID_HEX_LEN / 6) + &"0".repeat(ENODE_ID_HEX_LEN % 6);
         assert_eq!(id.len(), ENODE_ID_HEX_LEN);
         let enode = format!("enode://{id}@example.com:30303");
-        validate_and_derive_peers(&node("10.0.0.1", false), &[enode]).unwrap();
+        unpinned(&node("10.0.0.1"), &[enode]).unwrap();
     }
 
     #[test]
     fn rejects_missing_enode_scheme() {
         let bad = enode("10.0.0.1:30303").replace("enode://", "");
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(matches!(err, TdxInitError::InvalidPeers(_)));
         assert!(err.to_string().contains("enode://"), "{err}");
     }
@@ -352,7 +386,7 @@ mod tests {
     fn rejects_short_node_id() {
         let id = "a".repeat(ENODE_ID_HEX_LEN - 1);
         let bad = format!("enode://{id}@10.0.0.1:30303");
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains("hex chars"), "{err}");
     }
 
@@ -360,49 +394,48 @@ mod tests {
     fn rejects_non_hex_node_id() {
         let id = "z".repeat(ENODE_ID_HEX_LEN);
         let bad = format!("enode://{id}@10.0.0.1:30303");
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains("hex chars"), "{err}");
     }
 
     #[test]
     fn rejects_missing_at_separator() {
         let bad = format!("enode://{}", "a".repeat(ENODE_ID_HEX_LEN));
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains("'@'"), "{err}");
     }
 
     #[test]
     fn rejects_missing_port() {
         let bad = enode("10.0.0.1");
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains(":port"), "{err}");
     }
 
     #[test]
     fn rejects_non_numeric_port() {
         let bad = enode("10.0.0.1:notaport");
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains("port"), "{err}");
     }
 
     #[test]
     fn rejects_empty_host() {
         let bad = enode(":30303");
-        let err = validate_and_derive_peers(&node("10.0.0.1", false), &[bad]).unwrap_err();
+        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains("empty host"), "{err}");
     }
 
     #[test]
     fn rejects_invalid_external_ip() {
-        let err = validate_and_derive_peers(&node("not.an.ip", true), &[enode("10.0.0.1:30303")])
-            .unwrap_err();
+        let err = unpinned(&node("not.an.ip"), &[enode("10.0.0.1:30303")]).unwrap_err();
         assert!(matches!(err, TdxInitError::InvalidPeers(_)));
         assert!(err.to_string().contains("valid IP"), "{err}");
     }
 
     #[test]
     fn advertises_external_ip_at_the_consensus_port() {
-        let addr = summit_advertised_addr(&node("203.0.113.7", false)).unwrap();
+        let addr = summit_advertised_addr(&node("203.0.113.7")).unwrap();
         assert_eq!(addr.to_string(), "203.0.113.7:18551");
     }
 
@@ -410,13 +443,13 @@ mod tests {
     fn advertises_ipv6_bracketed() {
         // The address is handed to summit as text and parsed there as a socket
         // address, so an IPv6 host has to arrive bracketed.
-        let addr = summit_advertised_addr(&node("2001:db8::7", false)).unwrap();
+        let addr = summit_advertised_addr(&node("2001:db8::7")).unwrap();
         assert_eq!(addr.to_string(), "[2001:db8::7]:18551");
     }
 
     #[test]
     fn advertised_addr_rejects_invalid_external_ip() {
-        let err = summit_advertised_addr(&node("not.an.ip", false)).unwrap_err();
+        let err = summit_advertised_addr(&node("not.an.ip")).unwrap_err();
         assert!(err.to_string().contains("valid IP"), "{err}");
     }
 }

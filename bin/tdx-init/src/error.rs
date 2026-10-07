@@ -21,6 +21,11 @@ pub enum TdxInitError {
     #[error("invalid peer config: {0}")]
     InvalidPeers(String),
 
+    /// The custodian's candidate tx_io_pk file exists but cannot be read: an
+    /// image fault (a missing group grant), not an operator error.
+    #[error("{0}")]
+    CandidateTxIoPk(#[from] seismic_custodian_ipc::candidate_tx_io_pk::CandidateTxIoPkFileError),
+
     #[error("Server error: {0}")]
     ServerError(String),
 }
@@ -52,6 +57,10 @@ impl IntoResponse for TdxInitError {
             TdxInitError::Io(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_string(),
+            ),
+            TdxInitError::CandidateTxIoPk(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("reading the custodian's candidate tx_io_pk@0: {e}"),
             ),
             TdxInitError::ServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };

@@ -1,7 +1,7 @@
 //! Helpers for deriving Seismic protocol-binding digests.
 //!
 //! Every binding is `SHA256(domain || network_id || fixed-length fields ||
-//! optional variable tail)`; [`founding_summit_keys_binding`] is the one
+//! optional variable tail)`; [`founding_keys_binding`] is the one
 //! exception, predating the manifest and so omitting `network_id`. The layout
 //! rule: domain string first, then only fixed-length fields (`network_id` 32,
 //! nonces 32, compressed secp256k1 points 33, ed25519 32, BLS12-381 MinPk 48,
@@ -78,7 +78,8 @@ pub fn deploy_verification_binding(
     hasher.finalize().into()
 }
 
-/// Binding for one founding node's summit keys, harvested before the manifest
+/// Binding for one founding node's harvested keys: its summit keys and the
+/// `tx_io_pk@0` of its candidate `root_key`, all minted before the manifest
 /// exists.
 ///
 /// Per node, not per cohort: each founding node generates its own keys and
@@ -86,28 +87,33 @@ pub fn deploy_verification_binding(
 /// and deploy harvests each node separately.
 ///
 /// The attestation service's founding harvest quotes over this binding, from
-/// the pubkeys of the keys the image's `summit-keygen` generated at boot; deploy's harvest recomputes it from the nonce it sent and
-/// the pubkeys it got back, then re-checks it at assemble time against that
-/// node's pinned pubkeys. `harvest_nonce` is fresh per request, so an earlier
-/// harvest's quote can't be replayed.
+/// the pubkeys of the keys the image's `summit-keygen` generated at boot and
+/// the `tx_io_pk@0` of the custodian's candidate root key; deploy's harvest
+/// recomputes it from the nonce it sent and the keys it got back, then
+/// re-checks it at assemble time against that node's pinned keys.
+/// `harvest_nonce` is fresh per request, so an earlier harvest's quote can't
+/// be replayed.
 ///
-/// No `network_id`: it doesn't exist yet, since these pubkeys are inputs to the
+/// No `network_id`: it doesn't exist yet, since these keys are inputs to the
 /// manifest that defines it. Pinning them into the manifest is what supplies the
 /// intent binding `network_id` carries elsewhere.
 ///
-/// A passing quote proves measured code generated the keys and holds the
-/// corresponding private keys, so possession, TEE custody, and honest generation
-/// (no rogue-key choice) all follow from the measurement.
-pub fn founding_summit_keys_binding(
+/// A passing quote proves the measured image generated the keys and holds the
+/// corresponding private keys — the summit keys `summit-keygen` generated, the
+/// candidate `root_key` in the custodian — so possession, TEE custody, and honest
+/// generation (no rogue-key choice) all follow from the measurement.
+pub fn founding_keys_binding(
     harvest_nonce: &[u8; 32],
     summit_node_pk: &[u8; 32],      // ed25519 node identity
     summit_consensus_pk: &[u8; 48], // BLS12-381 MinPk
+    candidate_tx_io_pk: &[u8; 33],  // the candidate root_key's tx_io_pk@0
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"seismic-founding-keys-v1:");
     hasher.update(harvest_nonce);
     hasher.update(summit_node_pk);
     hasher.update(summit_consensus_pk);
+    hasher.update(candidate_tx_io_pk);
     hasher.finalize().into()
 }
 
@@ -160,12 +166,13 @@ mod tests {
             "16a53bcb2d1421951a830a1308bca525b8ecfbf96fc89ad6152cdbfce4777eb9"
         );
         assert_eq!(
-            hex::encode(founding_summit_keys_binding(
+            hex::encode(founding_keys_binding(
                 &[0x77; 32],
                 &[0x88; 32],
-                &[0x99; 48]
+                &[0x99; 48],
+                &tx_io_pk
             )),
-            "8973b984dc10f809ebfaacdcad64b8cc5a647cf24e4bc27b3833cc234a9290e5"
+            "e0f462f8dfb2eb5059b9e9824ba2f1853a9c9487d86680dee26aa19977c46c38"
         );
     }
 
@@ -189,9 +196,10 @@ mod tests {
     fn bindings_diverge_across_harvests() {
         let node_pk = [0x88; 32];
         let consensus_pk = [0x99; 48];
+        let tx_io_pk = [0x02; 33];
 
-        let harvest_a = founding_summit_keys_binding(&[0xAA; 32], &node_pk, &consensus_pk);
-        let harvest_b = founding_summit_keys_binding(&[0xBB; 32], &node_pk, &consensus_pk);
+        let harvest_a = founding_keys_binding(&[0xAA; 32], &node_pk, &consensus_pk, &tx_io_pk);
+        let harvest_b = founding_keys_binding(&[0xBB; 32], &node_pk, &consensus_pk, &tx_io_pk);
         assert_ne!(harvest_a, harvest_b);
     }
 

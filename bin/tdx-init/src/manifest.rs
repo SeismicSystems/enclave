@@ -25,6 +25,9 @@ pub struct ValidatedManifest {
     pub bytes: Vec<u8>,
     pub chain_id: u64,
     pub namespace: String,
+    /// The pin on `root_key`: the `tx_io_pk@0` of the candidate assemble
+    /// chose.
+    pub founding_tx_io_pk: [u8; 33],
 }
 
 /// Decode the `[network].manifest_base64` embed and strictly validate it.
@@ -55,6 +58,7 @@ pub fn decode_and_validate(manifest_base64: &str) -> Result<ValidatedManifest> {
         bytes,
         chain_id: manifest.eth.chain_id,
         namespace: manifest.summit.namespace,
+        founding_tx_io_pk: manifest.founding_tx_io_pk,
     })
 }
 
@@ -75,7 +79,7 @@ mod tests {
     const FIXTURE: &[u8] =
         include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
-        "0x8ef142e3f2bf15f8b201c4d8cda7848a9e846222c62b5615d4d36c7fccd98a24";
+        "0xe2ad747387fbe8bb1c07d919e7bba807f44b0812704e82ebdb048e6a8b8e2bbd";
 
     fn b64(bytes: &[u8]) -> String {
         base64::engine::general_purpose::STANDARD.encode(bytes)

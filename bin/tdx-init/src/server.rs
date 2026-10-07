@@ -7,6 +7,8 @@ use axum::{
     response::Response,
     routing::post,
 };
+use seismic_custodian_ipc::candidate_tx_io_pk;
+use std::path::Path;
 use std::sync::Arc;
 use tdx_init_config::InitConfig;
 use tokio::net::TcpListener;
@@ -78,7 +80,14 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
         &config.network.summit_genesis_base64,
         &manifest.namespace,
     )?;
-    crate::peers::validate_and_derive_peers(&config.node, &config.network.bootnodes)?;
+    crate::peers::validate_and_derive_peers(
+        &config.node,
+        &config.network.bootnodes,
+        crate::peers::holds_pinned_candidate(
+            Path::new(candidate_tx_io_pk::CANDIDATE_TX_IO_PK_PATH),
+            &manifest.founding_tx_io_pk,
+        )?,
+    )?;
 
     let mut sender_guard = state.config_sender.lock().await;
     match sender_guard.take() {

@@ -96,6 +96,8 @@ use seismic_measurement_registry_client::{MEASUREMENT_REGISTRY_ADDRESS, Measurem
 const NETWORK_MANIFEST_TEMPLATE: &[u8] =
     include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
 
+/// The root key whose `tx_io_pk@0` the fixture manifest pins.
+const PINNED_ROOT_KEY: [u8; 32] = [7u8; 32];
 /// A genesis hash no seeded node here can serve, so a manifest pinning it
 /// names a chain the responder's local reth is not on.
 const FOREIGN_GENESIS: B256 = B256::repeat_byte(0xef);
@@ -696,7 +698,7 @@ struct ServiceNode {
 /// Start a custodian/attestation-service pair on `manifest` against
 /// `reth_rpc_url` and wait until its RPC listener is healthy.
 ///
-/// `peers: None` starts a responder (genesis custodian, fresh root key);
+/// `peers: None` starts a responder (the custodian the manifest pins);
 /// `Some(urls)` starts a joiner whose custodian acquires the root key from
 /// those peers, so returning implies the join completed. `n` offsets the
 /// HTTP port; keep offsets distinct across tests — they share one process,
@@ -712,18 +714,23 @@ async fn start_service(
     let runtime = tempfile::tempdir().expect("create service runtime directory");
     let socket = runtime.path().join("custodian.sock");
     let luks_keyfile = runtime.path().join("luks-keys");
-    let state = if peers.is_none() {
-        CustodianState::new_with_root_key(
-            Custodian::new_as_genesis().expect("generate genesis root key"),
-            luks_keyfile,
-        )
-        .expect("construct genesis custodian")
+    // Every custodian starts with a candidate and resolves it against the
+    // manifest at the service's first bootstrap call: the fixture pins
+    // PINNED_ROOT_KEY, so the responder keeps it and a joiner's freshly minted
+    // candidate is discarded.
+    let candidate = if peers.is_none() {
+        Custodian::new(PINNED_ROOT_KEY)
     } else {
-        CustodianState::new_awaiting_root_key(luks_keyfile)
+        Custodian::mint().expect("mint a candidate root key")
     };
-    let wrap_count = spawn_counting_custodian(state, &socket);
     let conf_dir = runtime.path().join("conf");
     write_conf_dir(&conf_dir, manifest, &peers.unwrap_or_default());
+    let state = CustodianState::new_with_candidate(
+        candidate,
+        conf_dir.join(conf::NETWORK_MANIFEST),
+        luks_keyfile,
+    );
+    let wrap_count = spawn_counting_custodian(state, &socket);
 
     let args = Args {
         peer_listen: SocketAddr::from(([0, 0, 0, 0], 7878 + n)),

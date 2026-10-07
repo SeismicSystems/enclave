@@ -1,14 +1,24 @@
 //! Root-key lifecycle for the standalone custodian service.
 //!
-//! A genesis node starts with a freshly generated root key present. A joining
-//! node binds the socket before it holds a root key and acquires it *through*
-//! the socket: it starts awaiting, retains at most one requester-side
-//! bootstrap attempt, and installs the root key from a verified, wrapped
-//! bootstrap response. The requester's ephemeral ECDH secret never leaves
-//! this process — the network-facing attestation service drives the evidence
-//! exchange and sees only the public half.
+//! Every node starts holding a *candidate*: a root key minted at boot, before
+//! the network manifest exists, whose `tx_io_pk@0` the founding harvest
+//! quotes. Assemble pins one box's candidate in the manifest, so
+//! `network_id` commits to the network's key. Once the config POST has
+//! written the manifest, the first bootstrap call resolves the candidate
+//! against that pin: a custodian whose candidate the manifest pins keeps it
+//! as the root key; every other discards it and acquires the root key
+//! *through* the socket. It retains at most one requester-side bootstrap
+//! attempt and installs the root key from a verified, wrapped bootstrap
+//! response, but only a key that derives the pinned `tx_io_pk@0`. The
+//! requester's ephemeral ECDH secret never leaves this process — the
+//! network-facing attestation service drives the evidence exchange and sees
+//! only the public half.
 //!
-//! Both ways a root key becomes present — genesis construction and a verified
+//! The pin is read here, from the manifest bytes tdx-init wrote, never from
+//! a caller: a compromised attestation service can neither choose which
+//! custodian keeps its candidate nor install a key of its own.
+//!
+//! Both ways a root key becomes present — a kept candidate and a verified
 //! install — write the LUKS keyfile before the key is observable, so a
 //! present root key always implies the handoff to `setup-persistent-luks`
 //! has happened.
@@ -24,6 +34,7 @@ use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_custodian::{Custodian, EphemeralKeypair, unwrap_root_key};
 use seismic_custodian_ipc::AdmittedOn;
+use seismic_network_manifest::NetworkManifestV1;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tracing::info;
@@ -39,8 +50,21 @@ pub struct CustodianState {
 // Variant names mirror the wire vocabulary (`RootKeyAlreadyPresent`,
 // `RootKeyAbsent` in custodian-ipc).
 enum RootKeyState {
-    /// No root key yet (a joining node): only the bootstrap methods act.
-    Absent { attempt: Option<PendingAttempt> },
+    /// The root key minted at boot, not yet resolved against the manifest.
+    /// Nothing is served from it: it is not the network's key until the
+    /// manifest pins it. The service binary writes its `tx_io_pk@0` to the
+    /// candidate tx_io_pk file for the founding harvest.
+    Candidate {
+        candidate: Custodian,
+        /// Where tdx-init writes the manifest that carries the pin.
+        manifest_path: PathBuf,
+    },
+    /// No root key: the manifest pins another key. Only the bootstrap methods
+    /// act, and an install must derive the pin.
+    Absent {
+        founding_tx_io_pk: [u8; 33],
+        attempt: Option<PendingAttempt>,
+    },
     /// Root key held: derivations and wraps are served.
     Present {
         custodian: Custodian,
@@ -54,11 +78,12 @@ enum RootKeyState {
 ///
 /// A chain view at block 0 is host-supplied and indistinguishable from a
 /// withheld chain, so the host must not be able to bring the founding policy
-/// back. Only the custodian that minted the root key starts out honoring it,
-/// and it retires it once — when the chain is seen past genesis — for the rest
-/// of that key's lifetime. Undoing that means restarting this process, which
-/// loses the key; the node then rejoins with an installed key, which never
-/// honors the founding policy.
+/// back. Only the custodian that minted the root key — the one whose
+/// candidate the manifest pins — starts out honoring it, and it retires it
+/// once — when the chain is seen past genesis — for the rest of that key's
+/// lifetime. Undoing that means restarting this process, which loses the key;
+/// the node then mints a candidate the manifest does not pin and rejoins with
+/// an installed key, which never honors the founding policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FoundingPolicy {
     Honored,
@@ -88,6 +113,12 @@ pub enum CreateAttemptOutcome {
         requester_eph_pk: [u8; 33],
     },
     RootKeyAlreadyPresent,
+    /// The candidate could not be resolved: the manifest is missing or does
+    /// not parse. The candidate is kept, so a later call can resolve it.
+    ManifestUnreadable(anyhow::Error),
+    /// The manifest pins the candidate, but the LUKS keyfile write failed.
+    /// The candidate is kept, so a later call can retry the write.
+    LuksKeyfileWriteFailed(anyhow::Error),
 }
 
 /// Outcome of [`CustodianState::install_root_key`].
@@ -101,22 +132,49 @@ pub enum InstallOutcome {
     /// matching attempt is consumed: a retry must start a fresh exchange, so
     /// a failed one leaks nothing reusable.
     InstallFailed(anyhow::Error),
+    /// The wrapped key opened, but it does not derive the manifest's pinned
+    /// `tx_io_pk@0`: the responder holds some other network's key, or one it
+    /// chose. Nothing was installed and the attempt is consumed.
+    NotPinned,
     /// The root key was recovered but the LUKS keyfile write failed, so
     /// nothing was installed. Without the handoff the node cannot finish this
-    /// boot; the host treats this as fatal.
+    /// boot; the service binary treats this as fatal.
     LuksKeyfileWriteFailed(anyhow::Error),
 }
 
 impl CustodianState {
-    pub fn new_awaiting_root_key(luks_keyfile: PathBuf) -> Self {
+    /// A custodian holding the candidate it minted at boot, to be resolved
+    /// against the pin in the manifest tdx-init writes to `manifest_path`.
+    pub fn new_with_candidate(
+        candidate: Custodian,
+        manifest_path: PathBuf,
+        luks_keyfile: PathBuf,
+    ) -> Self {
         Self {
-            inner: Mutex::new(RootKeyState::Absent { attempt: None }),
+            inner: Mutex::new(RootKeyState::Candidate {
+                candidate,
+                manifest_path,
+            }),
             luks_keyfile,
         }
     }
 
-    /// A custodian holding the root key it just minted, so it starts out
-    /// honoring the founding policy.
+    /// A custodian whose candidate the manifest does not pin, awaiting a
+    /// root key that derives `founding_tx_io_pk`.
+    pub fn new_awaiting_root_key(founding_tx_io_pk: [u8; 33], luks_keyfile: PathBuf) -> Self {
+        Self {
+            inner: Mutex::new(RootKeyState::Absent {
+                founding_tx_io_pk,
+                attempt: None,
+            }),
+            luks_keyfile,
+        }
+    }
+
+    /// A custodian already holding the root key it minted, honoring the
+    /// founding policy: the state [`Self::create_bootstrap_attempt`] moves a
+    /// pinned candidate into, built directly. Only tests start here; the
+    /// service starts every custodian with a candidate.
     ///
     /// Errors if the LUKS keyfile write fails: a root key is never present
     /// without the handoff done.
@@ -136,7 +194,7 @@ impl CustodianState {
     pub fn with_custodian<T>(&self, f: impl FnOnce(&Custodian) -> T) -> Option<T> {
         match &*self.lock() {
             RootKeyState::Present { custodian, .. } => Some(f(custodian)),
-            RootKeyState::Absent { .. } => None,
+            RootKeyState::Candidate { .. } | RootKeyState::Absent { .. } => None,
         }
     }
 
@@ -149,7 +207,7 @@ impl CustodianState {
         f: impl FnOnce(&Custodian) -> T,
     ) -> WrapGate<T> {
         match &*self.lock() {
-            RootKeyState::Absent { .. } => WrapGate::RootKeyAbsent,
+            RootKeyState::Candidate { .. } | RootKeyState::Absent { .. } => WrapGate::RootKeyAbsent,
             RootKeyState::Present {
                 founding_policy: FoundingPolicy::Retired,
                 ..
@@ -162,7 +220,7 @@ impl CustodianState {
     /// present: there is no founding policy to retire without a key.
     pub fn retire_founding_policy(&self) -> Option<()> {
         match &mut *self.lock() {
-            RootKeyState::Absent { .. } => None,
+            RootKeyState::Candidate { .. } | RootKeyState::Absent { .. } => None,
             RootKeyState::Present {
                 founding_policy, ..
             } => {
@@ -178,10 +236,54 @@ impl CustodianState {
     /// Start a requester-side bootstrap attempt, replacing (and thereby
     /// invalidating) any previous one: one live exchange at a time, with a
     /// fresh ephemeral key per exchange.
+    ///
+    /// An unresolved candidate is resolved first, against the pin in the
+    /// manifest: kept as the root key if the manifest pins it (answering
+    /// `RootKeyAlreadyPresent`), discarded otherwise. This is the first call
+    /// the attestation service makes once the manifest exists, so the
+    /// candidate never outlives the config POST by more than its startup.
     pub fn create_bootstrap_attempt(&self) -> CreateAttemptOutcome {
-        match &mut *self.lock() {
+        let mut state = self.lock();
+        if let RootKeyState::Candidate {
+            candidate,
+            manifest_path,
+        } = &*state
+        {
+            let founding_tx_io_pk = match read_founding_tx_io_pk(manifest_path) {
+                Ok(founding_tx_io_pk) => founding_tx_io_pk,
+                Err(e) => return CreateAttemptOutcome::ManifestUnreadable(e),
+            };
+            let pinned = candidate.get_tx_io_pk(0).serialize() == founding_tx_io_pk;
+            if pinned && let Err(e) = write_luks_keyfile(candidate, &self.luks_keyfile) {
+                return CreateAttemptOutcome::LuksKeyfileWriteFailed(e);
+            }
+            let RootKeyState::Candidate { candidate, .. } = std::mem::replace(
+                &mut *state,
+                RootKeyState::Absent {
+                    founding_tx_io_pk,
+                    attempt: None,
+                },
+            ) else {
+                unreachable!("matched as a candidate above");
+            };
+            if pinned {
+                info!("the manifest pins this custodian's candidate: keeping it as the root key");
+                *state = RootKeyState::Present {
+                    custodian: candidate,
+                    founding_policy: FoundingPolicy::Honored,
+                };
+            } else {
+                info!(
+                    "the manifest pins another key: discarded this custodian's candidate, \
+                     awaiting the root key from a peer"
+                );
+            }
+        }
+
+        match &mut *state {
+            RootKeyState::Candidate { .. } => unreachable!("resolved above"),
             RootKeyState::Present { .. } => CreateAttemptOutcome::RootKeyAlreadyPresent,
-            RootKeyState::Absent { attempt } => {
+            RootKeyState::Absent { attempt, .. } => {
                 let mut id = [0u8; 32];
                 OsRng
                     .try_fill_bytes(&mut id)
@@ -198,14 +300,16 @@ impl CustodianState {
     }
 
     /// Open a verified, wrapped bootstrap response with the retained attempt's
-    /// ephemeral secret and install the recovered root key, writing the LUKS
-    /// keyfile as part of the transition. An installed key never honors the
-    /// founding policy: only the minter admits on it.
+    /// ephemeral secret and install the recovered root key if it derives the
+    /// pinned `tx_io_pk@0`, writing the LUKS keyfile as part of the
+    /// transition. An installed key never honors the founding policy: only
+    /// the minter admits on it.
     ///
     /// The caller asserts, via its ACL grant, that the responder's evidence
     /// over this exact response transcript has been verified — mirroring
     /// `VerifiedPeerAuthorization` on the wrap side, the binding is opaque
-    /// bytes here and the AEAD tag is the only local check.
+    /// bytes here. The AEAD tag and the pin are the local checks, and the pin
+    /// is the one that makes the key the network's.
     pub fn install_root_key(
         &self,
         attempt_id: [u8; 32],
@@ -214,16 +318,19 @@ impl CustodianState {
         wrapped_root_key: &[u8],
     ) -> InstallOutcome {
         let mut state = self.lock();
-        let attempt = match &mut *state {
+        let (founding_tx_io_pk, attempt) = match &mut *state {
             RootKeyState::Present { .. } => return InstallOutcome::RootKeyAlreadyPresent,
+            // A candidate retains no attempt until it is resolved.
+            RootKeyState::Candidate { .. } => return InstallOutcome::UnknownAttempt,
             // take_if: consume the attempt only on an id match — a stale id
             // must not invalidate a newer live attempt.
-            RootKeyState::Absent { attempt } => {
-                match attempt.take_if(|pending| pending.id == attempt_id) {
-                    Some(pending) => pending,
-                    None => return InstallOutcome::UnknownAttempt,
-                }
-            }
+            RootKeyState::Absent {
+                founding_tx_io_pk,
+                attempt,
+            } => match attempt.take_if(|pending| pending.id == attempt_id) {
+                Some(pending) => (*founding_tx_io_pk, pending),
+                None => return InstallOutcome::UnknownAttempt,
+            },
         };
 
         let responder_pk = match PublicKey::from_slice(&responder_eph_pk) {
@@ -234,27 +341,29 @@ impl CustodianState {
                 ));
             }
         };
-        match unwrap_root_key(
+        let root_key = match unwrap_root_key(
             &attempt.eph.sk,
             &responder_pk,
             wrapped_root_key,
             &root_key_request_binding,
         ) {
-            Ok(root_key) => {
-                let custodian = Custodian::new(root_key);
-                // The handoff precedes the transition: a present root key
-                // always implies the LUKS keyfile has been written.
-                if let Err(e) = write_luks_keyfile(&custodian, &self.luks_keyfile) {
-                    return InstallOutcome::LuksKeyfileWriteFailed(e);
-                }
-                *state = RootKeyState::Present {
-                    custodian,
-                    founding_policy: FoundingPolicy::Retired,
-                };
-                InstallOutcome::Installed
-            }
-            Err(e) => InstallOutcome::InstallFailed(e),
+            Ok(root_key) => root_key,
+            Err(e) => return InstallOutcome::InstallFailed(e),
+        };
+        let custodian = Custodian::new(root_key);
+        if custodian.get_tx_io_pk(0).serialize() != founding_tx_io_pk {
+            return InstallOutcome::NotPinned;
         }
+        // The handoff precedes the transition: a present root key always
+        // implies the LUKS keyfile has been written.
+        if let Err(e) = write_luks_keyfile(&custodian, &self.luks_keyfile) {
+            return InstallOutcome::LuksKeyfileWriteFailed(e);
+        }
+        *state = RootKeyState::Present {
+            custodian,
+            founding_policy: FoundingPolicy::Retired,
+        };
+        InstallOutcome::Installed
     }
 
     /// A panicking connection thread must not wedge every later request, so
@@ -263,6 +372,17 @@ impl CustodianState {
     fn lock(&self) -> MutexGuard<'_, RootKeyState> {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// The manifest's pin on `root_key`, read from the bytes tdx-init wrote.
+/// tdx-init validated them at POST time; the strict parse here is what lets
+/// this process rely on nothing but the file.
+fn read_founding_tx_io_pk(manifest_path: &Path) -> Result<[u8; 33]> {
+    let bytes = std::fs::read(manifest_path)
+        .with_context(|| format!("reading the network manifest {}", manifest_path.display()))?;
+    let manifest = NetworkManifestV1::from_json_bytes(&bytes)
+        .with_context(|| format!("parsing the network manifest {}", manifest_path.display()))?;
+    Ok(manifest.founding_tx_io_pk)
 }
 
 /// Hand the LUKS keys off to `setup-persistent-luks` (seismic-images), which
@@ -284,6 +404,15 @@ mod tests {
     const ROOT_KEY: [u8; 32] = [7u8; 32];
     const BINDING: [u8; 32] = [0x33; 32];
 
+    /// The committed manifest fixture, whose `founding_tx_io_pk` is
+    /// ROOT_KEY's `tx_io_pk@0`.
+    const MANIFEST: &[u8] =
+        include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+
+    fn fixture_founding_tx_io_pk() -> [u8; 33] {
+        Custodian::new(ROOT_KEY).get_tx_io_pk(0).serialize()
+    }
+
     fn tmp_luks() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("luks-keys");
@@ -291,7 +420,22 @@ mod tests {
     }
 
     fn awaiting(luks_keyfile: &Path) -> CustodianState {
-        CustodianState::new_awaiting_root_key(luks_keyfile.to_path_buf())
+        CustodianState::new_awaiting_root_key(
+            fixture_founding_tx_io_pk(),
+            luks_keyfile.to_path_buf(),
+        )
+    }
+
+    /// A custodian holding `candidate`, with the fixture manifest written
+    /// where it reads the pin from.
+    fn configured_candidate(candidate: [u8; 32], dir: &Path) -> CustodianState {
+        let manifest = dir.join("network-manifest.json");
+        std::fs::write(&manifest, MANIFEST).expect("write manifest");
+        CustodianState::new_with_candidate(
+            Custodian::new(candidate),
+            manifest,
+            dir.join("luks-keys"),
+        )
     }
 
     fn with_root_key(luks_keyfile: &Path) -> CustodianState {
@@ -519,6 +663,141 @@ mod tests {
         assert!(matches!(
             state.install_root_key(attempt_id, BINDING, [0; 33], &[0; 60]),
             InstallOutcome::InstallFailed(_)
+        ));
+    }
+
+    #[test]
+    fn the_fixture_manifest_pins_the_test_root_key() {
+        let manifest = NetworkManifestV1::from_json_bytes(MANIFEST).expect("fixture parses");
+        assert_eq!(manifest.founding_tx_io_pk, fixture_founding_tx_io_pk());
+    }
+
+    #[test]
+    fn a_candidate_serves_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = configured_candidate(ROOT_KEY, dir.path());
+
+        assert!(state.with_custodian(|_| ()).is_none());
+        assert!(matches!(
+            state.with_custodian_for_wrap(AdmittedOn::FoundingPolicy, |_| ()),
+            WrapGate::RootKeyAbsent
+        ));
+        assert_eq!(state.retire_founding_policy(), None);
+        assert!(matches!(
+            state.install_root_key([0; 32], BINDING, [0; 33], &[]),
+            InstallOutcome::UnknownAttempt
+        ));
+        assert!(!dir.path().join("luks-keys").exists());
+    }
+
+    #[test]
+    fn a_candidate_waits_for_the_manifest() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = CustodianState::new_with_candidate(
+            Custodian::new(ROOT_KEY),
+            dir.path().join("network-manifest.json"),
+            dir.path().join("luks-keys"),
+        );
+        assert!(matches!(
+            state.create_bootstrap_attempt(),
+            CreateAttemptOutcome::ManifestUnreadable(_)
+        ));
+        // Still a candidate: the config POST can land and a retry resolve it.
+        std::fs::write(dir.path().join("network-manifest.json"), MANIFEST).unwrap();
+        assert!(matches!(
+            state.create_bootstrap_attempt(),
+            CreateAttemptOutcome::RootKeyAlreadyPresent
+        ));
+    }
+
+    #[test]
+    fn the_pinned_candidate_is_kept_and_honors_the_founding_policy() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = configured_candidate(ROOT_KEY, dir.path());
+
+        assert!(matches!(
+            state.create_bootstrap_attempt(),
+            CreateAttemptOutcome::RootKeyAlreadyPresent
+        ));
+        assert_luks_keyfile(&dir.path().join("luks-keys"));
+        assert_eq!(
+            state.with_custodian(|c| c.get_tx_io_pk(0).serialize()),
+            Some(fixture_founding_tx_io_pk())
+        );
+        assert!(wraps_on_founding_policy(&state));
+    }
+
+    #[test]
+    fn a_failed_luks_write_keeps_the_pinned_candidate_for_a_retry() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let manifest = dir.path().join("network-manifest.json");
+        std::fs::write(&manifest, MANIFEST).expect("write manifest");
+        let luks_dir = dir.path().join("missing-dir");
+        let luks = luks_dir.join("luks-keys");
+        let state =
+            CustodianState::new_with_candidate(Custodian::new(ROOT_KEY), manifest, luks.clone());
+
+        assert!(matches!(
+            state.create_bootstrap_attempt(),
+            CreateAttemptOutcome::LuksKeyfileWriteFailed(_)
+        ));
+        // Never present without the handoff.
+        assert!(state.with_custodian(|_| ()).is_none());
+        assert!(matches!(
+            state.with_custodian_for_wrap(AdmittedOn::FoundingPolicy, |_| ()),
+            WrapGate::RootKeyAbsent
+        ));
+
+        // Still the candidate: once the write can succeed, a retry keeps it.
+        std::fs::create_dir(&luks_dir).expect("create LUKS keyfile dir");
+        assert!(matches!(
+            state.create_bootstrap_attempt(),
+            CreateAttemptOutcome::RootKeyAlreadyPresent
+        ));
+        assert_luks_keyfile(&luks);
+        assert!(wraps_on_founding_policy(&state));
+    }
+
+    #[test]
+    fn an_unpinned_candidate_is_discarded_and_the_pinned_key_installed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = configured_candidate([9u8; 32], dir.path());
+
+        let (attempt_id, requester_eph_pk) = created(&state);
+        assert!(state.with_custodian(|_| ()).is_none());
+        assert!(!dir.path().join("luks-keys").exists());
+
+        let (responder_eph_pk, wrapped) = wrap_for(&Custodian::new(ROOT_KEY), requester_eph_pk);
+        assert!(matches!(
+            state.install_root_key(attempt_id, BINDING, responder_eph_pk, &wrapped),
+            InstallOutcome::Installed
+        ));
+        assert_eq!(
+            state.with_custodian(|c| c.get_tx_io_pk(0).serialize()),
+            Some(fixture_founding_tx_io_pk())
+        );
+        assert!(!wraps_on_founding_policy(&state));
+    }
+
+    /// The check that makes the joiner safe whoever its responder is: a key
+    /// the manifest does not pin is never installed, however well it wraps.
+    #[test]
+    fn a_key_the_manifest_does_not_pin_is_refused() {
+        let (_dir, luks) = tmp_luks();
+        let state = awaiting(&luks);
+
+        let (attempt_id, requester_eph_pk) = created(&state);
+        let (responder_eph_pk, wrapped) = wrap_for(&Custodian::new([9u8; 32]), requester_eph_pk);
+        assert!(matches!(
+            state.install_root_key(attempt_id, BINDING, responder_eph_pk, &wrapped),
+            InstallOutcome::NotPinned
+        ));
+        assert!(state.with_custodian(|_| ()).is_none());
+        assert!(!luks.exists());
+        // The attempt is consumed: the next try starts a fresh exchange.
+        assert!(matches!(
+            state.install_root_key(attempt_id, BINDING, responder_eph_pk, &wrapped),
+            InstallOutcome::UnknownAttempt
         ));
     }
 }

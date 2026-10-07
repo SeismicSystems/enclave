@@ -1,5 +1,5 @@
 //! Building blocks of the standalone custodian service: the root-key
-//! lifecycle ([`state`]), the socket dispatch ([`dispatch`]), and the
+//! lifecycle ([`state`]), the socket dispatch ([`dispatch`]) and the
 //! `--allow` grant parsing ([`acl`]). The shipped binary (`main.rs`) is a
 //! thin CLI over these modules; they are also linkable as a library so
 //! workspace integration tests can assemble real custodian/attestation-service

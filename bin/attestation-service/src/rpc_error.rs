@@ -164,10 +164,13 @@ pub(crate) fn root_key_answer_rpc_error(error: AnswerError) -> ErrorObjectOwned 
 fn answer_failure_kind(error: &AnswerError) -> Option<DenialKind> {
     match error {
         AnswerError::VerifyRequester { source } => verification_failure_kind(source),
-        // Admitted on the founding policy by a node that may not act on it: a
-        // joined node, or one whose chain has been seen past block 0 and now
-        // reads block 0 again. The requester's evidence is not what failed,
-        // retrying here cannot change it, and the genesis node answers instead.
+        // Admitted on the founding policy by a custodian that may not act on
+        // it:
+        // - a joined node's: it installed the root key, and only the minting
+        //   custodian honors the founding policy;
+        // - the minting custodian, once it has seen the chain past block 0.
+        // The requester's evidence is not what failed, and retrying this
+        // responder cannot change the answer.
         AnswerError::FoundingPolicyRetired => Some(DenialKind::ResponderMisconfigured),
         AnswerError::WrapRootKey { .. }
         | AnswerError::ResponderEphemeralKey { .. }

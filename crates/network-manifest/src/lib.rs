@@ -96,8 +96,9 @@ impl fmt::Debug for NetworkId {
 /// other two layers to hold.
 ///
 /// Parsing is strict: unknown keys are rejected, so two verifiers can never
-/// disagree on field semantics. New fields require `manifest_version = 2` and
-/// a `NetworkManifestV2` type. Strictness is about semantics only —
+/// disagree on field semantics. Until a permanent network pins a v1 manifest,
+/// v1 changes in place; after that, new fields require `manifest_version = 2`
+/// and a `NetworkManifestV2` type. Strictness is about semantics only —
 /// `network_id` hashes raw bytes, so an unknown field could never silently
 /// change the id.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -109,6 +110,24 @@ pub struct NetworkManifestV1 {
     pub eth: EthManifest,
     pub summit: SummitManifest,
     pub measurements: MeasurementsManifest,
+    /// The pin on `root_key`: `tx_io_pk@0`, the tx-io public key that the
+    /// root key this network was founded with derives at epoch 0.
+    ///
+    /// Every founding box mints a candidate `root_key` before the manifest
+    /// exists, and the harvest quotes each candidate's `tx_io_pk@0`; assemble
+    /// pins one here, so `network_id` commits to the network's key. A
+    /// custodian keeps its candidate only if it derives this key, and installs
+    /// a fetched `root_key` only if it does. A client that pins `network_id`
+    /// reads the key it encrypts to from here.
+    ///
+    /// It is the founding key, never "the current key": later epochs and root
+    /// versions are anchored elsewhere.
+    ///
+    /// 33-byte compressed SEC1 secp256k1 point. Only the encoding is checked,
+    /// here and in the custodian, which compares bytes: a pin that is not a
+    /// curve point matches no candidate.
+    #[serde(deserialize_with = "compressed_secp256k1_point")]
+    pub founding_tx_io_pk: [u8; 33],
 }
 
 /// Execution-layer (reth) identity.
@@ -243,6 +262,19 @@ fn hex_20<'de, D: Deserializer<'de>>(deserializer: D) -> Result<[u8; 20], D::Err
     decode_fixed_hex(deserializer)
 }
 
+fn compressed_secp256k1_point<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<[u8; 33], D::Error> {
+    let bytes: [u8; 33] = decode_fixed_hex(deserializer)?;
+    if !matches!(bytes[0], 0x02 | 0x03) {
+        return Err(serde::de::Error::custom(format!(
+            "expected a compressed secp256k1 point (0x02 or 0x03 prefix), got prefix {:#04x}",
+            bytes[0]
+        )));
+    }
+    Ok(bytes)
+}
+
 fn decode_fixed_hex<'de, D: Deserializer<'de>, const N: usize>(
     deserializer: D,
 ) -> Result<[u8; N], D::Error> {
@@ -290,13 +322,17 @@ mod tests {
             hex::encode(manifest.measurements.contracts.authority),
             "1000000000000000000000000000000000000002"
         );
+        assert_eq!(
+            hex::encode(manifest.founding_tx_io_pk),
+            "03f39b46b20d0f2f9c8d45206d6c1cdf8a3332c7b7b96dad5c1f0d0051585d7329"
+        );
 
         // Stable vector: sha256sum of the fixture file. Display is the
         // presentation form (lowercase 0x-hex).
         let network_id = NetworkId::from_manifest_bytes(FIXTURE);
         assert_eq!(
             network_id.to_string(),
-            "0x8ef142e3f2bf15f8b201c4d8cda7848a9e846222c62b5615d4d36c7fccd98a24"
+            "0xe2ad747387fbe8bb1c07d919e7bba807f44b0812704e82ebdb048e6a8b8e2bbd"
         );
     }
 
@@ -327,7 +363,26 @@ mod tests {
 
     #[test]
     fn rejects_unknown_fields() {
-        let result = parse_mutated(|v| v["tx_io_pk"] = "0x02ab".into());
+        let result = parse_mutated(|v| v["genesis_node"] = true.into());
+        assert!(matches!(result, Err(ManifestError::Json(_))));
+    }
+
+    #[test]
+    fn requires_the_founding_tx_io_pk() {
+        let result = parse_mutated(|v| {
+            v.as_object_mut().unwrap().remove("founding_tx_io_pk");
+        });
+        assert!(matches!(result, Err(ManifestError::Json(_))));
+    }
+
+    #[test]
+    fn rejects_a_founding_tx_io_pk_that_is_not_a_compressed_point() {
+        let result =
+            parse_mutated(|v| v["founding_tx_io_pk"] = format!("0x04{}", "ab".repeat(32)).into());
+        assert!(matches!(result, Err(ManifestError::Json(_))));
+
+        let result =
+            parse_mutated(|v| v["founding_tx_io_pk"] = format!("0x02{}", "ab".repeat(31)).into());
         assert!(matches!(result, Err(ManifestError::Json(_))));
     }
 

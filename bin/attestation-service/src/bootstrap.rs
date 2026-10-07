@@ -1,9 +1,9 @@
 //! The encrypted root-key bootstrap.
 //!
-//! A booting non-genesis node (the *requester*, side `b` in the binding
-//! helpers) needs the network root key. A node that already holds it (the
-//! *responder*, side `a`) returns it AEAD-wrapped to the requester's attested
-//! ephemeral key.
+//! A booting node whose candidate the manifest does not pin (the
+//! *requester*, side `b` in the binding helpers) needs the network root key.
+//! A node that already holds it (the *responder*, side `a`) returns it
+//! AEAD-wrapped to the requester's attested ephemeral key.
 //! The exchange is a one-round handshake, both halves attested and bound to the
 //! same `network_id = H(network-manifest.json)`:
 //!

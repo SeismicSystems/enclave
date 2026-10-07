@@ -58,8 +58,9 @@ impl Custodian {
         Self { root_key }
     }
 
-    /// Generate a fresh root key from the OS CSPRNG (the genesis-node path).
-    pub fn new_as_genesis() -> Result<Self> {
+    /// Mint a fresh root key from the OS CSPRNG: every node's candidate at
+    /// boot, kept only if the manifest pins its `tx_io_pk@0`.
+    pub fn mint() -> Result<Self> {
         let mut rng = OsRng;
         let mut rng_bytes = [0u8; 32];
         rng.try_fill_bytes(&mut rng_bytes)?;

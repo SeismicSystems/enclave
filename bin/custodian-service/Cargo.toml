@@ -15,6 +15,7 @@ description = "Standalone service process for the Seismic key custodian"
 
 [dependencies]
 seismic-custodian.workspace = true
+seismic-network-manifest.workspace = true
 # default-features = false is this binary's no-async-runtime guarantee: only
 # the wire types plus the synchronous `server` transport are linked. CAUTION:
 # under cargo feature unification the guarantee holds only when this binary is
@@ -25,6 +26,7 @@ seismic-custodian-ipc = { workspace = true, features = ["server"] }
 
 anyhow.workspace = true
 clap.workspace = true
+hex.workspace = true
 libc.workspace = true
 rand.workspace = true
 secp256k1.workspace = true

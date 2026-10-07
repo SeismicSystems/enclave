@@ -1,30 +1,34 @@
-//! The founding harvest: summit's public keys, and a quote over them, on
-//! `--operator-listen` (`:7879` in the image).
+//! The founding harvest: summit's public keys, the custodian's candidate
+//! `tx_io_pk@0`, and a quote over them, on `--operator-listen` (`:7879` in the
+//! image).
 //!
 //! Two GETs, per the founding-harvest wire contract:
 //!
 //! - `GET /v1/keys` → `{node_public_key, consensus_public_key}` — served
 //!   for life; post-persist this feeds deploy's launch-time continuity
 //!   assertion (live pubkeys == pinned pubkeys).
-//! - `GET /v1/quote?nonce=<64-hex>` → the keys plus attestation evidence
-//!   whose `report_data` is `founding_summit_keys_binding(nonce, node_pk,
-//!   consensus_pk)`. Deploy archives all three verbatim, together with the
+//! - `GET /v1/quote?nonce=<64-hex>` → the keys, the `tx_io_pk@0` of the
+//!   custodian's candidate root key, and attestation evidence whose
+//!   `report_data` is `founding_keys_binding(nonce, node_pk, consensus_pk,
+//!   candidate_tx_io_pk)`. Deploy archives all four verbatim, together with the
 //!   nonce it sent, as this node's harvest record — the document
 //!   `seismic-verify-quote`'s `verify_harvest` (the deploy CLI's `verify
 //!   harvest`) verifies. Refuses 410 once the network manifest exists.
 //!
 //! The keys come from the public-keys file the image's summit setup units
 //! write: `summit-keygen` from the tmpfs keys it generated at boot, and
-//! `summit-persist` from the keystore once it has copied or confirmed it.
-//! This service never sees a private key; it quotes the public halves the
-//! file names, under a binding it builds itself.
+//! `summit-persist` from the keystore once it has copied or confirmed it. The
+//! candidate's `tx_io_pk@0` comes from the candidate tx_io_pk file the
+//! custodian writes when it mints at startup. This service never sees a private
+//! key; it quotes the public halves the files name, under a binding it builds
+//! itself.
 //!
 //! The listener is up before the config POST, so it is reachable
 //! pre-admission; the node's firewall restricts the port to the operator's
 //! CIDR, permanently — the conf dir is tmpfs, so the quote window reopens on
 //! every boot.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::Router;
@@ -32,8 +36,10 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
-use seismic_attestation::bindings::{binding64_from_digest32, founding_summit_keys_binding};
+use seismic_attestation::bindings::{binding64_from_digest32, founding_keys_binding};
 use seismic_attestation::{AttestationExchangeMessage, generate_evidence};
+use seismic_custodian_ipc::candidate_tx_io_pk;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::net::TcpListener;
@@ -57,6 +63,9 @@ pub struct KeysResponse {
 pub struct QuoteResponse {
     pub node_public_key: String,
     pub consensus_public_key: String,
+    /// The custodian's candidate `tx_io_pk@0`, 33-byte compressed SEC1 hex.
+    /// Assemble pins one box's in the manifest.
+    pub candidate_tx_io_public_key: String,
     /// Stored verbatim by deploy's harvest, inside the record it hands to
     /// `seismic-verify-quote`'s `verify_harvest`.
     pub evidence: AttestationExchangeMessage,
@@ -81,11 +90,19 @@ pub(crate) enum HarvestError {
 
     /// `summit-keygen` has not written the public-keys file yet.
     #[error("summit public keys not yet written")]
-    NoPublicKeys,
+    NoSummitPublicKeys,
 
     /// The public-keys file exists but cannot be read or decoded.
     #[error("summit public keys: {0}")]
-    PublicKeys(String),
+    SummitPublicKeys(String),
+
+    /// The custodian has not written its candidate tx_io_pk file yet.
+    #[error("candidate tx_io_pk@0 not yet written")]
+    NoCandidateTxIoPk,
+
+    /// The candidate tx_io_pk file exists but cannot be read or decoded.
+    #[error("candidate tx_io_pk@0: {0}")]
+    CandidateTxIoPk(String),
 
     /// Evidence generation failed (TPM/IMDS path, or a non-TDX host).
     #[error("evidence generation: {0}")]
@@ -97,8 +114,12 @@ impl IntoResponse for HarvestError {
         let (status, message) = match &self {
             HarvestError::InvalidNonce(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             HarvestError::QuoteWindowClosed => (StatusCode::GONE, self.to_string()),
-            HarvestError::NoPublicKeys => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
-            HarvestError::PublicKeys(_) | HarvestError::Attestation(_) => {
+            HarvestError::NoSummitPublicKeys | HarvestError::NoCandidateTxIoPk => {
+                (StatusCode::SERVICE_UNAVAILABLE, self.to_string())
+            }
+            HarvestError::SummitPublicKeys(_)
+            | HarvestError::CandidateTxIoPk(_)
+            | HarvestError::Attestation(_) => {
                 tracing::error!(error = %self, "internal error serving harvest request");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -111,43 +132,41 @@ impl IntoResponse for HarvestError {
 }
 
 pub(crate) struct Harvest {
-    public_keys_path: PathBuf,
+    summit_public_keys_path: PathBuf,
     manifest_path: PathBuf,
+    candidate_tx_io_pk_path: PathBuf,
     /// Serializes this listener's evidence generation: the vTPM quote path is
     /// exclusive-open on `/dev/tpm0` and takes seconds per call.
     quote_gate: tokio::sync::Mutex<()>,
 }
 
 impl Harvest {
-    pub(crate) fn new(public_keys_path: PathBuf, manifest_path: PathBuf) -> Self {
+    pub(crate) fn new(
+        summit_public_keys_path: PathBuf,
+        manifest_path: PathBuf,
+        candidate_tx_io_pk_path: PathBuf,
+    ) -> Self {
         Self {
-            public_keys_path,
+            summit_public_keys_path,
             manifest_path,
+            candidate_tx_io_pk_path,
             quote_gate: tokio::sync::Mutex::new(()),
         }
     }
 
     /// Read per request, since `summit-persist` rewrites the file from the
     /// keystore once LUKS opens.
-    fn public_keys(&self) -> Result<KeysResponse, HarvestError> {
-        let bytes = match std::fs::read(&self.public_keys_path) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(HarvestError::NoPublicKeys);
-            }
-            Err(error) => {
-                return Err(HarvestError::PublicKeys(format!(
-                    "reading {}: {error}",
-                    self.public_keys_path.display()
-                )));
-            }
-        };
-        serde_json::from_slice(&bytes).map_err(|error| {
-            HarvestError::PublicKeys(format!(
-                "decoding {}: {error}",
-                self.public_keys_path.display()
-            ))
-        })
+    fn summit_public_keys(&self) -> Result<KeysResponse, HarvestError> {
+        read_json(&self.summit_public_keys_path)
+            .ok_or(HarvestError::NoSummitPublicKeys)?
+            .map_err(HarvestError::SummitPublicKeys)
+    }
+
+    /// Read per request, since a custodian restart re-mints and rewrites it.
+    fn candidate_tx_io_public_key(&self) -> Result<[u8; 33], HarvestError> {
+        candidate_tx_io_pk::read(&self.candidate_tx_io_pk_path)
+            .map_err(|e| HarvestError::CandidateTxIoPk(e.to_string()))?
+            .ok_or(HarvestError::NoCandidateTxIoPk)
     }
 
     /// A per-request stat of the tmpfs path is the freshest possible check.
@@ -170,7 +189,7 @@ pub(crate) async fn serve(listener: TcpListener, harvest: Harvest) -> anyhow::Re
 }
 
 async fn get_keys(State(harvest): State<Arc<Harvest>>) -> Result<Json<KeysResponse>, HarvestError> {
-    Ok(Json(harvest.public_keys()?))
+    Ok(Json(harvest.summit_public_keys()?))
 }
 
 async fn get_quote(
@@ -181,13 +200,15 @@ async fn get_quote(
         return Err(HarvestError::QuoteWindowClosed);
     }
     let nonce = parse_nonce(&params.nonce)?;
-    let keys = harvest.public_keys()?;
+    let keys = harvest.summit_public_keys()?;
     let node_pk: [u8; 32] = decode_key(&keys.node_public_key, "node_public_key")?;
     let consensus_pk: [u8; 48] = decode_key(&keys.consensus_public_key, "consensus_public_key")?;
-    let binding = binding64_from_digest32(founding_summit_keys_binding(
+    let candidate_tx_io_pk = harvest.candidate_tx_io_public_key()?;
+    let binding = binding64_from_digest32(founding_keys_binding(
         &nonce,
         &node_pk,
         &consensus_pk,
+        &candidate_tx_io_pk,
     ));
 
     // Evidence generation blocks for seconds (NV write, fixed 3 s sleep,
@@ -198,10 +219,16 @@ async fn get_quote(
             .await
             .map_err(|e| HarvestError::Attestation(format!("evidence task panicked: {e}")))?
             .map_err(|e| HarvestError::Attestation(e.to_string()))?;
+    // Evidence generation takes seconds: recheck, so a config POST landing
+    // meanwhile closes the window for this request too.
+    if !harvest.quote_window_open() {
+        return Err(HarvestError::QuoteWindowClosed);
+    }
 
     Ok(Json(QuoteResponse {
         node_public_key: keys.node_public_key,
         consensus_public_key: keys.consensus_public_key,
+        candidate_tx_io_public_key: hex::encode(candidate_tx_io_pk),
         evidence,
     }))
 }
@@ -217,12 +244,26 @@ fn parse_nonce(value: &str) -> Result<[u8; 32], HarvestError> {
         .map_err(|_| HarvestError::InvalidNonce("expected 32 bytes (64 hex chars)".to_string()))
 }
 
+/// `None` while the file does not exist yet, `Some(Err(detail))` when it
+/// cannot be read or decoded: each caller maps both to its own errors.
+fn read_json<T: DeserializeOwned>(path: &Path) -> Option<Result<T, String>> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(error) => return Some(Err(format!("reading {}: {error}", path.display()))),
+    };
+    Some(
+        serde_json::from_slice(&bytes)
+            .map_err(|error| format!("decoding {}: {error}", path.display())),
+    )
+}
+
 fn decode_key<const N: usize>(value: &str, field: &str) -> Result<[u8; N], HarvestError> {
     let bytes = hex::decode(value)
-        .map_err(|e| HarvestError::PublicKeys(format!("{field}: not hex: {e}")))?;
+        .map_err(|e| HarvestError::SummitPublicKeys(format!("{field}: not hex: {e}")))?;
     bytes
         .try_into()
-        .map_err(|_| HarvestError::PublicKeys(format!("{field}: expected {N} bytes")))
+        .map_err(|_| HarvestError::SummitPublicKeys(format!("{field}: expected {N} bytes")))
 }
 
 #[cfg(test)]
@@ -241,6 +282,7 @@ mod tests {
         router(Arc::new(Harvest::new(
             dir.join("public-keys.json"),
             dir.join("network-manifest.json"),
+            dir.join("candidate-tx-io-pk"),
         )))
     }
 
@@ -259,7 +301,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn keys_endpoint_serves_the_public_keys_file() {
+    async fn keys_endpoint_serves_the_summit_public_keys_file() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("public-keys.json"), KEYS_JSON).unwrap();
         let (status, body) = get(router_in(dir.path()), "/v1/keys").await;
@@ -270,7 +312,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_public_keys_are_503() {
+    async fn missing_summit_public_keys_are_503() {
         let dir = tempfile::tempdir().unwrap();
         let (status, _) = get(router_in(dir.path()), "/v1/keys").await;
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
@@ -280,7 +322,7 @@ mod tests {
 
     // A wrong-length key never reaches the TPM, and its detail stays off the wire.
     #[tokio::test]
-    async fn malformed_public_keys_are_500_before_touching_the_tpm() {
+    async fn malformed_summit_public_keys_are_500_before_touching_the_tpm() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(
             dir.path().join("public-keys.json"),
@@ -302,6 +344,27 @@ mod tests {
         // /v1/keys keeps serving for the launch checks.
         let (status, _) = get(router_in(dir.path()), "/v1/keys").await;
         assert_eq!(status, StatusCode::OK);
+    }
+
+    // No candidate, no quote: the harvest must never see summit keys quoted
+    // without the candidate key beside them.
+    #[tokio::test]
+    async fn a_missing_candidate_tx_io_pk_is_503() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("public-keys.json"), KEYS_JSON).unwrap();
+        let (status, body) = get(router_in(dir.path()), &quote_uri()).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body, b"candidate tx_io_pk@0 not yet written");
+    }
+
+    #[tokio::test]
+    async fn a_malformed_candidate_tx_io_pk_is_500_before_touching_the_tpm() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("public-keys.json"), KEYS_JSON).unwrap();
+        fs::write(dir.path().join("candidate-tx-io-pk"), [0x02u8; 32]).unwrap();
+        let (status, body) = get(router_in(dir.path()), &quote_uri()).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body, b"internal error");
     }
 
     #[tokio::test]

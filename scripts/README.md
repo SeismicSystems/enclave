@@ -27,8 +27,8 @@ to `getDeployVerificationEvidence`, independently derives the expected
 network/nonce binding, and verifies the complete evidence envelope; bindings
 for another nonce or another network are rejected.
 
-`test_four_node_root_key_distribution` starts one genesis pair plus three
-joining pairs — two bootstrapping from the genesis node, one from an
+`test_four_node_root_key_distribution` starts one minting pair plus three
+joining pairs — two bootstrapping from the minting pair, one from an
 already-bootstrapped joiner — and checks that every join completes and all
 four custodians derive the same `tx_io_pk`.
 

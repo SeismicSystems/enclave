@@ -14,7 +14,7 @@ library they share, or one deploy's Rust CLI links.
 | Crate (dir) | Binary | Role |
 |---|---|---|
 | `tdx-init` | `tdx-init` | Boot-time init: receives node config over HTTP and writes the enclave/reth runtime env, then exits. |
-| `attestation-service` | `seismic-attestation-service` | Network-facing JSON-RPC service (`:7878`): serves attestation evidence and purpose keys, and from boot the founding harvest over HTTP (`:7879`): summit's pubkeys, and a quote over them until the manifest exists. The node's only TPM user. Holds no key material — reaches the custodian over a Unix socket. |
+| `attestation-service` | `seismic-attestation-service` | Network-facing JSON-RPC service (`:7878`): serves attestation evidence and purpose keys, and from boot the founding harvest over HTTP (`:7879`): summit's pubkeys and the custodian's candidate `tx_io_pk@0`, and a quote over them until the manifest exists. The node's only TPM user. Holds no key material — reaches the custodian over a Unix socket. |
 | `custodian-service` | `seismic-custodian-service` | Standalone service for the RAM-only root-key custodian: no network listener, minimal Unix-socket API, owns the per-boot LUKS keyfile handoff. |
 
 ### Libraries (`crates/`)

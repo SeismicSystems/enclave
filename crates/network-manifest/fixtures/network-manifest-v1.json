@@ -3,6 +3,7 @@
     "chain_id": 5124,
     "genesis_hash": "0x78ab9057bb67f95a6182969c5d755ac02802c98c0d2f0d8daeb52f4bddc60be5"
   },
+  "founding_tx_io_pk": "0x03f39b46b20d0f2f9c8d45206d6c1cdf8a3332c7b7b96dad5c1f0d0051585d7329",
   "manifest_version": 1,
   "measurements": {
     "bootstrap_policy_hash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

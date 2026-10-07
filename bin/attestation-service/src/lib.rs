@@ -45,9 +45,10 @@ pub struct Args {
     pub peer_listen: SocketAddr,
 
     /// The listener only the operator may reach, up from boot: the founding
-    /// harvest, summit's pubkeys and a quote over them until the network
-    /// manifest exists. A node's firewall restricts it to the operator's
-    /// CIDR, permanently, since the quote window reopens every boot.
+    /// harvest, summit's pubkeys and the custodian's candidate `tx_io_pk@0`
+    /// with a quote over them until the network manifest exists. A node's
+    /// firewall restricts it to the operator's CIDR, permanently, since the
+    /// quote window reopens every boot.
     #[arg(long, default_value = DEFAULT_OPERATOR_LISTEN)]
     pub operator_listen: SocketAddr,
 
@@ -92,6 +93,7 @@ impl Args {
             harvest::Harvest::new(
                 harvest::SUMMIT_PUBLIC_KEYS_PATH.into(),
                 self.conf_dir.join(conf::NETWORK_MANIFEST),
+                seismic_custodian_ipc::candidate_tx_io_pk::CANDIDATE_TX_IO_PK_PATH.into(),
             ),
         );
 

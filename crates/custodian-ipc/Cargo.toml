@@ -52,3 +52,6 @@ cli = ["client", "dep:anyhow", "dep:clap", "dep:hex", "dep:sha2"]
 [[bin]]
 name = "custodian-ipc-cli"
 required-features = ["cli"]
+
+[dev-dependencies]
+tempfile.workspace = true
