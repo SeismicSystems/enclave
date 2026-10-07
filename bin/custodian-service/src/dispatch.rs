@@ -64,6 +64,23 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
                 })
             }
             CreateAttemptOutcome::RootKeyAlreadyPresent => Response::RootKeyAlreadyPresent,
+            CreateAttemptOutcome::ManifestUnreadable(error) => {
+                warn!(
+                    ?error,
+                    "cannot resolve the candidate root key: manifest unreadable"
+                );
+                Response::Error {
+                    message: "network manifest unreadable".to_string(),
+                }
+            }
+            CreateAttemptOutcome::LuksKeyfileWriteFailed(error) => {
+                // Without the LUKS handoff this boot cannot proceed. A restart
+                // mints a candidate the manifest does not pin, so this node
+                // then rejoins from a peer; at founding there is none yet, and
+                // the network has to be re-founded.
+                error!(?error, "LUKS keyfile write failed for the pinned candidate");
+                std::process::exit(1);
+            }
         },
         Request::WrapRootKey {
             root_key_request_binding,
@@ -117,6 +134,15 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
                 std::process::exit(1);
             }
             InstallOutcome::RootKeyAlreadyPresent => Response::RootKeyAlreadyPresent,
+            InstallOutcome::NotPinned => {
+                warn!(
+                    "root-key install refused: the fetched key does not derive the \
+                     manifest's pinned tx_io_pk@0"
+                );
+                Response::Error {
+                    message: "root key does not match the manifest's founding_tx_io_pk".to_string(),
+                }
+            }
             InstallOutcome::UnknownAttempt => {
                 warn!("root-key install refused: no matching bootstrap attempt");
                 Response::Error {
@@ -172,7 +198,8 @@ mod tests {
     }
 
     fn awaiting(luks_keyfile: &Path) -> CustodianState {
-        CustodianState::new_awaiting_root_key(luks_keyfile.to_path_buf())
+        let founding_tx_io_pk = Custodian::new(ROOT_KEY).get_tx_io_pk(0).serialize();
+        CustodianState::new_awaiting_root_key(founding_tx_io_pk, luks_keyfile.to_path_buf())
     }
 
     #[test]

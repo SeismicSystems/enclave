@@ -37,6 +37,7 @@ use seismic_attestation_rpc::{
 };
 use seismic_attestation_service::{
     api::NodeStatusRpcClient as _,
+    conf,
     utils::{init_tracing, is_sudo},
 };
 use seismic_custodian::Custodian;
@@ -50,6 +51,8 @@ use seismic_custodian_service::state::CustodianState;
 // network ID.
 const EXPECTED_NETWORK_MANIFEST: &[u8] =
     include_bytes!("../../../../crates/network-manifest/fixtures/network-manifest-v1.json");
+/// The root key whose `tx_io_pk@0` the fixture manifest pins.
+const PINNED_ROOT_KEY: [u8; 32] = [7u8; 32];
 const NODE_STARTUP_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const EVIDENCE_RPC_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(2);
@@ -68,7 +71,7 @@ async fn test_two_node_root_key_bootstrap() {
         panic!("test_two_node_root_key_bootstrap: skipped (requires sudo privileges)");
     }
 
-    let genesis = start_node("genesis node", 0, None).await;
+    let genesis = start_node("minting node", 0, None).await;
     let joiner = start_node("joining node", 1, Some(vec![genesis.url.clone()])).await;
 
     // The bootstrap installed the root key in the joiner's custodian, which
@@ -102,7 +105,7 @@ async fn test_tx_io_evidence_relying_party() {
         panic!("test_tx_io_evidence_relying_party: skipped (requires sudo privileges)");
     }
 
-    let node = start_node("genesis node", 20, None).await;
+    let node = start_node("minting node", 20, None).await;
 
     let epoch = 0;
     let response = get_tx_io_attestation_evidence(&node.client, epoch).await;
@@ -181,7 +184,7 @@ async fn test_deploy_verification_relying_party() {
         panic!("test_deploy_verification_relying_party: skipped (requires sudo privileges)");
     }
 
-    let node = start_node("genesis node", 21, None).await;
+    let node = start_node("minting node", 21, None).await;
 
     let deployment_nonce = [0xD7u8; 32];
     let response = get_deploy_verification_evidence(&node.client, deployment_nonce).await;
@@ -243,7 +246,7 @@ async fn test_deploy_verification_relying_party() {
 /// ```
 ///
 /// So the same responder serves repeat joins (genesis -> a, b) and the root
-/// key travels onward through an already-bootstrapped, non-genesis node
+/// key travels onward through an already-bootstrapped, joined node
 /// (a -> c). Nodes come up sequentially — each health wait spans the full
 /// attested exchange — so quote generation never runs concurrently on the
 /// runner's single vTPM (all four logical nodes legitimately share its one
@@ -260,7 +263,7 @@ async fn test_four_node_root_key_distribution() {
         panic!("test_four_node_root_key_distribution: skipped (requires sudo privileges)");
     }
 
-    let genesis = start_node("genesis node", 10, None).await;
+    let genesis = start_node("minting node", 10, None).await;
     let joiner_a = start_node("joiner a", 11, Some(vec![genesis.url.clone()])).await;
     let joiner_b = start_node("joiner b", 12, Some(vec![genesis.url.clone()])).await;
     let joiner_c = start_node("joiner c", 13, Some(vec![joiner_a.url.clone()])).await;
@@ -286,7 +289,7 @@ async fn test_four_node_root_key_distribution() {
         assert_eq!(
             tx_io_pk(joiner).await,
             genesis_tx_io_pk,
-            "{} derived a different tx_io_pk than the genesis node",
+            "{} derived a different tx_io_pk than the minting node",
             joiner.label
         );
     }
@@ -380,7 +383,7 @@ struct NodePair {
 
 /// Start a node's process pair and wait until its RPC listener is healthy.
 ///
-/// `peers: None` starts the genesis node (fresh root key); `Some(urls)`
+/// `peers: None` starts the node the manifest pins; `Some(urls)`
 /// starts a joiner whose custodian acquires the root key from those peers, so
 /// returning implies the join completed. `n` offsets the HTTP port; keep
 /// offsets distinct across tests — they share one process, and a just-aborted
@@ -389,25 +392,30 @@ async fn start_node(label: &'static str, n: u16, peers: Option<Vec<String>>) -> 
     let runtime = tempfile::tempdir().expect("create node runtime directory");
     let socket = runtime.path().join("custodian.sock");
     let luks_keyfile = runtime.path().join("luks-keys");
-    let state = if peers.is_none() {
-        CustodianState::new_with_root_key(
-            Custodian::new_as_genesis().expect("generate genesis root key"),
-            luks_keyfile,
-        )
-        .expect("construct genesis custodian")
+    // Every custodian starts with a candidate and resolves it against the
+    // manifest at the service's first bootstrap call: the fixture pins
+    // PINNED_ROOT_KEY, so the first node keeps it and a joiner's freshly
+    // minted candidate is discarded.
+    let candidate = if peers.is_none() {
+        Custodian::new(PINNED_ROOT_KEY)
     } else {
-        CustodianState::new_awaiting_root_key(luks_keyfile)
+        Custodian::mint().expect("mint a candidate root key")
     };
-    spawn_custodian(state, &socket);
-
-    // Each node answers admission reads from its own accepting mock registry.
-    let registry_url = spawn_accepting_registry().await;
     let conf_dir = runtime.path().join("conf");
     write_conf_dir(
         &conf_dir,
         EXPECTED_NETWORK_MANIFEST,
         &peers.unwrap_or_default(),
     );
+    let state = CustodianState::new_with_candidate(
+        candidate,
+        conf_dir.join(conf::NETWORK_MANIFEST),
+        luks_keyfile,
+    );
+    spawn_custodian(state, &socket);
+
+    // Each node answers admission reads from its own accepting mock registry.
+    let registry_url = spawn_accepting_registry().await;
     let args = get_args(n, conf_dir, socket.clone(), &registry_url);
     let url = format!("http://localhost:{}", args.peer_listen.port());
     let mut handle = tokio::spawn(args.start());

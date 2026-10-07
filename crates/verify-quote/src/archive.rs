@@ -19,9 +19,10 @@
 //!
 //! The document, `version: 1`:
 //!
-//! - `harvest_nonce`, `node_public_key`, `consensus_public_key`: the record's
-//!   claims, bare lowercase hex, exactly as the box's holder spelled them;
-//!   the binding the evidence must carry is recomputed from these;
+//! - `harvest_nonce`, `node_public_key`, `consensus_public_key`,
+//!   `candidate_tx_io_public_key`: the record's claims, bare lowercase hex,
+//!   exactly as the box's harvest endpoint spelled them; the binding the
+//!   evidence must carry is recomputed from these;
 //! - `evidence`: the attestation exchange message verbatim, in the backend's
 //!   own serialization;
 //! - `verified_at`: seconds since the Unix epoch, the instant the
@@ -69,6 +70,9 @@ pub struct FoundingArchive {
     pub node_public_key: [u8; 32],
     /// The BLS12-381 MinPk consensus pubkey the harvest endpoint served.
     pub consensus_public_key: [u8; 48],
+    /// The `tx_io_pk@0` of the node's candidate `root_key`, as the harvest
+    /// endpoint served it.
+    pub candidate_tx_io_public_key: [u8; 33],
     /// The evidence and everything the verdict on it rested on.
     pub bundle: VerificationBundle,
     /// What that verdict established; a replay has to reproduce it.
@@ -82,6 +86,7 @@ impl FoundingArchive {
             &self.harvest_nonce,
             &self.node_public_key,
             &self.consensus_public_key,
+            &self.candidate_tx_io_public_key,
         )
     }
 }
@@ -99,6 +104,7 @@ struct ArchivedFoundingV1 {
     harvest_nonce: String,
     node_public_key: String,
     consensus_public_key: String,
+    candidate_tx_io_public_key: String,
     evidence: AttestationExchangeMessage,
     verified_at: u64,
     dcap_collateral: ArchivedCollateral,
@@ -199,6 +205,7 @@ impl From<&FoundingArchive> for ArchivedFoundingV1 {
             harvest_nonce: hex::encode(archive.harvest_nonce),
             node_public_key: hex::encode(archive.node_public_key),
             consensus_public_key: hex::encode(archive.consensus_public_key),
+            candidate_tx_io_public_key: hex::encode(archive.candidate_tx_io_public_key),
             evidence: bundle.evidence.clone(),
             verified_at: bundle.verified_at,
             dcap_collateral: ArchivedCollateral::from(&bundle.dcap_collateral),
@@ -218,6 +225,10 @@ impl TryFrom<ArchivedFoundingV1> for FoundingArchive {
             consensus_public_key: decode_hex(
                 "consensus_public_key",
                 &archived.consensus_public_key,
+            )?,
+            candidate_tx_io_public_key: decode_hex(
+                "candidate_tx_io_public_key",
+                &archived.candidate_tx_io_public_key,
             )?,
             bundle: VerificationBundle {
                 evidence: archived.evidence,
@@ -415,6 +426,7 @@ pub fn fabricated_archive() -> FoundingArchive {
         harvest_nonce: [0x5a; 32],
         node_public_key: [0x6b; 32],
         consensus_public_key: [0x7c; 48],
+        candidate_tx_io_public_key: [0x03; 33],
         bundle: VerificationBundle {
             evidence: AttestationExchangeMessage::without_attestation(),
             verified_at: FABRICATED_AT,
@@ -521,7 +533,7 @@ mod tests {
 
     /// The DER components are base64, and the Intel-signed bodies and PEM
     /// chains are the archive's own text — inspectable without tooling. The
-    /// claims are bare hex in the holder's spelling, the anchors are named,
+    /// claims are bare hex in the harvest endpoint's spelling, the anchors are named,
     /// and the report spells registers as the policy does.
     #[test]
     fn document_is_readable_and_versioned() {

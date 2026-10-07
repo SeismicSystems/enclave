@@ -47,7 +47,7 @@ pub async fn await_config(conf_dir: &Path) -> Result<Vec<String>> {
 }
 
 /// The file holds one line, `SEISMIC_ROOT_KEY_PEERS=` and a comma-separated
-/// list, empty on the genesis node.
+/// list, empty when `[network].bootnodes` names no other machine.
 fn parse_root_key_peers(content: &str) -> Result<Vec<String>> {
     let mut peers = None;
     for line in content.lines().filter(|line| !line.trim().is_empty()) {

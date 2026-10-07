@@ -1,18 +1,18 @@
 //! This node's own join: obtaining the network root key at boot.
 //!
-//! A node that already holds the key — the genesis node, or one whose custodian
-//! kept it across a restart — has nothing to do here. A keyless one runs the
-//! requester side of the bootstrap handshake ([`crate::bootstrap`]) against its
-//! configured peers until one answers, and this module is the loop around that:
-//! which peer to ask, what a refusal says about this node, and how long to wait
-//! before asking again.
+//! A node that already holds the key — the box whose candidate the manifest
+//! pins, or one whose custodian kept it across a restart of this service — has
+//! nothing to do here. A keyless one runs the requester side of the bootstrap
+//! handshake ([`crate::bootstrap`]) against its configured peers until one
+//! answers, and this module is the loop around that: which peer to ask, what a
+//! refusal says about this node, and how long to wait before asking again.
 //!
 //! The counterpart is [`crate::server`], where this same process answers that
 //! handshake for the nodes joining after it.
 
 use crate::{
     ATTESTATION_TYPE,
-    admission::DangerouslyAdmitAnyAzureGuest,
+    admission::AdmitAnyAzureGuest,
     bootstrap::{RootKeyResponse, build_root_key_request, verify_root_key_response},
     rpc_error::RootKeyRefusal,
 };
@@ -41,13 +41,14 @@ const REFUSED_CYCLE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// Block until the local custodian holds the network root key.
 ///
-/// The first `CreateRootKeyBootstrapAttempt` doubles as the readiness probe
-/// and the state query (there is deliberately no separate state RPC): a
-/// custodian that already holds the key — genesis, or a bootstrap completed
-/// before this service restarted — answers `RootKeyAlreadyPresent` and we
-/// proceed straight to serving. Only a keyless custodian sends us into the
-/// peer-fetch loop; the probe's retained attempt is superseded by the fresh
-/// attempt each fetch try creates.
+/// Starts with one `CreateRootKeyBootstrapAttempt`. The custodian has no state
+/// RPC, so this call is the state query, and it is the call that makes the
+/// custodian check its candidate against the manifest's pin. It answers:
+///
+/// - `RootKeyAlreadyPresent`: the manifest pins its candidate, or a bootstrap
+///   finished before this service restarted. Nothing to do.
+/// - an attempt: it holds no root key. Fetch one from the peers. Each request
+///   to a peer creates a new attempt, which replaces this one.
 pub(crate) async fn ensure_root_key_present(
     custodian_socket: &Path,
     peers: &[String],
@@ -62,14 +63,14 @@ pub(crate) async fn ensure_root_key_present(
         return Ok(());
     }
 
+    // tdx-init accepts an empty peer list only when the candidate tx_io_pk file
+    // named the pinned key at the config POST.
     if peers.is_empty() {
         anyhow::bail!(
-            "The custodian holds no root key and no peers are configured. Either:\n  \
-             - list the config POST's bootnodes, to fetch the root_key \
-             from an existing peer, OR\n  \
-             - run seismic-custodian-service with --genesis-node to bootstrap a new \
-             chain (set this on exactly one node in the deployment; \
-             setting it on multiple nodes causes a silent network split)."
+            "The custodian holds no root key and no root-key peers are configured. \
+             tdx-init accepted the empty peer list because this box held the pinned \
+             candidate at the config POST, so the custodian has restarted since and \
+             minted a new one: the pinned root key is lost. Found the network again."
         );
     }
 
@@ -235,17 +236,15 @@ async fn try_fetch_root_key_from_peer(
     let response_bytes = client.get_wrapped_root_key(request_bytes).await?;
     let response: RootKeyResponse = serde_json::from_slice(&response_bytes)?;
 
-    // The joiner's appraisal of the responder is intentionally permissive for
-    // now; see [`DangerouslyAdmitAnyAzureGuest`].
-    let request_binding = verify_root_key_response(
-        &response,
-        &request,
-        network_id,
-        &DangerouslyAdmitAnyAzureGuest,
-    )
-    .await?;
+    // The joiner's appraisal of the responder is permissive: the custodian
+    // installs the key only if it derives the manifest's pin; see
+    // [`AdmitAnyAzureGuest`].
+    let request_binding =
+        verify_root_key_response(&response, &request, network_id, &AdmitAnyAzureGuest).await?;
 
-    // Both install outcomes leave the custodian holding the root key.
+    // Both install outcomes leave the custodian holding the root key. A key
+    // the manifest does not pin is refused there, as an error, so the loop
+    // moves on to the next peer.
     custodian
         .install_root_key_from_verified_bootstrap_response(
             attempt.attempt_id,

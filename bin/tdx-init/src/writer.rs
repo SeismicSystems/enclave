@@ -16,10 +16,22 @@ pub const DEFAULT_FILE_MODE: u32 = 0o644;
 /// Every input is validated before the first byte is written, so a bad config
 /// leaves no `conf_dir` and no partially populated set of files behind. The
 /// second half is then pure filesystem work that can only fail on I/O.
-pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Result<()> {
-    let peers = crate::peers::validate_and_derive_peers(&config.node, &config.network.bootnodes)?;
-    let summit_addr = crate::peers::summit_advertised_addr(&config.node)?;
+///
+/// `candidate_tx_io_pk_path` is the custodian's candidate tx_io_pk file,
+/// compared with the manifest's pin to decide whether this node may go without
+/// peers.
+pub async fn write_service_configs(
+    conf_dir: &Path,
+    candidate_tx_io_pk_path: &Path,
+    config: &InitConfig,
+) -> Result<()> {
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
+    let peers = crate::peers::validate_and_derive_peers(
+        &config.node,
+        &config.network.bootnodes,
+        crate::peers::holds_pinned_candidate(candidate_tx_io_pk_path, &manifest.founding_tx_io_pk)?,
+    )?;
+    let summit_addr = crate::peers::summit_advertised_addr(&config.node)?;
     let genesis = crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,
         manifest.chain_id,
@@ -31,7 +43,6 @@ pub async fn write_service_configs(conf_dir: &Path, config: &InitConfig) -> Resu
 
     fs::create_dir_all(conf_dir).await?;
     write_domain_env(conf_dir, config).await?;
-    write_custodian_env(conf_dir, config).await?;
     write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
     write_reth_p2p_env(conf_dir, &peers.peer_enodes, &config.node.external_ip).await?;
     write_summit_env(conf_dir, summit_addr).await?;
@@ -87,23 +98,9 @@ async fn write_domain_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
     Ok(())
 }
 
-/// The custodian's systemd unit loads this via `EnvironmentFile=`; the binary
-/// reads `SEISMIC_CUSTODIAN_GENESIS_NODE` (whether to generate a fresh root
-/// key) through clap `env=`.
-async fn write_custodian_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
-    let path = conf_dir.join("custodian.env");
-    let content = format!(
-        "SEISMIC_CUSTODIAN_GENESIS_NODE={}\n",
-        config.node.genesis_node,
-    );
-    write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
-    info!("wrote {}", path.display());
-    Ok(())
-}
-
 /// The attestation service reads this in-process once the sentinel appears:
-/// `SEISMIC_ROOT_KEY_PEERS` is where to fetch the root key when the local
-/// custodian starts without one. The peer list
+/// `SEISMIC_ROOT_KEY_PEERS` is where to fetch the root key when the manifest
+/// does not pin the local custodian's candidate. The peer list
 /// is not a config field: it is derived from `[network].bootnodes` in
 /// `crate::peers`.
 async fn write_attestation_svc_env(conf_dir: &Path, root_key_peers: &[String]) -> Result<()> {
@@ -119,7 +116,7 @@ async fn write_attestation_svc_env(conf_dir: &Path, root_key_peers: &[String]) -
 /// on reth's command line. Each var holds a whole flag: systemd word-splits an
 /// unquoted expansion, so a populated var expands to argv entries while an
 /// empty one drops out entirely. Emitting the flag name inside the var (rather
-/// than a bare value) is what lets the genesis node's empty bootnode list
+/// than a bare value) is what lets an empty bootnode list
 /// vanish instead of passing `--bootnodes ""`, which reth rejects.
 /// `RETH_NAT_FLAG` is always populated (external_ip is required); the two peer
 /// flags are empty together, on a node whose cohort names no other machine.
@@ -186,12 +183,24 @@ mod tests {
     use tdx_init_config::{DomainConfig, NetworkConfig, NodeConfig};
     use tempfile::TempDir;
 
+    /// A candidate tx_io_pk file naming the fixture manifest's pin, so
+    /// `sample_config` (no bootnodes) is valid; the guard keeps the file alive.
+    fn pinned_candidate() -> (TempDir, std::path::PathBuf) {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("candidate-tx-io-pk");
+        let manifest =
+            crate::manifest::decode_and_validate(&sample_config().network.manifest_base64).unwrap();
+        seismic_custodian_ipc::candidate_tx_io_pk::write(&path, &manifest.founding_tx_io_pk)
+            .unwrap();
+        (dir, path)
+    }
+
     /// A syntactically valid enode at `host_port` (128-hex pubkey).
     fn enode(host_port: &str) -> String {
         format!("enode://{}@{host_port}", "a".repeat(128))
     }
 
-    fn sample_config(genesis_node: bool) -> InitConfig {
+    fn sample_config() -> InitConfig {
         InitConfig {
             network: NetworkConfig {
                 manifest_base64: base64::engine::general_purpose::STANDARD.encode(include_bytes!(
@@ -213,7 +222,6 @@ mod tests {
             },
             node: NodeConfig {
                 external_ip: "203.0.113.1".to_string(),
-                genesis_node,
                 domain: DomainConfig {
                     email: "ops@example.com".to_string(),
                     name: "node1.example.com".to_string(),
@@ -225,19 +233,19 @@ mod tests {
     #[tokio::test]
     async fn writes_env_files_with_expected_contents() {
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(true);
+        let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("10.0.0.1:30303"), enode("10.0.0.2:30303")];
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let domain = std::fs::read_to_string(tmp.path().join("domain.env")).unwrap();
         assert_eq!(
             domain,
             "DOMAIN_NAME=node1.example.com\nDOMAIN_EMAIL=ops@example.com\n"
         );
-
-        let custodian = std::fs::read_to_string(tmp.path().join("custodian.env")).unwrap();
-        assert_eq!(custodian, "SEISMIC_CUSTODIAN_GENESIS_NODE=true\n");
 
         // The peer list is derived from the bootnode hosts, not delivered.
         let attestation = std::fs::read_to_string(tmp.path().join("attestation.env")).unwrap();
@@ -248,11 +256,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn genesis_node_without_bootnodes_gets_empty_peers() {
+    async fn no_bootnodes_gets_empty_peers() {
         let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(true);
+        let cfg = sample_config();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let attestation = std::fs::read_to_string(tmp.path().join("attestation.env")).unwrap();
         assert_eq!(attestation, "SEISMIC_ROOT_KEY_PEERS=\n");
@@ -264,10 +275,13 @@ mod tests {
         // Nothing this node uses to reach others should name itself, so it is
         // absent from both reth flags and from the root-key fetch list.
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(false);
+        let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("203.0.113.1:30303"), enode("10.0.0.2:30303")];
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let attestation = std::fs::read_to_string(tmp.path().join("attestation.env")).unwrap();
         assert_eq!(attestation, "SEISMIC_ROOT_KEY_PEERS=http://10.0.0.2:7878\n");
@@ -284,24 +298,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_joiner_without_peer_source() {
-        let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(false);
-
-        let err = write_service_configs(tmp.path(), &cfg).await.unwrap_err();
-        assert!(matches!(err, crate::error::TdxInitError::InvalidPeers(_)));
-    }
-
-    #[tokio::test]
     async fn a_rejected_config_writes_nothing() {
         // Validation runs to completion before any file is written, so a
         // failure in the last-validated artifact still leaves an empty conf
         // dir rather than a set of files the boot chain would go on to read.
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(true);
+        let mut cfg = sample_config();
         cfg.network.summit_genesis_base64 = "not base64".to_string();
 
-        let err = write_service_configs(tmp.path(), &cfg).await.unwrap_err();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        let err = write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap_err();
         assert!(matches!(
             err,
             crate::error::TdxInitError::InvalidSummitGenesis(_)
@@ -310,13 +318,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_unpinned_node_without_peers_writes_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let no_candidate_tx_io_pk = tmp.path().join("no-candidate-tx-io-pk");
+
+        let err = write_service_configs(tmp.path(), &no_candidate_tx_io_pk, &sample_config())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, crate::error::TdxInitError::InvalidPeers(_)));
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
     async fn writes_reth_p2p_env_populated() {
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(false);
+        let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("10.0.0.1:30303"), enode("10.0.0.2:30303")];
         cfg.node.external_ip = "203.0.113.7".to_string();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let p2p = std::fs::read_to_string(tmp.path().join("reth-p2p.env")).unwrap();
         let id = "a".repeat(128);
@@ -330,14 +353,17 @@ mod tests {
 
     #[tokio::test]
     async fn writes_reth_p2p_env_without_bootnodes() {
-        // The lone genesis node has no bootnodes: RETH_BOOTNODES_FLAG and
+        // A box founding alone has no bootnodes: RETH_BOOTNODES_FLAG and
         // RETH_TRUSTED_PEERS_FLAG are empty so reth.service's unquoted
         // expansion drops them, while RETH_NAT_FLAG is still populated from the
         // (required) external_ip.
         let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(true);
+        let cfg = sample_config();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let p2p = std::fs::read_to_string(tmp.path().join("reth-p2p.env")).unwrap();
         assert_eq!(
@@ -349,11 +375,14 @@ mod tests {
     #[tokio::test]
     async fn writes_summit_env() {
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(false);
+        let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("10.0.0.2:30303")];
         cfg.node.external_ip = "203.0.113.7".to_string();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let env = std::fs::read_to_string(tmp.path().join("summit.env")).unwrap();
         assert_eq!(env, "SUMMIT_ADVERTISED_ADDR=203.0.113.7:18551\n");
@@ -366,11 +395,14 @@ mod tests {
         // address would emit a value it rejects, so the address is formatted as
         // a SocketAddr rather than composed textually.
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(false);
+        let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("[2001:db8::2]:30303")];
         cfg.node.external_ip = "2001:db8::7".to_string();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let env = std::fs::read_to_string(tmp.path().join("summit.env")).unwrap();
         assert_eq!(env, "SUMMIT_ADVERTISED_ADDR=[2001:db8::7]:18551\n");
@@ -379,7 +411,7 @@ mod tests {
     #[tokio::test]
     async fn writes_network_manifest_verbatim() {
         let tmp = TempDir::new().unwrap();
-        let mut cfg = sample_config(true);
+        let mut cfg = sample_config();
         // A valid manifest with a non-canonical byte (trailing newline): the
         // written file must be the decoded bytes exactly, not a re-rendering.
         let raw = [
@@ -393,7 +425,10 @@ mod tests {
             ..cfg.network
         };
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let written = std::fs::read(tmp.path().join("network-manifest.json")).unwrap();
         assert_eq!(written, raw);
@@ -402,9 +437,12 @@ mod tests {
     #[tokio::test]
     async fn writes_reth_genesis_verbatim() {
         let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(true);
+        let cfg = sample_config();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let written = std::fs::read(tmp.path().join("reth-genesis.json")).unwrap();
         let expected =
@@ -415,9 +453,12 @@ mod tests {
     #[tokio::test]
     async fn writes_summit_genesis_verbatim() {
         let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(true);
+        let cfg = sample_config();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         let written = std::fs::read(tmp.path().join("summit-genesis.toml")).unwrap();
         let expected = crate::summit_genesis::tests::genesis_toml(
@@ -429,13 +470,15 @@ mod tests {
     #[tokio::test]
     async fn sets_default_mode() {
         let tmp = TempDir::new().unwrap();
-        let cfg = sample_config(true);
+        let cfg = sample_config();
 
-        write_service_configs(tmp.path(), &cfg).await.unwrap();
+        let (_candidate_dir, candidate) = pinned_candidate();
+        write_service_configs(tmp.path(), &candidate, &cfg)
+            .await
+            .unwrap();
 
         for name in [
             "domain.env",
-            "custodian.env",
             "attestation.env",
             "reth-p2p.env",
             "summit.env",

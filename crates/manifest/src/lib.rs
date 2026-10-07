@@ -36,6 +36,7 @@ pub fn render(manifest: &NetworkManifestV1) -> Vec<u8> {
         eth,
         summit,
         measurements,
+        founding_tx_io_pk,
     } = manifest;
     let EthManifest {
         chain_id,
@@ -63,6 +64,7 @@ pub fn render(manifest: &NetworkManifestV1) -> Vec<u8> {
             "chain_id": chain_id,
             "genesis_hash": hex_0x(genesis_hash),
         },
+        "founding_tx_io_pk": hex_0x(founding_tx_io_pk),
         "manifest_version": manifest_version,
         "measurements": {
             "bootstrap_policy_hash": hex_0x(bootstrap_policy_hash),
@@ -114,7 +116,7 @@ mod tests {
     const FIXTURE: &[u8] =
         include_bytes!("../../network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
-        "0x8ef142e3f2bf15f8b201c4d8cda7848a9e846222c62b5615d4d36c7fccd98a24";
+        "0xe2ad747387fbe8bb1c07d919e7bba807f44b0812704e82ebdb048e6a8b8e2bbd";
 
     #[test]
     fn render_reproduces_fixture_bytes() {

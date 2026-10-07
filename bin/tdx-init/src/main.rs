@@ -70,7 +70,12 @@ async fn wait_for_and_persist_config() -> Result<()> {
     let config = server::run_initialization_server().await?;
 
     let conf_dir = Path::new(CONF_DIR);
-    writer::write_service_configs(conf_dir, &config).await?;
+    writer::write_service_configs(
+        conf_dir,
+        Path::new(seismic_custodian_ipc::candidate_tx_io_pk::CANDIDATE_TX_IO_PK_PATH),
+        &config,
+    )
+    .await?;
     fs::write(SENTINEL_FILE, b"").await?;
     info!("configuration received and written under {}", CONF_DIR);
     Ok(())

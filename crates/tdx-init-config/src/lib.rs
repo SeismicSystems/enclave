@@ -117,10 +117,11 @@ pub struct NetworkConfig {
     /// and, as `http://<host>:7878`, the attestation service's root-key fetch
     /// list (`attestation.env`); the rendering lives in
     /// `bin/tdx-init/src/peers.rs`, which also documents why reth gets the list
-    /// twice. The field is required,
-    /// but an empty list is valid on the genesis node only — it has no peers
-    /// to dial and mints `root_key` itself; a non-genesis POST with no usable
-    /// bootnode is rejected with `400`.
+    /// twice. The field is required, but an empty list is valid only on the box
+    /// whose candidate `root_key` the manifest pins, at founding: it keeps the
+    /// key and has no peer to fetch from. tdx-init compares the custodian's
+    /// candidate tx_io_pk file with the pin at the POST and rejects any other
+    /// node left with no root-key peer with `400`.
     pub bootnodes: Vec<String>,
 }
 
@@ -137,17 +138,6 @@ pub struct NodeConfig {
     /// `[network].bootnodes`. Validated as an `IpAddr` at POST time
     /// (`bin/tdx-init/src/peers.rs`).
     pub external_ip: String,
-
-    /// Root-key custody flag: true iff this node is the network's genesis
-    /// node — the one whose custodian generates `root_key` locally with
-    /// OsRng. Every other node must leave this `false` (the default) and
-    /// fetch from a peer derived from `[network].bootnodes`. Setting it on
-    /// multiple nodes causes a silent network split (each generates a
-    /// different `root_key`; downstream nodes that fetch from one can't
-    /// decrypt state from the other). Rendered to `custodian.env` as
-    /// `SEISMIC_CUSTODIAN_GENESIS_NODE`.
-    #[serde(default)]
-    pub genesis_node: bool,
 
     /// TLS identity for this node's public RPC; see [`DomainConfig`].
     pub domain: DomainConfig,
@@ -168,7 +158,6 @@ bootnodes = ["enode://abc@10.0.0.1:30303", "enode://def@10.0.0.2:30303"]
 
 [node]
 external_ip = "203.0.113.7"
-genesis_node = true
 
 [node.domain]
 name = "node1.example.com"
@@ -181,38 +170,14 @@ email = "ops@example.com"
         );
         assert_eq!(cfg.network.bootnodes.len(), 2);
         assert_eq!(cfg.node.external_ip, "203.0.113.7");
-        assert!(cfg.node.genesis_node);
         assert_eq!(cfg.node.domain.name, "node1.example.com");
         assert_eq!(cfg.node.domain.email, "ops@example.com");
     }
 
     #[test]
-    fn genesis_node_defaults_to_false() {
-        // Fetching from a peer is the safe default: an accidentally-omitted
-        // flag must never mint a second root_key.
-        let toml_input = r#"
-[network]
-manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
-reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
-summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
-bootnodes = []
-
-[node]
-external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
-"#;
-        let cfg: InitConfig = toml::from_str(toml_input).unwrap();
-        assert!(!cfg.node.genesis_node);
-    }
-
-    #[test]
-    fn accepts_empty_bootnodes() {
-        // The genesis node has no peers to dial: the key is required but an
-        // empty list parses fine (the genesis-only rule lives in
-        // bin/tdx-init/src/peers.rs).
+    fn rejects_the_removed_genesis_node_flag() {
+        // The manifest's root-key pin, not a flag, decides which box keeps its
+        // key: an old deploy CLI still sending the flag must get a clean 400.
         let toml_input = r#"
 [network]
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
@@ -223,6 +188,28 @@ bootnodes = []
 [node]
 external_ip = "203.0.113.7"
 genesis_node = true
+
+[node.domain]
+name = "node1.example.com"
+email = "ops@example.com"
+"#;
+        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("unknown"));
+    }
+
+    #[test]
+    fn accepts_empty_bootnodes() {
+        // The pinned box has no peers to dial at founding: the key is
+        // required but an empty list parses fine.
+        let toml_input = r#"
+[network]
+manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
+bootnodes = []
+
+[node]
+external_ip = "203.0.113.7"
 
 [node.domain]
 name = "node1.example.com"
@@ -299,7 +286,6 @@ email = "ops@example.com"
         let toml_input = r#"
 [node]
 external_ip = "203.0.113.7"
-genesis_node = true
 
 [node.domain]
 name = "node1.example.com"

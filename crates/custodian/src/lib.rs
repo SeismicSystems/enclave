@@ -2,10 +2,11 @@
 //!
 //! [`Custodian`] owns `root_key`, the network-wide master secret from which
 //! every purpose key is derived (tx-io, snapshot, RNG, LUKS storage +
-//! header-MAC). The key is RAM-only: generated fresh on the genesis node or
-//! received from a peer via the attested wrap protocol, never written to disk
-//! in any form. At-rest confidentiality comes from the LUKS volume, whose
-//! unlock key is itself derived from `root_key`.
+//! header-MAC). The key is RAM-only: minted at boot as a candidate and kept
+//! if the network manifest pins it, or received from a peer via the attested
+//! wrap protocol, never written to disk in any form. At-rest confidentiality
+//! comes from the LUKS volume, whose unlock key is itself derived from
+//! `root_key`.
 //!
 //! Boundary rule: this crate never sees remote attestation evidence, let
 //! alone parses it. Releasing `root_key` to a peer requires a

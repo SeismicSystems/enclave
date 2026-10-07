@@ -10,6 +10,7 @@ readme.workspace = true
 description = "Boot-time node initialization: receives node config over HTTP and writes the enclave/reth runtime env"
 
 [dependencies]
+seismic-custodian-ipc.workspace = true
 seismic-network-manifest.workspace = true
 tdx-init-config.workspace = true
 

@@ -25,7 +25,7 @@ pub struct EphemeralKeypair {
 }
 
 impl EphemeralKeypair {
-    /// Draw the scalar from the OS CSPRNG (like [`Custodian::new_as_genesis`]),
+    /// Draw the scalar from the OS CSPRNG (like [`Custodian::mint`]),
     /// retrying on the negligible chance of an out-of-range scalar. We seed from
     /// bytes rather than secp256k1's own `generate_keypair` because that helper
     /// wants a `rand` 0.8 RNG, while this workspace is on `rand` 0.9.

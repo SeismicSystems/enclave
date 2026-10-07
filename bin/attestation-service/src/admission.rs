@@ -18,8 +18,9 @@
 //!   `check_pinned_genesis`). The chain carries the *live* policy:
 //!   additions and deprecations take effect on the next handshake, no node
 //!   restart needed.
-//! - [`DangerouslyAdmitAnyAzureGuest`] — the requester's (joiner's) predicate
-//!   for appraising the responder, intentionally permissive; see its docs.
+//! - [`AdmitAnyAzureGuest`] — the requester's (joiner's) predicate for
+//!   appraising the responder, permissive because the custodian checks the
+//!   key it delivers; see its docs.
 //!
 //! The measurements → admission-ID mapping is `seismic-measurement-admission`,
 //! the same derivation deploy tooling compiles the registry's genesis storage
@@ -33,11 +34,11 @@
 //! chain `network_id` commits to, at a finalized block whose timestamp is
 //! recent. Two residuals survive, both accepted host influence under the TEE
 //! threat model — a host that eclipses the guest *and* controls its clock, and
-//! the genesis node's own host holding its chain view at block 0 from birth,
+//! the minting custodian's own host holding its chain view at block 0 from birth,
 //! where the founding policy applies and no timestamp check bites. Only the
 //! minting custodian honors the founding policy, and it retires it for good at
 //! block 1 (see [`AdmittedOn`]), so rewinding any other node's chain view, or
-//! the genesis node's after block 1, brings nothing back; the pinned-genesis
+//! the minting custodian's after block 1, brings nothing back; the pinned-genesis
 //! check bounds what remains to the network's founding accepted set.
 
 use crate::api::AdmissionChainStatus;
@@ -456,16 +457,13 @@ impl AdmissionPredicate for RegistryAdmission {
 /// Requester-side (joiner) appraisal of the responder: any cryptographically
 /// valid Azure TDX guest is admitted, measurements unchecked.
 ///
-/// TODO(bootstrap): intentionally temporary. The joiner cannot hold the live
-/// policy — it can't read the chain before it holds `root_key`, and a
-/// manifest-pinned allowlist would be frozen at genesis — so its real defense
-/// is planned as provenance, not measurement appraisal: verifying the
-/// responder against the network's pinned `tx_io_pk` commitment. Until that
-/// lands, a joiner talking to an attacker-chosen "responder" enclave gets no
-/// measurement guarantee beyond genuine Azure TDX hardware.
-pub(crate) struct DangerouslyAdmitAnyAzureGuest;
+/// Permissive because the joiner's protection is not appraisal: the custodian
+/// installs a delivered key only if it derives the manifest's pinned
+/// `tx_io_pk@0` (`CustodianState::install_root_key`), so the responder's
+/// image cannot change what the joiner ends up holding.
+pub(crate) struct AdmitAnyAzureGuest;
 
-impl AdmissionPredicate for DangerouslyAdmitAnyAzureGuest {
+impl AdmissionPredicate for AdmitAnyAzureGuest {
     type Admitted = ();
 
     async fn admit(
@@ -477,10 +475,6 @@ impl AdmissionPredicate for DangerouslyAdmitAnyAzureGuest {
                 AdmissionDenial::UnsupportedAttestationType(verified.attestation_type()).into(),
             );
         }
-        warn!(
-            "bootstrap: admitting responder on any Azure TDX measurements; \
-             its image is NOT being checked against the network policy"
-        );
         Ok(())
     }
 }
@@ -838,7 +832,7 @@ mod tests {
 
     /// How the served custodian came to hold `root_key`.
     enum KeyOrigin {
-        /// Generated here: the genesis node, which starts out honoring the
+        /// Generated here: the minting custodian, which starts out honoring the
         /// founding policy.
         Minted,
         /// Received from a peer: a joined node, which never honors it.
@@ -862,7 +856,11 @@ mod tests {
             KeyOrigin::Minted => minted("luks-keys"),
             KeyOrigin::Installed => {
                 let minter = minted("minter-luks-keys");
-                let joiner = CustodianState::new_awaiting_root_key(dir.path().join("luks-keys"));
+                let founding_tx_io_pk = Custodian::new([7u8; 32]).get_tx_io_pk(0).serialize();
+                let joiner = CustodianState::new_awaiting_root_key(
+                    founding_tx_io_pk,
+                    dir.path().join("luks-keys"),
+                );
                 let Response::RootKeyBootstrapAttemptCreated(attempt) =
                     dispatch(&joiner, Request::CreateRootKeyBootstrapAttempt)
                 else {
@@ -1033,7 +1031,7 @@ mod tests {
         let error = admission
             .admit(&verified_azure(golden_pcr_bank()))
             .await
-            .expect_err("a chain whose genesis the manifest does not pin must deny");
+            .expect_err("a chain whose genesis the manifest does not founding_tx_io_pk must deny");
         let denial = error
             .downcast_ref::<AdmissionDenial>()
             .expect("typed admission denial");
@@ -1130,14 +1128,14 @@ mod tests {
 
     #[tokio::test]
     async fn joiner_predicate_admits_azure_and_denies_other_types() {
-        DangerouslyAdmitAnyAzureGuest
+        AdmitAnyAzureGuest
             .admit(&verified_azure(HashMap::new()))
             .await
-            .expect("any Azure guest is admitted by the temporary predicate");
+            .expect("any Azure guest is admitted by the joiner's predicate");
 
-        DangerouslyAdmitAnyAzureGuest
+        AdmitAnyAzureGuest
             .admit(&verified_dcap())
             .await
-            .expect_err("non-Azure attestation types are denied even by the temporary predicate");
+            .expect_err("non-Azure attestation types are denied even by the joiner's predicate");
     }
 }

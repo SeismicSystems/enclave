@@ -7,7 +7,8 @@
 //! what each host needs:
 //!
 //! - core (always): wire types + pure/blocking framing — serde, ciborium,
-//!   zeroize only
+//!   zeroize only — and the [`candidate_tx_io_pk`] file, the custodian's one
+//!   channel outside the socket, in std alone
 //! - `client` (default): async [`CustodianClient`] for tokio hosts (reth,
 //!   the attestation service)
 //! - `server`: the synchronous socket server in [`server`] — no async
@@ -19,6 +20,7 @@
 //! an injected closure rather than knowing the custodian. Linking any part
 //! of this crate never drags the enclave stack into a consumer.
 
+pub mod candidate_tx_io_pk;
 #[cfg(feature = "client")]
 mod client;
 mod error;
