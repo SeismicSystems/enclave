@@ -74,12 +74,13 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
                 }
             }
             CreateAttemptOutcome::LuksKeyfileWriteFailed(error) => {
-                // Without the LUKS handoff this boot cannot proceed. A restart
-                // mints a candidate the manifest does not pin, so this node
-                // then rejoins from a peer; at founding there is none yet, and
-                // the network has to be re-founded.
+                // Not fatal, unlike the install arm: this process holds the
+                // only copy of the pinned key, and a restart would mint an
+                // unpinned one. The next call retries the write.
                 error!(?error, "LUKS keyfile write failed for the pinned candidate");
-                std::process::exit(1);
+                Response::Error {
+                    message: "LUKS keyfile write failed".to_string(),
+                }
             }
         },
         Request::WrapRootKey {

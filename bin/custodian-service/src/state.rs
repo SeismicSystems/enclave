@@ -116,9 +116,8 @@ pub enum CreateAttemptOutcome {
     /// The candidate could not be resolved: the manifest is missing or does
     /// not parse. The candidate is kept, so a later call can resolve it.
     ManifestUnreadable(anyhow::Error),
-    /// The manifest pins the candidate, but the LUKS keyfile write failed, so
-    /// it was not kept. Without the handoff the node cannot finish this boot;
-    /// the service binary treats this as fatal.
+    /// The manifest pins the candidate, but the LUKS keyfile write failed.
+    /// The candidate is kept, so a later call can retry the write.
     LuksKeyfileWriteFailed(anyhow::Error),
 }
 
@@ -729,26 +728,34 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_luks_write_does_not_keep_the_pinned_candidate() {
+    fn a_failed_luks_write_keeps_the_pinned_candidate_for_a_retry() {
         let dir = tempfile::tempdir().expect("tempdir");
         let manifest = dir.path().join("network-manifest.json");
         std::fs::write(&manifest, MANIFEST).expect("write manifest");
-        let state = CustodianState::new_with_candidate(
-            Custodian::new(ROOT_KEY),
-            manifest,
-            dir.path().join("missing-dir").join("luks-keys"),
-        );
+        let luks_dir = dir.path().join("missing-dir");
+        let luks = luks_dir.join("luks-keys");
+        let state =
+            CustodianState::new_with_candidate(Custodian::new(ROOT_KEY), manifest, luks.clone());
 
         assert!(matches!(
             state.create_bootstrap_attempt(),
             CreateAttemptOutcome::LuksKeyfileWriteFailed(_)
         ));
-        // Never present without the handoff; the host exits on this outcome.
+        // Never present without the handoff.
         assert!(state.with_custodian(|_| ()).is_none());
         assert!(matches!(
             state.with_custodian_for_wrap(AdmittedOn::FoundingPolicy, |_| ()),
             WrapGate::RootKeyAbsent
         ));
+
+        // Still the candidate: once the write can succeed, a retry keeps it.
+        std::fs::create_dir(&luks_dir).expect("create LUKS keyfile dir");
+        assert!(matches!(
+            state.create_bootstrap_attempt(),
+            CreateAttemptOutcome::RootKeyAlreadyPresent
+        ));
+        assert_luks_keyfile(&luks);
+        assert!(wraps_on_founding_policy(&state));
     }
 
     #[test]
