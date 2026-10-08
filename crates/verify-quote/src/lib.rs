@@ -457,19 +457,20 @@ mod tests {
 
     /// One real founding, kept verbatim as its archive: a harvest record, the
     /// bundle its verification consumed, what it established, and the
-    /// promoted policy it was verified against. Captured on Azure TDX
-    /// hardware from cohort `tmp-devnet-1` on image
-    /// `seismic-dev_2026-08-27.5c012e.vhd`, harvested 2026-08-27T20:20:55Z
-    /// and torn down the same day, and re-encoded offline from the earlier
-    /// record-plus-sidecar layout into one archive document. The pubkeys are a destroyed throwaway
-    /// network's, so the committed archive discloses nothing.
+    /// promoted policy it was verified against. Copied verbatim from
+    /// `tee-devnet-1`'s record and the bootstrap policy of the monorepo's
+    /// [fixture-devnet](https://github.com/SeismicSystems/seismic/tree/40eae17be70c1643e4b53031fa5999c5817efac6/tee/networks/fixture-devnet),
+    /// founded on Azure TDX hardware on image `seismic_2026-10-08.dbab6a`,
+    /// harvested 2026-10-08T17:22:17Z and torn down the same day. The
+    /// pubkeys are a destroyed throwaway network's, so the committed archive
+    /// discloses nothing.
     const FOUNDING_ARCHIVE: &str = include_str!("../fixtures/founding-archive-v1.json");
     const FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-v1.json");
 
     /// The instant frozen into that archive, and the reason the fixture
     /// cannot rot: a replay evaluates every freshness window here, not at
     /// the wall clock.
-    const FOUNDING_VERIFIED_AT: u64 = 1787862055;
+    const FOUNDING_VERIFIED_AT: u64 = 1791480137;
 
     /// How many registers the Azure TDX v1 admission schema
     /// (`seismic.azure-tdx.pcr4-pcr9-pcr11.v1`) pins: guest identity is that
@@ -568,9 +569,8 @@ mod tests {
     /// Info and QE Identity windows, both CRLs, and the Azure AK certificate
     /// chain — at the instant the archive pins. A live verification of this
     /// same record stops passing once the bundle's `nextUpdate` lapses
-    /// (2026-09-26); this one keeps passing, which is the whole point.
+    /// (2026-11-07); this one keeps passing, which is the whole point.
     #[test]
-    #[ignore = "the committed archive has no candidate_tx_io_public_key; recapture it from a SEI-643 founding"]
     fn a_real_founding_reverifies_offline_from_its_archive() {
         let archive = founding_archive();
         // Asserted before verifying: a fixture re-captured without its
@@ -605,7 +605,6 @@ mod tests {
     /// and rendering it back reproduces the file byte for byte, so the
     /// fixture and the renderer cannot drift apart unnoticed.
     #[test]
-    #[ignore = "the committed archive has no candidate_tx_io_public_key; recapture it from a SEI-643 founding"]
     fn the_committed_archive_is_canonical() {
         assert_eq!(
             archive::render(&founding_archive()).unwrap(),
@@ -617,9 +616,8 @@ mod tests {
     /// that founding verify, not the bundle alone. Move the instant past the
     /// bundle's `nextUpdate` and the very same archive stops verifying —
     /// which is what a live verification will do to this record from
-    /// 2026-09-26 on, and what the archive exists to avoid.
+    /// 2026-11-07 on, and what the archive exists to avoid.
     #[test]
-    #[ignore = "the committed archive has no candidate_tx_io_public_key; recapture it from a SEI-643 founding"]
     fn the_archived_instant_is_what_makes_the_founding_verify() {
         // 2027-01-15, months past every window in the archived bundle. Only
         // the instant changes; the collateral is the same bytes that verify
@@ -642,13 +640,18 @@ mod tests {
     /// what the quote proves, so the replay refuses it even though the quote
     /// verifies.
     #[test]
-    #[ignore = "the committed archive has no candidate_tx_io_public_key; recapture it from a SEI-643 founding"]
     fn an_edited_archive_does_not_verify() {
         let other_node_key = mutated_archive(|document| {
             document["node_public_key"] = serde_json::json!("00".repeat(32));
         });
         verify_archived_harvest(other_node_key, policy(FOUNDING_POLICY))
             .expect_err("a quote does not vouch for keys it never bound");
+
+        let other_candidate = mutated_archive(|document| {
+            document["candidate_tx_io_public_key"] = serde_json::json!(TX_IO_PK_HEX);
+        });
+        verify_archived_harvest(other_candidate, policy(FOUNDING_POLICY))
+            .expect_err("a quote does not vouch for a candidate it never bound");
 
         let other_pcr = mutated_archive(|document| {
             document["report"]["pcrs"]["pcr11"] = serde_json::json!("00".repeat(32));
@@ -665,7 +668,6 @@ mod tests {
     /// A replay under other anchors than the founding's still verifies (the
     /// evidence chains to this build's roots) and says so.
     #[test]
-    #[ignore = "the committed archive has no candidate_tx_io_public_key; recapture it from a SEI-643 founding"]
     fn a_replay_under_other_anchors_reports_the_drift() {
         let archive = mutated_archive(|document| {
             document["trust_anchors"]["dcap_qvl_version"] = serde_json::json!("0.0.1");
@@ -781,7 +783,6 @@ mod tests {
     /// still parses as one, so a founding archive's own document reads as
     /// the record it was verified from.
     #[test]
-    #[ignore = "the committed archive has no candidate_tx_io_public_key; recapture it from a SEI-643 founding"]
     fn record_ignores_extra_fields() {
         let record = record(FOUNDING_ARCHIVE);
         let archive = founding_archive();
