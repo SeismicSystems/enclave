@@ -129,13 +129,21 @@ deploy rather than a later boot.
   against the manifest before POSTing, and summit derives its P2P and signing
   domains from it, so a node fed a divergent genesis can't complete a
   handshake (`src/summit_genesis.rs`).
-- **`bootnodes`**: each entry is `enode://<128 hex pubkey>@host:port`, and at
-  least one names a machine other than this one, unless this box holds the
-  pinned candidate. tdx-init compares the custodian's candidate tx_io_pk file
+- **`bootnodes`**: each entry is `enode://<128 hex pubkey>@host:port`, with
+  the host an IPv4 address, a bracketed IPv6 address or a hostname, so no
+  entry can break a line of `reth-p2p.env` or `attestation.env`. At least one
+  names a machine other than this one, unless this box holds the pinned
+  candidate. tdx-init compares the custodian's candidate tx_io_pk file
   (`/run/seismic/custodian/candidate-tx-io-pk`) with the manifest's
   `founding_tx_io_pk`, so `bootnodes = []` is valid only on the box assemble
   pinned, at founding (`src/peers.rs`).
 - **`external_ip`**: parses as an IP address.
+- **`[node.domain]`**: `name` is an RFC 1123 hostname (letters, digits and
+  `-` in dot-separated labels, at most 253 characters) and `email` is
+  `<local>@<hostname>` with a local part of letters, digits and `._+-`.
+  Both reach root-run code on the node as unquoted text, so neither may carry
+  whitespace, quotes, `$`, backticks, `;`, `/` or a newline. The check runs while the TOML is parsed,
+  in [`tdx-init-config`](../../crates/tdx-init-config)'s types.
 
 ## Per-service outputs
 
@@ -143,7 +151,7 @@ After validation, tdx-init writes:
 
 | File | Schema | Consumer |
 |---|---|---|
-| `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | `setup-nginx-ssl` (seismic-images) — `source`'d before invoking certbot for Let's Encrypt cert issuance and renewal |
+| `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | the TLS proxy (seismic-images) — the certificate's domain and the ACME contact |
 | `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | [`seismic-attestation-service`](../attestation-service) — read in-process once the sentinel appears. Derived from `[network].bootnodes`, not a config field |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings; [`seismic-custodian-service`](../custodian-service) — reads `founding_tx_io_pk` from it |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
