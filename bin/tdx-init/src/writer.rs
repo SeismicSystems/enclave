@@ -1,8 +1,8 @@
 use crate::error::Result;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tdx_init_config::{DomainConfig, InitConfig};
+use tdx_init_config::{Bootnode, DomainConfig, InitConfig};
 use tokio::fs;
 use tracing::info;
 
@@ -26,12 +26,12 @@ pub async fn write_service_configs(
     config: &InitConfig,
 ) -> Result<()> {
     let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
-    let peers = crate::peers::validate_and_derive_peers(
+    let peers = crate::peers::derive_peer_lists(
         &config.node,
         &config.network.bootnodes,
         crate::peers::holds_pinned_candidate(candidate_tx_io_pk_path, &manifest.founding_tx_io_pk)?,
     )?;
-    let summit_addr = crate::peers::summit_advertised_addr(&config.node)?;
+    let summit_addr = crate::peers::summit_advertised_addr(&config.node);
     let genesis = crate::reth_genesis::decode_and_validate(
         &config.network.reth_genesis_base64,
         manifest.chain_id,
@@ -44,7 +44,7 @@ pub async fn write_service_configs(
     fs::create_dir_all(conf_dir).await?;
     write_domain_env(conf_dir, &config.node.domain).await?;
     write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
-    write_reth_p2p_env(conf_dir, &peers.peer_enodes, &config.node.external_ip).await?;
+    write_reth_p2p_env(conf_dir, &peers.peer_enodes, config.node.external_ip).await?;
     write_summit_env(conf_dir, summit_addr).await?;
     write_network_manifest(conf_dir, &manifest).await?;
     write_reth_genesis(conf_dir, &genesis).await?;
@@ -130,14 +130,18 @@ async fn write_attestation_svc_env(conf_dir: &Path, root_key_peers: &[String]) -
 /// why reth gets it twice, and for the POST-time validation behind it.
 async fn write_reth_p2p_env(
     conf_dir: &Path,
-    peer_enodes: &[String],
-    external_ip: &str,
+    peer_enodes: &[Bootnode],
+    external_ip: IpAddr,
 ) -> Result<()> {
     let path = conf_dir.join("reth-p2p.env");
     let (bootnodes_flag, trusted_peers_flag) = if peer_enodes.is_empty() {
         (String::new(), String::new())
     } else {
-        let csv = peer_enodes.join(",");
+        let csv = peer_enodes
+            .iter()
+            .map(Bootnode::as_ref)
+            .collect::<Vec<_>>()
+            .join(",");
         (
             format!("--bootnodes {csv}"),
             format!("--trusted-peers {csv}"),
@@ -198,9 +202,11 @@ mod tests {
         (dir, path)
     }
 
-    /// A syntactically valid enode at `host_port` (128-hex pubkey).
-    fn enode(host_port: &str) -> String {
+    /// A valid enode at `host_port` (128-hex pubkey).
+    fn enode(host_port: &str) -> Bootnode {
         format!("enode://{}@{host_port}", "a".repeat(128))
+            .parse()
+            .unwrap()
     }
 
     fn sample_config() -> InitConfig {
@@ -224,7 +230,7 @@ mod tests {
                 bootnodes: vec![],
             },
             node: NodeConfig {
-                external_ip: "203.0.113.1".to_string(),
+                external_ip: "203.0.113.1".parse().unwrap(),
                 domain: DomainConfig {
                     email: "ops@example.com".parse().unwrap(),
                     name: "node1.example.com".parse().unwrap(),
@@ -337,7 +343,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("10.0.0.1:30303"), enode("10.0.0.2:30303")];
-        cfg.node.external_ip = "203.0.113.7".to_string();
+        cfg.node.external_ip = "203.0.113.7".parse().unwrap();
 
         let (_candidate_dir, candidate) = pinned_candidate();
         write_service_configs(tmp.path(), &candidate, &cfg)
@@ -380,7 +386,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("10.0.0.2:30303")];
-        cfg.node.external_ip = "203.0.113.7".to_string();
+        cfg.node.external_ip = "203.0.113.7".parse().unwrap();
 
         let (_candidate_dir, candidate) = pinned_candidate();
         write_service_configs(tmp.path(), &candidate, &cfg)
@@ -400,7 +406,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let mut cfg = sample_config();
         cfg.network.bootnodes = vec![enode("[2001:db8::2]:30303")];
-        cfg.node.external_ip = "2001:db8::7".to_string();
+        cfg.node.external_ip = "2001:db8::7".parse().unwrap();
 
         let (_candidate_dir, candidate) = pinned_candidate();
         write_service_configs(tmp.path(), &candidate, &cfg)

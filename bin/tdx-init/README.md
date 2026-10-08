@@ -112,7 +112,10 @@ flowchart LR
 ### What tdx-init checks at POST time
 
 A failed check answers `400` and writes nothing, so a bad config fails the
-deploy rather than a later boot.
+deploy rather than a later boot. The shape of `bootnodes`, `external_ip` and
+`[node.domain]` is checked while the TOML is parsed, by
+[`tdx-init-config`](../../crates/tdx-init-config)'s types, so deploy tooling
+building a config runs the same checks.
 
 - **`manifest_base64`**: the strict v1 schema, parsed by
   [`seismic-network-manifest`](../../crates/network-manifest).
@@ -137,13 +140,12 @@ deploy rather than a later boot.
   (`/run/seismic/custodian/candidate-tx-io-pk`) with the manifest's
   `founding_tx_io_pk`, so `bootnodes = []` is valid only on the box assemble
   pinned, at founding (`src/peers.rs`).
-- **`external_ip`**: parses as an IP address.
+- **`external_ip`**: an IP address.
 - **`[node.domain]`**: `name` is an RFC 1123 hostname (letters, digits and
   `-` in dot-separated labels, at most 253 characters) and `email` is
   `<local>@<hostname>` with a local part of letters, digits and `._+-`.
   Both reach root-run code on the node as unquoted text, so neither may carry
-  whitespace, quotes, `$`, backticks, `;`, `/` or a newline. The check runs while the TOML is parsed,
-  in [`tdx-init-config`](../../crates/tdx-init-config)'s types.
+  whitespace, quotes, `$`, backticks, `;`, `/` or a newline.
 
 ## Per-service outputs
 
