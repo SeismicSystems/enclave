@@ -2,7 +2,7 @@ use crate::error::Result;
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tdx_init_config::InitConfig;
+use tdx_init_config::{DomainConfig, InitConfig};
 use tokio::fs;
 use tracing::info;
 
@@ -42,7 +42,7 @@ pub async fn write_service_configs(
     )?;
 
     fs::create_dir_all(conf_dir).await?;
-    write_domain_env(conf_dir, config).await?;
+    write_domain_env(conf_dir, &config.node.domain).await?;
     write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
     write_reth_p2p_env(conf_dir, &peers.peer_enodes, &config.node.external_ip).await?;
     write_summit_env(conf_dir, summit_addr).await?;
@@ -87,11 +87,14 @@ async fn write_summit_genesis(conf_dir: &Path, genesis_bytes: &[u8]) -> Result<(
     Ok(())
 }
 
-async fn write_domain_env(conf_dir: &Path, config: &InitConfig) -> Result<()> {
+/// Both values are written unquoted, which is safe only because
+/// [`DomainConfig`]'s types admit no whitespace, quote, `$`, backslash or
+/// newline.
+async fn write_domain_env(conf_dir: &Path, domain: &DomainConfig) -> Result<()> {
     let path = conf_dir.join("domain.env");
     let content = format!(
         "DOMAIN_NAME={}\nDOMAIN_EMAIL={}\n",
-        config.node.domain.name, config.node.domain.email,
+        domain.name, domain.email,
     );
     write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
     info!("wrote {}", path.display());
@@ -180,7 +183,7 @@ async fn write_with_mode(path: &Path, content: impl AsRef<[u8]>, mode: u32) -> R
 mod tests {
     use super::*;
     use base64::Engine as _;
-    use tdx_init_config::{DomainConfig, NetworkConfig, NodeConfig};
+    use tdx_init_config::{NetworkConfig, NodeConfig};
     use tempfile::TempDir;
 
     /// A candidate tx_io_pk file naming the fixture manifest's pin, so
@@ -223,8 +226,8 @@ mod tests {
             node: NodeConfig {
                 external_ip: "203.0.113.1".to_string(),
                 domain: DomainConfig {
-                    email: "ops@example.com".to_string(),
-                    name: "node1.example.com".to_string(),
+                    email: "ops@example.com".parse().unwrap(),
+                    name: "node1.example.com".parse().unwrap(),
                 },
             },
         }

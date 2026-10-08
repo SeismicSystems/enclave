@@ -5,17 +5,25 @@
 //! It is a crate of its own so both ends of the POST hold the same types: the
 //! on-node `tdx-init` binary deserializes [`InitConfig`] and fans it out into
 //! per-service config files, and deploy tooling constructs the same struct
-//! rather than hand-assembling TOML. Nothing here does any work — no I/O, no
-//! validation beyond serde's — so linking it costs a downstream crate nothing
-//! but `serde`. Every semantic check (the manifest schema, the genesis
-//! commitments, the peer derivation) lives in `tdx-init` itself, where the
-//! POST is handled.
+//! rather than hand-assembling TOML. Nothing here does I/O, so linking it
+//! costs a downstream crate nothing but `serde`. Validation is split:
+//!
+//! - here: the shape of the `[node.domain]` strings. [`Hostname`] and
+//!   [`PlainEmail`] can only be built from a valid string, so the check runs
+//!   wherever a config is parsed or built, in `tdx-init` and in deploy tooling
+//!   alike;
+//! - in `tdx-init`: every check that needs more than the string itself (the
+//!   manifest schema, the genesis commitments, the peers against the
+//!   custodian's candidate key), run when the POST is handled.
 //!
 //! `deny_unknown_fields` throughout: a field this build does not know is a
 //! deploy tool and a node that disagree on the format, which must be a clean
 //! `400` rather than a node silently running with defaults.
 
 use serde::{Deserialize, Serialize};
+
+mod domain;
+pub use domain::{Hostname, InvalidDomain, PlainEmail};
 
 /// Operator-supplied initialization config, received over HTTP at deploy
 /// time and fanned out by tdx-init into per-component config files under
@@ -48,14 +56,13 @@ pub struct InitConfig {
 
 /// DNS name + contact email for the Let's Encrypt cert that fronts this
 /// node's public RPC. Written by tdx-init to `domain.env` under
-/// `/run/seismic/conf` as `DOMAIN_NAME=...` / `DOMAIN_EMAIL=...`, which
-/// `setup-nginx-ssl` (seismic-images) sources before invoking certbot
-/// for cert issuance and renewal.
+/// `/run/seismic/conf` as `DOMAIN_NAME=...` / `DOMAIN_EMAIL=...`, for the
+/// image's TLS proxy (seismic-images).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DomainConfig {
-    pub email: String,
-    pub name: String,
+    pub email: PlainEmail,
+    pub name: Hostname,
 }
 
 /// The network's identity document, common to genesis and joining nodes.
@@ -170,8 +177,49 @@ email = "ops@example.com"
         );
         assert_eq!(cfg.network.bootnodes.len(), 2);
         assert_eq!(cfg.node.external_ip, "203.0.113.7");
-        assert_eq!(cfg.node.domain.name, "node1.example.com");
-        assert_eq!(cfg.node.domain.email, "ops@example.com");
+        assert_eq!(cfg.node.domain.name.as_ref(), "node1.example.com");
+        assert_eq!(cfg.node.domain.email.as_ref(), "ops@example.com");
+    }
+
+    /// A full config whose `[node.domain]` holds `name` and `email`, each
+    /// TOML-escaped so a newline arrives as one.
+    fn with_domain(name: &str, email: &str) -> String {
+        format!(
+            r#"
+[network]
+manifest_base64 = "eyJ9"
+reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
+summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
+bootnodes = []
+
+[node]
+external_ip = "203.0.113.7"
+
+[node.domain]
+name = {}
+email = {}
+"#,
+            toml::Value::from(name),
+            toml::Value::from(email),
+        )
+    }
+
+    #[test]
+    fn rejects_shell_and_config_syntax_in_the_domain() {
+        // Both values reach root-run code as unquoted text: neither may carry
+        // anything a shell or a config parser would read as syntax.
+        toml::from_str::<InitConfig>(&with_domain("node1.example.com", "ops@example.com")).unwrap();
+        for bad in [";", "$(", "`", "/", "\n", "{", " "] {
+            let name = format!("node1{bad}id.example.com");
+            let err =
+                toml::from_str::<InitConfig>(&with_domain(&name, "ops@example.com")).unwrap_err();
+            assert!(err.to_string().contains("domain name"), "{name:?}: {err}");
+
+            let email = format!("ops{bad}id@example.com");
+            let err = toml::from_str::<InitConfig>(&with_domain("node1.example.com", &email))
+                .unwrap_err();
+            assert!(err.to_string().contains("domain email"), "{email:?}: {err}");
+        }
     }
 
     #[test]

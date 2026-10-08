@@ -27,9 +27,9 @@
 
 use crate::error::{Result, TdxInitError};
 use seismic_custodian_ipc::candidate_tx_io_pk;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
-use tdx_init_config::NodeConfig;
+use tdx_init_config::{Hostname, NodeConfig};
 use tracing::info;
 
 /// Number of hex chars in an enode node id: the 64-byte secp256k1 public key
@@ -138,9 +138,21 @@ pub fn holds_pinned_candidate(candidate_tx_io_pk_path: &Path, pin: &[u8; 33]) ->
         .is_some_and(|candidate| candidate == *pin))
 }
 
-/// Check that `enode` matches `enode://<128 hex pubkey>@host:port` and return
-/// the host. Host shape (IPv4/IPv6/DNS) is left to reth; we only require it
-/// non-empty and the port to parse as a `u16`.
+/// Check that `enode` is an [enode URL](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode)
+/// of the form `enode://<pubkey>@<host>:<port>`, and return the host, where:
+///
+/// - `pubkey` is 128 hex characters;
+/// - `host` is a URL host: an IPv4 address, an IPv6 address in brackets
+///   ([RFC 3986 §3.2.2](https://www.rfc-editor.org/rfc/rfc3986#section-3.2.2)),
+///   or a [`Hostname`]. The spec names only IP hosts; reth, like geth, also
+///   accepts a DNS name;
+/// - `port` is a `u16`, split off at the last `:`, which the brackets keep
+///   out of an IPv6 host.
+///
+/// The enode lands unquoted in `reth-p2p.env`, where a newline would start a
+/// new variable and a space a new reth argument, and the host in
+/// `attestation.env`'s fetch URLs. The host is the only free-form part, so
+/// its shape is what keeps both files to the lines tdx-init means to write.
 fn parse_enode_host(enode: &str) -> Result<&str> {
     let rest = enode.strip_prefix("enode://").ok_or_else(|| {
         TdxInitError::InvalidPeers(format!("bootnode {enode:?} must start with enode://"))
@@ -162,6 +174,16 @@ fn parse_enode_host(enode: &str) -> Result<&str> {
     if host.is_empty() {
         return Err(TdxInitError::InvalidPeers(format!(
             "bootnode {enode:?} has an empty host"
+        )));
+    }
+    let is_ip = match host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+        Some(bracketed) => bracketed.parse::<Ipv6Addr>().is_ok(),
+        None => host.parse::<Ipv4Addr>().is_ok(),
+    };
+    if !is_ip && host.parse::<Hostname>().is_err() {
+        return Err(TdxInitError::InvalidPeers(format!(
+            "bootnode {enode:?} host {host:?} is not an IPv4 address, a bracketed IPv6 \
+             address or a DNS name"
         )));
     }
     port.parse::<u16>().map_err(|_| {
@@ -221,8 +243,8 @@ mod tests {
         NodeConfig {
             external_ip: external_ip.to_string(),
             domain: DomainConfig {
-                email: "ops@example.com".to_string(),
-                name: "node1.example.com".to_string(),
+                email: "ops@example.com".parse().unwrap(),
+                name: "node1.example.com".parse().unwrap(),
             },
         }
     }
@@ -424,6 +446,26 @@ mod tests {
         let bad = enode(":30303");
         let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
         assert!(err.to_string().contains("empty host"), "{err}");
+    }
+
+    #[test]
+    fn rejects_a_host_that_would_break_the_env_files() {
+        for host in [
+            "10.0.0.1\nRETH_NAT_FLAG=--nat extip:6.6.6.6\nX=10.0.0.1",
+            "10.0.0.1 --http.api admin",
+            "node2.example.com/evil",
+            "$(reboot)",
+            "[node2.example.com]",
+            "[10.0.0.1]",
+            "2001:db8::1",
+        ] {
+            let bad = enode(&format!("{host}:30303"));
+            let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
+            assert!(
+                err.to_string().contains("bracketed IPv6"),
+                "{host:?}: {err}"
+            );
+        }
     }
 
     #[test]
