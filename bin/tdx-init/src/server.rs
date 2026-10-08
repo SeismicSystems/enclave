@@ -80,7 +80,7 @@ async fn handle_config(State(state): State<AppState>, body: String) -> Result<Re
         &config.network.summit_genesis_base64,
         &manifest.namespace,
     )?;
-    crate::peers::validate_and_derive_peers(
+    crate::peers::derive_peer_lists(
         &config.node,
         &config.network.bootnodes,
         crate::peers::holds_pinned_candidate(

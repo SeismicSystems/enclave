@@ -1,5 +1,5 @@
-//! POST-time validation of the peer inputs and derivation of the per-consumer
-//! peer lists.
+//! Derivation of the per-consumer peer lists from the parsed peer inputs, and
+//! the one peer rule that needs the node.
 //!
 //! `[network].bootnodes` is the single source for the cohort's peer machines.
 //! It feeds three consumers, in two renderings:
@@ -15,26 +15,22 @@
 //! input, so skew between them is unrepresentable and the `http://…:7878`
 //! convention lives in exactly one place.
 //!
-//! `[node].external_ip` is validated here too, as the address this machine is
-//! reached at: it decides which bootnode entry names this node itself, and it
-//! is the address summit advertises for consensus (`summit_advertised_addr`).
+//! `[node].external_ip` is the address this machine is reached at: it decides
+//! which bootnode entry names this node itself, and it is the address summit
+//! advertises for consensus (`summit_advertised_addr`).
 //!
-//! Validation is structural, so a malformed enode or IP fails the deploy POST
-//! with `400` rather than surfacing when reth parses its flags at boot and
-//! crash-loops — likewise a node left with no usable bootnode whose candidate
-//! root key the manifest does not pin, which would otherwise boot an
+//! Both arrive parsed (`tdx-init-config`'s [`Bootnode`] and an `IpAddr`), so
+//! a malformed enode or IP has already failed the POST with `400`. What is
+//! checked here needs the node: a node left with no usable bootnode whose
+//! candidate root key the manifest does not pin would otherwise boot an
 //! attestation service with no way to obtain `root_key`.
 
 use crate::error::{Result, TdxInitError};
 use seismic_custodian_ipc::candidate_tx_io_pk;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::path::Path;
-use tdx_init_config::{Hostname, NodeConfig};
+use tdx_init_config::{Bootnode, BootnodeHost, NodeConfig};
 use tracing::info;
-
-/// Number of hex chars in an enode node id: the 64-byte secp256k1 public key
-/// (uncompressed, without the 0x04 prefix), hex-encoded.
-const ENODE_ID_HEX_LEN: usize = 128;
 
 /// Port the attestation service serves `getWrappedRootKey` on
 /// (`DEFAULT_ENDPOINT_PORT` in `bin/attestation-service`, which is a binary
@@ -66,7 +62,7 @@ pub struct PeerLists {
     /// seeds discv5, which is how it reaches everyone the list cannot name.
     /// Membership on this plane is open, so later joiners are exactly the peers
     /// no founding-era list could have held.
-    pub peer_enodes: Vec<String>,
+    pub peer_enodes: Vec<Bootnode>,
     /// Where the attestation service fetches `root_key` when the local
     /// custodian starts without one (`attestation.env`'s
     /// `SEISMIC_ROOT_KEY_PEERS`): `http://<host>:7878` per peer host, deduped
@@ -74,27 +70,25 @@ pub struct PeerLists {
     pub root_key_urls: Vec<String>,
 }
 
-/// Validate the peer inputs from the POSTed config and render this node's peer
-/// lists from the bootnodes: `external_ip` must parse as an IP address and
-/// every bootnode must be a well-formed `enode://` URL. The node's own enode
+/// Render this node's peer lists from the bootnodes. The node's own enode
 /// (host == `external_ip`) is dropped — after the founding ceremony the
 /// persisted bootnode set includes every founding node, this one included, and
 /// a node has no reason to reach itself. A node that does not hold the pinned
 /// candidate ([`holds_pinned_candidate`]) must end up with at least one peer,
 /// or it has no source for `root_key`.
-pub fn validate_and_derive_peers(
+pub fn derive_peer_lists(
     node: &NodeConfig,
-    bootnodes: &[String],
+    bootnodes: &[Bootnode],
     holds_pinned_candidate: bool,
 ) -> Result<PeerLists> {
-    let external_ip = parse_external_ip(&node.external_ip)?;
     let mut derived = PeerLists {
         peer_enodes: Vec::new(),
         root_key_urls: Vec::new(),
     };
     for enode in bootnodes {
-        let host = parse_enode_host(enode)?;
-        if is_self(host, external_ip) {
+        let host = enode.host();
+        // A DNS host never matches: tdx-init does not resolve names.
+        if *host == BootnodeHost::Ip(node.external_ip) {
             continue;
         }
         derived.peer_enodes.push(enode.clone());
@@ -138,62 +132,6 @@ pub fn holds_pinned_candidate(candidate_tx_io_pk_path: &Path, pin: &[u8; 33]) ->
         .is_some_and(|candidate| candidate == *pin))
 }
 
-/// Check that `enode` is an [enode URL](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode)
-/// of the form `enode://<pubkey>@<host>:<port>`, and return the host, where:
-///
-/// - `pubkey` is 128 hex characters;
-/// - `host` is a URL host: an IPv4 address, an IPv6 address in brackets
-///   ([RFC 3986 §3.2.2](https://www.rfc-editor.org/rfc/rfc3986#section-3.2.2)),
-///   or a [`Hostname`]. The spec names only IP hosts; reth, like geth, also
-///   accepts a DNS name;
-/// - `port` is a `u16`, split off at the last `:`, which the brackets keep
-///   out of an IPv6 host.
-///
-/// The enode lands unquoted in `reth-p2p.env`, where a newline would start a
-/// new variable and a space a new reth argument, and the host in
-/// `attestation.env`'s fetch URLs. The host is the only free-form part, so
-/// its shape is what keeps both files to the lines tdx-init means to write.
-fn parse_enode_host(enode: &str) -> Result<&str> {
-    let rest = enode.strip_prefix("enode://").ok_or_else(|| {
-        TdxInitError::InvalidPeers(format!("bootnode {enode:?} must start with enode://"))
-    })?;
-    let (id, host_port) = rest.split_once('@').ok_or_else(|| {
-        TdxInitError::InvalidPeers(format!(
-            "bootnode {enode:?} is missing the '@' separating node id from host:port"
-        ))
-    })?;
-    if id.len() != ENODE_ID_HEX_LEN || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(TdxInitError::InvalidPeers(format!(
-            "bootnode {enode:?} pubkey must be {ENODE_ID_HEX_LEN} hex chars"
-        )));
-    }
-    // rsplit so a bracketed IPv6 host ("[::1]:30303") keeps its inner colons.
-    let (host, port) = host_port.rsplit_once(':').ok_or_else(|| {
-        TdxInitError::InvalidPeers(format!("bootnode {enode:?} is missing ':port'"))
-    })?;
-    if host.is_empty() {
-        return Err(TdxInitError::InvalidPeers(format!(
-            "bootnode {enode:?} has an empty host"
-        )));
-    }
-    let is_ip = match host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
-        Some(bracketed) => bracketed.parse::<Ipv6Addr>().is_ok(),
-        None => host.parse::<Ipv4Addr>().is_ok(),
-    };
-    if !is_ip && host.parse::<Hostname>().is_err() {
-        return Err(TdxInitError::InvalidPeers(format!(
-            "bootnode {enode:?} host {host:?} is not an IPv4 address, a bracketed IPv6 \
-             address or a DNS name"
-        )));
-    }
-    port.parse::<u16>().map_err(|_| {
-        TdxInitError::InvalidPeers(format!(
-            "bootnode {enode:?} has a non-numeric port {port:?}"
-        ))
-    })?;
-    Ok(host)
-}
-
 /// The consensus address this node advertises to the cohort (`summit.env`'s
 /// `SUMMIT_ADVERTISED_ADDR`, spliced into summit's `--ip`): `external_ip` at
 /// the consensus port.
@@ -211,27 +149,8 @@ fn parse_enode_host(enode: &str) -> Result<&str> {
 ///
 /// A `SocketAddr` rather than a formatted string: its `Display` brackets IPv6,
 /// which is the form summit parses.
-pub fn summit_advertised_addr(node: &NodeConfig) -> Result<SocketAddr> {
-    let external_ip = parse_external_ip(&node.external_ip)?;
-    Ok(SocketAddr::new(external_ip, SUMMIT_CONSENSUS_PORT))
-}
-
-/// Check that `external_ip` parses as an IPv4 or IPv6 address.
-fn parse_external_ip(ip: &str) -> Result<IpAddr> {
-    ip.parse::<IpAddr>().map_err(|_| {
-        TdxInitError::InvalidPeers(format!("external_ip {ip:?} is not a valid IP address"))
-    })
-}
-
-/// Whether an enode host names this node itself. Compared as parsed
-/// `IpAddr`s so equivalent textual forms match (`[2001:0db8::1]` vs
-/// `2001:db8::1`); a DNS host never matches — tdx-init does not resolve.
-fn is_self(host: &str, external_ip: IpAddr) -> bool {
-    let bare = host
-        .strip_prefix('[')
-        .and_then(|h| h.strip_suffix(']'))
-        .unwrap_or(host);
-    bare.parse::<IpAddr>() == Ok(external_ip)
+pub fn summit_advertised_addr(node: &NodeConfig) -> SocketAddr {
+    SocketAddr::new(node.external_ip, SUMMIT_CONSENSUS_PORT)
 }
 
 #[cfg(test)]
@@ -241,7 +160,7 @@ mod tests {
 
     fn node(external_ip: &str) -> NodeConfig {
         NodeConfig {
-            external_ip: external_ip.to_string(),
+            external_ip: external_ip.parse().unwrap(),
             domain: DomainConfig {
                 email: "ops@example.com".parse().unwrap(),
                 name: "node1.example.com".parse().unwrap(),
@@ -249,14 +168,20 @@ mod tests {
         }
     }
 
-    /// Peer validation for a node whose candidate the manifest does not pin.
-    fn unpinned(node: &NodeConfig, bootnodes: &[String]) -> Result<PeerLists> {
-        validate_and_derive_peers(node, bootnodes, false)
+    /// Peer derivation for a node whose candidate the manifest does not pin.
+    fn unpinned(node: &NodeConfig, bootnodes: &[Bootnode]) -> Result<PeerLists> {
+        derive_peer_lists(node, bootnodes, false)
     }
 
-    /// A syntactically valid enode at `host_port` (128-hex pubkey).
-    fn enode(host_port: &str) -> String {
-        format!("enode://{}@{host_port}", "a".repeat(ENODE_ID_HEX_LEN))
+    /// A valid enode at `host_port`, with node id `id` repeated 128 times.
+    fn enode_with_id(id: char, host_port: &str) -> Bootnode {
+        format!("enode://{}@{host_port}", id.to_string().repeat(128))
+            .parse()
+            .unwrap()
+    }
+
+    fn enode(host_port: &str) -> Bootnode {
+        enode_with_id('a', host_port)
     }
 
     #[test]
@@ -317,8 +242,7 @@ mod tests {
     fn dedupes_repeated_hosts() {
         // Two enodes on one host collapse to a single root-key URL, but both
         // stay peer enodes: reth keys peers by node id, not by address.
-        let mut second = enode("10.0.0.2:30303");
-        second = second.replacen('a', "b", 1);
+        let second = enode_with_id('b', "10.0.0.2:30303");
         let derived = unpinned(
             &node("10.0.0.1"),
             &[enode("10.0.0.2:30303"), second.clone()],
@@ -349,12 +273,12 @@ mod tests {
     fn the_pinned_box_may_have_no_bootnodes() {
         // The pinned box at founding has no peers to dial and keeps its
         // candidate root_key.
-        let derived = validate_and_derive_peers(&node("10.0.0.1"), &[], true).unwrap();
+        let derived = derive_peer_lists(&node("10.0.0.1"), &[], true).unwrap();
         assert!(derived.root_key_urls.is_empty());
         assert!(derived.peer_enodes.is_empty());
 
         let derived =
-            validate_and_derive_peers(&node("10.0.0.1"), &[enode("10.0.0.1:30303")], true).unwrap();
+            derive_peer_lists(&node("10.0.0.1"), &[enode("10.0.0.1:30303")], true).unwrap();
         assert!(derived.root_key_urls.is_empty());
         assert!(derived.peer_enodes.is_empty());
     }
@@ -389,95 +313,8 @@ mod tests {
     }
 
     #[test]
-    fn accepts_uppercase_hex_node_id() {
-        let id = "AbCdEf".repeat(ENODE_ID_HEX_LEN / 6) + &"0".repeat(ENODE_ID_HEX_LEN % 6);
-        assert_eq!(id.len(), ENODE_ID_HEX_LEN);
-        let enode = format!("enode://{id}@example.com:30303");
-        unpinned(&node("10.0.0.1"), &[enode]).unwrap();
-    }
-
-    #[test]
-    fn rejects_missing_enode_scheme() {
-        let bad = enode("10.0.0.1:30303").replace("enode://", "");
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(matches!(err, TdxInitError::InvalidPeers(_)));
-        assert!(err.to_string().contains("enode://"), "{err}");
-    }
-
-    #[test]
-    fn rejects_short_node_id() {
-        let id = "a".repeat(ENODE_ID_HEX_LEN - 1);
-        let bad = format!("enode://{id}@10.0.0.1:30303");
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(err.to_string().contains("hex chars"), "{err}");
-    }
-
-    #[test]
-    fn rejects_non_hex_node_id() {
-        let id = "z".repeat(ENODE_ID_HEX_LEN);
-        let bad = format!("enode://{id}@10.0.0.1:30303");
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(err.to_string().contains("hex chars"), "{err}");
-    }
-
-    #[test]
-    fn rejects_missing_at_separator() {
-        let bad = format!("enode://{}", "a".repeat(ENODE_ID_HEX_LEN));
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(err.to_string().contains("'@'"), "{err}");
-    }
-
-    #[test]
-    fn rejects_missing_port() {
-        let bad = enode("10.0.0.1");
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(err.to_string().contains(":port"), "{err}");
-    }
-
-    #[test]
-    fn rejects_non_numeric_port() {
-        let bad = enode("10.0.0.1:notaport");
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(err.to_string().contains("port"), "{err}");
-    }
-
-    #[test]
-    fn rejects_empty_host() {
-        let bad = enode(":30303");
-        let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-        assert!(err.to_string().contains("empty host"), "{err}");
-    }
-
-    #[test]
-    fn rejects_a_host_that_would_break_the_env_files() {
-        for host in [
-            "10.0.0.1\nRETH_NAT_FLAG=--nat extip:6.6.6.6\nX=10.0.0.1",
-            "10.0.0.1 --http.api admin",
-            "node2.example.com/evil",
-            "$(reboot)",
-            "[node2.example.com]",
-            "[10.0.0.1]",
-            "2001:db8::1",
-        ] {
-            let bad = enode(&format!("{host}:30303"));
-            let err = unpinned(&node("10.0.0.1"), &[bad]).unwrap_err();
-            assert!(
-                err.to_string().contains("bracketed IPv6"),
-                "{host:?}: {err}"
-            );
-        }
-    }
-
-    #[test]
-    fn rejects_invalid_external_ip() {
-        let err = unpinned(&node("not.an.ip"), &[enode("10.0.0.1:30303")]).unwrap_err();
-        assert!(matches!(err, TdxInitError::InvalidPeers(_)));
-        assert!(err.to_string().contains("valid IP"), "{err}");
-    }
-
-    #[test]
     fn advertises_external_ip_at_the_consensus_port() {
-        let addr = summit_advertised_addr(&node("203.0.113.7")).unwrap();
+        let addr = summit_advertised_addr(&node("203.0.113.7"));
         assert_eq!(addr.to_string(), "203.0.113.7:18551");
     }
 
@@ -485,13 +322,7 @@ mod tests {
     fn advertises_ipv6_bracketed() {
         // The address is handed to summit as text and parsed there as a socket
         // address, so an IPv6 host has to arrive bracketed.
-        let addr = summit_advertised_addr(&node("2001:db8::7")).unwrap();
+        let addr = summit_advertised_addr(&node("2001:db8::7"));
         assert_eq!(addr.to_string(), "[2001:db8::7]:18551");
-    }
-
-    #[test]
-    fn advertised_addr_rejects_invalid_external_ip() {
-        let err = summit_advertised_addr(&node("not.an.ip")).unwrap_err();
-        assert!(err.to_string().contains("valid IP"), "{err}");
     }
 }

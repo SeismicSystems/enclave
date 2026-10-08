@@ -8,21 +8,25 @@
 //! rather than hand-assembling TOML. Nothing here does I/O, so linking it
 //! costs a downstream crate nothing but `serde`. Validation is split:
 //!
-//! - here: the shape of the `[node.domain]` strings. [`Hostname`] and
-//!   [`PlainEmail`] can only be built from a valid string, so the check runs
-//!   wherever a config is parsed or built, in `tdx-init` and in deploy tooling
-//!   alike;
-//! - in `tdx-init`: every check that needs more than the string itself (the
-//!   manifest schema, the genesis commitments, the peers against the
-//!   custodian's candidate key), run when the POST is handled.
+//! - here: the shape of each field that has one. `external_ip` is an
+//!   `IpAddr`, each bootnode a [`Bootnode`], and the `[node.domain]` values a
+//!   [`Hostname`] and a [`PlainEmail`]. None can be built from an invalid
+//!   string, so the check runs wherever a config is parsed or built, in
+//!   `tdx-init` and in deploy tooling alike;
+//! - in `tdx-init`: every check that needs more than one field (the manifest
+//!   schema, the genesis commitments, the peers against the custodian's
+//!   candidate key), run when the POST is handled.
 //!
 //! `deny_unknown_fields` throughout: a field this build does not know is a
 //! deploy tool and a node that disagree on the format, which must be a clean
 //! `400` rather than a node silently running with defaults.
 
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
 
+mod bootnode;
 mod domain;
+pub use bootnode::{Bootnode, BootnodeHost, InvalidBootnode};
 pub use domain::{Hostname, InvalidDomain, PlainEmail};
 
 /// Operator-supplied initialization config, received over HTTP at deploy
@@ -129,7 +133,7 @@ pub struct NetworkConfig {
     /// key and has no peer to fetch from. tdx-init compares the custodian's
     /// candidate tx_io_pk file with the pin at the POST and rejects any other
     /// node left with no root-key peer with `400`.
-    pub bootnodes: Vec<String>,
+    pub bootnodes: Vec<Bootnode>,
 }
 
 /// Per-node settings — values that depend on which node receives the config,
@@ -142,9 +146,8 @@ pub struct NodeConfig {
     /// `reth-p2p.env`'s `RETH_NAT_FLAG` as `--nat extip:<ip>` so reth
     /// advertises the correct external address to peers. Also used to drop
     /// this node's own enode when deriving root-key fetch peers from
-    /// `[network].bootnodes`. Validated as an `IpAddr` at POST time
-    /// (`bin/tdx-init/src/peers.rs`).
-    pub external_ip: String,
+    /// `[network].bootnodes`.
+    pub external_ip: IpAddr,
 
     /// TLS identity for this node's public RPC; see [`DomainConfig`].
     pub domain: DomainConfig,
@@ -161,7 +164,10 @@ mod tests {
 manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
-bootnodes = ["enode://abc@10.0.0.1:30303", "enode://def@10.0.0.2:30303"]
+bootnodes = [
+    "enode://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@10.0.0.1:30303",
+    "enode://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb@10.0.0.2:30303",
+]
 
 [node]
 external_ip = "203.0.113.7"
@@ -176,7 +182,7 @@ email = "ops@example.com"
             "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
         );
         assert_eq!(cfg.network.bootnodes.len(), 2);
-        assert_eq!(cfg.node.external_ip, "203.0.113.7");
+        assert_eq!(cfg.node.external_ip.to_string(), "203.0.113.7");
         assert_eq!(cfg.node.domain.name.as_ref(), "node1.example.com");
         assert_eq!(cfg.node.domain.email.as_ref(), "ops@example.com");
     }
@@ -220,6 +226,26 @@ email = {}
                 .unwrap_err();
             assert!(err.to_string().contains("domain email"), "{email:?}: {err}");
         }
+    }
+
+    #[test]
+    fn rejects_an_external_ip_that_is_not_an_ip() {
+        let toml_input = with_domain("node1.example.com", "ops@example.com").replace(
+            r#"external_ip = "203.0.113.7""#,
+            r#"external_ip = "not.an.ip""#,
+        );
+        let err = toml::from_str::<InitConfig>(&toml_input).unwrap_err();
+        assert!(err.to_string().contains("IP address"), "{err}");
+    }
+
+    #[test]
+    fn rejects_a_malformed_bootnode() {
+        let toml_input = with_domain("node1.example.com", "ops@example.com").replace(
+            "bootnodes = []",
+            r#"bootnodes = ["enode://abc@10.0.0.1:30303"]"#,
+        );
+        let err = toml::from_str::<InitConfig>(&toml_input).unwrap_err();
+        assert!(err.to_string().contains("hex chars"), "{err}");
     }
 
     #[test]
