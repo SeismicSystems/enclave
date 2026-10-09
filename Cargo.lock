@@ -1149,7 +1149,7 @@ dependencies = [
 [[package]]
 name = "attestation"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?rev=8304e8a8950e81084cdaf9a15d53617b98408aa8#8304e8a8950e81084cdaf9a15d53617b98408aa8"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=fe508d546c98e233aee2edffda570f73a567548a#fe508d546c98e233aee2edffda570f73a567548a"
 dependencies = [
  "anyhow",
  "attest-measure",
@@ -4284,7 +4284,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pccs"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?rev=8304e8a8950e81084cdaf9a15d53617b98408aa8#8304e8a8950e81084cdaf9a15d53617b98408aa8"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=fe508d546c98e233aee2edffda570f73a567548a#fe508d546c98e233aee2edffda570f73a567548a"
 dependencies = [
  "anyhow",
  "dcap-qvl",

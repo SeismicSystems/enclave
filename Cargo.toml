@@ -54,7 +54,7 @@ anyhow = "1.0"
 # Seismic's attested-tls fork. The `seismic` branch carries our attestation
 # changes on top of flashbots/attested-tls main. Goal is to upstream everything and
 # eventually revert back to flashbots' attested-tls however.
-attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "8304e8a8950e81084cdaf9a15d53617b98408aa8" }
+attestation = { git = "https://github.com/SeismicSystems/attested-tls", rev = "fe508d546c98e233aee2edffda570f73a567548a" }
 # Google's firmware endorsements: protobuf, RSA-signed under a pinned X.509 root.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 az-cvm-vtpm = { version = "0.7.4", default-features = false }
