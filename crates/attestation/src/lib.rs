@@ -151,11 +151,11 @@ fn platform_attestation_type(
 
 use attestation::{
     AttestationGenerator, AttestationVerifier, EndorsementSnapshot, GCE_CC_TCB_ROOT_DER,
-    GCE_CC_TCB_ROOT_NAME,
+    GCE_CC_TCB_ROOT_NAME, GcpEndorsementChecker,
     measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
 };
 use sha2::{Digest as _, Sha256};
-use std::{collections::HashMap, fmt, path::PathBuf};
+use std::{collections::HashMap, fmt, path::PathBuf, sync::LazyLock};
 use thiserror::Error;
 
 // === Main public entrypoints ===
@@ -365,6 +365,11 @@ async fn verify_with_backend_policy(
     })
 }
 
+/// Google's firmware endorsements, one verified copy per MRTD for the process;
+/// every verifier is built per call and would otherwise fetch its own.
+static GCP_ENDORSEMENTS: LazyLock<GcpEndorsementChecker> =
+    LazyLock::new(GcpEndorsementChecker::new);
+
 /// The backend verifier every Seismic verification runs through.
 fn backend_verifier(
     backend_policy: BackendMeasurementPolicy,
@@ -373,6 +378,7 @@ fn backend_verifier(
 ) -> AttestationVerifier {
     let mut builder = AttestationVerifier::builder(backend_policy)
         .with_dump_dcap_quotes(dump_dcap_quotes)
+        .with_gcp_endorsement_checker(GCP_ENDORSEMENTS.clone())
         // The backend can rewrite one Azure FMSPC's TCB Info to clamp a
         // component's required SVN down, so a platform behind every published
         // TCB level matches one. No Seismic relying party asks for that: it
