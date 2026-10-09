@@ -23,8 +23,7 @@ use crate::{
 };
 use jsonrpsee::types::{ErrorCode, ErrorObjectOwned};
 use seismic_attestation::{
-    AttestationError, BackendAttestationError, DcapVerificationError, GoogleEndorsementError,
-    MaaError,
+    AttestationError, BackendAttestationError, DcapVerificationError, GcpEndorsementError, MaaError,
 };
 use std::fmt::Debug;
 use tracing::{error, warn};
@@ -202,19 +201,9 @@ fn verification_failure_kind(error: &AttestationError) -> Option<DenialKind> {
         AttestationError::PolicyFormat(_)
         | AttestationError::MeasurementTypeMismatch { .. }
         | AttestationError::NoFetchedDcapCollateral => None,
-        // Google's endorsement of the requester's firmware. The endpoint
-        // answers an unendorsed MRTD and a network fault the same way, so a
-        // failed fetch carries no verdict; an endorsement that was fetched
-        // and does not hold is the requester's firmware. A missing archived
-        // endorsement is an archive defect, never a live denial.
-        AttestationError::GcpFirmwareNotEndorsed {
-            source: GoogleEndorsementError::Fetch(_),
-            ..
-        }
-        | AttestationError::GcpFirmwareEndorsementMissing => None,
-        AttestationError::GcpFirmwareNotEndorsed { .. } => {
-            Some(DenialKind::RequesterEvidenceUnusable)
-        }
+        // A missing archived endorsement is an archive defect, never a live
+        // denial.
+        AttestationError::GcpFirmwareEndorsementMissing => None,
     }
 }
 
@@ -284,6 +273,14 @@ fn backend_failure_kind(backend: &BackendAttestationError) -> Option<DenialKind>
             | MaaError::JwkConversion
             | MaaError::CannotExtractMeasurementsFromQuote,
         ) => Some(DenialKind::RequesterEvidenceUnusable),
+        // Google's endorsement of the requester's firmware: only its verdict
+        // on the MRTD is about the requester. The bytes are Google's, fetched
+        // by this responder, so a failed fetch, a malformed document or a
+        // certificate that does not hold says nothing about the evidence.
+        BackendAttestationError::GcpFirmwareEndorsement(
+            GcpEndorsementError::MrtdNotEndorsed(_) | GcpEndorsementError::NoTdx,
+        ) => Some(DenialKind::RequesterEvidenceUnusable),
+        BackendAttestationError::GcpFirmwareEndorsement(_) => None,
         _ => None,
     }
 }
@@ -486,28 +483,32 @@ mod tests {
         }
     }
 
-    /// Google's firmware endorsement: an endorsement that does not hold is the
-    /// requester's firmware, and a fetch that failed says nothing.
+    /// Google's firmware endorsement: only an MRTD the endorsement does not
+    /// name is the requester's firmware. The bytes are Google's, fetched by
+    /// the responder, so a fetch that failed or an endorsement that does not
+    /// hold says nothing about the evidence.
     #[test]
-    fn the_firmware_endorsement_attributes_by_what_failed() {
-        let not_endorsed = |source| AttestationError::GcpFirmwareNotEndorsed {
-            mrtd: "ab".into(),
-            source,
+    fn the_firmware_endorsement_attributes_only_an_unendorsed_mrtd() {
+        let endorsement = |source| {
+            AttestationError::Backend(BackendAttestationError::GcpFirmwareEndorsement(source))
         };
         assert_eq!(
-            verification_failure_kind(&not_endorsed(GoogleEndorsementError::MrtdNotEndorsed(
+            verification_failure_kind(&endorsement(GcpEndorsementError::MrtdNotEndorsed(
                 "ab".into()
             ))),
             Some(DenialKind::RequesterEvidenceUnusable)
         );
+        for unattributed in [
+            GcpEndorsementError::Fetch("offline".into()),
+            GcpEndorsementError::Unavailable("offline".into()),
+            GcpEndorsementError::Signature,
+            GcpEndorsementError::CertNotValidAt,
+            GcpEndorsementError::CertChain,
+        ] {
+            assert_eq!(verification_failure_kind(&endorsement(unattributed)), None);
+        }
         assert_eq!(
-            verification_failure_kind(&not_endorsed(GoogleEndorsementError::Signature)),
-            Some(DenialKind::RequesterEvidenceUnusable)
-        );
-        assert_eq!(
-            verification_failure_kind(&not_endorsed(GoogleEndorsementError::Fetch(
-                "offline".into()
-            ))),
+            verification_failure_kind(&AttestationError::GcpFirmwareEndorsementMissing),
             None
         );
     }
