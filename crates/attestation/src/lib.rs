@@ -84,6 +84,9 @@ pub use attestation::{
 };
 /// Backend evidence envelope and attestation-type enum used on the wire.
 pub use attestation::{AttestationExchangeMessage, AttestationType};
+/// Google's endorsement of a `gcp-tdx` quote's firmware, as the backend
+/// records it, and why one failed to hold.
+pub use attestation::{GcpEndorsementError, GcpFirmwareEndorsement};
 
 /// This guest's platform could not be determined, so no attestation type is.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -146,12 +149,11 @@ fn platform_attestation_type(
     }
 }
 
-mod google;
 use attestation::{
-    AttestationGenerator, AttestationVerifier, EndorsementSnapshot,
+    AttestationGenerator, AttestationVerifier, EndorsementSnapshot, GCE_CC_TCB_ROOT_DER,
+    GCE_CC_TCB_ROOT_NAME,
     measurements::{MeasurementFormatError, MeasurementPolicy as BackendMeasurementPolicy},
 };
-pub use google::GoogleEndorsementError;
 use sha2::{Digest as _, Sha256};
 use std::{collections::HashMap, fmt, path::PathBuf};
 use thiserror::Error;
@@ -238,31 +240,27 @@ pub fn verify_archived_evidence_with_policy(
     // The verifier is built with a collateral source it never asks: the
     // archived path fetches nothing by construction.
     let verifier = backend_verifier(policy.into_backend_policy(), None, false);
-    let endorsements =
+    let mut endorsements =
         EndorsementSnapshot::dcap(bundle.dcap_collateral.clone(), bundle.verified_at);
+    // The backend's host-registry check has no archived form (the registry is
+    // unsigned), so the archive carries Google's signed firmware endorsement
+    // instead, which the backend holds to the pinned root at the archive's
+    // own instant.
+    if attestation_type == AttestationType::GcpTdx {
+        let endorsement = bundle
+            .gcp_firmware_endorsement
+            .clone()
+            .ok_or(AttestationError::GcpFirmwareEndorsementMissing)?;
+        endorsements = endorsements.with_gcp_firmware(GcpFirmwareEndorsement::new(endorsement));
+    }
     let verified = verifier
         .verify_attestation_archived(bundle.evidence.clone(), expected_binding, &endorsements)?
         .ok_or(AttestationError::Unattested)?;
-    let attestation = VerifiedSeismicAttestation::from_backend(
+    VerifiedSeismicAttestation::from_backend(
         attestation_type,
         expected_binding,
         verified.measurements,
-    )?;
-    // The backend's host-registry check has no archived form (the registry is
-    // unsigned), so the archive carries Google's signed firmware endorsement
-    // instead, held to the pinned root at the archive's own instant.
-    if let VerifiedSeismicAttestation::GcpTdx(tdx) = &attestation {
-        let endorsement = bundle
-            .gcp_firmware_endorsement
-            .as_deref()
-            .ok_or(AttestationError::GcpFirmwareEndorsementMissing)?;
-        google::verify_endorsement(endorsement, tdx.measurements.mrtd, bundle.verified_at)
-            .map_err(|source| AttestationError::GcpFirmwareNotEndorsed {
-                mrtd: hex::encode(tdx.measurements.mrtd),
-                source,
-            })?;
-    }
-    Ok(attestation)
+    )
 }
 
 /// Verify remote attestation evidence with the backend and appraise the
@@ -342,17 +340,15 @@ async fn verify_with_backend_policy(
         verified.measurements,
     )?;
     // Google's endorsement of the firmware that extended a GCP guest's
-    // registers: required here, and archived so a replay can require it too.
+    // registers: the backend required it, and it is archived so a replay can
+    // require it too.
     let gcp_firmware_endorsement = match &attestation {
-        VerifiedSeismicAttestation::GcpTdx(tdx) => Some(
-            google::endorsement_for(tdx.measurements.mrtd, verified.endorsements.at)
-                .await
-                .map_err(|source| AttestationError::GcpFirmwareNotEndorsed {
-                    mrtd: hex::encode(tdx.measurements.mrtd),
-                    source,
-                })?
-                .as_ref()
-                .clone(),
+        VerifiedSeismicAttestation::GcpTdx(_) => Some(
+            verified
+                .endorsements
+                .gcp_firmware
+                .ok_or(AttestationError::GcpFirmwareEndorsementMissing)?
+                .into_bytes(),
         ),
         _ => None,
     };
@@ -566,8 +562,8 @@ impl TrustAnchors {
             // Read from the lockfile by build.rs; see there.
             dcap_qvl_version: env!("SEISMIC_DCAP_QVL_VERSION").to_string(),
             gcp_firmware_root: Some(AnchorDigest {
-                name: google::GCE_CC_TCB_ROOT_NAME.to_string(),
-                sha256: Sha256::digest(google::GCE_CC_TCB_ROOT_DER).into(),
+                name: GCE_CC_TCB_ROOT_NAME.to_string(),
+                sha256: Sha256::digest(GCE_CC_TCB_ROOT_DER).into(),
             }),
         }
     }
@@ -789,13 +785,7 @@ pub enum AttestationError {
         attestation_type: AttestationType,
         measurements: Box<MultiMeasurements>,
     },
-    #[error("gcp-tdx firmware {mrtd} is not a build Google has endorsed: {source}")]
-    GcpFirmwareNotEndorsed {
-        mrtd: String,
-        #[source]
-        source: GoogleEndorsementError,
-    },
-    #[error("the archive carries no Google firmware endorsement for its gcp-tdx evidence")]
+    #[error("no Google firmware endorsement accompanies this gcp-tdx evidence")]
     GcpFirmwareEndorsementMissing,
 }
 
@@ -987,7 +977,7 @@ mod tests {
     #[test]
     fn the_google_root_is_a_compiled_in_anchor() {
         let root = TrustAnchors::compiled_in().gcp_firmware_root.unwrap();
-        assert_eq!(root.name, google::GCE_CC_TCB_ROOT_NAME);
+        assert_eq!(root.name, GCE_CC_TCB_ROOT_NAME);
         assert_eq!(
             hex::encode(root.sha256),
             "e876bc6978bf4f3da445f98a0a82363c8c0bae5a1fc033c6df65846a6cb0f18c"
