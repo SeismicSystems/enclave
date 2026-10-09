@@ -11,8 +11,8 @@
 //! handshake for the nodes joining after it.
 
 use crate::{
-    ATTESTATION_TYPE,
-    admission::AdmitAnyAzureGuest,
+    admission::AdmitAnyTdxGuest,
+    attestation_type,
     bootstrap::{RootKeyResponse, build_root_key_request, verify_root_key_response},
     rpc_error::RootKeyRefusal,
 };
@@ -229,7 +229,7 @@ async fn try_fetch_root_key_from_peer(
     };
     let requester_eph_pk = PublicKey::from_slice(&attempt.requester_eph_pk)
         .context("custodian returned an invalid requester ephemeral key")?;
-    let request = build_root_key_request(network_id, &requester_eph_pk, ATTESTATION_TYPE)?;
+    let request = build_root_key_request(network_id, &requester_eph_pk, attestation_type())?;
 
     let client = HttpClientBuilder::default().build(peer)?;
     let request_bytes = serde_json::to_vec(&request)?;
@@ -238,9 +238,9 @@ async fn try_fetch_root_key_from_peer(
 
     // The joiner's appraisal of the responder is permissive: the custodian
     // installs the key only if it derives the manifest's pin; see
-    // [`AdmitAnyAzureGuest`].
+    // [`AdmitAnyTdxGuest`].
     let request_binding =
-        verify_root_key_response(&response, &request, network_id, &AdmitAnyAzureGuest).await?;
+        verify_root_key_response(&response, &request, network_id, &AdmitAnyTdxGuest).await?;
 
     // Both install outcomes leave the custodian holding the root key. A key
     // the manifest does not pin is refused there, as an error, so the loop

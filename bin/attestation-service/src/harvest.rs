@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::net::TcpListener;
 
-use crate::ATTESTATION_TYPE;
+use crate::attestation_type;
 
 /// Where the image's summit setup units write the node's summit public keys,
 /// as `summit keys show --json` prints them.
@@ -215,7 +215,7 @@ async fn get_quote(
     // IMDS round-trip), so it runs off the async runtime, one at a time.
     let _gate = harvest.quote_gate.lock().await;
     let evidence =
-        tokio::task::spawn_blocking(move || generate_evidence(ATTESTATION_TYPE, binding))
+        tokio::task::spawn_blocking(move || generate_evidence(attestation_type(), binding))
             .await
             .map_err(|e| HarvestError::Attestation(format!("evidence task panicked: {e}")))?
             .map_err(|e| HarvestError::Attestation(e.to_string()))?;

@@ -45,8 +45,8 @@ pub mod archive;
 use anyhow::Context as _;
 use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_attestation::{
-    AttestationType, VerificationBundle, VerifiedAzureAttestation, VerifiedEvidence,
-    VerifiedSeismicAttestation, VerifyOptions,
+    AttestationType, VerificationBundle, VerifiedEvidence, VerifiedSeismicAttestation,
+    VerifyOptions,
     bindings::{binding64_from_digest32, deploy_verification_binding, founding_keys_binding},
     verify_archived_evidence_with_policy, verify_evidence_with_policy,
 };
@@ -106,46 +106,106 @@ pub struct HarvestRecord {
 /// because the caller keeps this as provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuoteReport {
+    /// The platform whose registers this report carries.
+    pub attestation_type: AttestationType,
+
     /// The 64-byte `report_data` bound into the quote.
     pub binding: [u8; 64],
 
-    /// Every register the quote covers, in register order.
-    pub pcrs: BTreeMap<u32, [u8; 32]>,
+    /// Every register the quote covers, in the platform's own shape.
+    pub registers: QuoteRegisters,
+}
+
+/// The registers a quote attests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuoteRegisters {
+    /// Azure vTPM PCRs, SHA-256, in register order.
+    Pcrs(BTreeMap<u32, [u8; 32]>),
+    /// TDX measurement registers, SHA-384.
+    Tdx(Box<TdxRegisters>),
+}
+
+/// A TDX guest's measurement registers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TdxRegisters {
+    pub mrtd: [u8; 48],
+    pub rtmr0: [u8; 48],
+    pub rtmr1: [u8; 48],
+    pub rtmr2: [u8; 48],
+    pub rtmr3: [u8; 48],
+}
+
+impl TdxRegisters {
+    fn to_json(self) -> serde_json::Value {
+        serde_json::json!({
+            "mrtd": hex::encode(self.mrtd),
+            "rtmr0": hex::encode(self.rtmr0),
+            "rtmr1": hex::encode(self.rtmr1),
+            "rtmr2": hex::encode(self.rtmr2),
+            "rtmr3": hex::encode(self.rtmr3),
+        })
+    }
 }
 
 impl QuoteReport {
-    /// The one platform this report describes: the registers are Azure vTPM
-    /// PCRs.
-    pub const ATTESTATION_TYPE: AttestationType = AttestationType::AzureTdx;
-
-    fn from_verified(verified: &VerifiedAzureAttestation) -> Self {
-        Self {
-            binding: verified.binding,
-            // Register order, so archived reports diff cleanly across nodes,
-            // boots and builds: the backend hands back a `HashMap`, whose
-            // iteration order is not stable.
-            pcrs: verified
-                .guest_measurements
-                .pcrs
-                .iter()
-                .map(|(index, value)| (*index, *value))
-                .collect(),
-        }
+    fn from_verified(verified: &VerifiedSeismicAttestation) -> anyhow::Result<Self> {
+        Ok(match verified {
+            VerifiedSeismicAttestation::AzureTdx(azure) => Self {
+                attestation_type: AttestationType::AzureTdx,
+                binding: azure.binding,
+                // Register order, so archived reports diff cleanly across nodes,
+                // boots and builds: the backend hands back a `HashMap`, whose
+                // iteration order is not stable.
+                registers: QuoteRegisters::Pcrs(
+                    azure
+                        .guest_measurements
+                        .pcrs
+                        .iter()
+                        .map(|(index, value)| (*index, *value))
+                        .collect(),
+                ),
+            },
+            VerifiedSeismicAttestation::GcpTdx(tdx) => {
+                let m = &tdx.measurements;
+                Self {
+                    attestation_type: AttestationType::GcpTdx,
+                    binding: tdx.binding,
+                    registers: QuoteRegisters::Tdx(Box::new(TdxRegisters {
+                        mrtd: m.mrtd,
+                        rtmr0: m.rtmr0,
+                        rtmr1: m.rtmr1,
+                        rtmr2: m.rtmr2,
+                        rtmr3: m.rtmr3,
+                    })),
+                }
+            }
+            VerifiedSeismicAttestation::DcapTdx(_) => anyhow::bail!(
+                "dcap-tdx evidence has no report: only azure-tdx and gcp-tdx are supported"
+            ),
+        })
     }
 
     /// This report as a JSON object.
     pub fn to_json(&self) -> serde_json::Value {
-        let pcrs: serde_json::Map<String, serde_json::Value> = self
-            .pcrs
-            .iter()
-            .map(|(index, value)| (format!("pcr{index}"), hex::encode(value).into()))
-            .collect();
-        serde_json::json!({
+        let mut object = serde_json::json!({
             "verified": true,
-            "attestation_type": Self::ATTESTATION_TYPE.as_str(),
+            "attestation_type": self.attestation_type.as_str(),
             "binding": hex::encode(self.binding),
-            "pcrs": pcrs,
-        })
+        });
+        let fields = object.as_object_mut().expect("a report is a JSON object");
+        match &self.registers {
+            QuoteRegisters::Pcrs(pcrs) => {
+                let pcrs: serde_json::Map<String, serde_json::Value> = pcrs
+                    .iter()
+                    .map(|(index, value)| (format!("pcr{index}"), hex::encode(value).into()))
+                    .collect();
+                fields.insert("pcrs".to_string(), pcrs.into());
+            }
+            QuoteRegisters::Tdx(registers) => {
+                fields.insert("registers".to_string(), (**registers).to_json());
+            }
+        }
+        object
     }
 }
 
@@ -254,7 +314,7 @@ pub async fn verify_harvest(
         &candidate_tx_io_public_key,
     );
 
-    let (verified, bundle) = verify_azure_live(record.evidence, binding, policy, pccs_url)
+    let (verified, bundle) = verify_live(record.evidence, binding, policy, pccs_url)
         .await
         .context("verifying harvest evidence")?;
     Ok(VerifiedHarvest {
@@ -264,7 +324,7 @@ pub async fn verify_harvest(
             consensus_public_key,
             candidate_tx_io_public_key,
             bundle,
-            report: QuoteReport::from_verified(&verified),
+            report: QuoteReport::from_verified(&verified)?,
         },
         anchor_drift: None,
     })
@@ -290,11 +350,10 @@ pub fn verify_archived_harvest(
     archive: FoundingArchive,
     policy: SeismicMeasurementPolicy,
 ) -> anyhow::Result<VerifiedHarvest> {
-    expect_azure(&archive.bundle.evidence)?;
+    expect_supported(&archive.bundle.evidence)?;
     let verified = verify_archived_evidence_with_policy(&archive.bundle, archive.binding(), policy)
         .context("re-verifying the archived harvest evidence")?;
-    let verified = as_azure(verified)?;
-    let report = QuoteReport::from_verified(&verified);
+    let report = QuoteReport::from_verified(&verified)?;
     anyhow::ensure!(
         report == archive.report,
         "the archived report is not what the archived evidence proves; the document was edited \
@@ -350,11 +409,11 @@ pub async fn verify_deploy(
     let binding = deploy_binding(&network_id, &deployment_nonce);
     // The bundle goes unarchived here: a live challenge is fresh evidence,
     // judged against fresh collateral at the wall clock.
-    let (verified, _bundle) = verify_azure_live(response.evidence, binding, policy, pccs_url)
+    let (verified, _bundle) = verify_live(response.evidence, binding, policy, pccs_url)
         .await
         .context("verifying deploy-verification evidence")?;
     Ok(VerifiedDeploy {
-        report: QuoteReport::from_verified(&verified),
+        report: QuoteReport::from_verified(&verified)?,
         network_id,
         deployment_nonce,
     })
@@ -384,15 +443,15 @@ pub fn deploy_binding(network_id: &NetworkId, deployment_nonce: &[u8; 32]) -> [u
     binding64_from_digest32(deploy_verification_binding(network_id, deployment_nonce))
 }
 
-/// Verify Azure TDX evidence against `binding` and `policy`, live, returning
-/// the verified output and the bundle the verification consumed.
-async fn verify_azure_live(
+/// Verify TDX evidence against `binding` and `policy`, live, returning the
+/// verified output and the bundle the verification consumed.
+async fn verify_live(
     evidence: AttestationExchangeMessage,
     binding: [u8; 64],
     policy: SeismicMeasurementPolicy,
     pccs_url: Option<String>,
-) -> anyhow::Result<(VerifiedAzureAttestation, VerificationBundle)> {
-    expect_azure(&evidence)?;
+) -> anyhow::Result<(VerifiedSeismicAttestation, VerificationBundle)> {
+    expect_supported(&evidence)?;
     let VerifiedEvidence {
         attestation,
         bundle,
@@ -406,29 +465,23 @@ async fn verify_azure_live(
         },
     )
     .await?;
-    Ok((as_azure(attestation)?, bundle))
+    Ok((attestation, bundle))
 }
 
-/// Reject wrong-platform evidence on the claimed type, before verification:
-/// DCAP verification costs collateral round-trips, and this policy format
-/// cannot pin a non-Azure platform's measurements anyway.
-fn expect_azure(evidence: &AttestationExchangeMessage) -> anyhow::Result<()> {
+/// Reject evidence from a platform without an admission schema on the claimed
+/// type, before verification: DCAP verification costs collateral round-trips.
+fn expect_supported(evidence: &AttestationExchangeMessage) -> anyhow::Result<()> {
     anyhow::ensure!(
-        evidence.attestation_type() == AttestationType::AzureTdx,
-        "expected {} evidence, got {}",
+        matches!(
+            evidence.attestation_type(),
+            AttestationType::AzureTdx | AttestationType::GcpTdx
+        ),
+        "expected {} or {} evidence, got {}",
         AttestationType::AzureTdx.as_str(),
+        AttestationType::GcpTdx.as_str(),
         evidence.attestation_type().as_str(),
     );
     Ok(())
-}
-
-fn as_azure(attestation: VerifiedSeismicAttestation) -> anyhow::Result<VerifiedAzureAttestation> {
-    let VerifiedSeismicAttestation::AzureTdx(verified) = attestation else {
-        anyhow::bail!(
-            "verified output is not azure-tdx despite azure-tdx evidence: {attestation:?}"
-        );
-    };
-    Ok(verified)
 }
 
 /// Decode one fixed-length hex field of the record, naming the field in every
@@ -453,6 +506,7 @@ fn decode_hex_field<const N: usize>(field: &str, value: &str) -> anyhow::Result<
 mod tests {
     use super::*;
     use seismic_attestation::AzureGuestMeasurements;
+    use seismic_attestation::VerifiedAzureAttestation;
     use std::collections::HashMap;
 
     /// One real founding, kept verbatim as its archive: a harvest record, the
@@ -466,6 +520,18 @@ mod tests {
     /// discloses nothing.
     const FOUNDING_ARCHIVE: &str = include_str!("../fixtures/founding-archive-v1.json");
     const FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-v1.json");
+
+    /// The same for GCP TDX: cohort `tmp-multicloud` on image
+    /// `seismic-dev_2026-09-28.2f3cd0.tar.gz`, a c3-standard-4 with the vTPM
+    /// off, harvested 2026-10-01T04:14:33Z and torn down the same day, with
+    /// Google's endorsement of its firmware as published for that MRTD.
+    const GCP_FOUNDING_ARCHIVE: &str = include_str!("../fixtures/founding-archive-gcp-v1.json");
+    const GCP_FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-gcp-v1.json");
+    const GCP_FOUNDING_VERIFIED_AT: u64 = 1790873673;
+
+    /// How many registers the GCP TDX v1 admission schema
+    /// (`seismic.gcp-tdx.rtmr1-rtmr2.v1`) pins.
+    const GCP_TDX_V1_REGISTERS: usize = 2;
 
     /// The instant frozen into that archive, and the reason the fixture
     /// cannot rot: a replay evaluates every freshness window here, not at
@@ -535,7 +601,19 @@ mod tests {
     }
 
     fn mutated_archive(mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
-        let mut document: serde_json::Value = serde_json::from_str(FOUNDING_ARCHIVE).unwrap();
+        mutated(FOUNDING_ARCHIVE, mutate)
+    }
+
+    fn gcp_founding_archive() -> FoundingArchive {
+        archive::parse(GCP_FOUNDING_ARCHIVE).expect("the committed GCP founding archive parses")
+    }
+
+    fn mutated_gcp_archive(mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
+        mutated(GCP_FOUNDING_ARCHIVE, mutate)
+    }
+
+    fn mutated(archive: &str, mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
+        let mut document: serde_json::Value = serde_json::from_str(archive).unwrap();
         mutate(&mut document);
         archive::parse(&document.to_string()).expect("the mutated archive still parses")
     }
@@ -680,6 +758,78 @@ mod tests {
         assert!(drift.contains("0.0.1"), "{drift}");
     }
 
+    /// The GCP founding verifies offline the same way, and the policy's two
+    /// registers come back with the values it pinned.
+    #[test]
+    #[ignore = "the committed GCP archive has no candidate_tx_io_public_key; recapture it from a mint-first GCP founding"]
+    fn a_real_gcp_founding_reverifies_offline_from_its_archive() {
+        let archive = gcp_founding_archive();
+        assert_eq!(archive.bundle.verified_at, GCP_FOUNDING_VERIFIED_AT);
+
+        let verified = verify_archived_harvest(archive, policy(GCP_FOUNDING_POLICY))
+            .expect("the archived GCP founding verifies offline");
+        assert_eq!(verified.anchor_drift, None);
+
+        let report = verified.report().to_json();
+        assert_eq!(report["attestation_type"], "gcp-tdx");
+        let pinned = policy_registers(GCP_FOUNDING_POLICY);
+        assert_eq!(pinned.len(), GCP_TDX_V1_REGISTERS, "{pinned:?}");
+        let registers = report["registers"].as_object().unwrap();
+        for (register, expected) in &pinned {
+            assert_eq!(registers[register], *expected, "{register}");
+        }
+    }
+
+    #[test]
+    #[ignore = "the committed GCP archive has no candidate_tx_io_public_key; recapture it from a mint-first GCP founding"]
+    fn the_committed_gcp_archive_is_canonical() {
+        assert_eq!(
+            archive::render(&gcp_founding_archive()).unwrap(),
+            GCP_FOUNDING_ARCHIVE
+        );
+    }
+
+    /// A GCP quote proves its registers, not that Google's firmware produced
+    /// them: that is the endorsement's job. Without one, or with one that
+    /// does not hold, the replay refuses the archive even though the quote
+    /// itself verifies.
+    #[test]
+    #[ignore = "the committed GCP archive has no candidate_tx_io_public_key; recapture it from a mint-first GCP founding"]
+    fn a_gcp_archive_is_refused_without_a_holding_firmware_endorsement() {
+        let unendorsed = mutated_gcp_archive(|document| {
+            document
+                .as_object_mut()
+                .unwrap()
+                .remove("gcp_firmware_endorsement");
+        });
+        let error = verify_archived_harvest(unendorsed, policy(GCP_FOUNDING_POLICY))
+            .expect_err("a GCP archive without its endorsement must not verify");
+        assert!(
+            format!("{error:#}").contains("no Google firmware endorsement"),
+            "{error:#}"
+        );
+
+        let tampered = mutated_gcp_archive(|document| {
+            let endorsement = document["gcp_firmware_endorsement"].as_str().unwrap();
+            let mut bytes = hex::decode(endorsement).unwrap();
+            let last = bytes.len() - 1;
+            bytes[last] ^= 1;
+            document["gcp_firmware_endorsement"] = serde_json::json!(hex::encode(bytes));
+        });
+        let error = verify_archived_harvest(tampered, policy(GCP_FOUNDING_POLICY))
+            .expect_err("a GCP archive whose endorsement does not hold must not verify");
+        assert!(
+            format!("{error:#}").contains("not a build Google has endorsed"),
+            "{error:#}"
+        );
+
+        let other_firmware = mutated_gcp_archive(|document| {
+            document["report"]["registers"]["mrtd"] = serde_json::json!("11".repeat(48));
+        });
+        verify_archived_harvest(other_firmware, policy(GCP_FOUNDING_POLICY))
+            .expect_err("a report the quote does not prove");
+    }
+
     const NO_ATTESTATION: &str = r#"{ "attestation_evidence": null }"#;
 
     /// One job, one binding: a quote from a platform whose measurements this
@@ -694,14 +844,14 @@ mod tests {
         .await
         .unwrap_err();
         assert!(
-            format!("{error:#}").contains("expected azure-tdx evidence"),
+            format!("{error:#}").contains("expected azure-tdx or gcp-tdx evidence"),
             "{error:#}"
         );
 
         let error = verify_archived_harvest(archive::fabricated_archive(), policy(VALID_POLICY))
             .unwrap_err();
         assert!(
-            format!("{error:#}").contains("expected azure-tdx evidence"),
+            format!("{error:#}").contains("expected azure-tdx or gcp-tdx evidence"),
             "{error:#}"
         );
     }
@@ -822,7 +972,9 @@ mod tests {
             },
         };
 
-        let report = QuoteReport::from_verified(&verified).to_json();
+        let report = QuoteReport::from_verified(&VerifiedSeismicAttestation::AzureTdx(verified))
+            .unwrap()
+            .to_json();
 
         assert_eq!(report["verified"], true);
         assert_eq!(report["attestation_type"], "azure-tdx");
@@ -850,8 +1002,9 @@ mod tests {
         let deployment_nonce = [0x66u8; 32];
         let verified = VerifiedDeploy {
             report: QuoteReport {
+                attestation_type: AttestationType::AzureTdx,
                 binding: deploy_binding(&network_id, &deployment_nonce),
-                pcrs: BTreeMap::from([(4, [0x44; 32])]),
+                registers: QuoteRegisters::Pcrs(BTreeMap::from([(4, [0x44; 32])])),
             },
             network_id,
             deployment_nonce,

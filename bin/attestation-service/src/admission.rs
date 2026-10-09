@@ -11,23 +11,23 @@
 //! asking; the predicates here decide whether that guest is allowed:
 //!
 //! - [`RegistryAdmission`] — the responder's predicate. A requester is
-//!   admitted iff its Azure v1 admission ID is currently accepted by the
-//!   on-chain `MeasurementRegistry`, asked via `eth_call isAccepted(id)`
+//!   admitted iff its admission ID, under its platform's schema, is
+//!   currently accepted by the on-chain `MeasurementRegistry`, asked via `eth_call isAccepted(id)`
 //!   pinned to a provably fresh finalized block of the node's local reth, on
 //!   the chain the network manifest commits to (see `fresh_policy_block` and
 //!   `check_pinned_genesis`). The chain carries the *live* policy:
 //!   additions and deprecations take effect on the next handshake, no node
 //!   restart needed.
-//! - [`AdmitAnyAzureGuest`] — the requester's (joiner's) predicate for
+//! - [`AdmitAnyTdxGuest`] — the requester's (joiner's) predicate for
 //!   appraising the responder, permissive because the custodian checks the
 //!   key it delivers; see its docs.
 //!
 //! The measurements → admission-ID mapping is `seismic-measurement-admission`,
 //! the same derivation deploy tooling compiles the registry's genesis storage
 //! with — the two halves of the system cannot disagree on what an admission ID
-//! means. Every branch fails closed: a non-Azure attestation type, a PCR
-//! bank missing a schema register, an unreachable or stale chain, and a false
-//! `isAccepted` all deny the handshake.
+//! means. Every branch fails closed: an attestation type without a schema, a
+//! register bank missing a schema register, an unreachable or stale chain, and
+//! a false `isAccepted` all deny the handshake.
 //!
 //! Every input to the decision is host-supplied state, so each is anchored as
 //! tightly as a locally checkable witness allows: the policy is read on the
@@ -51,7 +51,9 @@ use alloy::{
 use alloy_primitives::{Address, B256};
 use seismic_attestation::{AdmissionPredicate, AttestationType, VerifiedSeismicAttestation};
 use seismic_custodian_ipc::{AdmittedOn, CustodianClient};
-use seismic_measurement_admission::{AdmissionId, AzureTdxV1Measurements, MissingPcr};
+use seismic_measurement_admission::{
+    AdmissionId, AzureTdxV1Measurements, GcpTdxV1Measurements, MissingPcr,
+};
 use seismic_measurement_registry_client::MeasurementRegistry::{self, MeasurementRegistryInstance};
 use std::{
     path::Path,
@@ -62,7 +64,7 @@ use tracing::{debug, info, warn};
 /// Why a bootstrap admission predicate denied a verified guest.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AdmissionDenial {
-    #[error("only Azure TDX guests are admitted to the bootstrap; evidence is {0}")]
+    #[error("only Azure and GCP TDX guests are admitted to the bootstrap; evidence is {0}")]
     UnsupportedAttestationType(AttestationType),
     #[error(transparent)]
     MissingPcr(#[from] MissingPcr),
@@ -141,9 +143,9 @@ impl AdmissionDenial {
     /// which tells a healthy joiner to stop asking.
     pub(crate) fn kind(&self) -> DenialKind {
         match self {
-            // No admission ID came out of the evidence: a non-Azure
-            // attestation type has no admission schema at all, and a PCR bank
-            // missing a schema register yields no identity to appraise.
+            // No admission ID came out of the evidence: the attestation type
+            // has no admission schema, or its register bank misses a schema
+            // register and so yields no identity to appraise.
             Self::UnsupportedAttestationType(_) | Self::MissingPcr(_) => {
                 DenialKind::RequesterEvidenceUnusable
             }
@@ -157,21 +159,24 @@ impl AdmissionDenial {
     }
 }
 
-/// The [`AdmissionId`] of a verified guest, under the Azure v1 schema.
+/// The [`AdmissionId`] of a verified guest under the schema its attestation type selects.
 ///
-/// Fails closed: only Azure TDX attestation has an admission schema, and a
-/// verified PCR bank missing any schema register yields an error, never a
-/// partial identity.
-fn azure_admission_id(
-    verified: &VerifiedSeismicAttestation,
-) -> Result<AdmissionId, AdmissionDenial> {
-    let VerifiedSeismicAttestation::AzureTdx(azure) = verified else {
-        return Err(AdmissionDenial::UnsupportedAttestationType(
-            verified.attestation_type(),
-        ));
-    };
-    let measurements = AzureTdxV1Measurements::from_pcrs(&azure.guest_measurements.pcrs)?;
-    Ok(measurements.admission_id())
+/// Fails closed: an attestation type without a schema is denied, and a register
+/// bank missing a schema register yields an error, never a partial identity.
+fn admission_id_of(verified: &VerifiedSeismicAttestation) -> Result<AdmissionId, AdmissionDenial> {
+    match verified {
+        VerifiedSeismicAttestation::AzureTdx(azure) => {
+            Ok(AzureTdxV1Measurements::from_pcrs(&azure.guest_measurements.pcrs)?.admission_id())
+        }
+        VerifiedSeismicAttestation::GcpTdx(gcp) => Ok(GcpTdxV1Measurements {
+            rtmr1: gcp.measurements.rtmr1,
+            rtmr2: gcp.measurements.rtmr2,
+        }
+        .admission_id()),
+        other => Err(AdmissionDenial::UnsupportedAttestationType(
+            other.attestation_type(),
+        )),
+    }
 }
 
 /// Upper bound on the age of the finalized block an admission decision is
@@ -436,7 +441,7 @@ impl AdmissionPredicate for RegistryAdmission {
         &self,
         verified: &VerifiedSeismicAttestation,
     ) -> Result<AdmittedOn, Box<dyn std::error::Error + Send + Sync>> {
-        let admission_id = azure_admission_id(verified)?;
+        let admission_id = admission_id_of(verified)?;
         let mut attempt = 1;
         loop {
             match self.decide(admission_id).await {
@@ -455,22 +460,25 @@ impl AdmissionPredicate for RegistryAdmission {
 }
 
 /// Requester-side (joiner) appraisal of the responder: any cryptographically
-/// valid Azure TDX guest is admitted, measurements unchecked.
+/// valid Azure or GCP TDX guest is admitted, measurements unchecked.
 ///
 /// Permissive because the joiner's protection is not appraisal: the custodian
 /// installs a delivered key only if it derives the manifest's pinned
 /// `tx_io_pk@0` (`CustodianState::install_root_key`), so the responder's
 /// image cannot change what the joiner ends up holding.
-pub(crate) struct AdmitAnyAzureGuest;
+pub(crate) struct AdmitAnyTdxGuest;
 
-impl AdmissionPredicate for AdmitAnyAzureGuest {
+impl AdmissionPredicate for AdmitAnyTdxGuest {
     type Admitted = ();
 
     async fn admit(
         &self,
         verified: &VerifiedSeismicAttestation,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if !matches!(verified, VerifiedSeismicAttestation::AzureTdx(_)) {
+        if !matches!(
+            verified,
+            VerifiedSeismicAttestation::AzureTdx(_) | VerifiedSeismicAttestation::GcpTdx(_)
+        ) {
             return Err(
                 AdmissionDenial::UnsupportedAttestationType(verified.attestation_type()).into(),
             );
@@ -484,7 +492,7 @@ mod tests {
     use super::*;
     use crate::bootstrap::{AnswerError, wrap_for_admitted_requester};
     use alloy::{rpc::client::RpcClient, transports::mock::Asserter};
-    use alloy_primitives::{Bytes, b256};
+    use alloy_primitives::{Bytes, b256, hex};
     use seismic_attestation::{
         AzureGuestMeasurements, TdxMeasurements, VerifiedAzureAttestation, VerifiedTdxAttestation,
     };
@@ -508,6 +516,29 @@ mod tests {
         VerifiedSeismicAttestation::AzureTdx(VerifiedAzureAttestation {
             binding: [0u8; 64],
             guest_measurements: AzureGuestMeasurements { pcrs },
+        })
+    }
+
+    /// The golden GCP v1 vector pinned in `seismic-measurement-admission`.
+    const RTMR1: [u8; 48] = hex!(
+        "762d5dc2b8dcd950b77ba759e2321a865a7a1fcdeb1f5d879f3e31e974c9697fa4171d92e08c2243a91af3027ad08cb0"
+    );
+    const RTMR2: [u8; 48] = hex!(
+        "85bc309a887ad0277ea50d47aacb850d080c498e2e713eeab0d035085acbd6d47ac06f276ae4284c828dc199e6845031"
+    );
+    const GCP_ADMISSION_ID: B256 =
+        b256!("0x518a6a72083a7db27660a91fd8fc9733ac58eab7d37596b0b161e91cc0681674");
+
+    fn verified_gcp(rtmr1: [u8; 48], rtmr2: [u8; 48]) -> VerifiedSeismicAttestation {
+        VerifiedSeismicAttestation::GcpTdx(VerifiedTdxAttestation {
+            binding: [0u8; 64],
+            measurements: TdxMeasurements {
+                mrtd: [0u8; 48],
+                rtmr0: [0u8; 48],
+                rtmr1,
+                rtmr2,
+                rtmr3: [0u8; 48],
+            },
         })
     }
 
@@ -656,7 +687,7 @@ mod tests {
         let mut pcrs = golden_pcr_bank();
         pcrs.insert(0, [0xaa; 32]);
         assert_eq!(
-            azure_admission_id(&verified_azure(pcrs)).unwrap(),
+            admission_id_of(&verified_azure(pcrs)).unwrap(),
             AdmissionId::from(GOLDEN_ADMISSION_ID)
         );
     }
@@ -666,15 +697,31 @@ mod tests {
         let mut pcrs = golden_pcr_bank();
         pcrs.remove(&9);
         assert!(matches!(
-            azure_admission_id(&verified_azure(pcrs)),
+            admission_id_of(&verified_azure(pcrs)),
             Err(AdmissionDenial::MissingPcr(MissingPcr(9)))
         ));
     }
 
     #[test]
-    fn non_azure_attestation_fails_closed() {
+    fn a_gcp_guest_is_identified_by_rtmr1_and_rtmr2_alone() {
+        assert_eq!(
+            *admission_id_of(&verified_gcp(RTMR1, RTMR2))
+                .unwrap()
+                .as_b256(),
+            GCP_ADMISSION_ID
+        );
+        // mrtd, rtmr0 and rtmr3 are not part of the identity: the helper zeroes
+        // them, and the golden ID still comes out.
+        assert_ne!(
+            admission_id_of(&verified_gcp(RTMR1, [0u8; 48])).unwrap(),
+            admission_id_of(&verified_gcp(RTMR1, RTMR2)).unwrap()
+        );
+    }
+
+    #[test]
+    fn an_attestation_type_without_a_schema_fails_closed() {
         assert!(matches!(
-            azure_admission_id(&verified_dcap()),
+            admission_id_of(&verified_dcap()),
             Err(AdmissionDenial::UnsupportedAttestationType(
                 AttestationType::DcapTdx
             ))
@@ -1127,15 +1174,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn joiner_predicate_admits_azure_and_denies_other_types() {
-        AdmitAnyAzureGuest
+    async fn joiner_predicate_admits_azure_and_gcp_and_denies_other_types() {
+        AdmitAnyTdxGuest
             .admit(&verified_azure(HashMap::new()))
             .await
             .expect("any Azure guest is admitted by the joiner's predicate");
 
-        AdmitAnyAzureGuest
-            .admit(&verified_dcap())
+        AdmitAnyTdxGuest
+            .admit(&verified_gcp([0u8; 48], [0u8; 48]))
             .await
-            .expect_err("non-Azure attestation types are denied even by the joiner's predicate");
+            .expect("any GCP guest is admitted by the joiner's predicate");
+
+        AdmitAnyTdxGuest.admit(&verified_dcap()).await.expect_err(
+            "an attestation type without a schema is denied even by the joiner's predicate",
+        );
     }
 }

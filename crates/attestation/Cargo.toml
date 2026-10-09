@@ -10,6 +10,7 @@ readme = "README.md"
 description = "Seismic attestation evidence types and policy checks"
 
 [dependencies]
+tracing.workspace = true
 hex.workspace = true
 seismic-network-manifest.workspace = true
 serde.workspace = true
@@ -20,6 +21,7 @@ thiserror.workspace = true
 # so it is unconditional: every consumer — the node binaries, the deploy CLI
 # linking seismic-verify-quote — verifies, on any platform.
 attestation = { workspace = true, features = ["azure-verifier"] }
+tokio.workspace = true
 
 # Evidence *generation* (Intel TDX quote + Azure vTPM quote) is opt-in through
 # this crate's `azure-attester` feature, and only ever reaches the graph for the
@@ -52,7 +54,6 @@ dcap-rs.workspace = true
 clap.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
 
 [features]
 default = []

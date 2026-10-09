@@ -1149,7 +1149,7 @@ dependencies = [
 [[package]]
 name = "attestation"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?rev=4eaf3239b5cd4d078fb234e3364dbe0ab2827de3#4eaf3239b5cd4d078fb234e3364dbe0ab2827de3"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=1f7147c20ee7263420979c787b4946b15d50e14e#1f7147c20ee7263420979c787b4946b15d50e14e"
 dependencies = [
  "anyhow",
  "attest-measure",
@@ -1166,11 +1166,14 @@ dependencies = [
  "parity-scale-codec",
  "pccs",
  "pem-rfc7468",
+ "prost",
  "rand_core 0.6.4",
  "reqwest 0.13.4",
+ "rsa",
  "rustls-webpki",
  "serde",
  "serde_json",
+ "sha2",
  "tdx-attest",
  "thiserror 2.0.18",
  "time",
@@ -4281,7 +4284,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pccs"
 version = "0.0.1"
-source = "git+https://github.com/SeismicSystems/attested-tls?rev=4eaf3239b5cd4d078fb234e3364dbe0ab2827de3#4eaf3239b5cd4d078fb234e3364dbe0ab2827de3"
+source = "git+https://github.com/SeismicSystems/attested-tls?rev=1f7147c20ee7263420979c787b4946b15d50e14e#1f7147c20ee7263420979c787b4946b15d50e14e"
 dependencies = [
  "anyhow",
  "dcap-qvl",
@@ -5372,6 +5375,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
