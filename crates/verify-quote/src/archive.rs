@@ -58,7 +58,6 @@
 use crate::{QuoteRegisters, QuoteReport, TdxRegisters};
 use anyhow::Context as _;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use seismic_attestation::AttestationType;
 use seismic_attestation::{
     AnchorDigest, AttestationExchangeMessage, QuoteCollateralV3, TrustAnchors, VerificationBundle,
 };
@@ -157,15 +156,23 @@ struct ArchivedAnchorDigest {
     sha256: String,
 }
 
+/// The report keyed by platform: `attestation_type` names the variant, and
+/// each variant carries only its own platform's registers.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-struct ArchivedReport {
-    attestation_type: String,
-    binding: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pcrs: Option<ArchivedPcrs>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    registers: Option<ArchivedTdxRegisters>,
+#[serde(
+    tag = "attestation_type",
+    rename_all = "kebab-case",
+    deny_unknown_fields
+)]
+enum ArchivedReport {
+    AzureTdx {
+        binding: String,
+        pcrs: ArchivedPcrs,
+    },
+    GcpTdx {
+        binding: String,
+        registers: ArchivedTdxRegisters,
+    },
 }
 
 /// TDX measurement registers as hex, one field per register.
@@ -368,31 +375,26 @@ impl TryFrom<ArchivedTrustAnchors> for TrustAnchors {
 
 impl From<&QuoteReport> for ArchivedReport {
     fn from(report: &QuoteReport) -> Self {
-        let (pcrs, registers) = match &report.registers {
-            QuoteRegisters::Pcrs(pcrs) => (
-                Some(ArchivedPcrs(
+        let binding = hex::encode(report.binding);
+        match &report.registers {
+            QuoteRegisters::AzureTdx(pcrs) => Self::AzureTdx {
+                binding,
+                pcrs: ArchivedPcrs(
                     pcrs.iter()
                         .map(|(index, value)| (*index, hex::encode(value)))
                         .collect(),
-                )),
-                None,
-            ),
-            QuoteRegisters::Tdx(tdx) => (
-                None,
-                Some(ArchivedTdxRegisters {
+                ),
+            },
+            QuoteRegisters::GcpTdx(tdx) => Self::GcpTdx {
+                binding,
+                registers: ArchivedTdxRegisters {
                     mrtd: hex::encode(tdx.mrtd),
                     rtmr0: hex::encode(tdx.rtmr0),
                     rtmr1: hex::encode(tdx.rtmr1),
                     rtmr2: hex::encode(tdx.rtmr2),
                     rtmr3: hex::encode(tdx.rtmr3),
-                }),
-            ),
-        };
-        Self {
-            attestation_type: report.attestation_type.as_str().to_string(),
-            binding: hex::encode(report.binding),
-            pcrs,
-            registers,
+                },
+            },
         }
     }
 }
@@ -401,43 +403,34 @@ impl TryFrom<ArchivedReport> for QuoteReport {
     type Error = anyhow::Error;
 
     fn try_from(archived: ArchivedReport) -> anyhow::Result<Self> {
-        let attestation_type = match archived.attestation_type.as_str() {
-            "azure-tdx" => AttestationType::AzureTdx,
-            "gcp-tdx" => AttestationType::GcpTdx,
-            other => anyhow::bail!(
-                "report.attestation_type {other:?} is not a platform this reader knows"
+        let (binding, registers) = match archived {
+            ArchivedReport::AzureTdx { binding, pcrs } => (
+                binding,
+                QuoteRegisters::AzureTdx(
+                    pcrs.0
+                        .iter()
+                        .map(|(index, value)| {
+                            Ok((
+                                *index,
+                                decode_hex(&format!("report.pcrs.pcr{index}"), value)?,
+                            ))
+                        })
+                        .collect::<anyhow::Result<_>>()?,
+                ),
             ),
-        };
-        let registers = match (attestation_type, archived.pcrs, archived.registers) {
-            (AttestationType::AzureTdx, Some(pcrs), None) => QuoteRegisters::Pcrs(
-                pcrs.0
-                    .iter()
-                    .map(|(index, value)| {
-                        Ok((
-                            *index,
-                            decode_hex(&format!("report.pcrs.pcr{index}"), value)?,
-                        ))
-                    })
-                    .collect::<anyhow::Result<_>>()?,
-            ),
-            (AttestationType::GcpTdx, None, Some(tdx)) => {
-                QuoteRegisters::Tdx(Box::new(TdxRegisters {
-                    mrtd: decode_hex("report.registers.mrtd", &tdx.mrtd)?,
-                    rtmr0: decode_hex("report.registers.rtmr0", &tdx.rtmr0)?,
-                    rtmr1: decode_hex("report.registers.rtmr1", &tdx.rtmr1)?,
-                    rtmr2: decode_hex("report.registers.rtmr2", &tdx.rtmr2)?,
-                    rtmr3: decode_hex("report.registers.rtmr3", &tdx.rtmr3)?,
-                }))
-            }
-            _ => anyhow::bail!(
-                "report registers do not match report.attestation_type {:?}: azure-tdx carries \
-                 `pcrs`, gcp-tdx carries `registers`",
-                archived.attestation_type
+            ArchivedReport::GcpTdx { binding, registers } => (
+                binding,
+                QuoteRegisters::GcpTdx(Box::new(TdxRegisters {
+                    mrtd: decode_hex("report.registers.mrtd", &registers.mrtd)?,
+                    rtmr0: decode_hex("report.registers.rtmr0", &registers.rtmr0)?,
+                    rtmr1: decode_hex("report.registers.rtmr1", &registers.rtmr1)?,
+                    rtmr2: decode_hex("report.registers.rtmr2", &registers.rtmr2)?,
+                    rtmr3: decode_hex("report.registers.rtmr3", &registers.rtmr3)?,
+                })),
             ),
         };
         Ok(Self {
-            attestation_type,
-            binding: decode_hex("report.binding", &archived.binding)?,
+            binding: decode_hex("report.binding", &binding)?,
             registers,
         })
     }
@@ -515,9 +508,11 @@ pub fn fabricated_archive() -> FoundingArchive {
             gcp_firmware_endorsement: None,
         },
         report: QuoteReport {
-            attestation_type: AttestationType::AzureTdx,
             binding: [0x8d; 64],
-            registers: QuoteRegisters::Pcrs(BTreeMap::from([(4, [0x44; 32]), (11, [0xbb; 32])])),
+            registers: QuoteRegisters::AzureTdx(BTreeMap::from([
+                (4, [0x44; 32]),
+                (11, [0xbb; 32]),
+            ])),
         },
     }
 }
@@ -735,11 +730,15 @@ mod tests {
         );
         assert!(error.contains("register4"), "{error}");
 
-        let error = parse_mutated(|value| {
-            value["report"]["attestation_type"] = serde_json::json!("gcp-tdx")
-        })
-        .unwrap_err()
-        .to_string();
-        assert!(error.contains("gcp-tdx"), "{error}");
+        // A platform whose registers are another platform's fails inside
+        // serde, naming the register field that does not belong.
+        let error = format!(
+            "{:#}",
+            parse_mutated(|value| {
+                value["report"]["attestation_type"] = serde_json::json!("gcp-tdx")
+            })
+            .unwrap_err()
+        );
+        assert!(error.contains("pcrs"), "{error}");
     }
 }

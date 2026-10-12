@@ -106,9 +106,6 @@ pub struct HarvestRecord {
 /// because the caller keeps this as provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuoteReport {
-    /// The platform whose registers this report carries.
-    pub attestation_type: AttestationType,
-
     /// The 64-byte `report_data` bound into the quote.
     pub binding: [u8; 64],
 
@@ -116,13 +113,13 @@ pub struct QuoteReport {
     pub registers: QuoteRegisters,
 }
 
-/// The registers a quote attests.
+/// The registers a quote attests, which name the platform that quoted them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QuoteRegisters {
     /// Azure vTPM PCRs, SHA-256, in register order.
-    Pcrs(BTreeMap<u32, [u8; 32]>),
-    /// TDX measurement registers, SHA-384.
-    Tdx(Box<TdxRegisters>),
+    AzureTdx(BTreeMap<u32, [u8; 32]>),
+    /// A GCP guest's TDX measurement registers, SHA-384.
+    GcpTdx(Box<TdxRegisters>),
 }
 
 /// A TDX guest's measurement registers.
@@ -148,15 +145,22 @@ impl TdxRegisters {
 }
 
 impl QuoteReport {
+    /// The platform whose registers this report carries.
+    pub fn attestation_type(&self) -> AttestationType {
+        match self.registers {
+            QuoteRegisters::AzureTdx(_) => AttestationType::AzureTdx,
+            QuoteRegisters::GcpTdx(_) => AttestationType::GcpTdx,
+        }
+    }
+
     fn from_verified(verified: &VerifiedSeismicAttestation) -> anyhow::Result<Self> {
         Ok(match verified {
             VerifiedSeismicAttestation::AzureTdx(azure) => Self {
-                attestation_type: AttestationType::AzureTdx,
                 binding: azure.binding,
                 // Register order, so archived reports diff cleanly across nodes,
                 // boots and builds: the backend hands back a `HashMap`, whose
                 // iteration order is not stable.
-                registers: QuoteRegisters::Pcrs(
+                registers: QuoteRegisters::AzureTdx(
                     azure
                         .guest_measurements
                         .pcrs
@@ -168,9 +172,8 @@ impl QuoteReport {
             VerifiedSeismicAttestation::GcpTdx(tdx) => {
                 let m = &tdx.measurements;
                 Self {
-                    attestation_type: AttestationType::GcpTdx,
                     binding: tdx.binding,
-                    registers: QuoteRegisters::Tdx(Box::new(TdxRegisters {
+                    registers: QuoteRegisters::GcpTdx(Box::new(TdxRegisters {
                         mrtd: m.mrtd,
                         rtmr0: m.rtmr0,
                         rtmr1: m.rtmr1,
@@ -189,19 +192,19 @@ impl QuoteReport {
     pub fn to_json(&self) -> serde_json::Value {
         let mut object = serde_json::json!({
             "verified": true,
-            "attestation_type": self.attestation_type.as_str(),
+            "attestation_type": self.attestation_type().as_str(),
             "binding": hex::encode(self.binding),
         });
         let fields = object.as_object_mut().expect("a report is a JSON object");
         match &self.registers {
-            QuoteRegisters::Pcrs(pcrs) => {
+            QuoteRegisters::AzureTdx(pcrs) => {
                 let pcrs: serde_json::Map<String, serde_json::Value> = pcrs
                     .iter()
                     .map(|(index, value)| (format!("pcr{index}"), hex::encode(value).into()))
                     .collect();
                 fields.insert("pcrs".to_string(), pcrs.into());
             }
-            QuoteRegisters::Tdx(registers) => {
+            QuoteRegisters::GcpTdx(registers) => {
                 fields.insert("registers".to_string(), (**registers).to_json());
             }
         }
@@ -1002,9 +1005,8 @@ mod tests {
         let deployment_nonce = [0x66u8; 32];
         let verified = VerifiedDeploy {
             report: QuoteReport {
-                attestation_type: AttestationType::AzureTdx,
                 binding: deploy_binding(&network_id, &deployment_nonce),
-                registers: QuoteRegisters::Pcrs(BTreeMap::from([(4, [0x44; 32])])),
+                registers: QuoteRegisters::AzureTdx(BTreeMap::from([(4, [0x44; 32])])),
             },
             network_id,
             deployment_nonce,
