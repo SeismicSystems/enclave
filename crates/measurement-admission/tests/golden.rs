@@ -5,7 +5,9 @@
 //! identical bytes. Any intentional change to the derivation must regenerate
 //! the compiled reports deliberately.
 
-use seismic_measurement_admission::{CompileReport, compile_policy, promote_measurements};
+use seismic_measurement_admission::{
+    AZURE_TDX_V1_SCHEMA, CompileReport, GCP_TDX_V1_SCHEMA, compile_policy, promote_measurements,
+};
 
 const POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.json");
 const COMPILED: &str = include_str!("../fixtures/golden/measurement-policy-v1.compiled.json");
@@ -31,7 +33,8 @@ const MIXED_COMPILED: &str =
 fn mixed_fixture_compiles_to_committed_report() {
     let compiled = compile_policy(MIXED_POLICY).expect("mixed fixture compiles");
     let report = CompileReport::new(&compiled);
-    assert_eq!(report.schema, None);
+    assert_eq!(report.records[0].schema, AZURE_TDX_V1_SCHEMA);
+    assert_eq!(report.records[1].schema, GCP_TDX_V1_SCHEMA);
     assert_eq!(report.to_json(), MIXED_COMPILED);
     let azure = compile_policy(IMAGE_A_POLICY).unwrap().admission_ids;
     let gcp = compile_policy(GCP_POLICY).unwrap().admission_ids;

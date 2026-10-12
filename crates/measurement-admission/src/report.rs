@@ -15,12 +15,6 @@ use std::collections::BTreeMap;
 /// Everything deploy needs from one compiled policy document.
 #[derive(Clone, Debug, Serialize)]
 pub struct CompileReport {
-    /// Admission schema every record compiled under; `None` when the records
-    /// span more than one.
-    pub schema: Option<&'static str>,
-    /// `keccak256(schema)`, the admission preimage's domain-separation word;
-    /// `None` when the records span more than one schema.
-    pub schema_id: Option<B256>,
     /// SHA-256 of the exact policy document bytes (the manifest's
     /// `bootstrap_policy_hash` and the genesis policy-hash slots).
     pub policy_hash: B256,
@@ -37,24 +31,22 @@ pub struct CompileReport {
     pub registry_genesis_storage: BTreeMap<B256, B256>,
 }
 
-/// One record's audit label and the admission ID it compiles to.
+/// One record's audit label, the schema it compiled under, and the
+/// admission ID it compiles to.
 #[derive(Clone, Debug, Serialize)]
 pub struct RecordReport {
     pub measurement_id: String,
+    /// Admission schema this record's tuple is derived under.
+    pub schema: &'static str,
+    /// `keccak256(schema)`, the admission preimage's domain-separation word.
+    pub schema_id: B256,
     /// The admission ID of this record's measurement tuple.
     pub admission_id: AdmissionId,
 }
 
 impl CompileReport {
     pub fn new(policy: &CompiledPolicy) -> Self {
-        let first = &policy.records[0].tuple;
-        let uniform = policy
-            .records
-            .iter()
-            .all(|record| record.tuple.schema() == first.schema());
         Self {
-            schema: uniform.then(|| first.schema()),
-            schema_id: uniform.then(|| first.schema_id()),
             policy_hash: policy.policy_hash,
             accepted_count: policy.admission_ids.len(),
             admission_ids: policy.admission_ids.clone(),
@@ -63,6 +55,8 @@ impl CompileReport {
                 .iter()
                 .map(|record| RecordReport {
                     measurement_id: record.measurement_id.clone(),
+                    schema: record.tuple.schema(),
+                    schema_id: record.tuple.schema_id(),
                     admission_id: record.admission_id(),
                 })
                 .collect(),

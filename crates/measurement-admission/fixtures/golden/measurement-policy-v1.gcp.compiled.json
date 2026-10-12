@@ -1,6 +1,4 @@
 {
-  "schema": "seismic.gcp-tdx.rtmr1-rtmr2.v1",
-  "schema_id": "0x8ec2bafae2e27f3779142d18c29e5c2077eb38b009f5efa060d90d17d67ee133",
   "policy_hash": "0x3df8bf9da68d3f7d9b6615b5b06897876913719e3cb456afbfb40c9e02364980",
   "accepted_count": 1,
   "admission_ids": [
@@ -9,6 +7,8 @@
   "records": [
     {
       "measurement_id": "seismic-dev_2026-09-28.932757.tar.gz",
+      "schema": "seismic.gcp-tdx.rtmr1-rtmr2.v1",
+      "schema_id": "0x8ec2bafae2e27f3779142d18c29e5c2077eb38b009f5efa060d90d17d67ee133",
       "admission_id": "0x518a6a72083a7db27660a91fd8fc9733ac58eab7d37596b0b161e91cc0681674"
     }
   ],

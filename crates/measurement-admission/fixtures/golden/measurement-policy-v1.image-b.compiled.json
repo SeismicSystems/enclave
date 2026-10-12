@@ -1,6 +1,4 @@
 {
-  "schema": "seismic.azure-tdx.pcr4-pcr9-pcr11.v1",
-  "schema_id": "0x3638c716e69d8604498bdfc48902b7a798c977e5b6e2cf74586e6d609bb09684",
   "policy_hash": "0xeda04529c05d8c3581bf47dee76e155bc74585bf96ad0e8b176b3fa570886a0c",
   "accepted_count": 1,
   "admission_ids": [
@@ -9,6 +7,8 @@
   "records": [
     {
       "measurement_id": "seismic-example_second-image.vhd",
+      "schema": "seismic.azure-tdx.pcr4-pcr9-pcr11.v1",
+      "schema_id": "0x3638c716e69d8604498bdfc48902b7a798c977e5b6e2cf74586e6d609bb09684",
       "admission_id": "0x87f29d7cea83b1028506f2164761f4794ae0a5f5bb13a0f8e792e8fd1fccaa17"
     }
   ],

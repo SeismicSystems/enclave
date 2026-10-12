@@ -106,6 +106,34 @@ pub const AZURE_TDX_ATTESTATION_TYPE: &str = "azure-tdx";
 /// PCR indexes bound by the Azure TDX v1 schema, in preimage order.
 pub const AZURE_TDX_V1_PCRS: [u32; 3] = [4, 9, 11];
 
+/// One measurement register, as a policy document names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Register {
+    /// A vTPM PCR, index 0-23, holding a SHA-256 digest.
+    Pcr(u32),
+    /// A TDX RTMR, index 0-3, holding a SHA-384 digest.
+    Rtmr(u8),
+}
+
+impl Register {
+    /// Length in bytes of the digest this register holds.
+    pub const fn digest_len(self) -> usize {
+        match self {
+            Self::Pcr(_) => 32,
+            Self::Rtmr(_) => 48,
+        }
+    }
+}
+
+impl fmt::Display for Register {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Pcr(index) => write!(f, "pcr{index}"),
+            Self::Rtmr(index) => write!(f, "rtmr{index}"),
+        }
+    }
+}
+
 /// Domain-separation word for Azure TDX v1 admission preimages:
 /// `keccak256(AZURE_TDX_V1_SCHEMA)`. Pinned by a golden test.
 pub fn azure_tdx_v1_schema_id() -> B256 {
@@ -168,6 +196,9 @@ pub const GCP_TDX_V1_SCHEMA: &str = "seismic.gcp-tdx.rtmr1-rtmr2.v1";
 
 /// The `attestation_type` value whose records compile under [`GCP_TDX_V1_SCHEMA`].
 pub const GCP_TDX_ATTESTATION_TYPE: &str = "gcp-tdx";
+
+/// RTMR indexes bound by the GCP TDX v1 schema, in preimage order.
+pub const GCP_TDX_V1_RTMRS: [u8; 2] = [1, 2];
 
 /// Domain-separation word for GCP TDX v1 admission preimages: `keccak256(GCP_TDX_V1_SCHEMA)`.
 pub fn gcp_tdx_v1_schema_id() -> B256 {

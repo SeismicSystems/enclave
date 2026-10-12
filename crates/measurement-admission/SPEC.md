@@ -15,9 +15,9 @@ cover what each consumer owes the predicate, the golden vectors, and what is
 frozen.
 
 Requirement words (MUST, MUST NOT, MAY) apply to any implementation of this
-predicate, in any language. Section 3 defines the one schema v1 specifies,
-for Azure TDX guests; every other section holds for any schema, because a
-second attestation backend adds a schema name and an ID space and leaves the
+predicate, in any language. Section 3 defines the two v1 schemas, for Azure
+and GCP TDX guests; every other section holds for any schema, because a
+further attestation backend adds a schema name and an ID space and leaves the
 ID structure, the document format, the registry, and the revision lifecycle
 untouched. The reference implementation is this crate.
 
@@ -273,9 +273,9 @@ or through the deprecated scalar `expected`.
 
 ### 4.2 GCP TDX v1 records
 
-For a `gcp-tdx` record the register keys are `rtmr1` and `rtmr2`
-(case-insensitive), each a 48-byte value (96 hex characters) of bare
-lowercase hex. Any other key, or a missing one, is an error.
+A register key is an `rtmr` prefix in any case and an index 0-3 (`"rtmr1"`,
+`"RTMR1"`). A register value is exactly 96 hexadecimal characters,
+case-insensitive, with no `0x` prefix, and binds as in 4.1.
 
 ### 4.3 Normalization and mixing
 
@@ -286,8 +286,8 @@ differently, because the hash covers the exact bytes (section 6).
 Records of different attestation types may share one document. Each
 compiles under its own schema into the one accepted set, which is how a
 network spanning clouds is founded: one document, one record per image.
-The compiled report's `schema` and `schema_id` are `null` for such a
-document. Worked example, `fixtures/golden/measurement-policy-v1.mixed.json`
+The compiled report names each record's schema. Worked example,
+`fixtures/golden/measurement-policy-v1.mixed.json`
 (image A's Azure record beside the GCP record), whose two admission IDs are
 those of the two records' own documents:
 
@@ -304,17 +304,14 @@ policy hash = 0x3e03f6adb33a8458f016e5b8d318f60ec3b77d24958a515b03589cef3df82d16
 | Zero records | `Empty` |
 | `attestation_type` other than `azure-tdx` or `gcp-tdx` | `UnsupportedAttestationType` |
 | Two records with the same `measurement_id` | `DuplicateMeasurementId` |
-| An `azure-tdx` record's key that is not a PCR index 0-23 | `BadRegisterKey` |
-| Two keys that normalize to one index | `DuplicateRegister` |
+| A key that is not a register name of the record's schema (4.1, 4.2) | `BadRegisterKey` |
+| Two keys that normalize to one register | `DuplicateRegister` |
 | A register outside the schema tuple | `UnexpectedRegister` |
 | A schema register absent from the record | `MissingRegister` |
 | Both `expected` and `expected_any` on one register | `BothExpectedForms` |
 | Neither form on one register | `NoExpectedValue` |
 | An `expected_any` list whose length is not 1 | `SingleValueRequired` |
-| A value that is not 32 bytes of bare hex | `BadValue` |
-| A `gcp-tdx` record's key other than `rtmr1` or `rtmr2` | `UnexpectedGcpRegister` |
-| A `gcp-tdx` record naming `rtmr1` or `rtmr2` twice after case folding | `DuplicateGcpRegister` |
-| A `gcp-tdx` record without `rtmr1` or `rtmr2` | `MissingGcpRegister` |
+| A value that is not the register's digest length of bare hex: 32 bytes for a PCR, 48 for an RTMR | `BadValue` |
 
 A record without `measurements` is the permissive format's accept-anything
 form. It MUST fail as a missing field. An admission policy has no wildcard
@@ -681,13 +678,13 @@ specification can assert the same files.
 | `make-measure-output.image-a.json` | Raw measured-boot output for image A, with non-schema registers and the event log. |
 | `measurement-policy-v1.image-a.json` | The image-A-only document, promoted from the raw output above: revision 1. |
 | `measurement-policy-v1.json` | The two-record document: images A and B. |
-| `measurement-policy-v1.compiled.json` | Its compiled report: hashes, IDs, per-record IDs, runtime code hash, complete genesis storage. |
+| `measurement-policy-v1.compiled.json` | Its compiled report: hashes, IDs, per-record schemas and IDs, runtime code hash, complete genesis storage. |
 | `measurement-policy-v1.image-b.json` | The image-B-only document: revision 3. |
 | `measurement-policy-v1.image-b.compiled.json` | Its compiled report. |
 | `measurement-policy-v1.gcp.json` | The one-record GCP document: a live c3-standard-4 boot without a vTPM. |
 | `measurement-policy-v1.gcp.compiled.json` | Its compiled report. |
 | `measurement-policy-v1.mixed.json` | Image A's Azure record beside the GCP record: the multi-cloud shape. |
-| `measurement-policy-v1.mixed.compiled.json` | Its compiled report, with `schema` and `schema_id` null. |
+| `measurement-policy-v1.mixed.compiled.json` | Its compiled report, one schema per record. |
 
 A compiled report is deterministic: fixed field order, sorted maps,
 2-space JSON, one trailing newline. A deliberate change to any rule this
