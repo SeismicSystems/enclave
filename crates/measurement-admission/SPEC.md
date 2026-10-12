@@ -203,8 +203,10 @@ Google has endorsed: the signed golden measurement Google publishes for it,
 under its `GCE-cc-tcb-root` CA. The endorsement is fetched live, archived
 with the evidence, and re-verified on replay; a `gcp-tdx` archive without
 one fails. A live verification also requires that the quote's platform is
-in Google's confidential-host registry. Neither is part of identity: a
-firmware roll changes `mrtd` and no admission ID.
+in Google's confidential-host registry. That check has no archived form: a
+replay proves the quote came from genuine TDX hardware running Google's
+firmware, not that the hardware was Google's. Neither check is part of
+identity: a firmware roll changes `mrtd` and no admission ID.
 
 
 ## 4. Policy document
