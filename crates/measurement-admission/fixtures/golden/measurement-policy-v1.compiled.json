@@ -1,6 +1,4 @@
 {
-  "schema": "seismic.azure-tdx.pcr4-pcr9-pcr11.v1",
-  "schema_id": "0x3638c716e69d8604498bdfc48902b7a798c977e5b6e2cf74586e6d609bb09684",
   "policy_hash": "0xcb3b7821868f37653ed707a637bd2e20b1cd4b8f82e025de998a19812ac24265",
   "accepted_count": 2,
   "admission_ids": [
@@ -10,10 +8,14 @@
   "records": [
     {
       "measurement_id": "seismic-dev_2026-07-02.5c3b5e.vhd",
+      "schema": "seismic.azure-tdx.pcr4-pcr9-pcr11.v1",
+      "schema_id": "0x3638c716e69d8604498bdfc48902b7a798c977e5b6e2cf74586e6d609bb09684",
       "admission_id": "0xa010094f9c414c4acf409cace507908b032ea874a6eb85b3cb592cb79852c39f"
     },
     {
       "measurement_id": "seismic-example_second-image.vhd",
+      "schema": "seismic.azure-tdx.pcr4-pcr9-pcr11.v1",
+      "schema_id": "0x3638c716e69d8604498bdfc48902b7a798c977e5b6e2cf74586e6d609bb09684",
       "admission_id": "0x87f29d7cea83b1028506f2164761f4794ae0a5f5bb13a0f8e792e8fd1fccaa17"
     }
   ],

@@ -10,13 +10,6 @@ pub mod rpc_error;
 mod server;
 pub mod utils;
 
-/// Attestation type this build mints and verifies evidence for. Azure TDX +
-/// vTPM is the only supported type today. Both roles hold to it: the evidence
-/// this node mints for its own join, and the evidence it accepts from nodes
-/// joining after it.
-pub(crate) const ATTESTATION_TYPE: seismic_attestation::AttestationType =
-    seismic_attestation::AttestationType::AzureTdx;
-
 /// Both listeners default to loopback as the safe choice; a node binds
 /// `0.0.0.0` and the cloud firewall decides who reaches each port.
 const DEFAULT_PEER_LISTEN: &str = "127.0.0.1:7878";
@@ -27,6 +20,7 @@ const DEFAULT_RETH_RPC_URL: &str = "http://127.0.0.1:8545";
 
 use anyhow::Result;
 use clap::Parser;
+use seismic_attestation::AttestationType;
 use seismic_custodian_ipc::DEFAULT_CUSTODIAN_SOCKET_PATH;
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
@@ -79,6 +73,7 @@ pub struct Args {
 
 impl Args {
     pub async fn start(self) -> Result<()> {
+        let attestation_type = seismic_attestation::configured_attestation_type()?;
         // Quote verification's collateral fetching (attested-tls) builds
         // rustls-backed HTTP clients, which need a process-level crypto
         // provider that only the application can choose. Install it before
@@ -91,6 +86,7 @@ impl Args {
         let harvest = harvest::serve(
             listener,
             harvest::Harvest::new(
+                attestation_type,
                 harvest::SUMMIT_PUBLIC_KEYS_PATH.into(),
                 self.conf_dir.join(conf::NETWORK_MANIFEST),
                 seismic_custodian_ipc::candidate_tx_io_pk::CANDIDATE_TX_IO_PK_PATH.into(),
@@ -99,18 +95,18 @@ impl Args {
 
         tokio::select! {
             result = harvest => result,
-            result = self.run_node() => result,
+            result = self.run_node(attestation_type) => result,
         }
     }
 
     /// Everything past the harvest: the manifest, `root_key`, and the
     /// JSON-RPC server.
-    async fn run_node(self) -> Result<()> {
+    async fn run_node(self, attestation_type: AttestationType) -> Result<()> {
         let peers = conf::await_config(&self.conf_dir).await?;
 
         let addr = self.peer_listen;
         info!("Starting attestation-service JSON-RPC server on {addr}...");
 
-        server::start_server(addr, self, &peers).await
+        server::start_server(addr, self, &peers, attestation_type).await
     }
 }

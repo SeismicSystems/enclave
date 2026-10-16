@@ -1,9 +1,9 @@
-//! Fetch and verify a remote node's attestation evidence, and record the guest
-//! measurements it actually reports.
+//! Verify a node's attestation evidence and record the guest measurements it
+//! actually reports, on Azure or GCP.
 //!
 //! Unlike `seismic-attestation`'s `azure_vtpm_roundtrip`, this never touches a
-//! local TPM: it only *verifies* a remote quote. So it runs anywhere Linux runs
-//! — a container on a laptop — pointed at a node's public address, and works
+//! local TPM: it only *verifies* a quote. So it runs anywhere Linux runs, a
+//! container on a laptop, pointed at a node's public address, and works
 //! against a production image that has no shell.
 //!
 //! ```text
@@ -13,10 +13,11 @@
 //!   --out-policy /tmp/observed.json
 //! ```
 //!
-//! All 24 registers are always printed. `--out-policy` writes only the
-//! admission-schema registers (Azure v1: pcr4, pcr9, pcr11), because a policy
-//! file enforces every register it lists and must therefore match what the
-//! admission ID covers. `--pcrs` overrides the set for experiments.
+//! Every quoted register is printed: the 24 vTPM PCRs on Azure, MRTD and the
+//! four RTMRs on GCP. `--out-policy` writes the admission-schema record for
+//! the platform the evidence came from (Azure v1: pcr4, pcr9, pcr11; GCP v1:
+//! rtmr1, rtmr2) through measurement-admission's promotion, so it carries
+//! exactly the registers the admission ID covers.
 //!
 //! The manifest is only read to derive `network_id`, which is its SHA-256. When
 //! the manifest isn't on this host, pass the hash instead — verification is
@@ -40,62 +41,81 @@
 //! network fails verification.
 //!
 //! Note this reaches the node over its attestation RPC, which needs a live
-//! custodian to answer — that is, a node that has finished bootstrapping. PCRs
-//! are final long before then, so use the on-node `azure_vtpm_roundtrip` to
-//! measure a node that never got that far.
+//! custodian to answer, that is, a node that has finished bootstrapping. A
+//! node that has not been founded yet serves the founding harvest instead;
+//! save its `/v1/quote` response and verify that:
+//!
+//! ```text
+//! nonce=$(openssl rand -hex 32)
+//! curl -s "http://<node>:7879/v1/quote?nonce=$nonce" > /tmp/quote.json
+//! cargo run -p seismic-attestation-service --example capture_measurements -- \
+//!   --harvest-response /tmp/quote.json --nonce $nonce --out-policy /tmp/observed.json
+//! ```
+//!
+//! The harvest binds the evidence to the nonce and the keys the response
+//! carries, so the binding is recomputed from those.
 
 use anyhow::Context as _;
 use clap::Parser;
 use jsonrpsee::http_client::HttpClientBuilder;
 use seismic_attestation::{
-    AttestationType, NetworkId, SeismicMeasurementPolicy, VerifiedSeismicAttestation,
-    VerifyOptions,
-    bindings::{binding64_from_digest32, tx_io_binding},
+    AttestationExchangeMessage, AttestationType, NetworkId, SeismicMeasurementPolicy,
+    TdxMeasurements, VerifiedSeismicAttestation, VerifyOptions,
+    bindings::{binding64_from_digest32, founding_keys_binding, tx_io_binding},
     verify_evidence_with_policy,
 };
 use seismic_attestation_rpc::AttestationRpcClient;
+use seismic_attestation_service::harvest::QuoteResponse;
+use seismic_measurement_admission::promote_measurements;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Parser)]
-#[command(about = "Fetch, verify, and record a remote node's guest measurements")]
+#[command(about = "Verify a node's evidence and record its guest measurements")]
 struct Cli {
     /// Base URL of the node's attestation RPC, e.g. `http://<node>:7878`.
-    #[arg(long)]
-    url: String,
+    #[arg(long, required_unless_present = "harvest_response")]
+    url: Option<String>,
 
     /// Network manifest whose `network_id` the node is expected to have loaded.
     /// Used to recompute the evidence binding.
-    #[arg(long, value_name = "PATH", required_unless_present = "network_id")]
-    manifest: Option<std::path::PathBuf>,
+    #[arg(
+        long,
+        value_name = "PATH",
+        required_unless_present_any = ["network_id", "harvest_response"],
+        conflicts_with = "harvest_response"
+    )]
+    manifest: Option<PathBuf>,
 
     /// The expected `network_id` as hex, instead of `--manifest`. The id is the
     /// manifest's SHA-256, so `sha256sum network-manifest.json` produces it
     /// without having to copy the manifest to this host.
-    #[arg(long, value_name = "HEX", conflicts_with = "manifest")]
+    #[arg(long, value_name = "HEX", conflicts_with_all = ["manifest", "harvest_response"])]
     network_id: Option<String>,
 
     /// tx-io key epoch to request.
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0, conflicts_with = "harvest_response")]
     epoch: u64,
+
+    /// A founding-harvest `/v1/quote` response saved to a file, verified
+    /// instead of fetching tx-io evidence from `--url`. Needs `--nonce`.
+    #[arg(long, value_name = "PATH", requires = "nonce", conflicts_with = "url")]
+    harvest_response: Option<PathBuf>,
+
+    /// The nonce the harvest response was requested with, 32 bytes of hex.
+    #[arg(long, value_name = "HEX", requires = "harvest_response")]
+    nonce: Option<String>,
 
     /// Enforce this measurements file instead of accepting whatever the node
     /// reports. Without it, any measurements are accepted so they can be
     /// recorded — cryptographic verification still applies either way.
     #[arg(long, value_name = "PATH")]
-    measurements: Option<std::path::PathBuf>,
-
-    /// Restrict the emitted policy to these registers, e.g. `4,9,11`. Defaults
-    /// to the Azure v1 schema set.
-    ///
-    /// Do not add pcr6 or pcr10: both carry per-VM-instance data, so a policy
-    /// containing either matches exactly one node.
-    #[arg(long, value_name = "LIST")]
-    pcrs: Option<String>,
+    measurements: Option<PathBuf>,
 
     /// Write the verified registers as a measurements-file policy record, in
     /// the same shape `--measurements` consumes.
     #[arg(long, value_name = "PATH")]
-    out_policy: Option<std::path::PathBuf>,
+    out_policy: Option<PathBuf>,
 
     /// `measurement_id` for the emitted policy record.
     #[arg(long, value_name = "ID", default_value = "observed")]
@@ -110,15 +130,58 @@ struct Cli {
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    // Resolve everything that can fail on bad input before touching the
-    // network: fetching evidence costs a round-trip plus DCAP verification, so
-    // a typo in --pcrs should not be discovered on the far side of it.
-    let requested_pcrs = parse_pcr_list(args.pcrs.as_deref())?;
-    let network_id = resolve_network_id(&args).await?;
+    let (evidence, expected_binding) = match &args.harvest_response {
+        Some(path) => {
+            harvest_evidence(path, args.nonce.as_deref().expect("clap requires --nonce"))?
+        }
+        None => tx_io_evidence(&args).await?,
+    };
+
+    let attestation_type = evidence.attestation_type();
+    println!("Evidence declares {attestation_type}");
+    let policy = match &args.measurements {
+        Some(path) => SeismicMeasurementPolicy::from_file(path.clone()).await?,
+        None => SeismicMeasurementPolicy::dangerously_accept_any_for_testing(attestation_type),
+    };
+
+    println!("Verifying evidence...");
+    let verified = verify_evidence_with_policy(
+        evidence,
+        expected_binding,
+        policy,
+        VerifyOptions {
+            pccs_url: args.pccs_url,
+            ..Default::default()
+        },
+    )
+    .await?
+    .attestation;
+    println!("Verification succeeded.");
+
+    let registers = quoted_registers(&verified);
+    print_registers(&registers);
+
+    if let Some(path) = &args.out_policy {
+        write_policy_record(
+            path,
+            &args.measurement_id,
+            verified.attestation_type(),
+            &registers,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// The node's tx-io evidence over its attestation RPC, and the binding it
+/// should have used: this network, this key, this epoch.
+async fn tx_io_evidence(args: &Cli) -> anyhow::Result<(AttestationExchangeMessage, [u8; 64])> {
+    let network_id = resolve_network_id(args).await?;
     println!("Expecting network_id {network_id}");
 
-    println!("Fetching tx-io attestation evidence from {}...", args.url);
-    let client = HttpClientBuilder::default().build(&args.url)?;
+    let url = args.url.as_deref().expect("clap requires --url");
+    println!("Fetching tx-io attestation evidence from {url}...");
+    let client = HttpClientBuilder::default().build(url)?;
     let response = client
         .get_tx_io_attestation_evidence(args.epoch)
         .await
@@ -131,58 +194,45 @@ async fn main() -> anyhow::Result<()> {
         args.epoch
     );
 
-    // Recompute the binding the node should have used. This is what ties the
-    // evidence to this network, this key, and this epoch.
-    let expected_binding = binding64_from_digest32(tx_io_binding(
+    let binding = binding64_from_digest32(tx_io_binding(
         &network_id,
         &response.tx_io_pk.serialize(),
         response.epoch,
     ));
+    Ok((response.evidence, binding))
+}
 
-    let policy = match &args.measurements {
-        Some(path) => SeismicMeasurementPolicy::from_file(path.clone()).await?,
-        None => {
-            SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx)
-        }
-    };
-
-    println!("Verifying evidence...");
-    let verified = verify_evidence_with_policy(
-        response.evidence,
-        expected_binding,
-        policy,
-        VerifyOptions {
-            pccs_url: args.pccs_url,
-            ..Default::default()
-        },
-    )
-    .await?
-    .attestation;
-    println!("Verification succeeded.");
-
-    let pcrs = sorted_azure_pcrs(&verified)
-        .ok_or_else(|| anyhow::anyhow!("expected an Azure TDX attestation, got {verified:?}"))?;
-    print_pcrs(&pcrs);
-
-    if let Some(path) = &args.out_policy {
-        let selected = select_pcrs(&pcrs, &requested_pcrs)?;
-        write_policy_record(path, &args.measurement_id, &selected).await?;
-    }
-
-    Ok(())
+/// A saved founding-harvest response, and the binding the harvest put in
+/// the quote: the nonce and the three keys the response carries.
+fn harvest_evidence(
+    path: &Path,
+    nonce: &str,
+) -> anyhow::Result<(AttestationExchangeMessage, [u8; 64])> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let response: QuoteResponse = serde_json::from_slice(&bytes)
+        .with_context(|| format!("{} is not a /v1/quote response", path.display()))?;
+    let nonce: [u8; 32] = decode_hex("--nonce", nonce)?;
+    let node_pk: [u8; 32] = decode_hex("node_public_key", &response.node_public_key)?;
+    let consensus_pk: [u8; 48] =
+        decode_hex("consensus_public_key", &response.consensus_public_key)?;
+    let candidate_tx_io_pk: [u8; 33] = decode_hex(
+        "candidate_tx_io_public_key",
+        &response.candidate_tx_io_public_key,
+    )?;
+    let binding = binding64_from_digest32(founding_keys_binding(
+        &nonce,
+        &node_pk,
+        &consensus_pk,
+        &candidate_tx_io_pk,
+    ));
+    Ok((response.evidence, binding))
 }
 
 /// The `network_id` the node's evidence must be bound to, from either the
 /// manifest itself or its already-computed hash.
 async fn resolve_network_id(args: &Cli) -> anyhow::Result<NetworkId> {
     if let Some(hex_id) = &args.network_id {
-        let bytes: [u8; 32] = hex::decode(hex_id.trim_start_matches("0x"))
-            .context("--network-id is not valid hex")?
-            .try_into()
-            .map_err(|bytes: Vec<u8>| {
-                anyhow::anyhow!("--network-id must be 32 bytes, got {}", bytes.len())
-            })?;
-        return Ok(NetworkId::from_bytes(bytes));
+        return Ok(NetworkId::from_bytes(decode_hex("--network-id", hex_id)?));
     }
 
     let path = args
@@ -195,112 +245,97 @@ async fn resolve_network_id(args: &Cli) -> anyhow::Result<NetworkId> {
     Ok(NetworkId::from_manifest_bytes(&bytes))
 }
 
-/// Azure PCRs as a `BTreeMap`, so output is ordered and diffable across nodes,
-/// boots, and builds. The backend hands back a `HashMap`, whose iteration order
-/// is not stable.
-fn sorted_azure_pcrs(verified: &VerifiedSeismicAttestation) -> Option<BTreeMap<u32, [u8; 32]>> {
+fn decode_hex<const N: usize>(field: &str, value: &str) -> anyhow::Result<[u8; N]> {
+    hex::decode(value.trim_start_matches("0x"))
+        .with_context(|| format!("{field} is not valid hex"))?
+        .try_into()
+        .map_err(|bytes: Vec<u8>| anyhow::anyhow!("{field} must be {N} bytes, got {}", bytes.len()))
+}
+
+/// Every register the quote attests, named as a policy document spells it,
+/// in register order so output is diffable across nodes, boots, and builds.
+fn quoted_registers(verified: &VerifiedSeismicAttestation) -> Vec<(String, Vec<u8>)> {
     match verified {
-        VerifiedSeismicAttestation::AzureTdx(azure) => Some(
-            azure
-                .guest_measurements
-                .pcrs
-                .iter()
-                .map(|(index, value)| (*index, *value))
-                .collect(),
-        ),
-        _ => None,
+        VerifiedSeismicAttestation::AzureTdx(azure) => azure
+            .guest_measurements
+            .pcrs
+            .iter()
+            .collect::<BTreeMap<_, _>>()
+            .into_iter()
+            .map(|(index, value)| (format!("pcr{index}"), value.to_vec()))
+            .collect(),
+        VerifiedSeismicAttestation::DcapTdx(tdx) | VerifiedSeismicAttestation::GcpTdx(tdx) => {
+            let TdxMeasurements {
+                mrtd,
+                rtmr0,
+                rtmr1,
+                rtmr2,
+                rtmr3,
+            } = &tdx.measurements;
+            [
+                ("mrtd", mrtd),
+                ("rtmr0", rtmr0),
+                ("rtmr1", rtmr1),
+                ("rtmr2", rtmr2),
+                ("rtmr3", rtmr3),
+            ]
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value.to_vec()))
+            .collect()
+        }
     }
 }
 
-fn print_pcrs(pcrs: &BTreeMap<u32, [u8; 32]>) {
-    println!("\nQuoted PCRs (SHA-256), {} registers:", pcrs.len());
-    for (index, value) in pcrs {
-        let marker = if value == &[0u8; 32] { "  (zero)" } else { "" };
-        println!("  pcr{index:<2} = {}{marker}", hex::encode(value));
+fn print_registers(registers: &[(String, Vec<u8>)]) {
+    println!("\nQuoted registers, {}:", registers.len());
+    for (name, value) in registers {
+        let marker = if value.iter().all(|byte| *byte == 0) {
+            "  (zero)"
+        } else if value.iter().all(|byte| *byte == 0xff) {
+            "  (all-ones: uninitialised, not a measurement)"
+        } else {
+            ""
+        };
+        println!("  {name:<6} = {}{marker}", hex::encode(value));
     }
     println!();
 }
 
-/// Registers bound by admission schema `seismic.azure-tdx.pcr4-pcr9-pcr11.v1`.
-const AZURE_V1_SCHEMA_PCRS: [u32; 3] = [4, 9, 11];
-
-/// Which registers to emit: an explicit `4,9,11`-style list, or the Azure v1
-/// schema set by default.
-///
-/// The default is the *schema*, deliberately not a "whatever is non-zero"
-/// heuristic. A policy file enforces every register it lists, so it must
-/// contain exactly the registers the admission ID covers, or the joiner and
-/// the responder end up checking different things. Selecting by observed
-/// value would also sweep in registers that cannot appear in a policy at all:
-/// pcr6 and pcr10 differ per VM instance, and pcr17-22 read all-ones rather
-/// than zero because they are uninitialised DRTM registers.
-///
-/// Pure, so it can run before any network work.
-fn parse_pcr_list(requested: Option<&str>) -> anyhow::Result<Vec<u32>> {
-    let Some(list) = requested else {
-        return Ok(AZURE_V1_SCHEMA_PCRS.to_vec());
-    };
-
-    list.split(',')
-        .map(|entry| {
-            let entry = entry.trim();
-            let index: u32 = entry
-                .trim_start_matches("pcr")
-                .parse()
-                .map_err(|_| anyhow::anyhow!("--pcrs entry is not a register index: {entry}"))?;
-            anyhow::ensure!(index <= 23, "--pcrs entry is out of range: pcr{index}");
-            Ok(index)
-        })
-        .collect()
-}
-
-/// Look up the selected registers in a verified quote.
-fn select_pcrs(
-    pcrs: &BTreeMap<u32, [u8; 32]>,
-    indices: &[u32],
-) -> anyhow::Result<BTreeMap<u32, [u8; 32]>> {
-    indices
-        .iter()
-        .copied()
-        .map(|index| {
-            let value = *pcrs
-                .get(&index)
-                .ok_or_else(|| anyhow::anyhow!("pcr{index} is not present in the quote"))?;
-            if value == [0u8; 32] {
-                eprintln!("warning: pcr{index} is all-zero — nothing extended it");
-            } else if value == [0xffu8; 32] {
-                eprintln!("warning: pcr{index} is all-ones — uninitialised, not a measurement");
-            }
-            Ok((index, value))
-        })
-        .collect()
-}
-
-async fn write_policy_record(
-    path: &std::path::Path,
+/// Promote the quoted registers into the platform's admission-schema record,
+/// the same way `make measure` output is promoted at image release.
+fn write_policy_record(
+    path: &Path,
     measurement_id: &str,
-    pcrs: &BTreeMap<u32, [u8; 32]>,
+    attestation_type: AttestationType,
+    registers: &[(String, Vec<u8>)],
 ) -> anyhow::Result<()> {
-    let measurements: serde_json::Map<String, serde_json::Value> = pcrs
+    // MRTD identifies the firmware, not the guest image; it is no policy key.
+    let measurements: serde_json::Map<String, serde_json::Value> = registers
         .iter()
-        .map(|(index, value)| {
+        .filter(|(name, _)| name.as_str() != "mrtd")
+        .map(|(name, value)| {
             (
-                format!("pcr{index}"),
-                serde_json::json!({ "expected_any": [hex::encode(value)] }),
+                name.clone(),
+                serde_json::json!({ "expected": hex::encode(value) }),
             )
         })
         .collect();
-
-    let record = serde_json::json!([{
+    let raw = serde_json::json!({
+        "attestation_type": attestation_type.as_str(),
         "measurement_id": measurement_id,
-        "attestation_type": AttestationType::AzureTdx.as_str(),
         "measurements": measurements,
-    }]);
+    });
+    let promoted =
+        promote_measurements(&serde_json::to_vec(&raw)?, None, None).with_context(|| {
+            format!("promoting the {attestation_type} registers to a policy record")
+        })?;
+    let bound = serde_json::from_slice::<serde_json::Value>(&promoted)?[0]["measurements"]
+        .as_object()
+        .map_or(0, |map| map.len());
 
-    tokio::fs::write(path, serde_json::to_vec_pretty(&record)?).await?;
+    std::fs::write(path, &promoted).with_context(|| format!("writing {}", path.display()))?;
     println!(
-        "Wrote observed policy record ({} registers) to {}",
-        pcrs.len(),
+        "Wrote the {attestation_type} policy record ({bound} registers) to {}",
         path.display()
     );
     Ok(())

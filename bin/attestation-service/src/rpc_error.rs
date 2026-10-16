@@ -23,7 +23,7 @@ use crate::{
 };
 use jsonrpsee::types::{ErrorCode, ErrorObjectOwned};
 use seismic_attestation::{
-    AttestationError, BackendAttestationError, DcapVerificationError, MaaError,
+    AttestationError, BackendAttestationError, DcapVerificationError, GcpEndorsementError, MaaError,
 };
 use std::fmt::Debug;
 use tracing::{error, warn};
@@ -201,6 +201,9 @@ fn verification_failure_kind(error: &AttestationError) -> Option<DenialKind> {
         AttestationError::PolicyFormat(_)
         | AttestationError::MeasurementTypeMismatch { .. }
         | AttestationError::NoFetchedDcapCollateral => None,
+        // A missing archived endorsement is an archive defect, never a live
+        // denial.
+        AttestationError::GcpFirmwareEndorsementMissing => None,
     }
 }
 
@@ -270,6 +273,14 @@ fn backend_failure_kind(backend: &BackendAttestationError) -> Option<DenialKind>
             | MaaError::JwkConversion
             | MaaError::CannotExtractMeasurementsFromQuote,
         ) => Some(DenialKind::RequesterEvidenceUnusable),
+        // Google's endorsement of the requester's firmware: only its verdict
+        // on the MRTD is about the requester. The bytes are Google's, fetched
+        // by this responder, so a failed fetch, a malformed document or a
+        // certificate that does not hold says nothing about the evidence.
+        BackendAttestationError::GcpFirmwareEndorsement(
+            GcpEndorsementError::MrtdNotEndorsed(_) | GcpEndorsementError::NoTdx,
+        ) => Some(DenialKind::RequesterEvidenceUnusable),
+        BackendAttestationError::GcpFirmwareEndorsement(_) => None,
         _ => None,
     }
 }
@@ -470,6 +481,36 @@ mod tests {
                 "an unattributed failure must not arrive as a refusal"
             );
         }
+    }
+
+    /// Google's firmware endorsement: only an MRTD the endorsement does not
+    /// name is the requester's firmware. The bytes are Google's, fetched by
+    /// the responder, so a fetch that failed or an endorsement that does not
+    /// hold says nothing about the evidence.
+    #[test]
+    fn the_firmware_endorsement_attributes_only_an_unendorsed_mrtd() {
+        let endorsement = |source| {
+            AttestationError::Backend(BackendAttestationError::GcpFirmwareEndorsement(source))
+        };
+        assert_eq!(
+            verification_failure_kind(&endorsement(GcpEndorsementError::MrtdNotEndorsed(
+                "ab".into()
+            ))),
+            Some(DenialKind::RequesterEvidenceUnusable)
+        );
+        for unattributed in [
+            GcpEndorsementError::Fetch("offline".into()),
+            GcpEndorsementError::Unavailable("offline".into()),
+            GcpEndorsementError::Signature,
+            GcpEndorsementError::CertNotValidAt,
+            GcpEndorsementError::CertChain,
+        ] {
+            assert_eq!(verification_failure_kind(&endorsement(unattributed)), None);
+        }
+        assert_eq!(
+            verification_failure_kind(&AttestationError::GcpFirmwareEndorsementMissing),
+            None
+        );
     }
 
     /// The step is what attributes, not the error inside it: the very variant

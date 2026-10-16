@@ -6,7 +6,7 @@
 //! key — see [`crate::join`].
 
 use crate::{
-    ATTESTATION_TYPE, Args,
+    Args,
     admission::RegistryAdmission,
     api::{AdmissionChainStatus, LuksProvisioningStatus, NodeStatusRpcServer},
     bootstrap::{RootKeyRequest, answer_root_key_request},
@@ -24,7 +24,7 @@ use jsonrpsee::{
 };
 use secp256k1::PublicKey;
 use seismic_attestation::{
-    NetworkId,
+    AttestationType, NetworkId,
     bindings::{binding64_from_digest32, deploy_verification_binding, tx_io_binding},
     generate_evidence,
 };
@@ -48,6 +48,8 @@ pub struct AttestationService {
     /// Admission gate for joining peers: their verified measurements must be
     /// accepted by the on-chain `MeasurementRegistry`. See [`crate::admission`].
     admission: RegistryAdmission,
+    /// The platform this node mints evidence as and asks peers to prove.
+    attestation_type: AttestationType,
 }
 
 impl AttestationService {
@@ -55,11 +57,13 @@ impl AttestationService {
         custodian_socket: PathBuf,
         network_id: NetworkId,
         admission: RegistryAdmission,
+        attestation_type: AttestationType,
     ) -> Self {
         Self {
             custodian_socket,
             network_id,
             admission,
+            attestation_type,
         }
     }
 
@@ -111,7 +115,7 @@ impl AttestationRpcServer for AttestationService {
             &self.network_id,
             &mut custodian,
             &self.admission,
-            ATTESTATION_TYPE,
+            self.attestation_type,
         )
         .await
         .map_err(root_key_answer_rpc_error)?;
@@ -137,7 +141,7 @@ impl AttestationRpcServer for AttestationService {
             .await
             .map_err(|error| internal_rpc_error("fetching tx-io public key", error))?;
         let binding = tx_io_binding(&self.network_id, &tx_io_pk.pk, epoch);
-        let evidence = generate_evidence(ATTESTATION_TYPE, binding64_from_digest32(binding))
+        let evidence = generate_evidence(self.attestation_type, binding64_from_digest32(binding))
             .map_err(|error| internal_rpc_error("generating tx-io evidence", error))?;
 
         Ok(TxIoAttestationResponse {
@@ -158,16 +162,21 @@ impl AttestationRpcServer for AttestationService {
         deployment_nonce: [u8; 32],
     ) -> RpcResult<DeployVerificationResponse> {
         let binding = deploy_verification_binding(&self.network_id, &deployment_nonce);
-        let evidence = generate_evidence(ATTESTATION_TYPE, binding64_from_digest32(binding))
+        let evidence = generate_evidence(self.attestation_type, binding64_from_digest32(binding))
             .map_err(|error| {
-                internal_rpc_error("generating deploy-verification evidence", error)
-            })?;
+            internal_rpc_error("generating deploy-verification evidence", error)
+        })?;
 
         Ok(DeployVerificationResponse { evidence })
     }
 }
 
-pub async fn start_server(addr: SocketAddr, args: Args, peers: &[String]) -> anyhow::Result<()> {
+pub async fn start_server(
+    addr: SocketAddr,
+    args: Args,
+    peers: &[String],
+    attestation_type: AttestationType,
+) -> anyhow::Result<()> {
     // Derive this node's network identity from the manifest tdx-init dropped on
     // tmpfs. Fatal if absent/malformed: without it every attestation binding is
     // unscoped, so we refuse to serve rather than fall back to an unbound quote.
@@ -202,7 +211,7 @@ pub async fn start_server(addr: SocketAddr, args: Args, peers: &[String]) -> any
     // no network listener; every key operation goes through its Unix socket.
     // Serve only once the custodian holds the root key, so peers and reth
     // never observe a listener whose key operations cannot succeed yet.
-    ensure_root_key_present(&args.custodian_socket, peers, &network_id).await?;
+    ensure_root_key_present(&args.custodian_socket, peers, &network_id, attestation_type).await?;
 
     // Retire the custodian's founding policy at block 1, whether or not a join
     // arrives to see it. A custodian that did not mint the root key never
@@ -219,7 +228,12 @@ pub async fn start_server(addr: SocketAddr, args: Args, peers: &[String]) -> any
 
     let server = ServerBuilder::default().build(addr).await?;
 
-    let service = AttestationService::new(args.custodian_socket, network_id, admission);
+    let service = AttestationService::new(
+        args.custodian_socket,
+        network_id,
+        admission,
+        attestation_type,
+    );
     let mut rpc = NodeStatusRpcServer::into_rpc(service.clone());
     rpc.merge(AttestationRpcServer::into_rpc(service))?;
     let handle = server.start(rpc);
