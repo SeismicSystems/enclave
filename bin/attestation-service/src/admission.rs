@@ -570,11 +570,6 @@ mod tests {
         block
     }
 
-    /// Fabricated headers carry unix-second timestamps, the unit real blocks
-    /// have (the sub-second part is in `extraData`, which the gate ignores).
-    /// The fresh and stale tests below hold the gate to that unit: a gate
-    /// reading these as milliseconds would deny every fresh block as decades
-    /// stale.
     fn now_secs() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
