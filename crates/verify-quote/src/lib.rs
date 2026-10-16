@@ -525,12 +525,12 @@ mod tests {
     const FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-v1.json");
 
     /// The same for GCP TDX: cohort `tmp-multicloud` on image
-    /// `seismic-dev_2026-09-28.2f3cd0.tar.gz`, a c3-standard-4 with the vTPM
-    /// off, harvested 2026-10-01T04:14:33Z and torn down the same day, with
+    /// `seismic-dev_2026-09-30.596f15.tar.gz`, a c3-standard-4 with the vTPM
+    /// off, harvested 2026-10-16T19:35:26Z from a throwaway network, with
     /// Google's endorsement of its firmware as published for that MRTD.
     const GCP_FOUNDING_ARCHIVE: &str = include_str!("../fixtures/founding-archive-gcp-v1.json");
     const GCP_FOUNDING_POLICY: &str = include_str!("../fixtures/founding-policy-gcp-v1.json");
-    const GCP_FOUNDING_VERIFIED_AT: u64 = 1790873673;
+    const GCP_FOUNDING_VERIFIED_AT: u64 = 1792179326;
 
     /// How many registers the GCP TDX v1 admission schema
     /// (`seismic.gcp-tdx.rtmr1-rtmr2.v1`) pins.
@@ -764,7 +764,6 @@ mod tests {
     /// The GCP founding verifies offline the same way, and the policy's two
     /// registers come back with the values it pinned.
     #[test]
-    #[ignore = "the committed GCP archive has no candidate_tx_io_public_key; recapture it from a mint-first GCP founding"]
     fn a_real_gcp_founding_reverifies_offline_from_its_archive() {
         let archive = gcp_founding_archive();
         assert_eq!(archive.bundle.verified_at, GCP_FOUNDING_VERIFIED_AT);
@@ -784,7 +783,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the committed GCP archive has no candidate_tx_io_public_key; recapture it from a mint-first GCP founding"]
     fn the_committed_gcp_archive_is_canonical() {
         assert_eq!(
             archive::render(&gcp_founding_archive()).unwrap(),
@@ -797,7 +795,6 @@ mod tests {
     /// does not hold, the replay refuses the archive even though the quote
     /// itself verifies.
     #[test]
-    #[ignore = "the committed GCP archive has no candidate_tx_io_public_key; recapture it from a mint-first GCP founding"]
     fn a_gcp_archive_is_refused_without_a_holding_firmware_endorsement() {
         let unendorsed = mutated_gcp_archive(|document| {
             document
@@ -822,7 +819,7 @@ mod tests {
         let error = verify_archived_harvest(tampered, policy(GCP_FOUNDING_POLICY))
             .expect_err("a GCP archive whose endorsement does not hold must not verify");
         assert!(
-            format!("{error:#}").contains("not a build Google has endorsed"),
+            format!("{error:#}").contains("endorsement signature does not verify"),
             "{error:#}"
         );
 
