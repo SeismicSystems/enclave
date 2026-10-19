@@ -169,8 +169,8 @@ pub struct SummitManifest {
 /// The TEE admission policy: which measurements may join, and who decides.
 ///
 /// The same measurement set exists in two representations: the bootstrap
-/// artifact pinned by `bootstrap_policy_hash` (the joiner's source — readable
-/// before it can read any chain state) and `MeasurementRegistry` genesis storage
+/// artifact pinned by `bootstrap_policy_hash` (the deploy tools' source,
+/// readable before any chain exists) and `MeasurementRegistry` genesis storage
 /// (the responder's source). Their consistency at genesis is a deploy-time
 /// validation; afterwards the contract carries the live policy while the
 /// artifact stays frozen.

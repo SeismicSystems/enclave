@@ -28,9 +28,9 @@
 //! synthetic values no real quote can match (the runner's image is the
 //! unknown tuple). Two dev-miner behaviors shape the fixture: `finalized` is
 //! served from block 0 but stays on the genesis block until the chain is
-//! ~64 blocks deep, so the genesis timestamp is stamped to now — in
-//! milliseconds, the chain's timestamp convention — to keep that view inside
-//! the freshness bound; and at block 0 a minting responder admits on the
+//! ~64 blocks deep, so the genesis timestamp is stamped to now — in unix
+//! seconds, the header's timestamp unit — to keep that view inside the
+//! freshness bound; and at block 0 a minting responder admits on the
 //! founding policy with no freshness check, so every rejection scenario first
 //! waits for the chain to advance.
 //!
@@ -394,7 +394,7 @@ fn synthetic_pcrs() -> HashMap<u32, [u8; 32]> {
 
 /// Compile a one-record policy from `pcrs`, seed the committed genesis
 /// template's registry account with its storage, stamp the genesis timestamp
-/// to now (milliseconds, the chain's convention — this is what keeps the
+/// to now (unix seconds, the header's timestamp unit — this is what keeps the
 /// dev miner's genesis-pinned finalized view inside the freshness bound),
 /// and boot `seismic-reth` on the result.
 fn launch_seeded_reth(measurement_id: &str, pcrs: &HashMap<u32, [u8; 32]>) -> RethNode {
@@ -446,7 +446,7 @@ fn launch_seeded_reth(measurement_id: &str, pcrs: &HashMap<u32, [u8; 32]>) -> Re
         })
         .collect();
     registry_account["storage"] = serde_json::Value::Object(storage);
-    genesis["timestamp"] = serde_json::Value::from(format!("{:#x}", now_millis()));
+    genesis["timestamp"] = serde_json::Value::from(format!("{:#x}", now_secs()));
 
     let http_port = free_port();
     let dir = env::temp_dir().join(format!("attestation-admission-reth-{http_port}"));
@@ -534,11 +534,11 @@ fn free_port() -> u16 {
         .port()
 }
 
-fn now_millis() -> u64 {
+fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock after epoch")
-        .as_millis() as u64
+        .as_secs()
 }
 
 /// A running dev node; the process and its scratch directory live exactly as
@@ -670,7 +670,7 @@ async fn wait_finalized_older_than(provider: &RootProvider, age: Duration) {
             .expect("finalized query")
             .expect("dev node serves a finalized block");
         let observed =
-            Duration::from_millis(now_millis().saturating_sub(finalized.header.inner.timestamp));
+            Duration::from_secs(now_secs().saturating_sub(finalized.header.inner.timestamp));
         if observed >= age {
             return;
         }

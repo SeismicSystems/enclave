@@ -72,12 +72,12 @@ pub async fn spawn_accepting_registry() -> String {
                 "earliest" => block.header.hash = genesis_hash,
                 "latest" | "finalized" => {
                     block.header.inner.number = 1;
-                    // Milliseconds, like real Seismic headers: the freshness
+                    // Unix seconds, like real Seismic headers: the freshness
                     // gate reads the timestamp in that unit.
                     block.header.inner.timestamp = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .expect("system clock after epoch")
-                        .as_millis() as u64;
+                        .as_secs();
                 }
                 other => {
                     return Err(jsonrpsee::types::ErrorObjectOwned::owned(

@@ -272,14 +272,15 @@ impl RegistryAdmission {
         }
 
         let finalized = self.block_by_tag(BlockNumberOrTag::Finalized).await?;
-        // Seismic header timestamps are milliseconds: summit proposes payload
-        // timestamps in milliseconds and reth serves them verbatim.
-        let now_millis = SystemTime::now()
+        // Seismic headers are stock Ethereum headers: `timestamp` is unix
+        // seconds, and the sub-second part lives in the first two bytes of
+        // `extraData`. A 60-second bound has no use for that part, so the
+        // age is compared in whole seconds.
+        let now_secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() as u64;
-        let age =
-            Duration::from_millis(now_millis.saturating_sub(finalized.header.inner.timestamp));
+            .as_secs();
+        let age = Duration::from_secs(now_secs.saturating_sub(finalized.header.inner.timestamp));
         if age > self.max_policy_age {
             return Err(AdmissionDenial::ChainStale {
                 number: finalized.header.inner.number,
@@ -600,14 +601,11 @@ mod tests {
         block
     }
 
-    /// Fabricated headers carry millisecond timestamps, the unit real blocks
-    /// have. The stale test below is what holds the gate to that unit: a gate
-    /// reading these as seconds would see every one of them as age zero.
-    fn now_millis() -> u64 {
+    fn now_secs() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock after epoch")
-            .as_millis() as u64
+            .as_secs()
     }
 
     /// Queue responses for the three chain reads `admit` issues before the
@@ -618,9 +616,9 @@ mod tests {
     /// finalized hash) is proven by
     /// `policy_read_is_pinned_to_the_fresh_finalized_block`.
     fn push_fresh_chain(asserter: &Asserter) {
-        asserter.push_success(&rpc_block(7, now_millis()));
+        asserter.push_success(&rpc_block(7, now_secs()));
         asserter.push_success(&rpc_block(0, 1_000));
-        asserter.push_success(&rpc_block(6, now_millis()));
+        asserter.push_success(&rpc_block(6, now_secs()));
     }
 
     /// A parameter-checking reth stand-in: serves `latest`, `earliest` and
@@ -736,9 +734,9 @@ mod tests {
         // finalized tag, and pins the registry query to the block it
         // freshness-checked.
         let url = spawn_tag_checking_reth(
-            rpc_block(7, now_millis()),
+            rpc_block(7, now_secs()),
             rpc_block(0, 1_000),
-            rpc_block(6, now_millis()),
+            rpc_block(6, now_secs()),
         )
         .await;
         let admission = RegistryAdmission::new(
@@ -823,9 +821,9 @@ mod tests {
     async fn stale_finalized_view_is_denied() {
         let asserter = Asserter::new();
         for _ in 0..DECIDE_ATTEMPTS {
-            asserter.push_success(&rpc_block(7, now_millis()));
+            asserter.push_success(&rpc_block(7, now_secs()));
             asserter.push_success(&rpc_block(0, 1_000));
-            asserter.push_success(&rpc_block(6, now_millis() - 3_600_000));
+            asserter.push_success(&rpc_block(6, now_secs() - 3_600));
         }
         let admission = mocked_registry(&asserter);
 
@@ -842,7 +840,7 @@ mod tests {
         // forkchoice update; the mock's null response covers the same branch.
         let asserter = Asserter::new();
         for _ in 0..DECIDE_ATTEMPTS {
-            asserter.push_success(&rpc_block(7, now_millis()));
+            asserter.push_success(&rpc_block(7, now_secs()));
             asserter.push_success(&rpc_block(0, 1_000));
             asserter.push_success(&serde_json::Value::Null);
         }
@@ -994,7 +992,7 @@ mod tests {
     async fn founding_policy_stays_retired_after_progress() {
         let custodian = serve_custodian(KeyOrigin::Minted);
         let watched = Asserter::new();
-        watched.push_success(&rpc_block(7, now_millis()));
+        watched.push_success(&rpc_block(7, now_secs()));
         watched.push_success(&rpc_block(0, 1_000));
         mocked_registry(&watched)
             .retire_founding_policy_past_block_zero(&custodian.socket)
@@ -1048,7 +1046,7 @@ mod tests {
         let asserter = Asserter::new();
         // One poll still at genesis, then one past it on the pinned chain.
         asserter.push_success(&rpc_block(0, 1_000));
-        asserter.push_success(&rpc_block(1, now_millis()));
+        asserter.push_success(&rpc_block(1, now_secs()));
         asserter.push_success(&rpc_block(0, 1_000));
 
         mocked_registry(&asserter)
@@ -1071,7 +1069,7 @@ mod tests {
         // mismatch, so this also pins the denial as final and as taken before
         // the registry is consulted.
         let asserter = Asserter::new();
-        asserter.push_success(&rpc_block(7, now_millis()));
+        asserter.push_success(&rpc_block(7, now_secs()));
         asserter.push_success(&foreign_block(0, 1_000));
         let admission = mocked_registry(&asserter);
 
@@ -1095,7 +1093,7 @@ mod tests {
         // The founding policy is the one branch that admits on an arbitrarily
         // old timestamp, so it is the branch a forged genesis aims at.
         let asserter = Asserter::new();
-        asserter.push_success(&foreign_block(0, now_millis()));
+        asserter.push_success(&foreign_block(0, now_secs()));
         let admission = mocked_registry(&asserter);
 
         let error = admission
@@ -1131,7 +1129,7 @@ mod tests {
         // One response and no more: the status is a single block-0 read, so it
         // cannot touch the registry.
         let asserter = Asserter::new();
-        asserter.push_success(&foreign_block(0, now_millis()));
+        asserter.push_success(&foreign_block(0, now_secs()));
         let admission = mocked_registry(&asserter);
 
         // Both hashes, because the operator's next move is comparing the chain
