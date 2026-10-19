@@ -64,6 +64,7 @@ struct Args {
 }
 
 fn main() -> Result<()> {
+    forbid_dumps().context("marking the process non-dumpable")?;
     init_tracing();
     let args = Args::parse();
 
@@ -98,6 +99,28 @@ fn main() -> Result<()> {
     unreachable!("the custodian accept loop never returns");
 }
 
+/// Defense in depth: nothing dumps the custodian's memory today, but this
+/// keeps the root key out of any core dump whatever the image's core handling
+/// becomes, and out of reach of other processes running as the custodian user.
+/// A non-dumpable process writes no core, and its `/proc/<pid>/mem` and ptrace
+/// need `CAP_SYS_PTRACE`.
+#[cfg(target_os = "linux")]
+fn forbid_dumps() -> std::io::Result<()> {
+    // SAFETY: PR_SET_DUMPABLE takes an integer argument and touches no caller
+    // memory.
+    let rc = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// No `prctl` on dev machines; production is Linux.
+#[cfg(not(target_os = "linux"))]
+fn forbid_dumps() -> std::io::Result<()> {
+    Ok(())
+}
+
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::fmt().with_env_filter(filter).init();
@@ -111,5 +134,14 @@ mod tests {
     #[test]
     fn args_parse() {
         Args::command().debug_assert();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn forbid_dumps_clears_the_dumpable_flag() {
+        forbid_dumps().unwrap();
+        // SAFETY: PR_GET_DUMPABLE takes no arguments and touches no caller
+        // memory.
+        assert_eq!(unsafe { libc::prctl(libc::PR_GET_DUMPABLE) }, 0);
     }
 }
