@@ -5,7 +5,9 @@
 //! identical bytes. Any intentional change to the derivation must regenerate
 //! the compiled reports deliberately.
 
-use seismic_measurement_admission::{CompileReport, compile_policy, promote_measurements};
+use seismic_measurement_admission::{
+    AZURE_TDX_V1_SCHEMA, CompileReport, GCP_TDX_V1_SCHEMA, compile_policy, promote_measurements,
+};
 
 const POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.json");
 const COMPILED: &str = include_str!("../fixtures/golden/measurement-policy-v1.compiled.json");
@@ -17,6 +19,35 @@ const IMAGE_B_POLICY: &[u8] =
     include_bytes!("../fixtures/golden/measurement-policy-v1.image-b.json");
 const IMAGE_B_COMPILED: &str =
     include_str!("../fixtures/golden/measurement-policy-v1.image-b.compiled.json");
+
+const GCP_POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.gcp.json");
+const GCP_COMPILED: &str =
+    include_str!("../fixtures/golden/measurement-policy-v1.gcp.compiled.json");
+const MIXED_POLICY: &[u8] = include_bytes!("../fixtures/golden/measurement-policy-v1.mixed.json");
+const MIXED_COMPILED: &str =
+    include_str!("../fixtures/golden/measurement-policy-v1.mixed.compiled.json");
+
+/// The multi-cloud document: image A's Azure record beside the GCP record,
+/// each under its own schema, one accepted set.
+#[test]
+fn mixed_fixture_compiles_to_committed_report() {
+    let compiled = compile_policy(MIXED_POLICY).expect("mixed fixture compiles");
+    let report = CompileReport::new(&compiled);
+    assert_eq!(report.records[0].schema, AZURE_TDX_V1_SCHEMA);
+    assert_eq!(report.records[1].schema, GCP_TDX_V1_SCHEMA);
+    assert_eq!(report.to_json(), MIXED_COMPILED);
+    let azure = compile_policy(IMAGE_A_POLICY).unwrap().admission_ids;
+    let gcp = compile_policy(GCP_POLICY).unwrap().admission_ids;
+    let mut both = [azure, gcp].concat();
+    both.sort();
+    assert_eq!(compiled.admission_ids, both);
+}
+
+#[test]
+fn gcp_fixture_compiles_to_committed_report() {
+    let compiled = compile_policy(GCP_POLICY).expect("gcp fixture compiles");
+    assert_eq!(CompileReport::new(&compiled).to_json(), GCP_COMPILED);
+}
 
 #[test]
 fn fixture_compiles_to_committed_report() {

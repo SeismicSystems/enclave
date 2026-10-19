@@ -37,14 +37,12 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
 use seismic_attestation::bindings::{binding64_from_digest32, founding_keys_binding};
-use seismic_attestation::{AttestationExchangeMessage, generate_evidence};
+use seismic_attestation::{AttestationExchangeMessage, AttestationType, generate_evidence};
 use seismic_custodian_ipc::candidate_tx_io_pk;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::net::TcpListener;
-
-use crate::ATTESTATION_TYPE;
 
 /// Where the image's summit setup units write the node's summit public keys,
 /// as `summit keys show --json` prints them.
@@ -132,6 +130,7 @@ impl IntoResponse for HarvestError {
 }
 
 pub(crate) struct Harvest {
+    attestation_type: AttestationType,
     summit_public_keys_path: PathBuf,
     manifest_path: PathBuf,
     candidate_tx_io_pk_path: PathBuf,
@@ -142,11 +141,13 @@ pub(crate) struct Harvest {
 
 impl Harvest {
     pub(crate) fn new(
+        attestation_type: AttestationType,
         summit_public_keys_path: PathBuf,
         manifest_path: PathBuf,
         candidate_tx_io_pk_path: PathBuf,
     ) -> Self {
         Self {
+            attestation_type,
             summit_public_keys_path,
             manifest_path,
             candidate_tx_io_pk_path,
@@ -214,8 +215,9 @@ async fn get_quote(
     // Evidence generation blocks for seconds (NV write, fixed 3 s sleep,
     // IMDS round-trip), so it runs off the async runtime, one at a time.
     let _gate = harvest.quote_gate.lock().await;
+    let attestation_type = harvest.attestation_type;
     let evidence =
-        tokio::task::spawn_blocking(move || generate_evidence(ATTESTATION_TYPE, binding))
+        tokio::task::spawn_blocking(move || generate_evidence(attestation_type, binding))
             .await
             .map_err(|e| HarvestError::Attestation(format!("evidence task panicked: {e}")))?
             .map_err(|e| HarvestError::Attestation(e.to_string()))?;
@@ -280,6 +282,7 @@ mod tests {
 
     fn router_in(dir: &Path) -> Router {
         router(Arc::new(Harvest::new(
+            AttestationType::AzureTdx,
             dir.join("public-keys.json"),
             dir.join("network-manifest.json"),
             dir.join("candidate-tx-io-pk"),

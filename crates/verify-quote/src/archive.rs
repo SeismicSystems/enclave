@@ -36,7 +36,11 @@
 //!   `pck_certificate_chain` is absent when the fetch left it unset, which is
 //!   the normal case;
 //! - `trust_anchors`: the [`TrustAnchors`] of the verifying build, each Azure
-//!   root by name and SHA-256 hex, and the `dcap-qvl` version;
+//!   vTPM root and the Google firmware root by name and SHA-256 hex, and the
+//!   `dcap-qvl` version;
+//! - `gcp_firmware_endorsement`: for `gcp-tdx` evidence, Google's signed
+//!   endorsement of the quoted firmware, hex of the protobuf as published;
+//!   absent for other platforms, and a `gcp-tdx` replay without it fails;
 //! - `report`: what the verification established, the binding and every
 //!   quoted register; a replay checks that it reproduces this, so an edited
 //!   report fails rather than misdescribing the quote.
@@ -51,7 +55,7 @@
 //! no committed founding carried it, and the one such artifact, this crate's
 //! own real-hardware fixture, was re-encoded offline.
 
-use crate::QuoteReport;
+use crate::{QuoteRegisters, QuoteReport, TdxRegisters};
 use anyhow::Context as _;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use seismic_attestation::{
@@ -109,6 +113,8 @@ struct ArchivedFoundingV1 {
     verified_at: u64,
     dcap_collateral: ArchivedCollateral,
     trust_anchors: ArchivedTrustAnchors,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gcp_firmware_endorsement: Option<String>,
     report: ArchivedReport,
 }
 
@@ -139,6 +145,8 @@ struct ArchivedCollateral {
 struct ArchivedTrustAnchors {
     azure_vtpm_roots: Vec<ArchivedAnchorDigest>,
     dcap_qvl_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gcp_firmware_root: Option<ArchivedAnchorDigest>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -148,12 +156,34 @@ struct ArchivedAnchorDigest {
     sha256: String,
 }
 
+/// The report keyed by platform: `attestation_type` names the variant, and
+/// each variant carries only its own platform's registers.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "attestation_type",
+    rename_all = "kebab-case",
+    deny_unknown_fields
+)]
+enum ArchivedReport {
+    AzureTdx {
+        binding: String,
+        pcrs: ArchivedPcrs,
+    },
+    GcpTdx {
+        binding: String,
+        registers: ArchivedTdxRegisters,
+    },
+}
+
+/// TDX measurement registers as hex, one field per register.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct ArchivedReport {
-    attestation_type: String,
-    binding: String,
-    pcrs: ArchivedPcrs,
+struct ArchivedTdxRegisters {
+    mrtd: String,
+    rtmr0: String,
+    rtmr1: String,
+    rtmr2: String,
+    rtmr3: String,
 }
 
 /// The quoted registers as a JSON object, `pcr<N>` to hex, in register
@@ -210,6 +240,7 @@ impl From<&FoundingArchive> for ArchivedFoundingV1 {
             verified_at: bundle.verified_at,
             dcap_collateral: ArchivedCollateral::from(&bundle.dcap_collateral),
             trust_anchors: ArchivedTrustAnchors::from(&bundle.trust_anchors),
+            gcp_firmware_endorsement: bundle.gcp_firmware_endorsement.as_ref().map(hex::encode),
             report: ArchivedReport::from(&archive.report),
         }
     }
@@ -235,6 +266,14 @@ impl TryFrom<ArchivedFoundingV1> for FoundingArchive {
                 verified_at: archived.verified_at,
                 dcap_collateral: archived.dcap_collateral.try_into()?,
                 trust_anchors: archived.trust_anchors.try_into()?,
+                gcp_firmware_endorsement: archived
+                    .gcp_firmware_endorsement
+                    .as_deref()
+                    .map(|endorsement| {
+                        hex::decode(endorsement)
+                            .map_err(|e| anyhow::anyhow!("gcp_firmware_endorsement: {e}"))
+                    })
+                    .transpose()?,
             },
             report: archived.report.try_into()?,
         })
@@ -292,6 +331,12 @@ impl From<&TrustAnchors> for ArchivedTrustAnchors {
                 })
                 .collect(),
             dcap_qvl_version: anchors.dcap_qvl_version.clone(),
+            gcp_firmware_root: anchors.gcp_firmware_root.as_ref().map(|root| {
+                ArchivedAnchorDigest {
+                    name: root.name.clone(),
+                    sha256: hex::encode(root.sha256),
+                }
+            }),
         }
     }
 }
@@ -315,22 +360,41 @@ impl TryFrom<ArchivedTrustAnchors> for TrustAnchors {
                 })
                 .collect::<anyhow::Result<_>>()?,
             dcap_qvl_version: archived.dcap_qvl_version,
+            gcp_firmware_root: archived
+                .gcp_firmware_root
+                .map(|root| {
+                    Ok::<_, anyhow::Error>(AnchorDigest {
+                        sha256: decode_hex("trust_anchors.gcp_firmware_root.sha256", &root.sha256)?,
+                        name: root.name,
+                    })
+                })
+                .transpose()?,
         })
     }
 }
 
 impl From<&QuoteReport> for ArchivedReport {
     fn from(report: &QuoteReport) -> Self {
-        Self {
-            attestation_type: QuoteReport::ATTESTATION_TYPE.as_str().to_string(),
-            binding: hex::encode(report.binding),
-            pcrs: ArchivedPcrs(
-                report
-                    .pcrs
-                    .iter()
-                    .map(|(index, value)| (*index, hex::encode(value)))
-                    .collect(),
-            ),
+        let binding = hex::encode(report.binding);
+        match &report.registers {
+            QuoteRegisters::AzureTdx(pcrs) => Self::AzureTdx {
+                binding,
+                pcrs: ArchivedPcrs(
+                    pcrs.iter()
+                        .map(|(index, value)| (*index, hex::encode(value)))
+                        .collect(),
+                ),
+            },
+            QuoteRegisters::GcpTdx(tdx) => Self::GcpTdx {
+                binding,
+                registers: ArchivedTdxRegisters {
+                    mrtd: hex::encode(tdx.mrtd),
+                    rtmr0: hex::encode(tdx.rtmr0),
+                    rtmr1: hex::encode(tdx.rtmr1),
+                    rtmr2: hex::encode(tdx.rtmr2),
+                    rtmr3: hex::encode(tdx.rtmr3),
+                },
+            },
         }
     }
 }
@@ -339,26 +403,35 @@ impl TryFrom<ArchivedReport> for QuoteReport {
     type Error = anyhow::Error;
 
     fn try_from(archived: ArchivedReport) -> anyhow::Result<Self> {
-        anyhow::ensure!(
-            archived.attestation_type == QuoteReport::ATTESTATION_TYPE.as_str(),
-            "report.attestation_type is {:?}; this archive holds {} reports",
-            archived.attestation_type,
-            QuoteReport::ATTESTATION_TYPE.as_str(),
-        );
-        let pcrs = archived
-            .pcrs
-            .0
-            .iter()
-            .map(|(index, value)| {
-                Ok((
-                    *index,
-                    decode_hex(&format!("report.pcrs.pcr{index}"), value)?,
-                ))
-            })
-            .collect::<anyhow::Result<_>>()?;
+        let (binding, registers) = match archived {
+            ArchivedReport::AzureTdx { binding, pcrs } => (
+                binding,
+                QuoteRegisters::AzureTdx(
+                    pcrs.0
+                        .iter()
+                        .map(|(index, value)| {
+                            Ok((
+                                *index,
+                                decode_hex(&format!("report.pcrs.pcr{index}"), value)?,
+                            ))
+                        })
+                        .collect::<anyhow::Result<_>>()?,
+                ),
+            ),
+            ArchivedReport::GcpTdx { binding, registers } => (
+                binding,
+                QuoteRegisters::GcpTdx(Box::new(TdxRegisters {
+                    mrtd: decode_hex("report.registers.mrtd", &registers.mrtd)?,
+                    rtmr0: decode_hex("report.registers.rtmr0", &registers.rtmr0)?,
+                    rtmr1: decode_hex("report.registers.rtmr1", &registers.rtmr1)?,
+                    rtmr2: decode_hex("report.registers.rtmr2", &registers.rtmr2)?,
+                    rtmr3: decode_hex("report.registers.rtmr3", &registers.rtmr3)?,
+                })),
+            ),
+        };
         Ok(Self {
-            binding: decode_hex("report.binding", &archived.binding)?,
-            pcrs,
+            binding: decode_hex("report.binding", &binding)?,
+            registers,
         })
     }
 }
@@ -432,10 +505,14 @@ pub fn fabricated_archive() -> FoundingArchive {
             verified_at: FABRICATED_AT,
             dcap_collateral: fabricated_collateral(),
             trust_anchors: fabricated_anchors(),
+            gcp_firmware_endorsement: None,
         },
         report: QuoteReport {
             binding: [0x8d; 64],
-            pcrs: BTreeMap::from([(4, [0x44; 32]), (11, [0xbb; 32])]),
+            registers: QuoteRegisters::AzureTdx(BTreeMap::from([
+                (4, [0x44; 32]),
+                (11, [0xbb; 32]),
+            ])),
         },
     }
 }
@@ -475,6 +552,10 @@ pub fn fabricated_anchors() -> TrustAnchors {
             },
         ],
         dcap_qvl_version: "9.9.9".to_string(),
+        gcp_firmware_root: Some(AnchorDigest {
+            name: "fabricated-google-root".to_string(),
+            sha256: [0xc3; 32],
+        }),
     }
 }
 
@@ -649,11 +730,15 @@ mod tests {
         );
         assert!(error.contains("register4"), "{error}");
 
-        let error = parse_mutated(|value| {
-            value["report"]["attestation_type"] = serde_json::json!("gcp-tdx")
-        })
-        .unwrap_err()
-        .to_string();
-        assert!(error.contains("gcp-tdx"), "{error}");
+        // A platform whose registers are another platform's fails inside
+        // serde, naming the register field that does not belong.
+        let error = format!(
+            "{:#}",
+            parse_mutated(|value| {
+                value["report"]["attestation_type"] = serde_json::json!("gcp-tdx")
+            })
+            .unwrap_err()
+        );
+        assert!(error.contains("pcrs"), "{error}");
     }
 }

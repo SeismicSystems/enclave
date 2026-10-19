@@ -11,15 +11,14 @@
 //! handshake for the nodes joining after it.
 
 use crate::{
-    ATTESTATION_TYPE,
-    admission::AdmitAnyAzureGuest,
+    admission::AdmitAnyTdxGuest,
     bootstrap::{RootKeyResponse, build_root_key_request, verify_root_key_response},
     rpc_error::RootKeyRefusal,
 };
 use anyhow::Context as _;
 use jsonrpsee::{core::ClientError, http_client::HttpClientBuilder};
 use secp256k1::PublicKey;
-use seismic_attestation::NetworkId;
+use seismic_attestation::{AttestationType, NetworkId};
 use seismic_attestation_rpc::AttestationRpcClient as _;
 use seismic_custodian_ipc::{CreateRootKeyBootstrapAttemptResult, CustodianClient};
 use std::{path::Path, time::Duration};
@@ -53,6 +52,7 @@ pub(crate) async fn ensure_root_key_present(
     custodian_socket: &Path,
     peers: &[String],
     network_id: &NetworkId,
+    attestation_type: AttestationType,
 ) -> anyhow::Result<()> {
     let mut custodian = connect_custodian_when_ready(custodian_socket).await;
     if matches!(
@@ -74,7 +74,7 @@ pub(crate) async fn ensure_root_key_present(
         );
     }
 
-    fetch_root_key_from_peers(custodian_socket, peers, network_id).await;
+    fetch_root_key_from_peers(custodian_socket, peers, network_id, attestation_type).await;
     Ok(())
 }
 
@@ -114,12 +114,15 @@ async fn fetch_root_key_from_peers(
     custodian_socket: &Path,
     peers: &[String],
     network_id: &NetworkId,
+    attestation_type: AttestationType,
 ) {
     info!("Starting root key fetching from peers");
     loop {
         let mut refusals = Vec::with_capacity(peers.len());
         for peer in peers {
-            match try_fetch_root_key_from_peer(custodian_socket, peer, network_id).await {
+            match try_fetch_root_key_from_peer(custodian_socket, peer, network_id, attestation_type)
+                .await
+            {
                 Ok(()) => {
                     info!("Key received from {peer} and installed in the custodian");
                     return;
@@ -216,6 +219,7 @@ async fn try_fetch_root_key_from_peer(
     custodian_socket: &Path,
     peer: &str,
     network_id: &NetworkId,
+    attestation_type: AttestationType,
 ) -> anyhow::Result<()> {
     // Fresh connection per attempt so a custodian restart mid-loop costs only
     // this attempt. A restart also drops its retained attempt, in which case
@@ -229,7 +233,7 @@ async fn try_fetch_root_key_from_peer(
     };
     let requester_eph_pk = PublicKey::from_slice(&attempt.requester_eph_pk)
         .context("custodian returned an invalid requester ephemeral key")?;
-    let request = build_root_key_request(network_id, &requester_eph_pk, ATTESTATION_TYPE)?;
+    let request = build_root_key_request(network_id, &requester_eph_pk, attestation_type)?;
 
     let client = HttpClientBuilder::default().build(peer)?;
     let request_bytes = serde_json::to_vec(&request)?;
@@ -238,9 +242,9 @@ async fn try_fetch_root_key_from_peer(
 
     // The joiner's appraisal of the responder is permissive: the custodian
     // installs the key only if it derives the manifest's pin; see
-    // [`AdmitAnyAzureGuest`].
+    // [`AdmitAnyTdxGuest`].
     let request_binding =
-        verify_root_key_response(&response, &request, network_id, &AdmitAnyAzureGuest).await?;
+        verify_root_key_response(&response, &request, network_id, &AdmitAnyTdxGuest).await?;
 
     // Both install outcomes leave the custodian holding the root key. A key
     // the manifest does not pin is refused there, as an error, so the loop

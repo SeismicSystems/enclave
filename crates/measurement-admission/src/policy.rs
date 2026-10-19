@@ -6,18 +6,22 @@
 //! registers within one record are ANDed (a deprecated scalar `expected`
 //! means a one-element `expected_any`). Seismic policies restrict the
 //! format's per-register OR: an `expected_any` list must contain exactly one
-//! value, so one record is one concrete `(pcr4, pcr9, pcr11)` guest identity
-//! and compiles to exactly one admission ID. Any accepted set is still
+//! value, so one record is one concrete guest identity under its schema and
+//! compiles to exactly one admission ID. Any accepted set is still
 //! expressible — one record per identity — and the document stays literal:
 //! the identities governance reviews are the records the document lists.
 //!
 //! A document that seeds chain state must be exact, so this compiler is
 //! deliberately stricter than attested-tls's permissive matcher: every
 //! record must carry exactly the schema registers, each spelled once, each
-//! binding a single 32-byte value. Parity tests hold the accepted semantics
-//! equal to `check_measurement` for every document this compiler accepts.
+//! binding a single digest. Parity tests hold the accepted semantics equal
+//! to `check_measurement` for every document this compiler accepts.
 
-use crate::{AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, AdmissionId, AzureTdxV1Measurements};
+use crate::{
+    AZURE_TDX_ATTESTATION_TYPE, AZURE_TDX_V1_PCRS, AZURE_TDX_V1_SCHEMA, AdmissionId,
+    AzureTdxV1Measurements, GCP_TDX_ATTESTATION_TYPE, GCP_TDX_V1_RTMRS, GCP_TDX_V1_SCHEMA,
+    GcpTdxV1Measurements, Register, azure_tdx_v1_schema_id, gcp_tdx_v1_schema_id,
+};
 use alloy_primitives::B256;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -37,13 +41,43 @@ pub struct CompiledPolicy {
     pub admission_ids: Vec<AdmissionId>,
 }
 
+/// A record's measurement tuple under the schema its attestation type selects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SchemaTuple {
+    AzureTdxV1(AzureTdxV1Measurements),
+    GcpTdxV1(GcpTdxV1Measurements),
+}
+
+impl SchemaTuple {
+    pub fn admission_id(&self) -> AdmissionId {
+        match self {
+            Self::AzureTdxV1(tuple) => tuple.admission_id(),
+            Self::GcpTdxV1(tuple) => tuple.admission_id(),
+        }
+    }
+
+    pub fn schema(&self) -> &'static str {
+        match self {
+            Self::AzureTdxV1(_) => AZURE_TDX_V1_SCHEMA,
+            Self::GcpTdxV1(_) => GCP_TDX_V1_SCHEMA,
+        }
+    }
+
+    pub fn schema_id(&self) -> B256 {
+        match self {
+            Self::AzureTdxV1(_) => azure_tdx_v1_schema_id(),
+            Self::GcpTdxV1(_) => gcp_tdx_v1_schema_id(),
+        }
+    }
+}
+
 /// One record's compiled form: the concrete guest identity it admits.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompiledRecord {
     /// The record's human audit label; not part of guest identity.
     pub measurement_id: String,
     /// The record's measurement tuple.
-    pub tuple: AzureTdxV1Measurements,
+    pub tuple: SchemaTuple,
 }
 
 impl CompiledRecord {
@@ -62,7 +96,7 @@ pub enum PolicyError {
     Empty,
     #[error(
         "{record}: unsupported attestation_type {attestation_type:?} \
-         (supported: {AZURE_TDX_ATTESTATION_TYPE:?})"
+         (supported: {AZURE_TDX_ATTESTATION_TYPE:?}, {GCP_TDX_ATTESTATION_TYPE:?})"
     )]
     UnsupportedAttestationType {
         record: String,
@@ -70,36 +104,41 @@ pub enum PolicyError {
     },
     #[error("{record}: measurement_id duplicates an earlier record's")]
     DuplicateMeasurementId { record: String },
-    #[error("{record}: register key {key:?} is not a PCR index (\"4\" or \"pcr4\", 0-23)")]
-    BadRegisterKey { record: String, key: String },
-    #[error("{record}: register key {key:?} duplicates pcr{index} after normalization")]
+    #[error("{record}: register key {key:?} is not {expected}")]
+    BadRegisterKey {
+        record: String,
+        key: String,
+        expected: &'static str,
+    },
+    #[error("{record}: register key {key:?} duplicates {register} after normalization")]
     DuplicateRegister {
         record: String,
         key: String,
-        index: u32,
+        register: Register,
     },
-    #[error("{record}: pcr{index} is not an admission register of this schema")]
-    UnexpectedRegister { record: String, index: u32 },
-    #[error("{record}: missing required register pcr{index}")]
-    MissingRegister { record: String, index: u32 },
-    #[error("{record}: pcr{index} sets both expected and expected_any")]
-    BothExpectedForms { record: String, index: u32 },
-    #[error("{record}: pcr{index} sets neither expected nor expected_any")]
-    NoExpectedValue { record: String, index: u32 },
+    #[error("{record}: {register} is not an admission register of this schema")]
+    UnexpectedRegister { record: String, register: Register },
+    #[error("{record}: missing required register {register}")]
+    MissingRegister { record: String, register: Register },
+    #[error("{record}: {register} sets both expected and expected_any")]
+    BothExpectedForms { record: String, register: Register },
+    #[error("{record}: {register} sets neither expected nor expected_any")]
+    NoExpectedValue { record: String, register: Register },
     #[error(
-        "{record}: pcr{index} must bind exactly one accepted value, got {count} \
+        "{record}: {register} must bind exactly one accepted value, got {count} \
          (one record admits one guest identity; author one record per identity)"
     )]
     SingleValueRequired {
         record: String,
-        index: u32,
+        register: Register,
         count: usize,
     },
-    #[error("{record}: pcr{index} value {value:?} is not 32 bytes of bare hex")]
+    #[error("{record}: {register} value {value:?} is not {len} bytes of bare hex")]
     BadValue {
         record: String,
-        index: u32,
+        register: Register,
         value: String,
+        len: usize,
     },
 }
 
@@ -124,6 +163,70 @@ pub(crate) struct RawEntry {
     expected_any: Option<Vec<String>>,
 }
 
+/// How one schema spells its register keys, which registers it binds, and
+/// the tuple those bind to.
+pub(crate) struct Schema {
+    pub(crate) attestation_type: &'static str,
+    parse_key: fn(&str) -> Option<Register>,
+    key_hint: &'static str,
+    pub(crate) registers: &'static [Register],
+    tuple: fn(&BTreeMap<Register, Vec<u8>>) -> SchemaTuple,
+}
+
+static AZURE_TDX_V1: Schema = Schema {
+    attestation_type: AZURE_TDX_ATTESTATION_TYPE,
+    parse_key: parse_pcr_key,
+    key_hint: "a PCR index (\"4\" or \"pcr4\", 0-23)",
+    registers: &[
+        Register::Pcr(AZURE_TDX_V1_PCRS[0]),
+        Register::Pcr(AZURE_TDX_V1_PCRS[1]),
+        Register::Pcr(AZURE_TDX_V1_PCRS[2]),
+    ],
+    tuple: azure_tdx_v1_tuple,
+};
+
+static GCP_TDX_V1: Schema = Schema {
+    attestation_type: GCP_TDX_ATTESTATION_TYPE,
+    parse_key: parse_rtmr_key,
+    key_hint: "an RTMR name (\"rtmr1\", 0-3)",
+    registers: &[
+        Register::Rtmr(GCP_TDX_V1_RTMRS[0]),
+        Register::Rtmr(GCP_TDX_V1_RTMRS[1]),
+    ],
+    tuple: gcp_tdx_v1_tuple,
+};
+
+/// The schema an `attestation_type` compiles under.
+pub(crate) fn schema_for(attestation_type: &str) -> Option<&'static Schema> {
+    match attestation_type {
+        AZURE_TDX_ATTESTATION_TYPE => Some(&AZURE_TDX_V1),
+        GCP_TDX_ATTESTATION_TYPE => Some(&GCP_TDX_V1),
+        _ => None,
+    }
+}
+
+fn azure_tdx_v1_tuple(values: &BTreeMap<Register, Vec<u8>>) -> SchemaTuple {
+    let pcr = |index| B256::from_slice(&values[&Register::Pcr(index)]);
+    SchemaTuple::AzureTdxV1(AzureTdxV1Measurements {
+        pcr4: pcr(4),
+        pcr9: pcr(9),
+        pcr11: pcr(11),
+    })
+}
+
+fn gcp_tdx_v1_tuple(values: &BTreeMap<Register, Vec<u8>>) -> SchemaTuple {
+    let rtmr = |index| {
+        values[&Register::Rtmr(index)]
+            .as_slice()
+            .try_into()
+            .expect("bound to the register's digest length")
+    };
+    SchemaTuple::GcpTdxV1(GcpTdxV1Measurements {
+        rtmr1: rtmr(1),
+        rtmr2: rtmr(2),
+    })
+}
+
 /// Compile a policy document's exact bytes into the admission IDs it admits.
 pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
     let raw_records: Vec<RawRecord> = serde_json::from_slice(bytes)?;
@@ -138,48 +241,26 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
     for (position, raw) in raw_records.iter().enumerate() {
         let record = format!("record {position} ({:?})", raw.measurement_id);
 
-        if raw.attestation_type != AZURE_TDX_ATTESTATION_TYPE {
-            return Err(PolicyError::UnsupportedAttestationType {
-                record,
+        let schema = schema_for(&raw.attestation_type).ok_or_else(|| {
+            PolicyError::UnsupportedAttestationType {
+                record: record.clone(),
                 attestation_type: raw.attestation_type.clone(),
-            });
-        }
+            }
+        })?;
         if !seen_measurement_ids.insert(&raw.measurement_id) {
             return Err(PolicyError::DuplicateMeasurementId { record });
         }
-
-        // Normalize register keys, rejecting aliases that collapse to the
-        // same index ("4" plus "pcr4") — a document carrying both is not
-        // reviewable as written.
-        let mut values: BTreeMap<u32, B256> = BTreeMap::new();
-        for (key, entry) in &raw.measurements {
-            let index = parse_pcr_key(key).ok_or_else(|| PolicyError::BadRegisterKey {
-                record: record.clone(),
-                key: key.clone(),
-            })?;
-            if values.contains_key(&index) {
-                return Err(PolicyError::DuplicateRegister {
-                    record,
-                    key: key.clone(),
-                    index,
-                });
-            }
-            if !AZURE_TDX_V1_PCRS.contains(&index) {
-                return Err(PolicyError::UnexpectedRegister { record, index });
-            }
-            values.insert(index, entry_value(&record, index, entry)?);
+        let registers = parse_registers(&record, &raw.measurements, schema)?;
+        if let Some(register) = registers
+            .keys()
+            .find(|register| !schema.registers.contains(register))
+        {
+            return Err(PolicyError::UnexpectedRegister {
+                record,
+                register: *register,
+            });
         }
-        for index in AZURE_TDX_V1_PCRS {
-            if !values.contains_key(&index) {
-                return Err(PolicyError::MissingRegister { record, index });
-            }
-        }
-
-        let tuple = AzureTdxV1Measurements {
-            pcr4: values[&4],
-            pcr9: values[&9],
-            pcr11: values[&11],
-        };
+        let tuple = (schema.tuple)(&bind_schema(&record, &registers, schema)?);
         unique_ids.insert(tuple.admission_id());
         records.push(CompiledRecord {
             measurement_id: raw.measurement_id.clone(),
@@ -194,10 +275,58 @@ pub fn compile_policy(bytes: &[u8]) -> Result<CompiledPolicy, PolicyError> {
     })
 }
 
-/// Normalize a register key: a bare index (`"4"`) or a case-insensitive
-/// `pcr` prefix (`"pcr4"`, `"PCR4"`), 0-23 — the spellings attested-tls's
+/// The registers a measurements map names, under `schema`'s spelling of
+/// keys. Two keys that normalize to one register fail: a document carrying
+/// both is not reviewable as written.
+pub(crate) fn parse_registers<'a>(
+    record: &str,
+    measurements: &'a BTreeMap<String, RawEntry>,
+    schema: &Schema,
+) -> Result<BTreeMap<Register, &'a RawEntry>, PolicyError> {
+    let mut registers = BTreeMap::new();
+    for (key, entry) in measurements {
+        let register = (schema.parse_key)(key).ok_or_else(|| PolicyError::BadRegisterKey {
+            record: record.to_owned(),
+            key: key.clone(),
+            expected: schema.key_hint,
+        })?;
+        if registers.insert(register, entry).is_some() {
+            return Err(PolicyError::DuplicateRegister {
+                record: record.to_owned(),
+                key: key.clone(),
+                register,
+            });
+        }
+    }
+    Ok(registers)
+}
+
+/// The single value each schema register binds; registers outside the
+/// schema are ignored.
+pub(crate) fn bind_schema(
+    record: &str,
+    registers: &BTreeMap<Register, &RawEntry>,
+    schema: &Schema,
+) -> Result<BTreeMap<Register, Vec<u8>>, PolicyError> {
+    schema
+        .registers
+        .iter()
+        .map(|register| {
+            let entry = registers
+                .get(register)
+                .ok_or_else(|| PolicyError::MissingRegister {
+                    record: record.to_owned(),
+                    register: *register,
+                })?;
+            Ok((*register, entry_value(record, *register, entry)?))
+        })
+        .collect()
+}
+
+/// Normalize a PCR key: a bare index (`"4"`) or a case-insensitive `pcr`
+/// prefix (`"pcr4"`, `"PCR4"`), 0-23 — the spellings attested-tls's
 /// `parse_azure_pcr_index` accepts.
-pub(crate) fn parse_pcr_key(key: &str) -> Option<u32> {
+fn parse_pcr_key(key: &str) -> Option<Register> {
     let digits = if key.get(..3).is_some_and(|p| p.eq_ignore_ascii_case("pcr")) {
         &key[3..]
     } else {
@@ -206,23 +335,38 @@ pub(crate) fn parse_pcr_key(key: &str) -> Option<u32> {
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    digits.parse().ok().filter(|index| *index <= 23)
+    digits
+        .parse()
+        .ok()
+        .filter(|index| *index <= 23)
+        .map(Register::Pcr)
+}
+
+/// Normalize an RTMR key: a case-insensitive `rtmr` prefix and one digit
+/// 0-3, the names attested-tls's `DcapMeasurementRegister` accepts.
+fn parse_rtmr_key(key: &str) -> Option<Register> {
+    let index = key
+        .get(..4)
+        .filter(|prefix| prefix.eq_ignore_ascii_case("rtmr"))
+        .and_then(|_| key[4..].parse::<u8>().ok())?;
+    (key.len() == 5 && index <= 3).then_some(Register::Rtmr(index))
 }
 
 /// Resolve one register entry to its single accepted value: exactly one of
-/// `expected` / `expected_any`, binding exactly one 32-byte bare-hex value.
-pub(crate) fn entry_value(record: &str, index: u32, entry: &RawEntry) -> Result<B256, PolicyError> {
+/// `expected` / `expected_any`, binding one bare-hex digest of the
+/// register's length.
+fn entry_value(record: &str, register: Register, entry: &RawEntry) -> Result<Vec<u8>, PolicyError> {
     let value = match (&entry.expected, &entry.expected_any) {
         (Some(_), Some(_)) => {
             return Err(PolicyError::BothExpectedForms {
                 record: record.to_owned(),
-                index,
+                register,
             });
         }
         (None, None) => {
             return Err(PolicyError::NoExpectedValue {
                 record: record.to_owned(),
-                index,
+                register,
             });
         }
         (Some(single), None) => single,
@@ -231,21 +375,22 @@ pub(crate) fn entry_value(record: &str, index: u32, entry: &RawEntry) -> Result<
             _ => {
                 return Err(PolicyError::SingleValueRequired {
                     record: record.to_owned(),
-                    index,
+                    register,
                     count: list.len(),
                 });
             }
         },
     };
 
+    let len = register.digest_len();
     hex::decode(value)
         .ok()
-        .and_then(|b| <[u8; 32]>::try_from(b).ok())
-        .map(B256::from)
+        .filter(|bytes| bytes.len() == len)
         .ok_or_else(|| PolicyError::BadValue {
             record: record.to_owned(),
-            index,
+            register,
             value: value.clone(),
+            len,
         })
 }
 
@@ -294,6 +439,77 @@ mod tests {
     }
 
     #[test]
+    fn compiles_a_gcp_record_under_the_gcp_schema() {
+        let rtmr1 = "762d5dc2b8dcd950b77ba759e2321a865a7a1fcdeb1f5d879f3e31e974c9697fa4171d92e08c2243a91af3027ad08cb0";
+        let rtmr2 = "85bc309a887ad0277ea50d47aacb850d080c498e2e713eeab0d035085acbd6d47ac06f276ae4284c828dc199e6845031";
+        let doc = format!(
+            r#"[{{"attestation_type":"gcp-tdx","measurement_id":"img.tar.gz","measurements":{{"rtmr1":{{"expected":"{rtmr1}"}},"rtmr2":{{"expected":"{rtmr2}"}}}}}}]"#
+        );
+        let compiled = compile_policy(doc.as_bytes()).unwrap();
+        let SchemaTuple::GcpTdxV1(tuple) = &compiled.records[0].tuple else {
+            panic!("wrong schema");
+        };
+        assert_eq!(hex::encode(tuple.rtmr1), rtmr1);
+        assert_eq!(hex::encode(tuple.rtmr2), rtmr2);
+        assert_eq!(compiled.records[0].tuple.schema(), GCP_TDX_V1_SCHEMA);
+
+        let twice = doc.replace(
+            r#""rtmr2":"#,
+            &format!(r#""RTMR1":{{"expected":"{rtmr1}"}},"rtmr2":"#),
+        );
+        assert!(matches!(
+            compile_policy(twice.as_bytes()),
+            Err(PolicyError::DuplicateRegister {
+                register: Register::Rtmr(1),
+                ..
+            })
+        ));
+
+        let only_rtmr1 = doc.replace(&format!(r#","rtmr2":{{"expected":"{rtmr2}"}}"#), "");
+        assert!(matches!(
+            compile_policy(only_rtmr1.as_bytes()),
+            Err(PolicyError::MissingRegister {
+                register: Register::Rtmr(2),
+                ..
+            })
+        ));
+
+        let extra = doc.replace(r#""rtmr1":"#, r#""rtmr0":{"expected":"00"},"rtmr1":"#);
+        assert!(matches!(
+            compile_policy(extra.as_bytes()),
+            Err(PolicyError::UnexpectedRegister {
+                register: Register::Rtmr(0),
+                ..
+            })
+        ));
+
+        let not_a_register = doc.replace(r#""rtmr1":"#, r#""mrtd":{"expected":"00"},"rtmr1":"#);
+        assert!(matches!(
+            compile_policy(not_a_register.as_bytes()),
+            Err(PolicyError::BadRegisterKey { .. })
+        ));
+        let mixed = format!(
+            r#"[{{"attestation_type":"azure-tdx","measurement_id":"a.vhd","measurements":{{"pcr4":{{"expected":"{z}"}},"pcr9":{{"expected":"{z}"}},"pcr11":{{"expected":"{z}"}}}}}},{}]"#,
+            &doc[1..doc.len() - 1],
+            z = "00".repeat(32)
+        );
+        let compiled = compile_policy(mixed.as_bytes()).unwrap();
+        assert_eq!(compiled.admission_ids.len(), 2);
+        assert!(matches!(
+            compiled.records[0].tuple,
+            SchemaTuple::AzureTdxV1(_)
+        ));
+        assert!(matches!(
+            compiled.records[1].tuple,
+            SchemaTuple::GcpTdxV1(_)
+        ));
+        let report = crate::CompileReport::new(&compiled);
+        assert_eq!(report.records[0].schema, crate::AZURE_TDX_V1_SCHEMA);
+        assert_eq!(report.records[1].schema, GCP_TDX_V1_SCHEMA);
+        assert_eq!(report.records[1].schema_id, gcp_tdx_v1_schema_id());
+    }
+
+    #[test]
     fn compiles_one_record_to_one_id_with_record_correlation() {
         let doc = two_record_policy();
         let compiled = compile_policy(doc.as_bytes()).unwrap();
@@ -301,19 +517,19 @@ mod tests {
         assert_eq!(compiled.records.len(), 2);
         assert_eq!(
             compiled.records[0].tuple,
-            AzureTdxV1Measurements {
+            SchemaTuple::AzureTdxV1(AzureTdxV1Measurements {
                 pcr4: b256(0x11),
                 pcr9: b256(0x22),
                 pcr11: b256(0x33),
-            }
+            })
         );
         assert_eq!(
             compiled.records[1].tuple,
-            AzureTdxV1Measurements {
+            SchemaTuple::AzureTdxV1(AzureTdxV1Measurements {
                 pcr4: b256(0xa1),
                 pcr9: b256(0xb1),
                 pcr11: b256(0xc1),
-            }
+            })
         );
 
         // 2 unique IDs, sorted ascending, no cross-record flattening: image
@@ -462,9 +678,14 @@ mod tests {
                 "BadRegisterKey",
             ),
             (
-                r#"[{"attestation_type":"gcp-tdx","measurement_id":"x","measurements":{}}]"#
+                r#"[{"attestation_type":"dcap-tdx","measurement_id":"x","measurements":{}}]"#
                     .to_owned(),
                 "UnsupportedAttestationType",
+            ),
+            (
+                r#"[{"attestation_type":"gcp-tdx","measurement_id":"x","measurements":{}}]"#
+                    .to_owned(),
+                "MissingRegister",
             ),
             (
                 r#"[{"attestation_type":"azure-tdx","measurement_id":"x"}]"#.to_owned(),
