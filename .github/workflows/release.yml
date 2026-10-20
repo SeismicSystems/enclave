@@ -1,0 +1,261 @@
+# Publishes prebuilt `seismic-centralized-custodian-service` binaries.
+#
+# Adapted from summit's release.yml, minus its per-push prereleases: only a
+# pushed `vX.Y.Z` tag publishes.
+#
+#   - pushing a `vX.Y.Z` tag publishes a versioned release, "Latest" unless
+#     the version carries a pre-release suffix (`v0.1.0-rc.1`). The tag must
+#     equal the `[workspace.package] version` in Cargo.toml, and must be
+#     higher than every version already released: releases only go up, so a
+#     rerun of an old tag or a maintenance release behind the newest is
+#     refused before anything is built — cut the next version instead. The
+#     workflow runs from the tagged commit, so the tag may point at any
+#     branch that carries this file.
+#   - a manual dispatch on any ref only builds — a dry run of the workflow —
+#     and publishes nothing. Only a *pushed* tag publishes, so no button
+#     rebuilds a live release.
+#
+# When a release run fails:
+#   - a transient failure (runner, network, attestation service): re-run the
+#     run (`gh run rerun <id> --failed`). A re-run keeps its push event and
+#     publishes; a release created before the failure is updated in place.
+#   - a broken workflow: fix it, dry-run the fix by dispatching on a branch,
+#     delete any partial release (`gh release delete <tag>`), then move the
+#     tag to the fixed commit and push it again — a fresh push event.
+#     Nothing was ever downloadable under the tag, so nothing the move could
+#     invalidate exists.
+#   - a bad release that was live long enough to be downloaded: cut the next
+#     version. A release someone may have verified is immutable.
+#
+# Each release ships
+# seismic-centralized-custodian-service_<tag>_linux_amd64.tar.gz — the
+# service binary built in its own cargo invocation, as its Cargo.toml requires
+# for the no-async-runtime guarantee — beside a build provenance attestation,
+# verifiable with
+# `gh attestation verify seismic-centralized-custodian-service --repo SeismicSystems/enclave`.
+#
+# The runner is pinned, never `-latest`: the binary links glibc dynamically
+# and needs the build host's version or newer at run time, so the build host
+# IS the compatibility floor — glibc 2.35, i.e. Ubuntu 22.04 / Debian 12 and
+# later. Nothing else is linked from the host: TLS is rustls, compiled in, and
+# the TPM stack (libtss2) that the sibling `seismic-custodian-service` needs
+# is not in this binary's graph, which the build step asserts.
+#
+# Only the publish job holds `contents: write`. The build keeps the read-only
+# default plus the two permissions attestation needs.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  BIN: seismic-centralized-custodian-service
+
+jobs:
+  build:
+    name: build seismic-centralized-custodian-service (linux amd64)
+    # The oldest Ubuntu runner offered: its glibc is the floor (see header).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      publish: ${{ steps.info.outputs.publish }}
+      tag: ${{ steps.info.outputs.tag }}
+      prerelease: ${{ steps.info.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The version check below compares against every released tag.
+          fetch-tags: true
+
+      - name: Name the release
+        id: info
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          publish=true
+          if [[ "$REF" == refs/tags/v* ]]; then
+            tag=$REF_NAME
+            # A semver pre-release (v0.1.0-rc.1) is a GitHub prerelease too.
+            if [[ "$tag" == *-* ]]; then prerelease=true; else prerelease=false; fi
+            # Only the tag's push publishes it; a dispatch on the tag is a
+            # dry run, so no button can rebuild a live release.
+            [[ "$EVENT" == push ]] || publish=false
+          else
+            # A dispatch on a branch: build only, named after the commit.
+            tag=dry-run-$SHA
+            prerelease=true
+            publish=false
+          fi
+          {
+            echo "publish=$publish"
+            echo "tag=$tag"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag $tag, prerelease $prerelease, publish $publish"
+
+      # The same toolchain setup ci.yml uses for its build job.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # Before the build, so a mistyped tag fails in seconds, not after it.
+      # The service inherits the workspace version, like every crate here.
+      - name: Check the tag against Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(cargo metadata --no-deps --locked --format-version 1 |
+            jq -r --arg bin "$BIN" '.packages[] | select(.name == $bin) | .version')
+          [ "${TAG#v}" = "$version" ] || {
+            echo "tag $TAG does not match the workspace version $version in Cargo.toml" >&2
+            exit 1
+          }
+
+      # Versions only go up (see summit's release.yml for the rationale).
+      - name: Check the version only goes up
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          highest=$(git -c versionsort.suffix=- tag -l 'v*.*.*' --sort=-v:refname | head -n1)
+          [ "$highest" = "$TAG" ] || {
+            echo "$TAG is not the highest version tag ($highest is). Releases only go up: a rerun of an older release, or a version behind the newest, is refused — cut the next version instead." >&2
+            exit 1
+          }
+
+      # Built alone, not as part of the workspace: the crate's Cargo.toml
+      # turns custodian-ipc's default features off, and cargo's feature
+      # unification would turn them back on in a workspace-wide build. The
+      # dynamic-library listing is the compatibility baseline made visible,
+      # and the grep holds it to libc: OpenSSL or libtss2 appearing here means
+      # a dependency change pulled host libraries in, caught at build time
+      # rather than on an operator's box.
+      - name: Build the service
+        run: |
+          cargo build --release --locked -p "$BIN"
+          bin=target/release/$BIN
+          file "$bin"
+          du -h "$bin"
+          ldd "$bin"
+          ! ldd "$bin" | grep -Eq 'libssl|libcrypto|libtss2' || {
+            echo "$BIN links host OpenSSL or libtss2; the service must depend only on libc" >&2
+            exit 1
+          }
+          "$bin" --version
+
+      - name: Archive the service
+        env:
+          TAG: ${{ steps.info.outputs.tag }}
+        run: |
+          mkdir dist
+          tar -czvf "dist/${BIN}_${TAG}_linux_amd64.tar.gz" -C target/release "$BIN"
+
+      - name: Attest build provenance
+        if: steps.info.outputs.publish == 'true'
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: target/release/${{ env.BIN }}
+
+      - name: Record the attestation URL
+        if: steps.info.outputs.publish == 'true'
+        env:
+          TAG: ${{ steps.info.outputs.tag }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+        run: echo "$ATTESTATION_URL" > "dist/${BIN}_${TAG}_linux_amd64.attestation.txt"
+
+      # Hand-off to the publish job. A day is plenty: the release is the
+      # durable copy.
+      - name: Upload the assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: custodian-linux-amd64
+          path: dist
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: publish ${{ needs.build.outputs.tag }}
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The notes list the commits since the previous release of the
+          # same kind, so the whole history and every tag are needed.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: custodian-linux-amd64
+          path: dist
+
+      - name: Write the release notes
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          # The highest other version tag — the previous release, since
+          # versions only go up (checked before the build).
+          prev=$(git -c versionsort.suffix=- tag -l 'v*.*.*' --sort=-v:refname | grep -v "^$TAG$" | head -n1)
+          if [ -n "$prev" ]; then
+            range="$prev..HEAD"
+          else
+            range=HEAD
+          fi
+          echo "previous release: ${prev:-none}; listing $range"
+
+          {
+            echo "\`$BIN\` built from https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA."
+            echo
+            echo "## Changes"
+            echo
+            git log --first-parent --format='- %s' "$range"
+            if [ -n "$prev" ]; then
+              echo
+              echo "Full changelog: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$TAG"
+            fi
+            echo
+            echo "## Verify"
+            echo
+            echo "The tarball holds the \`$BIN\` binary. It needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, and later) and nothing else from the host: TLS is rustls, compiled in, and no TPM stack is linked. Its build provenance is attested by GitHub:"
+            echo
+            echo '```sh'
+            echo "tar -xzf ${BIN}_${TAG}_linux_amd64.tar.gz"
+            echo "gh attestation verify $BIN --repo $GITHUB_REPOSITORY"
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      # Re-running a run that died after this step updates the release and
+      # replaces same-named assets instead of failing. Pinned to the commit
+      # behind v2.2.2 rather than the tag: this step holds `contents: write`.
+      - name: Publish the release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: ${{ needs.build.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ needs.build.outputs.prerelease == 'true' }}
+          body_path: ${{ runner.temp }}/notes.md
+          fail_on_unmatched_files: true
+          files: dist/*
