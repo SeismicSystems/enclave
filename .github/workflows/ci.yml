@@ -147,8 +147,17 @@ jobs:
         with:
           cache-on-failure: true
 
+      # The runner user reaches the raw TPM device (/dev/tpm0) through the
+      # tss group — the runner's cloud-init assigns it there — so the tests
+      # run unprivileged. Each target is one binary whose tests serialize on
+      # the single vTPM through serial_test's in-process locks — nextest's
+      # process-per-test model would need a max-threads = 1 test group to
+      # keep that.
       - name: Run evidence tests
-        run: ./scripts/run_attestation_service_evidence_tdx_tests.sh
+        env:
+          RUST_LOG: info
+          RUST_BACKTRACE: 1
+        run: cargo test -p seismic-attestation-service --test evidence
 
       # The admission suite boots real seismic-reth dev nodes from a prebuilt
       # nightly release binary.
@@ -158,5 +167,7 @@ jobs:
           version: nightly
       - name: Run admission tests
         env:
+          RUST_LOG: info
+          RUST_BACKTRACE: 1
           SEISMIC_RETH_BIN: ${{ steps.sreth.outputs.seismic-reth-path }}
-        run: ./scripts/run_attestation_service_admission_tdx_tests.sh
+        run: cargo test -p seismic-attestation-service --test admission

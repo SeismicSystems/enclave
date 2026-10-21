@@ -1,9 +1,7 @@
-//! Reth-backed responder-admission suite, run through
-//! `scripts/run_attestation_service_admission_tdx_tests.sh` on an Azure TDX
-//! runner: the service's `getWrappedRootKey` gate against a real
-//! `seismic-reth` dev node whose genesis storage carries the measurement
-//! policy. The complement to
-//! the registry-only tests in
+//! Reth-backed responder-admission suite, run on an Azure TDX runner (see
+//! `tests/README.md`): the service's `getWrappedRootKey` gate against a
+//! real `seismic-reth` dev node whose genesis storage carries the measurement
+//! policy. The complement to the registry-only tests in
 //! `crates/measurement-admission/tests/reth_registry.rs` and to the
 //! admission module's mocked unit tests: here the full live path — verified
 //! vTPM evidence → admission ID → fresh finalized chain state → registry
@@ -74,7 +72,7 @@ use seismic_attestation_service::{
     bootstrap::build_root_key_request,
     conf,
     rpc_error::RootKeyRefusal,
-    utils::{init_tracing, is_sudo},
+    utils::{init_tracing, require_tpm_access},
 };
 use seismic_custodian::Custodian;
 use seismic_custodian_ipc::{
@@ -148,9 +146,7 @@ sol! {
 #[tokio::test]
 async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_accepted_tuple_wraps_once_then_deprecation_applies_live: requires sudo");
-    }
+    require_tpm_access("test_accepted_tuple_wraps_once_then_deprecation_applies_live");
 
     let pcrs = observed_pcrs().await;
     let admission_id = *AzureTdxV1Measurements::from_pcrs(&pcrs)
@@ -239,9 +235,7 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
 #[tokio::test]
 async fn test_unknown_tuple_is_denied_and_reth_outage_fails_closed() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_unknown_tuple_is_denied_and_reth_outage_fails_closed: requires sudo");
-    }
+    require_tpm_access("test_unknown_tuple_is_denied_and_reth_outage_fails_closed");
 
     // Synthetic policy: real quotes carry the runner's PCRs, which can never
     // match these values, so the runner's admission ID is unknown on chain.
@@ -276,9 +270,7 @@ async fn test_unknown_tuple_is_denied_and_reth_outage_fails_closed() {
 #[tokio::test]
 async fn test_stale_policy_view_fails_closed() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_stale_policy_view_fails_closed: requires sudo");
-    }
+    require_tpm_access("test_stale_policy_view_fails_closed");
 
     let pcrs = observed_pcrs().await;
     let node = launch_seeded_reth("suite-observed", &pcrs);
@@ -316,9 +308,7 @@ async fn test_stale_policy_view_fails_closed() {
 #[tokio::test]
 async fn test_foreign_pinned_genesis_fails_closed() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_foreign_pinned_genesis_fails_closed: requires sudo");
-    }
+    require_tpm_access("test_foreign_pinned_genesis_fails_closed");
 
     let pcrs = observed_pcrs().await;
     let node = launch_seeded_reth("suite-observed", &pcrs);
