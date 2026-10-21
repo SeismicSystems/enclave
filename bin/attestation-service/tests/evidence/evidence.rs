@@ -1,7 +1,6 @@
 //! Live-TEE coverage of the evidence layer — attested transcripts, quote
-//! verification, and the key flows built on them — run through
-//! `scripts/run_attestation_service_evidence_tdx_tests.sh`. The script
-//! frees the TPM and executes these tests with the required privileges.
+//! verification, and the key flows built on them — run on an Azure TDX
+//! runner (see `tests/README.md`).
 //!
 //! Each node here answers admission reads from a permissive mock registry
 //! (see `utils::spawn_accepting_registry`), isolating what evidence
@@ -13,7 +12,7 @@
 //! process at a time (az-cvm-vtpm hardcodes tss-esapi's default TCTI,
 //! `/dev/tpm0`; only `/dev/tpmrm0` multiplexes). Evidence operations must
 //! therefore never overlap, and each level of concurrency has its own guard:
-//! the script keeps other processes off the device, the shared
+//! nothing else on the runner opens the device, the shared
 //! `serial(attestation_evidence)` key runs these tests one at a time within
 //! this binary, and each test starts its nodes sequentially so a single test
 //! never has two quote operations in flight. Relaxations are tracked
@@ -38,7 +37,7 @@ use seismic_attestation_rpc::{
 use seismic_attestation_service::{
     api::NodeStatusRpcClient as _,
     conf,
-    utils::{init_tracing, is_sudo},
+    utils::{init_tracing, require_tpm_access},
 };
 use seismic_custodian::Custodian;
 use seismic_custodian_ipc::CustodianClient;
@@ -67,9 +66,7 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 #[tokio::test]
 async fn test_two_node_root_key_bootstrap() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_two_node_root_key_bootstrap: skipped (requires sudo privileges)");
-    }
+    require_tpm_access("test_two_node_root_key_bootstrap");
 
     let genesis = start_node("minting node", 0, None).await;
     let joiner = start_node("joining node", 1, Some(vec![genesis.url.clone()])).await;
@@ -101,9 +98,7 @@ async fn test_two_node_root_key_bootstrap() {
 #[tokio::test]
 async fn test_tx_io_evidence_relying_party() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_tx_io_evidence_relying_party: skipped (requires sudo privileges)");
-    }
+    require_tpm_access("test_tx_io_evidence_relying_party");
 
     let node = start_node("minting node", 20, None).await;
 
@@ -180,9 +175,7 @@ async fn test_tx_io_evidence_relying_party() {
 #[tokio::test]
 async fn test_deploy_verification_relying_party() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_deploy_verification_relying_party: skipped (requires sudo privileges)");
-    }
+    require_tpm_access("test_deploy_verification_relying_party");
 
     let node = start_node("minting node", 21, None).await;
 
@@ -259,9 +252,7 @@ async fn test_deploy_verification_relying_party() {
 #[tokio::test]
 async fn test_four_node_root_key_distribution() {
     init_tracing();
-    if !is_sudo() {
-        panic!("test_four_node_root_key_distribution: skipped (requires sudo privileges)");
-    }
+    require_tpm_access("test_four_node_root_key_distribution");
 
     let genesis = start_node("minting node", 10, None).await;
     let joiner_a = start_node("joiner a", 11, Some(vec![genesis.url.clone()])).await;

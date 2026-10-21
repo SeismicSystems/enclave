@@ -51,6 +51,7 @@ installed — see [tss-esapi-sys](https://crates.io/crates/tss-esapi-sys).
 
 The custodian and attestation service run as a coordinated pair: the service
 acquires the root key from the custodian over the socket at startup, so neither
-runs standalone. `scripts/run_integration_tests.sh` exercises the real
+runs standalone. The
+[integration tests](bin/attestation-service/tests/README.md) exercise the real
 topology (a custodian + service pair per node); the deployed systemd units live
 in `seismic-images`.

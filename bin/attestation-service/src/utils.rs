@@ -1,21 +1,22 @@
 use tracing::info;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-/// Checks if the current user has root (sudo) privileges by running `id -u`
-/// and comparing the result to `0` (root).
-///
-/// # Returns
-///
-/// - `true`: user is root.
-/// - `false`: user is not root.
-pub fn is_sudo() -> bool {
-    let output = std::process::Command::new("id")
-        .arg("-u")
-        .output()
-        .expect("Failed to execute id command");
+/// The raw TPM device quote generation opens (az-cvm-vtpm hardcodes
+/// tss-esapi's default TCTI).
+const TPM_DEVICE: &str = "/dev/tpm0";
 
-    let user_id = String::from_utf8(output.stdout).unwrap().trim().to_string();
-    user_id == "0"
+/// Panic unless this process can open [`TPM_DEVICE`] read-write: as root, or
+/// as a member of the group the device is assigned to. The open also fails
+/// while another process holds the device, which live-TEE tests cannot share
+/// either. The device is closed again before this returns.
+pub fn require_tpm_access(test: &str) {
+    if let Err(err) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(TPM_DEVICE)
+    {
+        panic!("{test}: cannot open {TPM_DEVICE} ({err}); see tests/README.md");
+    }
 }
 
 pub fn init_tracing() {

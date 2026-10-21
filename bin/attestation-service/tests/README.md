@@ -1,8 +1,7 @@
 # Integration Tests
 
-`run_attestation_service_evidence_tdx_tests.sh` runs the live-TEE
-attestation-service evidence suite on the self-hosted Azure TDX runner.
-`run_attestation_service_admission_tdx_tests.sh` runs the service's
+The `evidence` target runs the live-TEE attestation-service evidence suite on
+the self-hosted Azure TDX runner. The `admission` target runs the service's
 reth-backed responder-admission suite on the same runner.
 
 ## Covered flows
@@ -45,25 +44,42 @@ a `seismic-reth` binary (`SEISMIC_RETH_BIN`).
 
 - An Azure TDX CVM with vTPM and IMDS access.
 - Network access for attestation collateral/certificate retrieval.
-- Root privileges for the TEE devices.
-- The image's resident node service stopped before the test takes over the
-  TPM. On the CI image, the script asks Supervisor to stop it if present.
+- Read-write access to the raw TPM device (`/dev/tpm0`), which quote
+  generation opens. Ubuntu's udev rules give it to group `root` (only
+  `/dev/tpmrm0` goes to `tss`), so either run as root or reassign it and join
+  `tss`:
+
+  ```bash
+  echo 'KERNEL=="tpm0", GROUP="tss", MODE="0660"' | sudo tee /etc/udev/rules.d/70-tpm0-tss.rules
+  sudo udevadm control --reload && sudo udevadm trigger /dev/tpm0
+  sudo usermod -aG tss "$USER"   # then log in again
+  ```
+
+- No other process holding the TPM: the kernel hands `/dev/tpm0` to one
+  process at a time. Stop any resident node service first.
 - A Rust toolchain.
 
-Each script builds its test binary as the runner user and executes it with
-`sudo`. Every node under test gets its own conf dir (`--conf-dir`), written
-the way tdx-init writes a node's: the network manifest, the root-key peers,
-and the done marker. The evidence suite uses the checked-in network-manifest
-fixture; the admission tests render their own, because a network's identity
-commits to its genesis hash and each of those tests mints a fresh genesis.
+Every node under test gets its own conf dir (`--conf-dir`), written the way
+tdx-init writes a node's: the network manifest, the root-key peers, and the
+done marker. The evidence suite uses the checked-in network-manifest fixture;
+the admission tests render their own, because a network's identity commits to
+its genesis hash and each of those tests mints a fresh genesis.
 
 ## Running
 
 ```bash
-./scripts/run_attestation_service_evidence_tdx_tests.sh
-./scripts/run_attestation_service_admission_tdx_tests.sh
+cargo test -p seismic-attestation-service --test evidence
+SEISMIC_RETH_BIN=/path/to/seismic-reth cargo test -p seismic-attestation-service --test admission
 ```
 
-CI runs the same scripts as the two steps of the
-`attestation_service_tdx_tests` job in `.github/workflows/ci.yml` — one job,
-so the suites share a single dependency build on the TDX runner.
+The admission tests find `seismic-reth` through `SEISMIC_RETH_BIN`, then
+`PATH`, then a sibling `seismic-reth` checkout's `target/{debug,release}`.
+Each test panics up front if it cannot open `/dev/tpm0`.
+
+Use `cargo test`, not nextest. Each target is one binary whose tests
+serialize on the single vTPM through `serial_test`, whose locks are
+in-process; nextest runs every test in its own process in parallel.
+
+CI runs these as the two test steps of the `attestation_service_tdx_tests`
+job in `.github/workflows/ci.yml` — one job, so the suites share a single
+dependency build on the TDX runner.
