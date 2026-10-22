@@ -193,6 +193,16 @@ fn main() -> Result<()> {
         );
     }
 
+    // Metrics are served on the council listener. Seed the delivered-epoch
+    // gauge from the (possibly backfilled) store so a restart reports the
+    // real value immediately.
+    seismic_centralized_custodian_service::metrics::init(if fetcher.is_some() {
+        "observer"
+    } else {
+        "validator"
+    });
+    seismic_centralized_custodian_service::metrics::set_delivered_epoch(state.status().epoch);
+
     let unix_listener = bind(&args.socket)
         .with_context(|| format!("binding custodian socket {}", args.socket.display()))?;
     let http_server = tiny_http::Server::http(args.council_listen).map_err(|err| {

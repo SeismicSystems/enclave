@@ -10,6 +10,7 @@
 
 pub mod council;
 pub mod dispatch;
+pub mod metrics;
 pub mod observer;
 pub mod observer_serving;
 pub mod root_key_file;

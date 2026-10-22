@@ -40,6 +40,8 @@ tiny_http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zeroize.workspace = true
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.17", default-features = false }
 
 [dev-dependencies]
 # Tests drive the served socket with the async client. Dev-only: resolver v2

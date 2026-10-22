@@ -199,6 +199,9 @@ fn observer_nonce_works_across_clients_and_cannot_be_replayed() {
 
 #[test]
 fn real_http_delivery_preserves_verification_conflicts_and_persistence() {
+    // Metrics are process-global and other tests in this binary also drive
+    // the handler, so the checks below assert presence and lower bounds.
+    seismic_centralized_custodian_service::metrics::init("validator");
     let dir = tempfile::tempdir().unwrap();
     let state = state(dir.path());
     let server = HttpServer::new(CouncilHandler::new(state.clone(), None));
@@ -263,4 +266,86 @@ fn real_http_delivery_preserves_verification_conflicts_and_persistence() {
         }
     ));
     assert_eq!(common::state(dir.path()).status().epoch, 1);
+
+    // The same listener serves Prometheus metrics. After the deliveries
+    // above: the epoch gauge advanced on the one accepted delivery, every
+    // council outcome seen is counted, and the exposition is well formed.
+    let scrape = raw(&server.base, "GET", "/metrics", "text/plain", b"", false);
+    let scrape = String::from_utf8(scrape).unwrap();
+    let (headers, body) = scrape.split_once("\r\n\r\n").unwrap();
+    assert!(headers.starts_with("HTTP/1.1 200"), "{headers}");
+    assert!(
+        headers.contains("Content-Type: text/plain; version=0.0.4; charset=utf-8"),
+        "{headers}"
+    );
+    assert!(headers.contains("Cache-Control: no-store"), "{headers}");
+    let counter = |body: &str, series: &str| -> u64 {
+        body.lines()
+            .find_map(|l| l.strip_prefix(series).and_then(|v| v.trim().parse().ok()))
+            .unwrap_or_else(|| panic!("missing series {series}: {body}"))
+    };
+    assert_eq!(counter(body, "custodian_delivered_epoch"), 1, "{body}");
+    assert!(
+        counter(
+            body,
+            "custodian_council_requests_total{outcome=\"delivered\"}"
+        ) >= 1
+    );
+    assert!(
+        counter(
+            body,
+            "custodian_council_requests_total{outcome=\"already_delivered\"}"
+        ) >= 1
+    );
+    assert!(
+        counter(
+            body,
+            "custodian_council_requests_total{outcome=\"rejected\"}"
+        ) >= 4
+    );
+    assert!(
+        body.contains("custodian_build_info{") && body.contains("role=\"validator\""),
+        "{body}"
+    );
+    // No payloads, nonces, or key bytes leak into the scrape.
+    assert!(!body.contains("0x") && !body.contains("55555555"), "{body}");
+    for line in body.lines() {
+        assert!(
+            line.is_empty()
+                || line.starts_with('#')
+                || line
+                    .rsplit_once(' ')
+                    .is_some_and(|(_, v)| v.parse::<f64>().is_ok()),
+            "malformed exposition line: {line:?}"
+        );
+    }
+    // A non-GET on /metrics is not a metrics request; it falls through to
+    // the council path's 404 and is counted as an HTTP error.
+    let before = counter(body, "custodian_council_http_errors_total{status=\"404\"}");
+    let bad = raw(
+        &server.base,
+        "POST",
+        "/metrics",
+        "application/cbor",
+        b"",
+        false,
+    );
+    assert!(String::from_utf8_lossy(&bad).starts_with("HTTP/1.1 404"));
+    let scrape = String::from_utf8(raw(
+        &server.base,
+        "GET",
+        "/metrics",
+        "text/plain",
+        b"",
+        false,
+    ))
+    .unwrap();
+    assert_eq!(
+        counter(
+            &scrape,
+            "custodian_council_http_errors_total{status=\"404\"}"
+        ),
+        before + 1,
+        "{scrape}"
+    );
 }

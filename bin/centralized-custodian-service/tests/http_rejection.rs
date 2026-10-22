@@ -38,6 +38,13 @@ impl CustodianProcess {
         command
             .env_clear()
             .env("RUST_LOG", "info")
+            // glibc reserves a 64 MiB arena per thread (up to 8 x cores), so an
+            // idle custodian with its 16 council workers sits at ~1 GiB of
+            // address space while using ~5 MiB. Under RLIMIT_AS those
+            // reservations, not real allocations, are what would trip the
+            // limit. Two arenas are plenty for this process and keep the
+            // measurement about the request paths.
+            .env("MALLOC_ARENA_MAX", "2")
             .args(["--council-listen", "127.0.0.1:0", "--chain-id", "5124"])
             .arg("--council-address")
             .arg(format!(
@@ -55,12 +62,17 @@ impl CustodianProcess {
             .stdin(Stdio::null())
             .stderr(log.try_clone().unwrap())
             .stdout(log);
+        // The oversized requests below declare 1 GiB bodies. The address-space
+        // cap only needs to sit below that so a server which allocates or
+        // buffers a declared body fails fast instead of OOMing the runner;
+        // it is not a statement of what the custodian needs.
+        const ADDRESS_SPACE_CAP: libc::rlim_t = 768 * 1024 * 1024;
         // SAFETY: only async-signal-safe setrlimit calls are made between fork
         // and exec. Limits apply only to the disposable child, never the runner.
         unsafe {
             command.pre_exec(|| {
                 for (resource, limit) in
-                    [(libc::RLIMIT_AS, 512 * 1024 * 1024), (libc::RLIMIT_CORE, 0)]
+                    [(libc::RLIMIT_AS, ADDRESS_SPACE_CAP), (libc::RLIMIT_CORE, 0)]
                 {
                     let limit = libc::rlimit {
                         rlim_cur: limit,
