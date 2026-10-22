@@ -42,6 +42,12 @@ behavior passes the regression tests below. The custodian enables no TLS feature
    complete CBOR prefix in an incomplete HTTP body from reaching dispatch.
    Empty-buffer reads and correctly framed keep-alive messages remain valid.
 
+7. Two `#[allow]` attributes on unchanged upstream items (`MustBeShareDummy`
+   in `lib.rs`, the `SequentialWriter` re-export in `util/mod.rs`) that newer
+   rustc lints flag. Registry dependencies compile with `--cap-lints allow`;
+   this path dependency does not, and the workspace builds with `-D warnings`.
+   No behaviour change.
+
 The cancellation plumbing is in `connection.rs`, `client.rs`, `request.rs`
 and `lib.rs`; only paths that explicitly close the socket may add the close
 header in `response.rs`. Like upstream, ordinary `Response::with_header("Connection",
@@ -59,8 +65,10 @@ cargo test -p seismic-council-delivery --features cli --test http_cli
 ```
 
 The Linux rejection tests spawn the **actual custodian binary**, with a
-512 MiB address-space limit, disabled core dumps, temporary state and an
-OS-selected loopback port. They send header-only enormous lengths, other
+768 MiB address-space limit (below the 1 GiB bodies the tests declare, so a
+server that buffers them fails fast), `MALLOC_ARENA_MAX=2` so glibc's
+per-thread 64 MiB arena reservations do not dominate that limit, disabled
+core dumps, temporary state and an OS-selected loopback port. They send header-only enormous lengths, other
 incomplete rejected bodies, an unfinished oversized chunk and malformed
 chunk input. They require the final status **and socket EOF**, retain client
 write sides across more requests than the worker count, and verify that
