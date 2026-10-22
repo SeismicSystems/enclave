@@ -173,6 +173,7 @@ impl CentralizedCustodianState {
             custodian,
             envelope_bytes,
         });
+        crate::metrics::set_delivered_epoch(epoch);
         info!(epoch, "epoch root key delivered");
         CouncilResponse::Delivered { epoch }
     }

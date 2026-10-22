@@ -27,6 +27,17 @@ pub fn dispatch(
     fetcher: Option<&ParentFetcher>,
     request: Request,
 ) -> Response {
+    let request_kind = request.method();
+    let response = dispatch_inner(state, fetcher, request);
+    crate::metrics::record_socket_request(request_kind, response.kind());
+    response
+}
+
+fn dispatch_inner(
+    state: &CentralizedCustodianState,
+    fetcher: Option<&ParentFetcher>,
+    request: Request,
+) -> Response {
     match request {
         Request::Ping => Response::Pong,
         Request::GetTxIoKeypair { epoch: 0 } => {

@@ -161,6 +161,8 @@ impl From<Request> for Message {
 
 // this trait is to make sure that Server implements Share and Send
 #[doc(hidden)]
+// Upstream code; a compile-time assertion is "never used" by design.
+#[allow(dead_code)]
 trait MustBeShareDummy: Sync + Send {}
 #[doc(hidden)]
 impl MustBeShareDummy for Server {}

@@ -25,6 +25,7 @@ use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 use tracing::{info, warn};
 
 const HTTP_WORKERS: usize = 16;
+const METRICS_PATH: &str = "/metrics";
 const MAX_CHALLENGES: usize = 1024;
 const CHALLENGE_TTL: Duration = Duration::from_secs(30);
 
@@ -146,10 +147,14 @@ impl CouncilHandler {
             outcome = response.kind(),
             "council request"
         );
+        crate::metrics::record_council_request(response.kind());
         response
     }
 
     pub fn handle_http(&self, mut request: Request) {
+        if request.url() == METRICS_PATH && request.method() == &Method::Get {
+            return respond_metrics(request);
+        }
         if request.url() != COUNCIL_PATH {
             return http_error(request, 404);
         }
@@ -216,7 +221,23 @@ fn header(name: &str, value: &str) -> Header {
     Header::from_bytes(name, value).expect("static HTTP header")
 }
 
+/// `GET /metrics`: Prometheus text exposition. Loopback-only like the rest
+/// of the council listener; the response carries counts and labels, never
+/// key material.
+fn respond_metrics(request: Request) {
+    let body = crate::metrics::render();
+    let response = Response::from_string(body)
+        .with_status_code(StatusCode(200))
+        .with_header(header(
+            "Content-Type",
+            "text/plain; version=0.0.4; charset=utf-8",
+        ))
+        .with_header(header("Cache-Control", "no-store"));
+    let _ = request.respond_and_close(response);
+}
+
 fn http_error(request: Request, status: u16) {
+    crate::metrics::record_council_http_error(status);
     // No request/response bodies or parser diagnostics in logs/errors.
     let mut response =
         Response::empty(StatusCode(status)).with_header(header("Cache-Control", "no-store"));
