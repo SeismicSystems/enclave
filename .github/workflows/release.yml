@@ -27,12 +27,22 @@
 #   - a bad release that was live long enough to be downloaded: cut the next
 #     version. A release someone may have verified is immutable.
 #
-# Each release ships
-# seismic-centralized-custodian-service_<tag>_linux_amd64.tar.gz — the
-# service binary built in its own cargo invocation, as its Cargo.toml requires
-# for the no-async-runtime guarantee — beside a build provenance attestation,
-# verifiable with
-# `gh attestation verify seismic-centralized-custodian-service --repo SeismicSystems/enclave`.
+# Each release ships three assets:
+#
+#   seismic-centralized-custodian-service_<tag>_linux_amd64.tar.gz        the binary
+#   seismic-centralized-custodian-service_<tag>_linux_amd64.sigstore.json  its build provenance
+#                                                                     attestation
+#                                                                     (Sigstore bundle)
+#   SHA256SUMS                                                        digests of both
+#
+# The service binary is built in its own cargo invocation, as its Cargo.toml
+# requires for the no-async-runtime guarantee. The bundle is the attestation
+# GitHub also stores behind its API; shipping it as an asset lets anyone verify
+# with the GitHub CLI but without a GitHub login, which the bare
+# `gh attestation verify` (API lookup) requires:
+#
+#   gh attestation verify seismic-centralized-custodian-service --owner SeismicSystems \
+#       --bundle seismic-centralized-custodian-service_<tag>_linux_amd64.sigstore.json
 #
 # The runner is pinned, never `-latest`: the binary links glibc dynamically
 # and needs the build host's version or newer at run time, so the build host
@@ -173,12 +183,20 @@ jobs:
         with:
           subject-path: target/release/${{ env.BIN }}
 
-      - name: Record the attestation URL
+      # The bundle is what `gh attestation verify --bundle` consumes; the URL
+      # sidecar remains for humans. SHA256SUMS covers the tarball and bundle
+      # for operators verifying without gh.
+      - name: Publish the attestation bundle and checksums
         if: steps.info.outputs.publish == 'true'
         env:
           TAG: ${{ steps.info.outputs.tag }}
           ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
-        run: echo "$ATTESTATION_URL" > "dist/${BIN}_${TAG}_linux_amd64.attestation.txt"
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE_PATH" "dist/${BIN}_${TAG}_linux_amd64.sigstore.json"
+          echo "$ATTESTATION_URL" > "dist/${BIN}_${TAG}_linux_amd64.attestation.txt"
+          (cd dist && sha256sum "${BIN}_${TAG}_linux_amd64.tar.gz" "${BIN}_${TAG}_linux_amd64.sigstore.json" > SHA256SUMS)
+          cat dist/SHA256SUMS
 
       # Hand-off to the publish job. A day is plenty: the release is the
       # durable copy.
@@ -237,11 +255,12 @@ jobs:
             echo
             echo "## Verify"
             echo
-            echo "The tarball holds the \`$BIN\` binary. It needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, and later) and nothing else from the host: TLS is rustls, compiled in, and no TPM stack is linked. Its build provenance is attested by GitHub:"
+            echo "The tarball holds the \`$BIN\` binary. It needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, and later) and nothing else from the host: TLS is rustls, compiled in, and no TPM stack is linked. Its build provenance is attested by GitHub; the \`.sigstore.json\` asset is the attestation bundle, so verification needs the GitHub CLI but no GitHub login:"
             echo
             echo '```sh'
+            echo "sha256sum --ignore-missing -c SHA256SUMS"
             echo "tar -xzf ${BIN}_${TAG}_linux_amd64.tar.gz"
-            echo "gh attestation verify $BIN --repo $GITHUB_REPOSITORY"
+            echo "gh attestation verify $BIN --owner ${GITHUB_REPOSITORY%%/*} --bundle ${BIN}_${TAG}_linux_amd64.sigstore.json"
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
