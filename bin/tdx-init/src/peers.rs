@@ -156,15 +156,10 @@ pub fn summit_advertised_addr(node: &NodeConfig) -> SocketAddr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tdx_init_config::DomainConfig;
 
     fn node(external_ip: &str) -> NodeConfig {
         NodeConfig {
             external_ip: external_ip.parse().unwrap(),
-            domain: DomainConfig {
-                email: "ops@example.com".parse().unwrap(),
-                name: "node1.example.com".parse().unwrap(),
-            },
         }
     }
 

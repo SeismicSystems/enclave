@@ -2,7 +2,7 @@ use crate::error::Result;
 use std::net::{IpAddr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tdx_init_config::{Bootnode, DomainConfig, InitConfig};
+use tdx_init_config::{Bootnode, InitConfig};
 use tokio::fs;
 use tracing::info;
 
@@ -42,7 +42,6 @@ pub async fn write_service_configs(
     )?;
 
     fs::create_dir_all(conf_dir).await?;
-    write_domain_env(conf_dir, &config.node.domain).await?;
     write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
     write_reth_p2p_env(conf_dir, &peers.peer_enodes, config.node.external_ip).await?;
     write_summit_env(conf_dir, summit_addr).await?;
@@ -83,20 +82,6 @@ async fn write_reth_genesis(conf_dir: &Path, genesis_bytes: &[u8]) -> Result<()>
 async fn write_summit_genesis(conf_dir: &Path, genesis_bytes: &[u8]) -> Result<()> {
     let path = conf_dir.join("summit-genesis.toml");
     write_with_mode(&path, genesis_bytes, DEFAULT_FILE_MODE).await?;
-    info!("wrote {}", path.display());
-    Ok(())
-}
-
-/// Both values are written unquoted, which is safe only because
-/// [`DomainConfig`]'s types admit no whitespace, quote, `$`, backslash or
-/// newline.
-async fn write_domain_env(conf_dir: &Path, domain: &DomainConfig) -> Result<()> {
-    let path = conf_dir.join("domain.env");
-    let content = format!(
-        "DOMAIN_NAME={}\nDOMAIN_EMAIL={}\n",
-        domain.name, domain.email,
-    );
-    write_with_mode(&path, &content, DEFAULT_FILE_MODE).await?;
     info!("wrote {}", path.display());
     Ok(())
 }
@@ -231,10 +216,6 @@ mod tests {
             },
             node: NodeConfig {
                 external_ip: "203.0.113.1".parse().unwrap(),
-                domain: DomainConfig {
-                    email: "ops@example.com".parse().unwrap(),
-                    name: "node1.example.com".parse().unwrap(),
-                },
             },
         }
     }
@@ -249,12 +230,6 @@ mod tests {
         write_service_configs(tmp.path(), &candidate, &cfg)
             .await
             .unwrap();
-
-        let domain = std::fs::read_to_string(tmp.path().join("domain.env")).unwrap();
-        assert_eq!(
-            domain,
-            "DOMAIN_NAME=node1.example.com\nDOMAIN_EMAIL=ops@example.com\n"
-        );
 
         // The peer list is derived from the bootnode hosts, not delivered.
         let attestation = std::fs::read_to_string(tmp.path().join("attestation.env")).unwrap();
@@ -486,12 +461,7 @@ mod tests {
             .await
             .unwrap();
 
-        for name in [
-            "domain.env",
-            "attestation.env",
-            "reth-p2p.env",
-            "summit.env",
-        ] {
+        for name in ["attestation.env", "reth-p2p.env", "summit.env"] {
             let meta = std::fs::metadata(tmp.path().join(name)).unwrap();
             let mode = meta.permissions().mode() & 0o777;
             assert_eq!(mode, DEFAULT_FILE_MODE);

@@ -48,10 +48,6 @@ bootnodes = ["enode://<128 hex pubkey>@host:port"]  # the cohort's peers; [] onl
 
 [node]                               # this node only
 external_ip = "203.0.113.7"          # this VM's public IP (reth --nat extip:, summit --ip)
-
-[node.domain]
-name = "<your.public.dns.name>"      # FQDN clients reach this VM at
-email = "<contact@example.com>"      # ACME registration / renewal email
 ```
 
 ### What each field becomes
@@ -64,7 +60,6 @@ flowchart LR
         SG["[network]<br/>summit_genesis_base64"]
         BN["[network]<br/>bootnodes"]
         IP["[node]<br/>external_ip"]
-        DOM["[node.domain]<br/>name, email"]
     end
 
     subgraph conf["/run/seismic/conf: each file and its reader"]
@@ -74,7 +69,6 @@ flowchart LR
         AE["<b>attestation.env</b><br/>attestation service:<br/>where to fetch root_key"]
         RP["<b>reth-p2p.env</b><br/>reth:<br/>--bootnodes<br/>--trusted-peers<br/>--nat extip:"]
         SE["<b>summit.env</b><br/>summit: --ip"]
-        DE["<b>domain.env</b><br/>nginx-ssl-setup: certbot"]
     end
 
     M -- verbatim --> MF
@@ -84,7 +78,6 @@ flowchart LR
     BN -- "peer enodes" --> RP
     IP -- "the NAT address" --> RP
     IP -- "host:18551" --> SE
-    DOM --> DE
 ```
 
 - **The three `[network]` artifacts are written verbatim**, never parsed and
@@ -112,8 +105,8 @@ flowchart LR
 ### What tdx-init checks at POST time
 
 A failed check answers `400` and writes nothing, so a bad config fails the
-deploy rather than a later boot. The shape of `bootnodes`, `external_ip` and
-`[node.domain]` is checked while the TOML is parsed, by
+deploy rather than a later boot. The shape of `bootnodes` and `external_ip` is
+checked while the TOML is parsed, by
 [`tdx-init-config`](../../crates/tdx-init-config)'s types, so deploy tooling
 building a config runs the same checks.
 
@@ -133,19 +126,15 @@ building a config runs the same checks.
   domains from it, so a node fed a divergent genesis can't complete a
   handshake (`src/summit_genesis.rs`).
 - **`bootnodes`**: each entry is `enode://<128 hex pubkey>@host:port`, with
-  the host an IPv4 address, a bracketed IPv6 address or a hostname, so no
-  entry can break a line of `reth-p2p.env` or `attestation.env`. At least one
+  the host an IPv4 address, a bracketed IPv6 address or an RFC 1123 hostname
+  (letters, digits and `-` in dot-separated labels, at most 253 characters),
+  so no entry can break a line of `reth-p2p.env` or `attestation.env`. At least one
   names a machine other than this one, unless this box holds the pinned
   candidate. tdx-init compares the custodian's candidate tx_io_pk file
   (`/run/seismic/custodian/candidate-tx-io-pk`) with the manifest's
   `founding_tx_io_pk`, so `bootnodes = []` is valid only on the box assemble
   pinned, at founding (`src/peers.rs`).
 - **`external_ip`**: an IP address.
-- **`[node.domain]`**: `name` is an RFC 1123 hostname (letters, digits and
-  `-` in dot-separated labels, at most 253 characters) and `email` is
-  `<local>@<hostname>` with a local part of letters, digits and `._+-`.
-  Both reach root-run code on the node as unquoted text, so neither may carry
-  whitespace, quotes, `$`, backticks, `;`, `/` or a newline.
 
 ## Per-service outputs
 
@@ -153,7 +142,6 @@ After validation, tdx-init writes:
 
 | File | Schema | Consumer |
 |---|---|---|
-| `/run/seismic/conf/domain.env` | `DOMAIN_NAME=...`, `DOMAIN_EMAIL=...` | the TLS proxy (seismic-images) — the certificate's domain and the ACME contact |
 | `/run/seismic/conf/attestation.env` | `SEISMIC_ROOT_KEY_PEERS=...` | [`seismic-attestation-service`](../attestation-service) — read in-process once the sentinel appears. Derived from `[network].bootnodes`, not a config field |
 | `/run/seismic/conf/network-manifest.json` | verbatim manifest bytes | [`seismic-attestation-service`](../attestation-service) — hashes the file itself to derive `network_id` for attestation bindings; [`seismic-custodian-service`](../custodian-service) — reads `founding_tx_io_pk` from it |
 | `/run/seismic/conf/reth-genesis.json` | verbatim reth genesis bytes | `reth.service` (seismic-images) — passed to `seismic-reth node --chain` |
