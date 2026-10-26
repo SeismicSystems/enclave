@@ -9,10 +9,9 @@
 //! costs a downstream crate nothing but `serde`. Validation is split:
 //!
 //! - here: the shape of each field that has one. `external_ip` is an
-//!   `IpAddr`, each bootnode a [`Bootnode`], and the `[node.domain]` values a
-//!   [`Hostname`] and a [`PlainEmail`]. None can be built from an invalid
-//!   string, so the check runs wherever a config is parsed or built, in
-//!   `tdx-init` and in deploy tooling alike;
+//!   `IpAddr` and each bootnode a [`Bootnode`]. Neither can be built from an
+//!   invalid string, so the check runs wherever a config is parsed or built,
+//!   in `tdx-init` and in deploy tooling alike;
 //! - in `tdx-init`: every check that needs more than one field (the manifest
 //!   schema, the genesis commitments, the peers against the custodian's
 //!   candidate key), run when the POST is handled.
@@ -25,9 +24,9 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
 mod bootnode;
-mod domain;
+mod hostname;
 pub use bootnode::{Bootnode, BootnodeHost, InvalidBootnode};
-pub use domain::{Hostname, InvalidDomain, PlainEmail};
+pub use hostname::{Hostname, InvalidHostname};
 
 /// Operator-supplied initialization config, received over HTTP at deploy
 /// time and fanned out by tdx-init into per-component config files under
@@ -56,17 +55,6 @@ pub struct InitConfig {
 
     /// Per-node settings; see [`NodeConfig`].
     pub node: NodeConfig,
-}
-
-/// DNS name + contact email for the Let's Encrypt cert that fronts this
-/// node's public RPC. Written by tdx-init to `domain.env` under
-/// `/run/seismic/conf` as `DOMAIN_NAME=...` / `DOMAIN_EMAIL=...`, for the
-/// image's TLS proxy (seismic-images).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DomainConfig {
-    pub email: PlainEmail,
-    pub name: Hostname,
 }
 
 /// The network's identity document, common to genesis and joining nodes.
@@ -148,9 +136,6 @@ pub struct NodeConfig {
     /// this node's own enode when deriving root-key fetch peers from
     /// `[network].bootnodes`.
     pub external_ip: IpAddr,
-
-    /// TLS identity for this node's public RPC; see [`DomainConfig`].
-    pub domain: DomainConfig,
 }
 
 #[cfg(test)]
@@ -171,10 +156,6 @@ bootnodes = [
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert_eq!(
@@ -183,15 +164,10 @@ email = "ops@example.com"
         );
         assert_eq!(cfg.network.bootnodes.len(), 2);
         assert_eq!(cfg.node.external_ip.to_string(), "203.0.113.7");
-        assert_eq!(cfg.node.domain.name.as_ref(), "node1.example.com");
-        assert_eq!(cfg.node.domain.email.as_ref(), "ops@example.com");
     }
 
-    /// A full config whose `[node.domain]` holds `name` and `email`, each
-    /// TOML-escaped so a newline arrives as one.
-    fn with_domain(name: &str, email: &str) -> String {
-        format!(
-            r#"
+    /// A full config, for a test to edit one line of.
+    const CONFIG: &str = r#"
 [network]
 manifest_base64 = "eyJ9"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
@@ -200,37 +176,23 @@ bootnodes = []
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = {}
-email = {}
-"#,
-            toml::Value::from(name),
-            toml::Value::from(email),
-        )
-    }
+"#;
 
     #[test]
-    fn rejects_shell_and_config_syntax_in_the_domain() {
-        // Both values reach root-run code as unquoted text: neither may carry
-        // anything a shell or a config parser would read as syntax.
-        toml::from_str::<InitConfig>(&with_domain("node1.example.com", "ops@example.com")).unwrap();
-        for bad in [";", "$(", "`", "/", "\n", "{", " "] {
-            let name = format!("node1{bad}id.example.com");
-            let err =
-                toml::from_str::<InitConfig>(&with_domain(&name, "ops@example.com")).unwrap_err();
-            assert!(err.to_string().contains("domain name"), "{name:?}: {err}");
-
-            let email = format!("ops{bad}id@example.com");
-            let err = toml::from_str::<InitConfig>(&with_domain("node1.example.com", &email))
-                .unwrap_err();
-            assert!(err.to_string().contains("domain email"), "{email:?}: {err}");
-        }
+    fn rejects_the_removed_domain_section() {
+        // The image runs no TLS proxy, so nothing on the node reads a domain:
+        // an old deploy CLI still sending one must get a clean 400.
+        toml::from_str::<InitConfig>(CONFIG).unwrap();
+        let toml_input = format!(
+            "{CONFIG}\n[node.domain]\nname = \"node1.example.com\"\nemail = \"ops@example.com\"\n"
+        );
+        let err = toml::from_str::<InitConfig>(&toml_input).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("unknown"), "{err}");
     }
 
     #[test]
     fn rejects_an_external_ip_that_is_not_an_ip() {
-        let toml_input = with_domain("node1.example.com", "ops@example.com").replace(
+        let toml_input = CONFIG.replace(
             r#"external_ip = "203.0.113.7""#,
             r#"external_ip = "not.an.ip""#,
         );
@@ -240,7 +202,7 @@ email = {}
 
     #[test]
     fn rejects_a_malformed_bootnode() {
-        let toml_input = with_domain("node1.example.com", "ops@example.com").replace(
+        let toml_input = CONFIG.replace(
             "bootnodes = []",
             r#"bootnodes = ["enode://abc@10.0.0.1:30303"]"#,
         );
@@ -262,10 +224,6 @@ bootnodes = []
 [node]
 external_ip = "203.0.113.7"
 genesis_node = true
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("unknown"));
@@ -284,10 +242,6 @@ bootnodes = []
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let cfg: InitConfig = toml::from_str(toml_input).unwrap();
         assert!(cfg.network.bootnodes.is_empty());
@@ -303,10 +257,6 @@ summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("bootnodes"));
@@ -324,10 +274,6 @@ bootnodes = []
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("reth_genesis_base64"));
@@ -346,10 +292,6 @@ bootnodes = []
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("summit_genesis_base64"));
@@ -360,10 +302,6 @@ email = "ops@example.com"
         let toml_input = r#"
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("network"));
@@ -392,28 +330,9 @@ summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
 bootnodes = []
 
 [node]
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().contains("external_ip"));
-    }
-
-    #[test]
-    fn requires_domain_in_node_section() {
-        let toml_input = r#"
-[network]
-manifest_base64 = "eyJtYW5pZmVzdF92ZXJzaW9uIjogMX0K"
-reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
-summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
-bootnodes = []
-
-[node]
-external_ip = "203.0.113.7"
-"#;
-        let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
-        assert!(err.to_string().contains("domain"));
     }
 
     #[test]
@@ -428,10 +347,6 @@ network_id = "0xabcd"
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("unknown"));
@@ -449,10 +364,6 @@ bootnodes = []
 [node]
 external_ip = "203.0.113.7"
 internal_ip = "10.0.0.1"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("unknown"));
@@ -475,10 +386,6 @@ bootnodes = []
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 "#;
         let err = toml::from_str::<InitConfig>(toml_input).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("unknown"));
@@ -495,10 +402,6 @@ bootnodes = []
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "node1.example.com"
-email = "ops@example.com"
 
 [bogus]
 field = "value"

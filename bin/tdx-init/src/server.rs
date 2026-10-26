@@ -112,7 +112,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn a_domain_with_shell_syntax_is_a_400_and_consumes_nothing() {
+    async fn a_bootnode_with_shell_syntax_is_a_400_and_consumes_nothing() {
         let (config_tx, _config_rx) = oneshot::channel();
         let state = AppState {
             config_sender: Arc::new(tokio::sync::Mutex::new(Some(config_tx))),
@@ -122,18 +122,13 @@ mod tests {
 manifest_base64 = "eyJ9"
 reth_genesis_base64 = "eyJjb25maWciOnt9fQ=="
 summit_genesis_base64 = "bmFtZXNwYWNlID0gIl9TVU1NSVQiCg=="
-bootnodes = []
+bootnodes = ["enode://{id}@x;reboot:30303"]
 
 [node]
 external_ip = "203.0.113.7"
-
-[node.domain]
-name = "x;reboot"
-email = "ops@example.com"
-"#;
-        let err = handle_config(State(state.clone()), body.to_string())
-            .await
-            .unwrap_err();
+"#
+        .replace("{id}", &"a".repeat(128));
+        let err = handle_config(State(state.clone()), body).await.unwrap_err();
         assert_eq!(err.into_response().status(), StatusCode::BAD_REQUEST);
         assert!(state.config_sender.lock().await.is_some());
     }

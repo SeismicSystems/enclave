@@ -87,7 +87,7 @@ pub enum LuksProvisioningStatus {
 /// Computed per call, never cached or checked at startup: reth comes up after
 /// this service, so this must be able to answer `Matches` later without a
 /// restart. Every field is public network data — the pin is in the manifest
-/// and block 0 is served on the node's public `/rpc` — so an unauthenticated
+/// and block 0 is served by the node's public RPC — so an unauthenticated
 /// caller learns nothing here it could not compute itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
