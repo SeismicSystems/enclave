@@ -237,7 +237,9 @@ impl CouncilHandler {
             Ok(bytes) => bytes,
             Err(_) => return http_error(500),
         };
-        let mut response = Response::new(Full::new(Bytes::copy_from_slice(&bytes)));
+        // Keep the zeroizing allocation as the body's owner (not a plain copy):
+        // observer responses carry plaintext root keys and are wiped on drop.
+        let mut response = Response::new(Full::new(Bytes::from_owner(bytes)));
         response.headers_mut().insert(
             header::CONTENT_TYPE,
             HeaderValue::from_static(CBOR_CONTENT_TYPE),
