@@ -17,8 +17,10 @@ validator custodians; correctly configured observers sync from their parents.
 
 ## HTTP transport and confidentiality
 
-The backend is synchronous `tiny_http`, with no TLS features and no async
-runtime. It defaults to **`127.0.0.1:7876`** and exposes:
+The backend is `hyper`'s HTTP/1.1 server on a single-threaded tokio runtime
+confined to the council thread; the rest of the process (dispatch, the Unix
+socket, the observer client) is synchronous. It has no TLS features. It
+defaults to **`127.0.0.1:7876`** and exposes:
 
 ```http
 POST /v1/council
@@ -31,24 +33,15 @@ CBOR, **without** the Unix socket's four-byte length prefix. The body limit
 is 64 KiB in both directions. The methods are `Ping`, `GetStatus`,
 `DeliverEpochKey`, `ObserverChallenge`, and `ObserverFetch`. Valid protocol
 replies, including typed delivery/observer rejections, return HTTP 200.
-Transport errors use 400 (invalid CBOR or unsupported protocol upgrade), 404
-(path), 405 (method), 413 (body limit/read failure, including premature EOF),
-415 (content type), or 500 (response encoding failure). Unsupported HTTP versions
-are rejected by the parser with HTTP/1.1 505 and connection closure.
-Responses carry `Cache-Control: no-store`; no keys belong in URLs or logs.
-Transport errors close the connection without draining an unread body.
-
-The workspace uses a pinned, locally patched `tiny_http` (see
-[`vendor/tiny_http/LOCAL_PATCH.md`](../../vendor/tiny_http/LOCAL_PATCH.md)).
-Upstream 0.12.0 allocates from an unread `Content-Length` when dropping a
-rejected request, even after HTTP 413, and ignores response-side
-`Connection: close` headers. The patch bounds cleanup buffers and provides
-an explicit respond-and-close API that cancels body reads and closes the
-socket before request destruction. It also rejects unsupported HTTP versions
-without leaking parser tasks, and treats truncated fixed-length/chunked bodies
-as errors rather than complete messages. The council endpoint rejects protocol
-upgrades so their raw-reader path cannot bypass framing checks. Do not substitute
-the unpatched crate.
+Transport errors use 400 (invalid CBOR or a protocol upgrade request), 404
+(path), 405 (method), 413 (body limit/read failure, including premature EOF
+and malformed chunking), 415 (content type), or 500 (response encoding
+failure). Malformed request heads, unsupported HTTP versions and
+unrepresentable lengths are rejected by hyper itself (400/431) before
+dispatch. Responses carry `Cache-Control: no-store`; no keys belong in URLs
+or logs. Every transport error closes the connection without draining an
+unread body; truncated fixed-length/chunked bodies are errors, never complete
+messages. The endpoint never upgrades protocols.
 
 **Delivery envelopes and observer responses contain plaintext root keys.**
 Serve the backend through an HTTPS reverse proxy, or use a secure tunnel.
@@ -77,11 +70,11 @@ including the response body. Compression is not enabled. The HTTP client
 is feature-gated in `seismic-council-delivery`; both the CLI and observer
 custodian use it. The custodian's **server** remains TLS-free.
 
-The application has 16 HTTP workers and a bounded challenge store. Unlike
-the old raw TCP server, **tiny_http does not expose socket deadlines or a
-connection cap**. The fronting proxy must bound idle/slow connections,
-request duration, connection count, request/header sizes and request rates.
-A worker cap is not a network connection cap. Unauthenticated challenge
+The backend accepts at most 64 concurrent connections, disconnects any
+connection that has not sent a complete request head within 30 seconds
+(including idle keep-alive connections), bounds request heads and bodies,
+and keeps a bounded challenge store. The fronting proxy must still bound
+request rates and slow request/response bodies. Unauthenticated challenge
 issuance also needs access/rate controls: a bounded nonce store limits memory,
 not an attacker's ability to exhaust its slots. Keep the backend loopback-only
 and prevent the proxy from caching, logging, or spilling secret bodies to
@@ -231,7 +224,7 @@ and HTTP delivery followed by key retrieval through the real Unix socket.
 Linux rejection regressions run the actual binary under an address-space
 limit, require socket closure for incomplete/oversized requests, and verify
 continued HTTP and Unix-socket availability. Additional regressions check
-parser thread/FD recovery after unsupported HTTP versions, and verify that
+task/FD recovery after unsupported HTTP versions, and verify that
 truncated signed deliveries (including upgrade attempts) cannot dispatch, advance
 the epoch or persist an envelope; complete copies of the same deliveries succeed:
 
@@ -255,8 +248,8 @@ cargo test -p seismic-centralized-custodian-service
 | `--observer INDEX` | — | — |
 | `--parent-custodian URL` | — | — (HTTPS base URL; HTTP only on loopback) |
 
-Like the TDX custodian, this binary links no async runtime. Build it separately:
-Cargo feature unification with IPC async-client consumers can otherwise pull
-Tokio into the binary (see `crates/custodian-ipc/Cargo.toml`). Rotating the
+Unlike the TDX custodian, this binary has a network listener and therefore
+links tokio and hyper; the boundary that matters is that attestation evidence
+parsers stay out of it (see the `seismic-custodian` crate docs). Rotating the
 council signing address invalidates verification of archived envelopes unless
 they are re-signed and redelivered under the new authority.

@@ -274,11 +274,12 @@ fn real_http_delivery_preserves_verification_conflicts_and_persistence() {
     let scrape = String::from_utf8(scrape).unwrap();
     let (headers, body) = scrape.split_once("\r\n\r\n").unwrap();
     assert!(headers.starts_with("HTTP/1.1 200"), "{headers}");
+    let headers = headers.to_ascii_lowercase();
     assert!(
-        headers.contains("Content-Type: text/plain; version=0.0.4; charset=utf-8"),
+        headers.contains("content-type: text/plain; version=0.0.4; charset=utf-8"),
         "{headers}"
     );
-    assert!(headers.contains("Cache-Control: no-store"), "{headers}");
+    assert!(headers.contains("cache-control: no-store"), "{headers}");
     let counter = |body: &str, series: &str| -> u64 {
         body.lines()
             .find_map(|l| l.strip_prefix(series).and_then(|v| v.trim().parse().ok()))

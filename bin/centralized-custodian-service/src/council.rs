@@ -1,30 +1,48 @@
-//! Synchronous HTTP council endpoint, behind a TLS-terminating reverse proxy.
+//! HTTP council endpoint, behind a TLS-terminating reverse proxy.
 //!
 //! POST /v1/council carries one CBOR message (no TCP length prefix). Delivery
 //! signatures and observer signatures authorize operations, not connections.
 //! Observer challenges are bounded, expiring and atomically consumed across
 //! connections, so HTTP pooling/proxying does not weaken replay protection.
 //!
-//! Only bind this backend to a trusted interface. tiny_http has no configurable
-//! per-request socket deadlines or connection cap; the fronting proxy must bound
-//! slow/idle connections. We bound body bytes and concurrent application handlers.
+//! hyper parses HTTP/1.1 on a dedicated single-threaded tokio runtime; the
+//! application dispatch stays synchronous. Only bind this backend to a trusted
+//! interface: it bounds concurrent connections, header read time and body
+//! bytes, but the fronting proxy must still bound request rates and slow
+//! or idle connections beyond those limits.
 
 use crate::{observer_serving::ObserverServing, state::CentralizedCustodianState};
+use bytes::Bytes;
+use http_body_util::{BodyExt as _, Full};
+use hyper::{
+    Method, Request, Response, StatusCode,
+    body::Incoming,
+    header::{self, HeaderValue},
+    server::conn::http1,
+    service::service_fn,
+};
+use hyper_util::rt::{TokioIo, TokioTimer};
 use seismic_council_delivery::{
     CouncilRequest, CouncilResponse, MAX_ENVELOPES_PER_FETCH, ObserverQuery, ObserverRejectCode,
     ObserverRootKey,
-    http::{CBOR_CONTENT_TYPE, COUNCIL_PATH, MAX_BODY_BYTES, decode, encode, read_body},
+    http::{CBOR_CONTENT_TYPE, COUNCIL_PATH, MAX_BODY_BYTES, decode, encode},
 };
 use std::{
     collections::HashMap,
-    io::Cursor,
+    convert::Infallible,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
+use tokio::{net::TcpListener, sync::Semaphore};
 use tracing::{info, warn};
+use zeroize::Zeroizing;
 
-const HTTP_WORKERS: usize = 16;
+/// Concurrent connections (not just in-flight requests); further accepts
+/// wait until one closes. Legitimate peers are the proxy's upstream pool.
+const MAX_CONNECTIONS: usize = 64;
+/// A client that has not sent a complete request head within this time,
+/// including on an idle keep-alive connection, is disconnected.
+const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
 const METRICS_PATH: &str = "/metrics";
 const MAX_CHALLENGES: usize = 1024;
 const CHALLENGE_TTL: Duration = Duration::from_secs(30);
@@ -151,122 +169,193 @@ impl CouncilHandler {
         response
     }
 
-    pub fn handle_http(&self, mut request: Request) {
-        if request.url() == METRICS_PATH && request.method() == &Method::Get {
-            return respond_metrics(request);
+    /// One HTTP exchange. Every non-200 outcome closes the connection without
+    /// reading the rest of the request, so a rejected body is never drained.
+    pub async fn handle_http(self: Arc<Self>, request: Request<Incoming>) -> HttpResponse {
+        // Path and query together, so `/v1/council?x` is not the council path.
+        let target = request
+            .uri()
+            .path_and_query()
+            .map_or("", |target| target.as_str());
+        if target == METRICS_PATH && request.method() == Method::GET {
+            return respond_metrics();
         }
-        if request.url() != COUNCIL_PATH {
-            return http_error(request, 404);
+        if target != COUNCIL_PATH {
+            return http_error(404);
         }
-        if request.method() != &Method::Post {
-            return http_error(request, 405);
+        if request.method() != Method::POST {
+            return http_error(405);
         }
-        // This endpoint never upgrades protocols. tiny_http exposes a raw,
-        // unframed body reader when Connection contains "upgrade"; reject that
-        // path so peer EOF cannot bypass fixed-length/chunked completeness.
-        // Match its substring check, not just well-formed Connection tokens.
-        if request.headers().iter().any(|h| {
-            h.field.equiv("Upgrade")
-                || (h.field.equiv("Connection")
-                    && h.value.as_str().to_ascii_lowercase().contains("upgrade"))
-        }) {
-            return http_error(request, 400);
-        }
-        let types: Vec<_> = request
-            .headers()
-            .iter()
-            .filter(|h| h.field.equiv("Content-Type"))
-            .collect();
-        if types.len() != 1 || types[0].value.as_str() != CBOR_CONTENT_TYPE {
-            return http_error(request, 415);
-        }
-        if request
-            .body_length()
-            .is_some_and(|len| len > MAX_BODY_BYTES)
+        // This endpoint never upgrades protocols (hyper only does so when
+        // asked); refuse requests that ask for one rather than answering them
+        // as plain POSTs.
+        if request.headers().contains_key(header::UPGRADE)
+            || request
+                .headers()
+                .get_all(header::CONNECTION)
+                .iter()
+                .any(|v| {
+                    v.as_bytes()
+                        .to_ascii_lowercase()
+                        .windows(7)
+                        .any(|w| w == b"upgrade")
+                })
         {
-            return http_error(request, 413);
+            return http_error(400);
         }
-        let bytes = match read_body(request.as_reader()) {
+        let mut types = request.headers().get_all(header::CONTENT_TYPE).iter();
+        if types.next().map(|v| v.as_bytes()) != Some(CBOR_CONTENT_TYPE.as_bytes())
+            || types.next().is_some()
+        {
+            return http_error(415);
+        }
+        // Declared length first: never start reading a body known to be too
+        // large. Chunked bodies are capped while they are read.
+        if hyper::body::Body::size_hint(request.body())
+            .upper()
+            .is_some_and(|len| len > MAX_BODY_BYTES as u64)
+        {
+            return http_error(413);
+        }
+        let bytes = match read_body(request.into_body()).await {
             Ok(bytes) => bytes,
-            Err(_) => return http_error(request, 413),
+            Err(()) => return http_error(413),
         };
         let message = match decode::<CouncilRequest>(&bytes) {
             Ok(message) => message,
-            Err(_) => return http_error(request, 400),
+            Err(_) => return http_error(400),
         };
         drop(bytes);
-        let response = self.dispatch(message);
+        // Dispatch takes locks and persists envelopes; keep it off the
+        // single-threaded runtime that parses other connections.
+        let handler = self.clone();
+        let response = match tokio::task::spawn_blocking(move || handler.dispatch(message)).await {
+            Ok(response) => response,
+            Err(_) => return http_error(500),
+        };
         let bytes = match encode(&response) {
             Ok(bytes) => bytes,
-            Err(_) => return http_error(request, 500),
+            Err(_) => return http_error(500),
         };
-        let length = bytes.len();
-        let response = Response::new(
-            StatusCode(200),
-            vec![
-                header("Content-Type", CBOR_CONTENT_TYPE),
-                header("Cache-Control", "no-store"),
-            ],
-            Cursor::new(bytes),
-            Some(length),
-            None,
+        let mut response = Response::new(Full::new(Bytes::copy_from_slice(&bytes)));
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static(CBOR_CONTENT_TYPE),
         );
-        if request.respond(response).is_err() {
-            warn!("council HTTP response failed");
-        }
+        response
+            .headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        response
     }
 }
 
-fn header(name: &str, value: &str) -> Header {
-    Header::from_bytes(name, value).expect("static HTTP header")
+pub type HttpResponse = Response<Full<Bytes>>;
+
+/// Collect a bounded body; truncated, malformed or oversized input is an error.
+async fn read_body(mut body: Incoming) -> Result<Zeroizing<Vec<u8>>, ()> {
+    let mut bytes = Zeroizing::new(Vec::new());
+    while let Some(frame) = body.frame().await {
+        if let Some(data) = frame.map_err(drop)?.data_ref() {
+            if bytes.len() + data.len() > MAX_BODY_BYTES {
+                return Err(());
+            }
+            bytes.extend_from_slice(data);
+        }
+    }
+    Ok(bytes)
 }
 
 /// `GET /metrics`: Prometheus text exposition. Loopback-only like the rest
 /// of the council listener; the response carries counts and labels, never
 /// key material.
-fn respond_metrics(request: Request) {
-    let body = crate::metrics::render();
-    let response = Response::from_string(body)
-        .with_status_code(StatusCode(200))
-        .with_header(header(
-            "Content-Type",
-            "text/plain; version=0.0.4; charset=utf-8",
-        ))
-        .with_header(header("Cache-Control", "no-store"));
-    let _ = request.respond_and_close(response);
+fn respond_metrics() -> HttpResponse {
+    let mut response = Response::new(Full::new(Bytes::from(crate::metrics::render())));
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
+    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers.insert(header::CONNECTION, HeaderValue::from_static("close"));
+    response
 }
 
-fn http_error(request: Request, status: u16) {
+fn http_error(status: u16) -> HttpResponse {
     crate::metrics::record_council_http_error(status);
     // No request/response bodies or parser diagnostics in logs/errors.
-    let mut response =
-        Response::empty(StatusCode(status)).with_header(header("Cache-Control", "no-store"));
+    let mut response = Response::new(Full::new(Bytes::new()));
+    *response.status_mut() = StatusCode::from_u16(status).expect("static status");
+    let headers = response.headers_mut();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     if status == 405 {
-        response.add_header(header("Allow", "POST"));
+        headers.insert(header::ALLOW, HeaderValue::from_static("POST"));
     }
-    // The locally patched API shuts down the socket before dropping unread
-    // body readers. A Connection header alone is ignored by upstream tiny_http,
-    // whose rejection cleanup otherwise drains attacker-controlled body lengths.
-    let _ = request.respond_and_close(response);
+    // hyper honours this by closing the socket after the response instead of
+    // draining the unread (attacker-sized) body for keep-alive.
+    headers.insert(header::CONNECTION, HeaderValue::from_static("close"));
+    response
 }
 
-/// Fixed-size application worker pool; tiny_http handles HTTP parsing.
+/// Accept loop: one task per connection, bounded by [`MAX_CONNECTIONS`].
+/// Runs until the listener fails irrecoverably.
+pub async fn serve(listener: TcpListener, handler: Arc<CouncilHandler>) {
+    let connections = Arc::new(Semaphore::new(MAX_CONNECTIONS));
+    loop {
+        let permit = connections
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore never closed");
+        let stream = match listener.accept().await {
+            Ok((stream, _)) => stream,
+            Err(err) => {
+                warn!(error = %err, "council accept failed");
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
+            }
+        };
+        let handler = handler.clone();
+        tokio::spawn(async move {
+            let _permit = permit;
+            let service = service_fn(move |request| {
+                let handler = handler.clone();
+                async move { Ok::<_, Infallible>(handler.handle_http(request).await) }
+            });
+            // Parse errors, timeouts and peer resets end the connection; hyper
+            // answers malformed heads itself. Not logged: no parser diagnostics.
+            let _ = http1::Builder::new()
+                .timer(TokioTimer::new())
+                .header_read_timeout(HEADER_READ_TIMEOUT)
+                // A client may shut down its write side after a complete
+                // request and still expect the response.
+                .half_close(true)
+                .serve_connection(TokioIo::new(stream), service)
+                .await;
+        });
+    }
+}
+
+/// Blocks the calling thread on a single-threaded runtime serving `listener`.
 pub fn serve_council(
-    server: Server,
+    listener: std::net::TcpListener,
     state: Arc<CentralizedCustodianState>,
     observer_serving: Option<Arc<ObserverServing>>,
 ) {
-    info!(address = %server.server_addr(), "council HTTP endpoint listening");
-    let handler = CouncilHandler::new(state, observer_serving);
-    std::thread::scope(|scope| {
-        for _ in 0..HTTP_WORKERS {
-            scope.spawn(|| {
-                for request in server.incoming_requests() {
-                    handler.handle_http(request);
-                }
-            });
+    let handler = Arc::new(CouncilHandler::new(state, observer_serving));
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("council runtime");
+    runtime.block_on(async move {
+        listener
+            .set_nonblocking(true)
+            .expect("non-blocking council listener");
+        let listener = TcpListener::from_std(listener).expect("council listener");
+        if let Ok(address) = listener.local_addr() {
+            info!(%address, "council HTTP endpoint listening");
         }
-    });
+        serve(listener, handler).await
+    })
 }
 
 fn random_nonce() -> [u8; 32] {

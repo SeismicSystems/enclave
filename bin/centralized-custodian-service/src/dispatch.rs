@@ -310,8 +310,9 @@ mod tests {
                 )
             });
 
-            let tcp_listener = tiny_http::Server::http("127.0.0.1:0").expect("bind HTTP endpoint");
-            let council_addr = tcp_listener.server_addr().to_ip().expect("council addr");
+            let tcp_listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("bind HTTP endpoint");
+            let council_addr = tcp_listener.local_addr().expect("council addr");
             let council_state = state.clone();
             std::thread::spawn(move || serve_council(tcp_listener, council_state, None));
 
@@ -373,8 +374,9 @@ mod tests {
             let parent_dir = tempfile::tempdir().expect("tempdir");
             let parent = Arc::new(build_state(parent_dir.path()));
             let serving = Arc::new(observer_serving(parent_dir.path()));
-            let tcp_listener = tiny_http::Server::http("127.0.0.1:0").expect("bind HTTP endpoint");
-            let parent_addr = tcp_listener.server_addr().to_ip().expect("parent addr");
+            let tcp_listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("bind HTTP endpoint");
+            let parent_addr = tcp_listener.local_addr().expect("parent addr");
             let parent_council = parent.clone();
             std::thread::spawn(move || serve_council(tcp_listener, parent_council, Some(serving)));
             let response = council_call(

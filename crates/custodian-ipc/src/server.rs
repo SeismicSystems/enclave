@@ -2,8 +2,9 @@
 //!
 //! Deliberately not async: the socket serves two or three long-lived local
 //! clients with single-digit requests per process lifetime, so a thread per
-//! connection is the entire concurrency requirement and the key-holding
-//! process links no async runtime. Hosts inject *dispatch* as a closure —
+//! connection is the entire concurrency requirement and the TDX custodian,
+//! which has no network listener, links no async runtime. Hosts inject
+//! *dispatch* as a closure —
 //! this crate never touches key material or depends on the custodian; it
 //! owns only the transport: bind semantics, peer credentials, ACL
 //! enforcement (structurally before dispatch), and the frame loop.

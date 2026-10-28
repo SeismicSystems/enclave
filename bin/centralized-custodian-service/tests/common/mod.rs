@@ -7,15 +7,7 @@ use seismic_council_delivery::{
     SignedDeliveryEnvelope, address_from_pubkey, network_id_from_chain_id, seal_delivery,
 };
 use seismic_custodian::Custodian;
-use std::{
-    path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread,
-    time::Duration,
-};
+use std::{path::Path, sync::Arc};
 
 pub const CHAIN_ID: u64 = 5124;
 pub const ROOT: [u8; 32] = [7; 32];
@@ -55,37 +47,30 @@ pub fn serving(dir: &Path) -> Arc<ObserverServing> {
     Arc::new(ObserverServing::load(&path, CHAIN_ID, ROOT).unwrap())
 }
 
-/// Finite-lifetime real HTTP handler fixture; no leaked server threads.
+/// Finite-lifetime real HTTP handler fixture; the runtime stops with it.
 pub struct HttpServer {
     pub base: String,
-    stop: Arc<AtomicBool>,
-    worker: Option<thread::JoinHandle<()>>,
+    runtime: tokio::runtime::Runtime,
 }
 
 impl HttpServer {
     pub fn new(handler: CouncilHandler) -> Self {
-        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
-        let base = format!("http://{}", server.server_addr());
-        let stop = Arc::new(AtomicBool::new(false));
-        let done = stop.clone();
-        let worker = thread::spawn(move || {
-            while !done.load(Ordering::Relaxed) {
-                if let Some(request) = server.recv_timeout(Duration::from_millis(50)).unwrap() {
-                    handler.handle_http(request);
-                }
-            }
-        });
-        Self {
-            base,
-            stop,
-            worker: Some(worker),
-        }
-    }
-}
-
-impl Drop for HttpServer {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        self.worker.take().unwrap().join().unwrap();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        listener.set_nonblocking(true).unwrap();
+        let listener = {
+            let _guard = runtime.enter();
+            tokio::net::TcpListener::from_std(listener).unwrap()
+        };
+        runtime.spawn(seismic_centralized_custodian_service::council::serve(
+            listener,
+            Arc::new(handler),
+        ));
+        Self { base, runtime }
     }
 }
