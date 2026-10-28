@@ -32,7 +32,7 @@ tiny_http = { path = "vendor/tiny_http" }
 
 [workspace.package]
 edition = "2024"
-version = "0.1.1"
+version = "0.1.2"
 repository = "https://github.com/SeismicSystems/enclave"
 homepage = "https://github.com/SeismicSystems/enclave"
 authors = ["Seismic Systems"]
