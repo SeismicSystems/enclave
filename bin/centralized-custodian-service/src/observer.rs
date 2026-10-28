@@ -265,8 +265,8 @@ mod tests {
     fn spawn_parent(dir: &Path) -> (SocketAddr, Arc<CentralizedCustodianState>) {
         let state = Arc::new(build_state(dir));
         let serving = Arc::new(observer_serving(dir));
-        let listener = tiny_http::Server::http("127.0.0.1:0").expect("bind parent port");
-        let addr = listener.server_addr().to_ip().expect("parent addr");
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind parent port");
+        let addr = listener.local_addr().expect("parent addr");
         let council_state = state.clone();
         std::thread::spawn(move || serve_council(listener, council_state, Some(serving)));
         (addr, state)

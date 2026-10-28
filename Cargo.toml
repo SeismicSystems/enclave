@@ -27,7 +27,7 @@ members = [
 exclude = ["vendor/tiny_http"]
 
 [patch.crates-io]
-# Bounded rejected-body cleanup and explicit socket cancellation; see LOCAL_PATCH.md.
+# Test fixtures only (fake council/parent servers); see LOCAL_PATCH.md.
 tiny_http = { path = "vendor/tiny_http" }
 
 [workspace.package]

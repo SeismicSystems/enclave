@@ -1,5 +1,12 @@
 # Local tiny_http security patch
 
+> **Test-only since the council endpoint moved to hyper.** No shipped binary
+> links this crate; it remains the fake-server fixture in
+> `bin/centralized-custodian-service/tests/http_observer.rs` and
+> `crates/council-delivery/tests/`. Those fixtures use the `respond_and_close`
+> API below, which is why the patch is still vendored. Replace the fixtures
+> and delete this directory rather than updating the patch.
+
 ## Provenance
 
 Vendored from the crates.io **tiny_http 0.12.0** release:

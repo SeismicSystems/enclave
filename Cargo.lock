@@ -5130,8 +5130,12 @@ name = "seismic-centralized-custodian-service"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "libc",
  "metrics",
  "metrics-exporter-prometheus",

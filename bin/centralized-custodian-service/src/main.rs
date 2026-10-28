@@ -9,9 +9,10 @@
 //! attested bootstrap, no LUKS handoff), and the delivery store is a plain
 //! directory scanned at startup.
 //!
-//! The endpoint accepts bounded CBOR bodies with a fixed application worker
-//! pool. Every delivery is signature-checked before installation. The backend
-//! defaults to loopback; the proxy must enforce connection limits and timeouts.
+//! The endpoint accepts bounded CBOR bodies on a bounded number of
+//! connections. Every delivery is signature-checked before installation. The
+//! backend defaults to loopback; the proxy must still enforce request rates
+//! and TLS.
 //!
 //! Two roles beyond the plain custodian, both keyed by `--summit-key-dir`
 //! (a summit keystore holding the node's ed25519 `node_key.pem`):
@@ -205,17 +206,13 @@ fn main() -> Result<()> {
 
     let unix_listener = bind(&args.socket)
         .with_context(|| format!("binding custodian socket {}", args.socket.display()))?;
-    let http_server = tiny_http::Server::http(args.council_listen).map_err(|err| {
-        anyhow!(
-            "binding council HTTP endpoint {}: {err}",
-            args.council_listen
-        )
-    })?;
+    let http_listener = std::net::TcpListener::bind(args.council_listen)
+        .with_context(|| format!("binding council HTTP endpoint {}", args.council_listen))?;
 
     let council_state = state.clone();
     std::thread::Builder::new()
         .name("council-port".to_string())
-        .spawn(move || council::serve_council(http_server, council_state, observer_serving))
+        .spawn(move || council::serve_council(http_listener, council_state, observer_serving))
         .context("spawning council port thread")?;
 
     serve(unix_listener, method_acl, move |request| {

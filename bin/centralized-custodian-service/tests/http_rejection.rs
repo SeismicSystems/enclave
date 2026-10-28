@@ -39,8 +39,8 @@ impl CustodianProcess {
             .env_clear()
             .env("RUST_LOG", "info")
             // glibc reserves a 64 MiB arena per thread (up to 8 x cores), so an
-            // idle custodian with its 16 council workers sits at ~1 GiB of
-            // address space while using ~5 MiB. Under RLIMIT_AS those
+            // idle custodian with its runtime and IPC threads can sit at
+            // hundreds of MiB of address space while using ~5 MiB. Under RLIMIT_AS those
             // reservations, not real allocations, are what would trip the
             // limit. Two arenas are plenty for this process and keep the
             // measurement about the request paths.
@@ -206,16 +206,17 @@ fn unsupported_versions_close_without_retaining_parser_resources() {
         let mut stream = process.connect();
         // No body: rejection must precede request construction, including its
         // eager buffering of small bodies. Alternate with an empty body request
-        // to cover the original circular sequential-writer wait directly.
+        // so withheld bodies and absent bodies both close promptly.
         let length = if index % 4 < 2 { 0 } else { 5 };
         // Send in one write: the server can reject as soon as it sees the
         // request line, before a fragmented formatting write sends headers.
         stream.write_all(format!("POST /v1/council HTTP/{version}\r\nHost: localhost\r\nContent-Length: {length}\r\n\r\n").as_bytes()).unwrap();
-        assert_final_response_and_eof(&mut stream, 505);
+        // hyper answers an unparseable request line with 400 before dispatch.
+        assert_final_response_and_eof(&mut stream, 400);
     }
     process.assert_healthy();
-    // Extra idle parser threads expire after five seconds. Peer EOF alone must
-    // also release every per-connection socket handle; allow scheduler slack.
+    // Peer EOF alone must release every per-connection socket handle and
+    // task; allow scheduler slack.
     let deadline = Instant::now() + Duration::from_secs(8);
     loop {
         let current = process.resources();
@@ -320,12 +321,13 @@ fn upgrade_cannot_bypass_delivery_body_framing() {
 fn oversized_and_early_rejected_bodies_close_without_allocation_or_draining() {
     let mut process = CustodianProcess::start();
     let mut clients = Vec::new();
-    // More than the entire 16-worker pool; leave client write sides open. Even
-    // bounded draining would exhaust the pool if rejection did not cancel it.
+    // Leave client write sides open across many connections: a server that
+    // drained declared bodies before closing would stall on each of them.
     for index in 0..32 {
         let (method, path, content_type, length, status) = match index % 5 {
             0 => ("POST", "/v1/council", "application/cbor", 1u64 << 30, 413),
-            1 => ("POST", "/v1/council", "application/cbor", u64::MAX, 413),
+            // hyper rejects an unrepresentable length at the parser (431).
+            1 => ("POST", "/v1/council", "application/cbor", u64::MAX, 431),
             2 => ("POST", "/wrong", "application/cbor", 2048, 404),
             3 => ("GET", "/v1/council", "application/cbor", 1u64 << 30, 405),
             _ => ("POST", "/v1/council", "application/json", 1u64 << 30, 415),

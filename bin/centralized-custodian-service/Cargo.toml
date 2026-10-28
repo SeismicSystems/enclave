@@ -21,22 +21,26 @@ seismic-custodian.workspace = true
 # state/dispatch modules are not linked. Its custodian-ipc dependency is the
 # no-tokio one below.
 seismic-custodian-service.workspace = true
-# default-features = false is this binary's no-async-runtime guarantee: only
-# the wire types plus the synchronous `server` transport are linked. CAUTION:
-# under cargo feature unification the guarantee holds only when this binary is
-# built in its own cargo invocation — see the feature note in
-# crates/custodian-ipc/Cargo.toml. A path dependency rather than `workspace =
+# Only the wire types plus the synchronous `server` transport are used; the
+# async `client` is not linked. A path dependency rather than `workspace =
 # true` because workspace inheritance cannot turn default features off.
 seismic-custodian-ipc = { path = "../../crates/custodian-ipc", default-features = false, features = ["server"] }
 seismic-network-manifest.workspace = true
 seismic-observer-key.workspace = true
 
 anyhow.workspace = true
+bytes = "1"
 clap.workspace = true
 hex.workspace = true
+# The council listener: hyper's HTTP/1.1 server on a single-threaded tokio
+# runtime confined to one thread; everything else in the process is
+# synchronous.
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 rand.workspace = true
 secp256k1.workspace = true
-tiny_http.workspace = true
+tokio = { version = "1.44", features = ["net", "rt", "sync", "time"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zeroize.workspace = true
@@ -44,10 +48,11 @@ metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.17", default-features = false }
 
 [dev-dependencies]
-# Tests drive the served socket with the async client. Dev-only: resolver v2
-# keeps dev-dep features out of `cargo build`, so the binary stays tokio-free.
+# Tests drive the served socket with the async client.
 seismic-custodian-ipc = { workspace = true, features = ["client"] }
 tempfile = "3.17.1"
+# Fake parent custodians in tests/http_observer.rs.
+tiny_http.workspace = true
 tokio.workspace = true
 # Limit the real custodian subprocess in oversized-body crash regression tests.
 libc.workspace = true
