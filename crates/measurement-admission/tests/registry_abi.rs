@@ -32,15 +32,16 @@ const CANONICAL_ARTIFACT_ENV: &str = "MEASUREMENT_REGISTRY_ARTIFACT";
 /// The protocol signatures [`common::IMeasurementRegistry`] is expected to
 /// declare, pinned so that editing the interface fails locally instead of only
 /// once CI supplies the canonical artifact.
-const PINNED_SIGNATURES: [&str; 8] = [
-    "AUTHORITY()",
+const PINNED_SIGNATURES: [&str; 9] = [
     "acceptedCount()",
     "activePolicyHash()",
+    "admin()",
     "applyPolicyUpdate(bytes32[],bytes32[],bytes32)",
     "bootstrapPolicyHash()",
     "isAccepted(bytes32)",
     "policyRevision()",
     "statusOf(bytes32)",
+    "transferAdmin(address)",
 ];
 
 fn selector_of(signature: &str) -> [u8; 4] {

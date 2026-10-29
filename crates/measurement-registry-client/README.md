@@ -10,7 +10,7 @@ Runtime code needs only:
 
 Admission-ID derivation and registry genesis-storage derivation live in
 `seismic-measurement-admission`. Solidity sources, contract artifacts, policy
-mutation, transaction signing, and authority administration live in the
+mutation, transaction signing, and admin-role administration live in the
 `SeismicSystems/seismic` contract and deployment tooling.
 
 The `abi_parity` test pins the generated Rust selector locally. CI also checks

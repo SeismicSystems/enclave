@@ -1,7 +1,8 @@
 //! Live reth-backed registry test: the compiled bootstrap policy is live from
 //! block 0 via real `eth_call` at the well-known registry address, then the
 //! whole revision lifecycle of `SPEC.md` — accept a second image, withdraw
-//! the first, reinstate it — runs through the authority.
+//! the first, reinstate it — runs as the registry admin, which then hands the
+//! role on.
 //!
 //! Every revision's `activePolicyHash` is the compiled hash of a committed
 //! golden document, and registry state is asserted equal to that document's
@@ -11,10 +12,10 @@
 //! The node is a real `seismic-reth` dev process (auto-mining, HTTP RPC)
 //! launched on a genesis built from `fixtures/reth-genesis-template.json`.
 //! The template mirrors reth's committed genesis templates — the registry
-//! predeploy ships the canonical runtime with empty storage — and this test
-//! plays the deploy role: it compiles a golden policy document with
-//! [`compile_policy`] and writes [`registry_genesis_storage`] into the
-//! registry account before boot. The template's registry code is pinned to
+//! predeploy ships the canonical runtime with only its admin seeded — and this
+//! test plays the deploy role: it compiles a golden policy document with
+//! [`compile_policy`] and adds [`registry_genesis_storage`] to the registry
+//! account before boot. The template's registry code is pinned to
 //! [`REGISTRY_RUNTIME_CODE_HASH`], so it cannot drift from the canonical
 //! `contracts/artifacts/MeasurementRegistry.json` unnoticed.
 //!
@@ -42,23 +43,24 @@ use seismic_measurement_admission::{
 };
 
 mod common;
-use common::{IMeasurementAuthorityDev, IMeasurementRegistry};
+use common::IMeasurementRegistry;
 
 const REGISTRY: Address = address!("0x1000000000000000000000000000000000000001");
-const AUTHORITY: Address = address!("0x1000000000000000000000000000000000000002");
 
-/// Anvil dev account 0 — `MeasurementAuthorityDev.OWNER`.
-const OWNER_SK: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-/// Anvil dev account 1 — funded in the template but not the authority owner.
-const INTRUDER_SK: &str = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+/// Anvil dev account 0 — the registry admin the template seeds.
+const ADMIN: Address = address!("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
+const ADMIN_SK: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+/// Anvil dev account 1 — funded in the template but not the admin.
+const OTHER: Address = address!("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+const OTHER_SK: &str = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
 const STATUS_UNKNOWN: u8 = 0;
 const STATUS_ACCEPTED: u8 = 1;
 const STATUS_DEPRECATED: u8 = 2;
 
-/// Fixed gas for `applyPolicyUpdate` transactions (single-ID updates fit
-/// comfortably); see the estimation note at the first send site.
-const APPLY_POLICY_UPDATE_GAS: u64 = 500_000;
+/// Fixed gas for registry transactions (single-ID updates fit comfortably);
+/// see the estimation note at the first send site.
+const REGISTRY_TX_GAS: u64 = 500_000;
 
 fn find_reth() -> Option<PathBuf> {
     if let Ok(explicit) = env::var("SEISMIC_RETH_BIN") {
@@ -127,8 +129,8 @@ fn compile_fixture(name: &str) -> CompiledPolicy {
     compile_policy(&bytes).expect("fixture policy compiles")
 }
 
-/// Seed the template's registry account with the bootstrap document's genesis
-/// storage and boot `seismic-reth` on the result.
+/// Add the bootstrap document's genesis storage to the template's registry
+/// account, beside the admin it seeds, and boot `seismic-reth` on the result.
 fn launch_seeded_node(reth: &PathBuf, bootstrap: &CompiledPolicy) -> RethNode {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let template = fs::read_to_string(manifest.join("fixtures/reth-genesis-template.json"))
@@ -147,16 +149,15 @@ fn launch_seeded_node(reth: &PathBuf, bootstrap: &CompiledPolicy) -> RethNode {
          (contracts/artifacts/MeasurementRegistry.json)"
     );
 
-    let storage: serde_json::Map<String, serde_json::Value> = registry_genesis_storage(bootstrap)
-        .iter()
-        .map(|(slot, value)| {
-            (
-                format!("{slot}"),
-                serde_json::Value::from(format!("{value}")),
-            )
-        })
-        .collect();
-    registry_account["storage"] = serde_json::Value::Object(storage);
+    let storage = registry_account["storage"]
+        .as_object_mut()
+        .expect("registry admin seeded in template");
+    for (slot, value) in registry_genesis_storage(bootstrap) {
+        storage.insert(
+            format!("{slot}"),
+            serde_json::Value::from(format!("{value}")),
+        );
+    }
 
     let http_port = free_port();
     let dir = env::temp_dir().join(format!("measurement-admission-reth-{http_port}"));
@@ -271,16 +272,16 @@ async fn assert_state_matches_document(
     );
 }
 
-/// Apply one policy update through the authority and require it to land.
+/// Apply one policy update as the admin and require it to land.
 async fn apply_update(
-    authority: &IMeasurementAuthorityDev::IMeasurementAuthorityDevInstance<impl Provider + Clone>,
+    admin: &IMeasurementRegistry::IMeasurementRegistryInstance<impl Provider + Clone>,
     accept: Vec<B256>,
     deprecate: Vec<B256>,
     new_active_policy_hash: B256,
 ) {
-    let receipt = authority
+    let receipt = admin
         .applyPolicyUpdate(accept, deprecate, new_active_policy_hash)
-        .gas(APPLY_POLICY_UPDATE_GAS)
+        .gas(REGISTRY_TX_GAS)
         .send()
         .await
         .expect("send policy update")
@@ -315,6 +316,7 @@ async fn genesis_policy_and_revision_lifecycle_follow_the_compiled_documents() {
     // Revision 1, block 0: the bootstrap document is the live policy straight
     // out of genesis storage — no initialization transaction ever ran.
     assert_eq!(provider.get_block_number().await.unwrap(), 0);
+    assert_eq!(registry.admin().call().await.unwrap(), ADMIN);
     assert_state_matches_document(&registry, &image_a, 1, bootstrap_policy_hash, &universe).await;
     assert_eq!(
         registry.statusOf(id_a).call().await.unwrap(),
@@ -332,36 +334,36 @@ async fn genesis_policy_and_revision_lifecycle_follow_the_compiled_documents() {
             .unwrap()
     );
 
-    // A non-owner sender is rejected by the authority (NotOwner), leaving the
-    // registry untouched. Explicit gas on every mutation below: plain
-    // eth_estimateGas is an unsigned read, for which seismic-reth zeroes
-    // msg.sender, tripping the owner check during the preflight. Sender-
+    // A non-admin sender is rejected (Unauthorized), leaving the registry
+    // untouched. Explicit gas on every mutation below: plain eth_estimateGas
+    // is an unsigned read, for which seismic-reth zeroes msg.sender, tripping
+    // the admin check during the preflight. Sender-
     // authenticated estimation exists (`seismic_estimateGas` with a signed
     // TxSeismic, via the seismic clients); fixed gas keeps this test on
     // vanilla alloy.
-    let intruder = IMeasurementAuthorityDev::new(AUTHORITY, wallet_provider(&node, INTRUDER_SK));
-    let receipt = intruder
+    let other = IMeasurementRegistry::new(REGISTRY, wallet_provider(&node, OTHER_SK));
+    let receipt = other
         .applyPolicyUpdate(vec![id_b], vec![], both_images.policy_hash)
-        .gas(APPLY_POLICY_UPDATE_GAS)
+        .gas(REGISTRY_TX_GAS)
         .send()
         .await
-        .expect("send non-owner update")
+        .expect("send non-admin update")
         .get_receipt()
         .await
-        .expect("non-owner update receipt");
-    assert!(!receipt.status(), "non-owner update must revert");
+        .expect("non-admin update receipt");
+    assert!(!receipt.status(), "non-admin update must revert");
     assert_state_matches_document(&registry, &image_a, 1, bootstrap_policy_hash, &universe).await;
 
-    // Revision 2: the owner accepts image B, and the active hash becomes the
+    // Revision 2: the admin accepts image B, and the active hash becomes the
     // two-image document's own hash.
-    let authority = IMeasurementAuthorityDev::new(AUTHORITY, wallet_provider(&node, OWNER_SK));
-    apply_update(&authority, vec![id_b], vec![], both_images.policy_hash).await;
+    let admin = IMeasurementRegistry::new(REGISTRY, wallet_provider(&node, ADMIN_SK));
+    apply_update(&admin, vec![id_b], vec![], both_images.policy_hash).await;
     assert_state_matches_document(&registry, &both_images, 2, bootstrap_policy_hash, &universe)
         .await;
 
     // Revision 3: image A is withdrawn. It stops being admitted immediately,
     // with no node or service restart.
-    apply_update(&authority, vec![], vec![id_a], image_b.policy_hash).await;
+    apply_update(&admin, vec![], vec![id_a], image_b.policy_hash).await;
     assert_state_matches_document(&registry, &image_b, 3, bootstrap_policy_hash, &universe).await;
     assert_eq!(
         registry.statusOf(id_a).call().await.unwrap(),
@@ -371,11 +373,27 @@ async fn genesis_policy_and_revision_lifecycle_follow_the_compiled_documents() {
     // Revision 4: image A returns. Reinstatement is a plain accept of a
     // deprecated ID, and republishing revision 2's document reuses its hash —
     // the unchanged-hash rule only forbids repeating the *current* one.
-    apply_update(&authority, vec![id_a], vec![], both_images.policy_hash).await;
+    apply_update(&admin, vec![id_a], vec![], both_images.policy_hash).await;
     assert_state_matches_document(&registry, &both_images, 4, bootstrap_policy_hash, &universe)
         .await;
     assert_eq!(
         registry.statusOf(id_a).call().await.unwrap(),
         STATUS_ACCEPTED
     );
+
+    // The admin hands the role on — how a network moves from a development
+    // key to a multisig — and the new admin alone can update the policy.
+    let receipt = admin
+        .transferAdmin(OTHER)
+        .gas(REGISTRY_TX_GAS)
+        .send()
+        .await
+        .expect("send admin transfer")
+        .get_receipt()
+        .await
+        .expect("admin transfer receipt");
+    assert!(receipt.status(), "admin transfer reverted");
+    assert_eq!(registry.admin().call().await.unwrap(), OTHER);
+    apply_update(&other, vec![], vec![id_b], image_a.policy_hash).await;
+    assert_state_matches_document(&registry, &image_a, 5, bootstrap_policy_hash, &universe).await;
 }

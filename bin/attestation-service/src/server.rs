@@ -192,7 +192,7 @@ pub async fn start_server(
     // on, our own reth answers for both. Construction is lazy — no connection
     // until a join arrives — so serving never waits on reth; a join that beats
     // reth's startup is denied (fail closed) and the requester retries.
-    let registry = Address::from(manifest.measurements.contracts.registry);
+    let registry = Address::from(manifest.measurements.registry);
     let pinned_genesis = B256::from(manifest.eth.genesis_hash);
     let mut admission = RegistryAdmission::new(args.reth_rpc_url.clone(), registry, pinned_genesis);
     if let Some(max_policy_age) = args.max_policy_age {
