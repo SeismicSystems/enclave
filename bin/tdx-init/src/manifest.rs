@@ -79,7 +79,7 @@ mod tests {
     const FIXTURE: &[u8] =
         include_bytes!("../../../crates/network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
-        "0xe2ad747387fbe8bb1c07d919e7bba807f44b0812704e82ebdb048e6a8b8e2bbd";
+        "0x0a6605bd97ed0e355059c052fb0e00323fd98a2b4081fed31f9db094ac06ba8a";
 
     fn b64(bytes: &[u8]) -> String {
         base64::engine::general_purpose::STANDARD.encode(bytes)

@@ -37,6 +37,14 @@ pub const POLICY_REVISION_SLOT: B256 =
 pub const ACCEPTED_COUNT_SLOT: B256 =
     b256!("0xa3ae60943e4f183142036d77b94858085814dd428f131289aea7e42703fb0b04");
 
+/// `admin` slot (base + 5): the account allowed to apply policy updates, an
+/// address right-aligned in its word. Not policy state, so
+/// [`registry_genesis_storage`] leaves it out: the genesis template seeds it,
+/// as it seeds the owners of the other owner-gated predeploys, and deploy
+/// assembly keeps it while injecting the compiled policy.
+pub const ADMIN_SLOT: B256 =
+    b256!("0xa3ae60943e4f183142036d77b94858085814dd428f131289aea7e42703fb0b05");
+
 /// The genesis policy revision. Revision 0 means uninitialized, so a
 /// registry seeded from a compiled policy always starts at 1.
 pub const GENESIS_POLICY_REVISION: u64 = 1;
@@ -51,7 +59,7 @@ pub const GENESIS_POLICY_REVISION: u64 = 1;
 /// registry account. A rebuilt contract is a deliberate re-pin here plus a
 /// regenerated compiled fixture.
 pub const REGISTRY_RUNTIME_CODE_HASH: B256 =
-    b256!("0xd6408a266c8582a56d8583bb56e19fde931f318402f7092a01c6dadf24ae4fe4");
+    b256!("0xb51ded5f9f1e5b895f6c1c7486d31314c028e60445fc044662a9d4c2b0d7fc37");
 
 /// `Status.Accepted` as a stored word.
 const STATUS_ACCEPTED: B256 =
@@ -70,7 +78,8 @@ pub fn admission_status_slot(admission_id: AdmissionId) -> B256 {
 /// compiled admission ID `Accepted`, bootstrap and active policy hashes both
 /// set to the document hash, revision [`GENESIS_POLICY_REVISION`], and
 /// `acceptedCount` equal to the unique-ID count. Deploy validation requires
-/// the registry account to hold exactly this map and nothing else.
+/// the registry account to hold exactly this map plus a nonzero
+/// [`ADMIN_SLOT`], and nothing else.
 pub fn registry_genesis_storage(policy: &CompiledPolicy) -> BTreeMap<B256, B256> {
     let mut storage = BTreeMap::new();
     storage.insert(BOOTSTRAP_POLICY_HASH_SLOT, policy.policy_hash);
@@ -114,6 +123,7 @@ mod tests {
             (2, ACTIVE_POLICY_HASH_SLOT),
             (3, POLICY_REVISION_SLOT),
             (4, ACCEPTED_COUNT_SLOT),
+            (5, ADMIN_SLOT),
         ] {
             assert_eq!(B256::from(base + U256::from(offset)), slot);
         }

@@ -215,7 +215,7 @@ pub(crate) struct RegistryAdmission {
 
 impl RegistryAdmission {
     /// Admission backed by the `MeasurementRegistry` at `registry` (the
-    /// manifest's `measurements.contracts.registry`), read over the node's
+    /// manifest's `measurements.registry`), read over the node's
     /// local reth HTTP endpoint, on the chain whose genesis is
     /// `pinned_genesis` (the manifest's `eth.genesis_hash`).
     pub(crate) fn new(reth_rpc_url: url::Url, registry: Address, pinned_genesis: B256) -> Self {

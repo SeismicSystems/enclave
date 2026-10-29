@@ -184,33 +184,25 @@ pub struct MeasurementsManifest {
     ///
     /// Pins the *bootstrap* policy only — the measurement set in force at
     /// genesis, frozen forever by this hash. Post-genesis additions and
-    /// deprecations happen on-chain in `contracts.registry`; read the
-    /// contract, not this artifact, for the current allowlist.
+    /// deprecations happen on-chain in `registry`; read the contract, not
+    /// this artifact, for the current allowlist.
     #[serde(deserialize_with = "hex_32")]
     pub bootstrap_policy_hash: [u8; 32],
-    pub contracts: ContractsManifest,
-}
-
-/// Addresses of the admission-policy contracts, duplicated from the genesis
-/// alloc for verifiers that don't hold the genesis file.
-///
-/// Fields are named by role, not by contract class name, so the hashed
-/// artifact schema survives contract renames. The registry's well-known
-/// genesis-predeploy address is also exposed as
-/// `seismic_measurement_registry_client::MEASUREMENT_REGISTRY_ADDRESS`.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ContractsManifest {
-    /// The measurement registry (`MeasurementRegistry.sol`): the allowlist
-    /// new Seismic nodes are checked against (`isAccepted()`). This is the
-    /// *live* policy, updated on-chain over the network's lifetime —
-    /// `bootstrap_policy_hash` freezes only the genesis-time set.
+    /// Address of the measurement registry (`MeasurementRegistry.sol`): the
+    /// allowlist new Seismic nodes are checked against (`isAccepted()`).
+    /// Duplicated from the genesis alloc for verifiers that don't hold the
+    /// genesis file, and also exposed as
+    /// `seismic_measurement_registry_client::MEASUREMENT_REGISTRY_ADDRESS`.
+    /// This is the *live* policy, updated on-chain over the network's
+    /// lifetime — `bootstrap_policy_hash` freezes only the genesis-time set.
+    ///
+    /// Named by role, not by contract class name, so the hashed artifact
+    /// schema survives a contract rename. Who may mutate the registry is
+    /// registry state (`admin()`), not a manifest field: the genesis admin is
+    /// committed through `eth.genesis_hash`, and the role can move on-chain
+    /// without changing the network's identity.
     #[serde(deserialize_with = "hex_20")]
     pub registry: [u8; 20],
-    /// The authority allowed to mutate the registry (today
-    /// `MeasurementAuthorityDev.sol`).
-    #[serde(deserialize_with = "hex_20")]
-    pub authority: [u8; 20],
 }
 
 impl NetworkManifestV1 {
@@ -315,12 +307,8 @@ mod tests {
         assert_eq!(manifest.summit.namespace, "seismic-devnet-3");
         assert_eq!(manifest.measurements.bootstrap_policy_hash, [0xCC; 32]);
         assert_eq!(
-            hex::encode(manifest.measurements.contracts.registry),
+            hex::encode(manifest.measurements.registry),
             "1000000000000000000000000000000000000001"
-        );
-        assert_eq!(
-            hex::encode(manifest.measurements.contracts.authority),
-            "1000000000000000000000000000000000000002"
         );
         assert_eq!(
             hex::encode(manifest.founding_tx_io_pk),
@@ -332,7 +320,7 @@ mod tests {
         let network_id = NetworkId::from_manifest_bytes(FIXTURE);
         assert_eq!(
             network_id.to_string(),
-            "0xe2ad747387fbe8bb1c07d919e7bba807f44b0812704e82ebdb048e6a8b8e2bbd"
+            "0x0a6605bd97ed0e355059c052fb0e00323fd98a2b4081fed31f9db094ac06ba8a"
         );
     }
 

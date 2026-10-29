@@ -47,7 +47,7 @@ mod tests {
         // Same vector as seismic-attestation's manifest test over the fixture.
         assert_eq!(network_id, NetworkId::from_manifest_bytes(FIXTURE));
         assert_eq!(
-            hex::encode(manifest.measurements.contracts.registry),
+            hex::encode(manifest.measurements.registry),
             "1000000000000000000000000000000000000001"
         );
     }

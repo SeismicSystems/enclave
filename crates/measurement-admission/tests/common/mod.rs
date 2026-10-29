@@ -3,7 +3,7 @@
 //! `IMeasurementRegistry` mirrors the full protocol surface of the canonical
 //! `MeasurementRegistry` contract — `registry_abi.rs` holds its selector set
 //! equal to the canonical artifact's ABI, so the mutating functions belong here
-//! even though only `reth_registry.rs`'s authority path exercises them.
+//! even though only `reth_registry.rs`'s admin path exercises them.
 //! Enclave *runtime* code reaches the registry through
 //! `seismic-measurement-registry-client`'s narrow read-only binding instead.
 
@@ -14,7 +14,7 @@ use alloy::sol;
 sol! {
     #[sol(rpc)]
     interface IMeasurementRegistry {
-        function AUTHORITY() external view returns (address);
+        function admin() external view returns (address);
         function isAccepted(bytes32 admissionId) external view returns (bool);
         function statusOf(bytes32 admissionId) external view returns (uint8);
         function bootstrapPolicyHash() external view returns (bytes32);
@@ -26,14 +26,6 @@ sol! {
             bytes32[] calldata deprecate,
             bytes32 newActivePolicyHash
         ) external;
-    }
-
-    #[sol(rpc)]
-    interface IMeasurementAuthorityDev {
-        function applyPolicyUpdate(
-            bytes32[] calldata accept,
-            bytes32[] calldata deprecate,
-            bytes32 newActivePolicyHash
-        ) external;
+        function transferAdmin(address newAdmin) external;
     }
 }

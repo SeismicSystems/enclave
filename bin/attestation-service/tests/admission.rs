@@ -59,7 +59,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
-use alloy_primitives::{Address, B256, address, keccak256};
+use alloy_primitives::{B256, keccak256};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use seismic_attestation::{
     AttestationType, NetworkId, SeismicMeasurementPolicy, VerifiedSeismicAttestation,
@@ -100,14 +100,11 @@ const PINNED_ROOT_KEY: [u8; 32] = [7u8; 32];
 /// names a chain the responder's local reth is not on.
 const FOREIGN_GENESIS: B256 = B256::repeat_byte(0xef);
 
-/// `MeasurementAuthorityDev` genesis predeploy (the manifest's
-/// `measurements.contracts.authority`).
-const AUTHORITY: Address = address!("0x1000000000000000000000000000000000000002");
-/// Anvil dev account 0 — `MeasurementAuthorityDev.OWNER`, funded in the
-/// genesis template.
-const OWNER_SK: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+/// Anvil dev account 0 — the registry admin the genesis template seeds, and
+/// funded there.
+const ADMIN_SK: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 /// Fixed gas for `applyPolicyUpdate`: plain `eth_estimateGas` is an unsigned
-/// read, for which seismic-reth zeroes `msg.sender`, tripping the owner check
+/// read, for which seismic-reth zeroes `msg.sender`, tripping the admin check
 /// during the preflight (see `reth_registry.rs` for the long version).
 const APPLY_POLICY_UPDATE_GAS: u64 = 500_000;
 
@@ -128,7 +125,7 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
 sol! {
     #[sol(rpc)]
-    interface IMeasurementAuthorityDev {
+    interface IMeasurementRegistryAdmin {
         function applyPolicyUpdate(
             bytes32[] calldata accept,
             bytes32[] calldata deprecate,
@@ -139,7 +136,7 @@ sol! {
 
 /// The accepted path, and deprecation applying live: a joiner service
 /// bootstraps against a responder whose registry accepts the runner's own
-/// measurements (exactly one root-key wrap); the authority then deprecates
+/// measurements (exactly one root-key wrap); the admin then deprecates
 /// that admission ID on chain, and the same responder process denies the
 /// next handshake.
 #[serial_test::serial(attestation_evidence)]
@@ -177,11 +174,11 @@ async fn test_accepted_tuple_wraps_once_then_deprecation_applies_live() {
     );
     joiner.handle.abort();
 
-    // Deprecate the runner's admission ID through the authority owner. The
+    // Deprecate the runner's admission ID as the registry admin. The
     // responder reads the policy at the finalized block, so wait for the
     // deprecated verdict to finalize before asserting on a handshake.
-    let authority = IMeasurementAuthorityDev::new(AUTHORITY, owner_provider(&node));
-    let receipt = authority
+    let admin = IMeasurementRegistryAdmin::new(MEASUREMENT_REGISTRY_ADDRESS, admin_provider(&node));
+    let receipt = admin
         .applyPolicyUpdate(vec![], vec![admission_id], keccak256("suite revision 2"))
         .gas(APPLY_POLICY_UPDATE_GAS)
         .send()
@@ -426,16 +423,16 @@ fn launch_seeded_reth(measurement_id: &str, pcrs: &HashMap<u32, [u8; 32]>) -> Re
         REGISTRY_RUNTIME_CODE_HASH,
         "template registry code drifted from the canonical artifact"
     );
-    let storage: serde_json::Map<String, serde_json::Value> = registry_genesis_storage(&compiled)
-        .iter()
-        .map(|(slot, value)| {
-            (
-                format!("{slot}"),
-                serde_json::Value::from(format!("{value}")),
-            )
-        })
-        .collect();
-    registry_account["storage"] = serde_json::Value::Object(storage);
+    // The template seeds the admin; the compiled policy joins it.
+    let storage = registry_account["storage"]
+        .as_object_mut()
+        .expect("registry admin seeded in template");
+    for (slot, value) in registry_genesis_storage(&compiled) {
+        storage.insert(
+            format!("{slot}"),
+            serde_json::Value::from(format!("{value}")),
+        );
+    }
     genesis["timestamp"] = serde_json::Value::from(format!("{:#x}", now_secs()));
 
     let http_port = free_port();
@@ -847,8 +844,8 @@ fn denial_refusal(result: Result<Vec<u8>, jsonrpsee::core::client::Error>) -> Ro
     }
 }
 
-fn owner_provider(node: &RethNode) -> impl Provider + Clone {
-    let signer: PrivateKeySigner = OWNER_SK.parse().unwrap();
+fn admin_provider(node: &RethNode) -> impl Provider + Clone {
+    let signer: PrivateKeySigner = ADMIN_SK.parse().unwrap();
     ProviderBuilder::new()
         .wallet(EthereumWallet::from(signer))
         .connect_http(node.http_url.parse().unwrap())

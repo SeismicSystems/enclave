@@ -2,7 +2,7 @@
 //! `MeasurementRegistry`.
 //!
 //! Measurement schemas, admission-ID derivation, and genesis storage derivation
-//! live in `seismic-measurement-admission`. Contract mutation and authority-key
+//! live in `seismic-measurement-admission`. Contract mutation and admin-key
 //! handling belong to deployment and governance tooling, not enclave runtime
 //! code.
 

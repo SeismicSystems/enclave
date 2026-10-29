@@ -34,7 +34,7 @@ flowchart TD
         raw["measurements.json<br/>(raw make-measure output)"]
         doc["measurement-policy document<br/>(one record = one guest identity)"]
         ids["accepted admission IDs"]
-        reg["MeasurementRegistry<br/>(live policy, authority-updated)"]
+        reg["MeasurementRegistry<br/>(live policy, admin-updated)"]
         raw -- "promote" --> doc
         doc -- "compile: the same derivation<br/>over each record's PCR values" --> ids
         ids -- "genesis storage slots" --> reg
@@ -86,7 +86,7 @@ review it.
 
 `MeasurementRegistry.applyPolicyUpdate(accept, deprecate,
 newActivePolicyHash)` takes a status delta plus the hash of the complete
-new document. The compiler never emits deltas; authority tooling derives
+new document. The compiler never emits deltas; admin tooling derives
 them from two compile runs:
 
 ```text

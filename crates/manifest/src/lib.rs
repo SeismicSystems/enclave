@@ -16,8 +16,7 @@
 //! them.
 
 pub use seismic_network_manifest::{
-    ContractsManifest, EthManifest, ManifestError, MeasurementsManifest, NetworkId,
-    NetworkManifestV1, SummitManifest,
+    EthManifest, ManifestError, MeasurementsManifest, NetworkId, NetworkManifestV1, SummitManifest,
 };
 use serde_json::json;
 
@@ -48,12 +47,8 @@ pub fn render(manifest: &NetworkManifestV1) -> Vec<u8> {
     } = summit;
     let MeasurementsManifest {
         bootstrap_policy_hash,
-        contracts,
-    } = measurements;
-    let ContractsManifest {
         registry,
-        authority,
-    } = contracts;
+    } = measurements;
 
     // Sorted keys are the canonical form: the one a holder of the file can
     // reproduce with no schema in hand, since `jq -S .` over these bytes
@@ -68,10 +63,7 @@ pub fn render(manifest: &NetworkManifestV1) -> Vec<u8> {
         "manifest_version": manifest_version,
         "measurements": {
             "bootstrap_policy_hash": hex_0x(bootstrap_policy_hash),
-            "contracts": {
-                "authority": hex_0x(authority),
-                "registry": hex_0x(registry),
-            },
+            "registry": hex_0x(registry),
         },
         "name": name,
         "summit": {
@@ -116,7 +108,7 @@ mod tests {
     const FIXTURE: &[u8] =
         include_bytes!("../../network-manifest/fixtures/network-manifest-v1.json");
     const FIXTURE_NETWORK_ID: &str =
-        "0xe2ad747387fbe8bb1c07d919e7bba807f44b0812704e82ebdb048e6a8b8e2bbd";
+        "0x0a6605bd97ed0e355059c052fb0e00323fd98a2b4081fed31f9db094ac06ba8a";
 
     #[test]
     fn render_reproduces_fixture_bytes() {

@@ -53,10 +53,10 @@ network's tooling — conforms by satisfying the same sections.
 | accepted set | The admission IDs a document admits, or the IDs the registry currently holds as `Accepted`. |
 | status | Per-ID registry state: `Unknown = 0`, `Accepted = 1`, `Deprecated = 2`. |
 | revision | The registry's `policyRevision` counter. Genesis is revision 1; each applied update adds 1. |
-| authority | The one address the registry accepts policy updates from: `0x1000000000000000000000000000000000000002`. |
+| admin | The one account the registry accepts policy updates from, held in registry storage. Seeded at genesis; the admin can transfer the role. |
 
-The registry lives at `0x1000000000000000000000000000000000000001`. Both
-addresses are genesis predeploys and never change.
+The registry lives at `0x1000000000000000000000000000000000000001`, a
+genesis predeploy that never moves.
 
 ## 2. Pipeline
 
@@ -466,6 +466,7 @@ bootstrapPolicyHash = N + 1
 activePolicyHash    = N + 2
 policyRevision      = N + 3
 acceptedCount       = N + 4
+admin               = N + 5
 ```
 
 Genesis values:
@@ -476,7 +477,12 @@ activePolicyHash    = the same hash
 policyRevision      = 1                          (0 means uninitialized)
 acceptedCount       = number of unique admission IDs
 statuses[id]        = 1 (Accepted) for every compiled ID
+admin               = the network's chosen admin (nonzero)
 ```
+
+The admin is not policy state, so a compiled report leaves it out: the
+genesis template seeds it, as it seeds the owners of the other owner-gated
+predeploys, and deploy tooling keeps it while writing the compiled policy.
 
 Complete genesis storage for `measurement-policy-v1.json`, as committed in
 `measurement-policy-v1.compiled.json`:
@@ -496,7 +502,7 @@ register value or a JSON byte: only keccak keys and status words.
 The slot formulas are meaningful only for the contract build they were
 frozen against, so a compiled report also carries
 `registry_runtime_code_hash`
-(`0xd6408a266c8582a56d8583bb56e19fde931f318402f7092a01c6dadf24ae4fe4`),
+(`0xb51ded5f9f1e5b895f6c1c7486d31314c028e60445fc044662a9d4c2b0d7fc37`),
 which is keccak256 of the canonical runtime bytecode in
 [`contracts/artifacts/MeasurementRegistry.json`](https://github.com/SeismicSystems/seismic/blob/main/contracts/artifacts/MeasurementRegistry.json).
 
@@ -507,10 +513,11 @@ Deploy tooling MUST prove genesis consistency before a network founds:
 3. recompute every status slot;
 4. check the registry account against the canonical runtime bytecode;
 5. check the policy-hash, revision, and count slots;
-6. check that the registry account holds no other storage entry.
+6. check that the admin slot holds a nonzero address;
+7. check that the registry account holds no other storage entry.
 
 The genesis hash then commits to the registry runtime, the initial accepted
-IDs, the bootstrap document hash, and the counters. There is no
+IDs, the bootstrap document hash, the counters, and the genesis admin. There is no
 empty-policy window, and no privileged transaction at t=0.
 
 ## 9. Registry behavior
@@ -540,7 +547,7 @@ The registry MUST enforce, and reverts otherwise:
 
 | Rule | Revert |
 | --- | --- |
-| `msg.sender` is the fixed authority address | `Unauthorized` |
+| `msg.sender` is the admin | `Unauthorized` |
 | the registry is initialized, so `policyRevision != 0` | `Uninitialized` |
 | the update changes something | `EmptyUpdate` |
 | `newActivePolicyHash` differs from the current `activePolicyHash` | `UnchangedPolicyHash` |
@@ -563,20 +570,29 @@ update states a real change. A status MUST NOT return to `Unknown`:
 a delta. A complete document per revision lets an auditor recover the policy
 for any revision from one published file, without replaying earlier updates.
 
-The registry does not check that a delta matches a hash. The authority
+The registry does not check that a delta matches a hash. The admin
 attests to that relationship. The registry's duplicate, contradiction,
 no-op, and transition rules are the atomic backstop for a mis-computed
 delta.
 
-The registry recognizes one fixed authority address, and no EOA can occupy
-it, so every network installs a forwarding contract there at genesis.
-Which contract that is — an audited multisig, a governance adapter, or the
-owner-gated development forwarder — is network configuration. It MUST NOT
-change the registry, its address, or its storage layout.
+Administration:
+
+```solidity
+function admin() external view returns (address);
+function transferAdmin(address newAdmin) external;
+```
+
+Only the admin may call `transferAdmin`, which reverts with `ZeroAddress`
+for the zero address: there is no renounce, since an admin-less registry
+could never update its policy again. Each transfer emits `AdminTransferred`.
+
+Who holds the role — a development key, an audited multisig, a governance
+contract — is network configuration, and moving between them is a transfer.
+It MUST NOT change the registry, its address, or its storage layout.
 
 ## 10. Revision lifecycle
 
-Authority tooling derives the delta from two compiled documents:
+Admin tooling derives the delta from two compiled documents:
 
 ```text
 accept              = ids(new) - ids(old)
@@ -616,8 +632,9 @@ Notes on the example:
   records what the network founded on.
 
 `tests/reth_registry.rs` runs exactly this sequence against a real
-`seismic-reth` node, through the authority, over `eth_call` and signed
-transactions.
+`seismic-reth` node, as the admin, over `eth_call` and signed
+transactions, then transfers the admin role and applies one more revision as
+the new admin.
 
 ## 11. Consumer obligations
 
@@ -718,7 +735,7 @@ Extensible without touching any of the above:
 - a new attestation backend or register set, as a new schema name with its
   own ID space;
 - a new accepted set, as a policy revision;
-- the authority implementation behind the fixed authority address;
+- who holds the admin role;
 - an on-chain catalog that publishes admission preimages, which can prove
   `keccak256(preimage) == admissionId` for an already-authoritative ID
   without joining the admission path.
