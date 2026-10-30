@@ -615,6 +615,32 @@ mod tests {
         mutated(GCP_FOUNDING_ARCHIVE, mutate)
     }
 
+    /// The `dcap-qvl` versions the founding fixtures were captured under and
+    /// that this build links. `TrustAnchors` records the version as a
+    /// stand-in for the Intel SGX Root CA it compiles in, and that root's
+    /// `TrustedRootCA.der` is byte-identical in both (SHA-256 `44a0196b...`),
+    /// so the version is the only anchor that moved. Bumping `dcap-qvl`
+    /// again fails the founding tests until the root is re-checked and this
+    /// pair updated.
+    const CHECKED_DCAP_QVL_DRIFT: (&str, &str) = ("0.5.2", "0.6.6");
+
+    /// Fail unless `drift` is absent or is exactly
+    /// [`CHECKED_DCAP_QVL_DRIFT`] with every other anchor unchanged.
+    fn assert_only_checked_dcap_qvl_drift(drift: Option<&AnchorDrift>) {
+        let Some(drift) = drift else { return };
+        assert_eq!(
+            (
+                drift.archived.dcap_qvl_version.as_str(),
+                drift.current.dcap_qvl_version.as_str()
+            ),
+            CHECKED_DCAP_QVL_DRIFT,
+            "{drift}"
+        );
+        let mut archived = drift.archived.clone();
+        archived.dcap_qvl_version = drift.current.dcap_qvl_version.clone();
+        assert_eq!(archived.drift_from(&drift.current), None, "{drift}");
+    }
+
     fn mutated(archive: &str, mutate: impl FnOnce(&mut serde_json::Value)) -> FoundingArchive {
         let mut document: serde_json::Value = serde_json::from_str(archive).unwrap();
         mutate(&mut document);
@@ -662,9 +688,10 @@ mod tests {
             .expect("the archived founding verifies offline");
 
         // The fixture was captured by a build carrying the same anchors as
-        // this one; were they to differ, the founding would still verify but
-        // this test should say so, loudly.
-        assert_eq!(verified.anchor_drift, None);
+        // this one, up to a checked dcap-qvl bump; were they to differ
+        // otherwise, the founding would still verify but this test should
+        // say so, loudly.
+        assert_only_checked_dcap_qvl_drift(verified.anchor_drift.as_ref());
 
         // The policy has to be one that really pins this guest: a policy
         // whose measurements map were empty accepts any quote, and this test
@@ -770,7 +797,7 @@ mod tests {
 
         let verified = verify_archived_harvest(archive, policy(GCP_FOUNDING_POLICY))
             .expect("the archived GCP founding verifies offline");
-        assert_eq!(verified.anchor_drift, None);
+        assert_only_checked_dcap_qvl_drift(verified.anchor_drift.as_ref());
 
         let report = verified.report().to_json();
         assert_eq!(report["attestation_type"], "gcp-tdx");
