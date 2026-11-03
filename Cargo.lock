@@ -5737,14 +5737,10 @@ dependencies = [
 name = "seismic-custodian-ipc"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "ciborium",
- "clap",
- "hex",
  "libc",
  "serde",
  "serde_bytes",
- "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

@@ -21,12 +21,6 @@ zeroize = { workspace = true, features = ["derive"] }
 # Optional so the custodian links no async runtime.
 tokio = { workspace = true, optional = true }
 
-# `cli` feature: debug binary.
-anyhow = { workspace = true, optional = true }
-clap = { workspace = true, optional = true }
-hex = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
-
 [dev-dependencies]
 tempfile.workspace = true
 
@@ -38,8 +32,3 @@ tempfile.workspace = true
 # with a `client` consumer (e.g. --workspace) pulls tokio back in. Build it on
 # its own.
 client = ["dep:tokio"]
-cli = ["client", "dep:anyhow", "dep:clap", "dep:hex", "dep:sha2"]
-
-[[bin]]
-name = "custodian-ipc-cli"
-required-features = ["cli"]

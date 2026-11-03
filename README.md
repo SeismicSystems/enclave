@@ -24,7 +24,7 @@ library they share, or one deploy's Rust CLI links.
 | `enclave` | Shared enclave API types (JSON-RPC surface); imported by seismic-reth. |
 | `crypto` | AES-GCM / ECDH / HKDF helpers shared across the Seismic stack. |
 | `custodian` | RAM-only custodian of the network root key. |
-| `custodian-ipc` | Wire protocol, client, and server for the custodian Unix socket (plus a debug CLI behind the `cli` feature). |
+| `custodian-ipc` | Wire protocol, client, and server for the custodian Unix socket. |
 | `attestation` | Attestation evidence types and policy checks. |
 | `attestation-rpc` | Purpose-specific attestation JSON-RPC types. |
 | `measurement-admission` | Admission-ID derivation and measurement-policy compiler for the on-chain `MeasurementRegistry`; deploy's Rust CLI links it to promote measurements and compile the policy. |
