@@ -4,7 +4,7 @@
 //! ([`framing`]); messages are the byte-oriented [`Request`]/[`Response`]
 //! serde enums.
 //! The synchronous [`server`] and the [`candidate_tx_io_pk`] file are always
-//! built. The async [`CustodianClient`] sits behind the default `client`
+//! built. The async [`CustodianClient`] sits behind the opt-in `client`
 //! feature, so the custodian can link this crate without tokio.
 //!
 //! Boundary rule: this crate stays a leaf — no custodian, attestation, or
