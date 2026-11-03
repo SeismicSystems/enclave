@@ -3,16 +3,9 @@
 //! Framing is a 4-byte big-endian length prefix followed by a CBOR body
 //! ([`framing`]); messages are the byte-oriented [`Request`]/[`Response`]
 //! serde enums.
-//! This crate is both ends of the custodian wire surface, feature-gated by
-//! what each host needs:
-//!
-//! - core (always): wire types + pure/blocking framing — serde, ciborium,
-//!   zeroize only — and the [`candidate_tx_io_pk`] file, the custodian's one
-//!   channel outside the socket, in std alone
-//! - `client` (default): async [`CustodianClient`] for tokio hosts (reth,
-//!   the attestation service)
-//! - `server`: the synchronous socket server in [`server`] — no async
-//!   runtime, for the process that holds the keys
+//! The synchronous [`server`] and the [`candidate_tx_io_pk`] file are always
+//! built. The async [`CustodianClient`] sits behind the default `client`
+//! feature, so the custodian can link this crate without tokio.
 //!
 //! Boundary rule: this crate stays a leaf — no custodian, attestation, or
 //! crypto-stack dependencies. Key material crosses the wire as raw bytes and
@@ -26,7 +19,6 @@ mod client;
 mod error;
 pub mod framing;
 mod messages;
-#[cfg(feature = "server")]
 pub mod server;
 
 #[cfg(feature = "client")]
