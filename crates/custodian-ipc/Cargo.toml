@@ -31,13 +31,12 @@ sha2 = { workspace = true, optional = true }
 tempfile.workspace = true
 
 [features]
-# `client` is the async CustodianClient. On by default for reth; the workspace
-# root turns default features off so the custodian builds without tokio.
+# `client` is the async CustodianClient. Off by default so the custodian, which
+# must not link tokio, gets it only if someone asks for it.
 #
 # CAUTION: cargo unifies features per build, so building the custodian together
 # with a `client` consumer (e.g. --workspace) pulls tokio back in. Build it on
 # its own.
-default = ["client"]
 client = ["dep:tokio"]
 cli = ["client", "dep:anyhow", "dep:clap", "dep:hex", "dep:sha2"]
 

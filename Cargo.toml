@@ -37,7 +37,7 @@ seismic-attestation = { path = "crates/attestation" }
 seismic-attestation-rpc = { path = "crates/attestation-rpc" }
 seismic-crypto = { path = "crates/crypto" }
 seismic-custodian = { path = "crates/custodian" }
-seismic-custodian-ipc = { path = "crates/custodian-ipc", default-features = false }
+seismic-custodian-ipc = { path = "crates/custodian-ipc" }
 seismic-custodian-service = { path = "bin/custodian-service" }
 seismic-measurement-admission = { path = "crates/measurement-admission" }
 seismic-measurement-registry-client = { path = "crates/measurement-registry-client" }
