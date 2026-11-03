@@ -68,11 +68,6 @@ jobs:
             contracts/artifacts/MeasurementRegistry.json
             contracts/test/fixtures
           sparse-checkout-cone-mode: false
-      # The workspace pass builds seismic-custodian-ipc with default features
-      # only, which compiles out the `server` module (and its ACL tests) and
-      # skips the `cli` binary entirely (required-features). Cover them here.
-      - name: Run seismic-custodian-ipc tests (all features)
-        run: cargo test -p seismic-custodian-ipc --all-features
       # The live seismic-attestation-service test targets (evidence,
       # admission) need a TDX CVM, and seismic-measurement-admission's
       # reth_registry test needs a seismic-reth binary; those run in their
