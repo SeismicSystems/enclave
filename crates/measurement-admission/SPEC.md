@@ -715,7 +715,6 @@ document states means regenerating the reports in the same change.
 | `tests/golden.rs` | The fixtures compile and promote to the committed bytes. |
 | `tests/spec_vectors.rs` | Every value in this document matches the fixtures. |
 | `tests/attested_tls_parity.rs` | Accepted semantics equal the permissive matcher's. |
-| `src/registry_abi.rs` unit tests | The Rust registry interface declares exactly the protocol signatures. |
 | `tests/reth_registry.rs` | Genesis policy and the revision lifecycle on a real node. |
 | [`MeasurementRegistry.t.sol`](https://github.com/SeismicSystems/seismic/blob/main/contracts/test/MeasurementRegistry.t.sol) | Registry rules, slot vectors, and the compiled fixture loaded as genesis storage. |
 | [`enclave_pin.rs`](https://github.com/SeismicSystems/seismic/blob/main/tee/cli/network/tests/enclave_pin.rs) | At the rev the Seismic repository pins: the runtime-code hash and the Rust interfaces match its contract artifact, and its fixture copy recompiles to its compiled copy. |

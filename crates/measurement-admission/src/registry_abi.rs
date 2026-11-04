@@ -37,30 +37,3 @@ sol! {
         function transferAdmin(address newAdmin) external;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::IMeasurementRegistry::IMeasurementRegistryCalls;
-
-    /// Editing the interface is a protocol change: it must also change this
-    /// list, and then the seismic repo's parity check at the next pin bump.
-    #[test]
-    fn interface_signatures_are_pinned() {
-        let mut declared = IMeasurementRegistryCalls::SIGNATURES.to_vec();
-        declared.sort_unstable();
-        assert_eq!(
-            declared,
-            [
-                "acceptedCount()",
-                "activePolicyHash()",
-                "admin()",
-                "applyPolicyUpdate(bytes32[],bytes32[],bytes32)",
-                "bootstrapPolicyHash()",
-                "isAccepted(bytes32)",
-                "policyRevision()",
-                "statusOf(bytes32)",
-                "transferAdmin(address)",
-            ]
-        );
-    }
-}

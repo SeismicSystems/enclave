@@ -24,17 +24,3 @@ sol! {
         function isAccepted(bytes32 admissionId) external view returns (bool);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::MeasurementRegistry::isAcceptedCall;
-    use alloy_sol_types::SolCall;
-
-    /// The seismic repo holds this binding to its canonical contract artifact
-    /// at the rev that pins this crate; this pins it locally.
-    #[test]
-    fn runtime_read_selector_is_pinned() {
-        assert_eq!(isAcceptedCall::SIGNATURE, "isAccepted(bytes32)");
-        assert_eq!(isAcceptedCall::SELECTOR, [0xa7, 0x8f, 0x84, 0xcf]);
-    }
-}
