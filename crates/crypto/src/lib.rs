@@ -15,6 +15,7 @@ use std::{path::Path, str::FromStr};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::digest::{consts::U12, generic_array::GenericArray};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
 
@@ -334,16 +335,55 @@ pub fn well_known_tx_io_keypair() -> secp256k1::Keypair {
     secp256k1::Keypair::from_secret_key(&Secp256k1::new(), &sk)
 }
 
+/// HKDF input key material for the RNG precompile.
+///
+/// Opaque: holders feed it to HKDF and nothing interprets its structure. The
+/// type exists so the bytes cannot be mixed up with the stack's other 64-byte
+/// values (signatures, uncompressed public keys, curve points) and so every
+/// holder gets a redacted `Debug` without writing one.
+///
+/// Zeroized on drop. Moves still leave stale, unwiped copies behind, since a
+/// Rust move is a `memcpy`. That is accepted at ownership handoffs (custodian
+/// to IPC, IPC to node, node to EVM): the key stays resident for a whole
+/// epoch anyway, and wiping every intermediate copy would need a heap-pinned
+/// handle threaded through every repo for no gain against an attacker who can
+/// already read the live copy. Hot paths that only read the key, such as each
+/// precompile call, should borrow it rather than copy it.
+///
+/// Not `Serialize`: wire formats carry their own byte DTO (e.g.
+/// `seismic-custodian-ipc`'s `RngIkmBytes`) and convert at their boundary.
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub struct RngIkm([u8; Self::LEN]);
+
+impl RngIkm {
+    /// Length of the input key material in bytes.
+    pub const LEN: usize = 64;
+
+    pub const fn from_bytes(bytes: [u8; Self::LEN]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(&self) -> &[u8; Self::LEN] {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for RngIkm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RngIkm(<redacted>)")
+    }
+}
+
 /// The well-known rng HKDF input key material: seeds the RNG precompile on
 /// networks running the well-known keys.
 ///
 /// The value is a consensus input — RNG-precompile outputs derive from it —
 /// so these bytes are frozen; a test pins them against accidental edits.
-pub fn well_known_rng_ikm() -> [u8; 64] {
-    hex_literal::hex!(
+pub fn well_known_rng_ikm() -> RngIkm {
+    RngIkm::from_bytes(hex_literal::hex!(
         "6c8fd0805e9524e8f01fee6f3627f6a3e7beed894c136bbc4e857eb7f5323808"
         "796c7dd73ee7d470538d4b9a6de14a479bfec72a4f64565d9bbea5b5c7f9c372"
-    )
+    ))
 }
 
 /// Encrypts the provided data using an AES key derived from
@@ -526,7 +566,13 @@ mod tests {
         ])
         .unwrap();
         let expanded = mini_secret_key.expand(schnorrkel::ExpansionMode::Uniform);
-        assert_eq!(well_known_rng_ikm(), expanded.to_bytes());
+        assert_eq!(well_known_rng_ikm().as_bytes(), &expanded.to_bytes());
+    }
+
+    #[test]
+    fn rng_ikm_debug_is_redacted() {
+        let ikm = RngIkm::from_bytes([0xab; RngIkm::LEN]);
+        assert_eq!(format!("{ikm:?}"), "RngIkm(<redacted>)");
     }
 
     /// Known-answer test shared with the TypeScript (aesKeygen.ts) and Python

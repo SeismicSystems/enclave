@@ -18,6 +18,7 @@ rand.workspace = true
 secp256k1.workspace = true
 serde.workspace = true
 sha2.workspace = true
+zeroize = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 hex.workspace = true

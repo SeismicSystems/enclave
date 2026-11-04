@@ -41,7 +41,7 @@ pub fn dispatch(state: &CustodianState, request: Request) -> Response {
         Request::GetRngIkm { epoch } => state
             .with_custodian(|custodian| {
                 Response::RngIkm(RngIkmBytes {
-                    ikm: custodian.get_rng_ikm(epoch),
+                    ikm: *custodian.get_rng_ikm(epoch).as_bytes(),
                 })
             })
             .unwrap_or(Response::RootKeyAbsent),
@@ -226,7 +226,7 @@ mod tests {
         let Response::RngIkm(rng) = dispatch(&state, Request::GetRngIkm { epoch: 0 }) else {
             panic!("expected rng ikm");
         };
-        assert_eq!(rng.ikm, custodian.get_rng_ikm(0));
+        assert_eq!(&rng.ikm, custodian.get_rng_ikm(0).as_bytes());
 
         let Response::SnapshotKey(snapshot) =
             dispatch(&state, Request::GetSnapshotKey { epoch: 0 })

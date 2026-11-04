@@ -3,8 +3,8 @@
 //! Everything crosses the wire as raw bytes — fixed-size arrays for keys and
 //! digests, `Vec<u8>` for variable-length blobs — tagged `serde_bytes` so CBOR
 //! encodes them as native byte strings. Callers convert to typed keys
-//! (`secp256k1`, `aes-gcm`) at their own boundary; see the crate-level
-//! boundary rule.
+//! (`secp256k1`, `aes-gcm`, `seismic_crypto::RngIkm`) at their own boundary;
+//! see the crate-level boundary rule.
 //!
 //! Key-fetch methods are deliberately one-per-purpose, never bundled: the
 //! method is the unit an ACL grant covers, so each caller can be given
@@ -229,8 +229,9 @@ pub struct RootKeyBootstrapAttemptBytes {
     pub requester_eph_pk: [u8; 33],
 }
 
-/// HKDF input key material for the RNG precompile (64 bytes: the secret half
-/// of the derived rng key, `SecretKey::to_bytes()`). Zeroized on drop.
+/// HKDF input key material for the RNG precompile, 64 opaque bytes. Callers
+/// convert to and from `seismic_crypto::RngIkm` at their boundary. Zeroized on
+/// drop.
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct RngIkmBytes {
     #[serde(with = "serde_bytes")]
