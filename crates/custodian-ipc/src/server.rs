@@ -33,7 +33,7 @@ const MAX_CONNECTIONS: usize = 64;
 /// deny-by-default — `MethodAcl::default()` denies all.
 #[derive(Default)]
 pub struct MethodAcl {
-    /// UIDs allowed the tx-io keypair (reth: TxSeismic calldata).
+    /// UIDs allowed the tx-io secret key (reth: TxSeismic calldata).
     pub tx_io: HashSet<u32>,
     /// UIDs allowed only the public half of the tx-io key (attestation
     /// service: tx-io evidence generation).
@@ -80,7 +80,7 @@ impl MethodAcl {
     pub fn allows(&self, uid: u32, request: &Request) -> bool {
         match request {
             Request::Ping => true,
-            Request::GetTxIoKeypair { .. } => self.tx_io.contains(&uid),
+            Request::GetTxIoSecretKey { .. } => self.tx_io.contains(&uid),
             Request::GetTxIoPublicKey { .. } => self.tx_io_public.contains(&uid),
             Request::GetRngIkm { .. } => self.rng.contains(&uid),
             Request::GetSnapshotKey { .. } => self.snapshot.contains(&uid),
@@ -319,12 +319,12 @@ mod tests {
     #[test]
     fn handler_sees_allowed_requests() {
         let responses = run_connection(
-            &[Request::Ping, Request::GetTxIoKeypair { epoch: 4 }],
+            &[Request::Ping, Request::GetTxIoSecretKey { epoch: 4 }],
             UID,
             &allow_all_for(UID),
             |request| match request {
                 Request::Ping => Response::Pong,
-                Request::GetTxIoKeypair { epoch } => Response::Error {
+                Request::GetTxIoSecretKey { epoch } => Response::Error {
                     message: format!("handler saw epoch {epoch}"),
                 },
                 _ => unreachable!(),
@@ -341,7 +341,7 @@ mod tests {
     fn denied_request_never_reaches_handler_but_ping_does() {
         let responses = run_connection(
             &[
-                Request::GetTxIoKeypair { epoch: 0 },
+                Request::GetTxIoSecretKey { epoch: 0 },
                 Request::Ping, // a denial answers the request; it doesn't poison the connection
             ],
             UID,
@@ -368,7 +368,7 @@ mod tests {
             rng: HashSet::from([UID]),
             ..MethodAcl::default()
         };
-        assert!(reth_like.allows(UID, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(reth_like.allows(UID, &Request::GetTxIoSecretKey { epoch: 0 }));
         assert!(reth_like.allows(UID, &Request::GetRngIkm { epoch: 0 }));
         assert!(!reth_like.allows(UID, &Request::GetTxIoPublicKey { epoch: 0 }));
         assert!(!reth_like.allows(UID, &Request::GetSnapshotKey { epoch: 0 }));
@@ -390,11 +390,11 @@ mod tests {
         assert!(attestation_like.allows(UID, &wrap_request()));
         assert!(attestation_like.allows(UID, &Request::RetireFoundingPolicy));
         assert!(attestation_like.allows(UID, &install_request()));
-        assert!(!attestation_like.allows(UID, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(!attestation_like.allows(UID, &Request::GetTxIoSecretKey { epoch: 0 }));
         assert!(!attestation_like.allows(UID, &Request::GetRngIkm { epoch: 0 }));
         assert!(!attestation_like.allows(UID, &Request::GetSnapshotKey { epoch: 0 }));
 
-        assert!(!reth_like.allows(UID + 1, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(!reth_like.allows(UID + 1, &Request::GetTxIoSecretKey { epoch: 0 }));
         assert!(!attestation_like.allows(UID + 1, &wrap_request()));
     }
 

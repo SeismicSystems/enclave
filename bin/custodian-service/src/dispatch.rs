@@ -12,7 +12,7 @@ use anyhow::Context as _;
 use seismic_custodian::{Custodian, VerifiedPeerAuthorization};
 use seismic_custodian_ipc::{
     Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
-    TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
+    TxIoPublicKeyBytes, TxIoSecretKeyBytes, WrappedRootKeyBytes,
 };
 use tracing::{error, info, warn};
 
@@ -23,11 +23,10 @@ use tracing::{error, info, warn};
 pub fn dispatch(state: &CustodianState, request: Request) -> Response {
     match request {
         Request::Ping => Response::Pong,
-        Request::GetTxIoKeypair { epoch } => state
+        Request::GetTxIoSecretKey { epoch } => state
             .with_custodian(|custodian| {
-                Response::TxIoKeypair(TxIoKeypairBytes {
+                Response::TxIoSecretKey(TxIoSecretKeyBytes {
                     sk: custodian.get_tx_io_sk(epoch).secret_bytes(),
-                    pk: custodian.get_tx_io_pk(epoch).serialize(),
                 })
             })
             .unwrap_or(Response::RootKeyAbsent),
@@ -209,19 +208,19 @@ mod tests {
         let state = with_root_key(&luks);
         let custodian = Custodian::new(ROOT_KEY);
 
-        let Response::TxIoKeypair(tx_io) = dispatch(&state, Request::GetTxIoKeypair { epoch: 0 })
+        let Response::TxIoSecretKey(tx_io) =
+            dispatch(&state, Request::GetTxIoSecretKey { epoch: 0 })
         else {
-            panic!("expected tx-io keypair");
+            panic!("expected tx-io secret key");
         };
         assert_eq!(tx_io.sk, custodian.get_tx_io_sk(0).secret_bytes());
-        assert_eq!(tx_io.pk, custodian.get_tx_io_pk(0).serialize());
 
         let Response::TxIoPublicKey(tx_io_public) =
             dispatch(&state, Request::GetTxIoPublicKey { epoch: 0 })
         else {
             panic!("expected tx-io public key");
         };
-        assert_eq!(tx_io_public.pk, tx_io.pk);
+        assert_eq!(tx_io_public.pk, custodian.get_tx_io_pk(0).serialize());
 
         let Response::RngIkm(rng) = dispatch(&state, Request::GetRngIkm { epoch: 0 }) else {
             panic!("expected rng ikm");
@@ -242,7 +241,7 @@ mod tests {
         let (_dir, luks) = tmp_luks();
         let state = awaiting(&luks);
         for request in [
-            Request::GetTxIoKeypair { epoch: 0 },
+            Request::GetTxIoSecretKey { epoch: 0 },
             Request::GetTxIoPublicKey { epoch: 0 },
             Request::GetRngIkm { epoch: 0 },
             Request::GetSnapshotKey { epoch: 0 },
@@ -298,10 +297,10 @@ mod tests {
         assert!(matches!(installed, Response::RootKeyInstalled));
 
         // The joiner now derives the genesis keys...
-        let Response::TxIoKeypair(joiner_keys) =
-            dispatch(&joiner, Request::GetTxIoKeypair { epoch: 0 })
+        let Response::TxIoSecretKey(joiner_keys) =
+            dispatch(&joiner, Request::GetTxIoSecretKey { epoch: 0 })
         else {
-            panic!("expected tx-io keypair");
+            panic!("expected tx-io secret key");
         };
         assert_eq!(
             joiner_keys.sk,
@@ -422,7 +421,10 @@ mod tests {
                 .expect("connect");
 
             // Before bootstrap, the joiner serves no keys.
-            let error = joiner.get_tx_io_keypair(0).await.expect_err("no key yet");
+            let error = joiner
+                .get_tx_io_secret_key(0)
+                .await
+                .expect_err("no key yet");
             assert!(matches!(error, IpcError::RootKeyAbsent));
 
             let CreateRootKeyBootstrapAttemptResult::Created(attempt) = joiner
@@ -460,8 +462,8 @@ mod tests {
             );
 
             // Both custodians now serve identical purpose keys.
-            let genesis_keys = genesis.get_tx_io_keypair(0).await.expect("genesis keys");
-            let joiner_keys = joiner.get_tx_io_keypair(0).await.expect("joiner keys");
+            let genesis_keys = genesis.get_tx_io_secret_key(0).await.expect("genesis keys");
+            let joiner_keys = joiner.get_tx_io_secret_key(0).await.expect("joiner keys");
             assert_eq!(genesis_keys.sk, joiner_keys.sk);
 
             // The joiner wrote its LUKS keyfile on install.

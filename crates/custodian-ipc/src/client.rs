@@ -9,7 +9,7 @@ use crate::error::IpcError;
 use crate::framing::{read_frame, write_frame};
 use crate::messages::{
     AdmittedOn, Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
-    TxIoKeypairBytes, TxIoPublicKeyBytes, WrappedRootKeyBytes,
+    TxIoPublicKeyBytes, TxIoSecretKeyBytes, WrappedRootKeyBytes,
 };
 use std::path::Path;
 use tokio::net::UnixStream;
@@ -50,10 +50,13 @@ impl CustodianClient {
         }
     }
 
-    pub async fn get_tx_io_keypair(&mut self, epoch: u64) -> Result<TxIoKeypairBytes, IpcError> {
-        match self.call(&Request::GetTxIoKeypair { epoch }).await? {
-            Response::TxIoKeypair(keys) => Ok(keys),
-            response => Err(unexpected_response("get_tx_io_keypair", &response)),
+    pub async fn get_tx_io_secret_key(
+        &mut self,
+        epoch: u64,
+    ) -> Result<TxIoSecretKeyBytes, IpcError> {
+        match self.call(&Request::GetTxIoSecretKey { epoch }).await? {
+            Response::TxIoSecretKey(keys) => Ok(keys),
+            response => Err(unexpected_response("get_tx_io_secret_key", &response)),
         }
     }
 
@@ -292,9 +295,8 @@ mod tests {
 
     #[tokio::test]
     async fn unexpected_response_reports_only_its_kind() {
-        let (mut client, server) = scripted_client(Response::TxIoKeypair(TxIoKeypairBytes {
+        let (mut client, server) = scripted_client(Response::TxIoSecretKey(TxIoSecretKeyBytes {
             sk: [0xA5; 32],
-            pk: [2; 33],
         }));
         let error = client
             .get_tx_io_public_key(0)
@@ -305,7 +307,7 @@ mod tests {
             error,
             IpcError::UnexpectedResponse {
                 method: "get_tx_io_public_key",
-                received: "tx_io_keypair"
+                received: "tx_io_secret_key"
             }
         ));
         assert!(

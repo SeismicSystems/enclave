@@ -23,10 +23,11 @@ pub enum Request {
     Ping,
 
     // ==================== Purpose-key access ====================
-    /// Derive this epoch's tx-io ECDH keypair (TxSeismic calldata
-    /// encryption). Epochs are fixed at 0 until a consensus-driven manual
-    /// rotation exists; same for the other purposes below.
-    GetTxIoKeypair { epoch: u64 },
+    /// Derive this epoch's tx-io ECDH secret key (TxSeismic calldata
+    /// encryption); the caller derives the public key from it. Epochs are
+    /// fixed at 0 until a consensus-driven manual rotation exists; same for
+    /// the other purposes below.
+    GetTxIoSecretKey { epoch: u64 },
     /// Derive only the public half of this epoch's tx-io key. The
     /// attestation service uses this to mint tx-io evidence without gaining
     /// access to `tx_io_sk`.
@@ -113,7 +114,7 @@ impl Request {
     pub fn method(&self) -> &'static str {
         match self {
             Request::Ping => "ping",
-            Request::GetTxIoKeypair { .. } => "get_tx_io_keypair",
+            Request::GetTxIoSecretKey { .. } => "get_tx_io_secret_key",
             Request::GetTxIoPublicKey { .. } => "get_tx_io_public_key",
             Request::GetRngIkm { .. } => "get_rng_ikm",
             Request::GetSnapshotKey { .. } => "get_snapshot_key",
@@ -134,7 +135,7 @@ impl Request {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Response {
     Pong,
-    TxIoKeypair(TxIoKeypairBytes),
+    TxIoSecretKey(TxIoSecretKeyBytes),
     TxIoPublicKey(TxIoPublicKeyBytes),
     RngIkm(RngIkmBytes),
     SnapshotKey(SnapshotKeyBytes),
@@ -173,7 +174,7 @@ impl Response {
     pub fn kind(&self) -> &'static str {
         match self {
             Response::Pong => "pong",
-            Response::TxIoKeypair(_) => "tx_io_keypair",
+            Response::TxIoSecretKey(_) => "tx_io_secret_key",
             Response::TxIoPublicKey(_) => "tx_io_public_key",
             Response::RngIkm(_) => "rng_ikm",
             Response::SnapshotKey(_) => "snapshot_key",
@@ -189,22 +190,21 @@ impl Response {
     }
 }
 
-/// secp256k1 tx-io keypair as raw bytes. Zeroized on drop: `sk` is a secret.
+/// secp256k1 tx-io secret key as raw bytes. Zeroized on drop.
+///
+/// Only the secret half crosses the wire: the caller derives the public key
+/// from it, so a mismatched pair is unrepresentable.
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-pub struct TxIoKeypairBytes {
+pub struct TxIoSecretKeyBytes {
     #[serde(with = "serde_bytes")]
     pub sk: [u8; 32],
-    /// 33-byte compressed SEC1 public key.
-    #[serde(with = "serde_bytes")]
-    pub pk: [u8; 33],
 }
 
-// Manual Debug so a stray `{:?}` on a response can't log the secret half.
-impl fmt::Debug for TxIoKeypairBytes {
+// Manual Debug so a stray `{:?}` on a response can't log the secret.
+impl fmt::Debug for TxIoSecretKeyBytes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TxIoKeypairBytes")
+        f.debug_struct("TxIoSecretKeyBytes")
             .field("sk", &"<redacted>")
-            .field("pk", &self.pk)
             .finish()
     }
 }
@@ -292,7 +292,7 @@ mod tests {
     fn request_roundtrips() {
         let requests = [
             Request::Ping,
-            Request::GetTxIoKeypair { epoch: 7 },
+            Request::GetTxIoSecretKey { epoch: 7 },
             Request::GetTxIoPublicKey { epoch: 7 },
             Request::GetRngIkm { epoch: 8 },
             Request::GetSnapshotKey { epoch: 9 },
@@ -318,15 +318,11 @@ mod tests {
 
     #[test]
     fn response_roundtrips() {
-        let response = Response::TxIoKeypair(TxIoKeypairBytes {
-            sk: [1; 32],
-            pk: [2; 33],
-        });
-        let Response::TxIoKeypair(keys) = from_cbor(&to_cbor(&response)) else {
+        let response = Response::TxIoSecretKey(TxIoSecretKeyBytes { sk: [1; 32] });
+        let Response::TxIoSecretKey(keys) = from_cbor(&to_cbor(&response)) else {
             panic!("wrong variant");
         };
         assert_eq!(keys.sk, [1; 32]);
-        assert_eq!(keys.pk, [2; 33]);
 
         let response = Response::SnapshotKey(SnapshotKeyBytes { key: [3; 32] });
         let Response::SnapshotKey(snapshot) = from_cbor(&to_cbor(&response)) else {
@@ -397,11 +393,8 @@ mod tests {
 
     #[test]
     fn response_kind_is_payload_free() {
-        let response = Response::TxIoKeypair(TxIoKeypairBytes {
-            sk: [0xA5; 32],
-            pk: [2; 33],
-        });
-        assert_eq!(response.kind(), "tx_io_keypair");
+        let response = Response::TxIoSecretKey(TxIoSecretKeyBytes { sk: [0xA5; 32] });
+        assert_eq!(response.kind(), "tx_io_secret_key");
         assert!(!response.kind().contains("a5"));
 
         let response = Response::Error {
@@ -413,10 +406,7 @@ mod tests {
 
     #[test]
     fn secret_payload_debug_redacts_secrets() {
-        let tx_io = TxIoKeypairBytes {
-            sk: [1; 32],
-            pk: [2; 33],
-        };
+        let tx_io = TxIoSecretKeyBytes { sk: [1; 32] };
         let debug = format!("{tx_io:?}");
         assert!(debug.contains("<redacted>"));
         assert!(!debug.contains("1, 1"), "sk leaked: {debug}");

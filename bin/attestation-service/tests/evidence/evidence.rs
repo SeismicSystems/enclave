@@ -40,7 +40,7 @@ use seismic_attestation_service::{
     utils::{init_tracing, require_tpm_access},
 };
 use seismic_custodian::Custodian;
-use seismic_custodian_ipc::CustodianClient;
+use seismic_custodian_ipc::{CustodianClient, RngIkmBytes, SnapshotKeyBytes, TxIoSecretKeyBytes};
 use seismic_custodian_service::state::CustodianState;
 
 // Each node reads this manifest from its own conf dir, written the way
@@ -80,9 +80,11 @@ async fn test_two_node_root_key_bootstrap() {
     // Both custodians hold the same root key now, so every purpose key they
     // derive matches. Asked straight over each custodian's own socket — the
     // key-holding boundary reth itself fetches from.
-    let keys1 = purpose_keys(&genesis.socket, 0).await;
-    let keys2 = purpose_keys(&joiner.socket, 0).await;
-    assert_eq!(keys1, keys2);
+    let (tx_io1, rng1, snapshot1) = purpose_keys(&genesis.socket, 0).await;
+    let (tx_io2, rng2, snapshot2) = purpose_keys(&joiner.socket, 0).await;
+    assert_eq!(tx_io1.sk, tx_io2.sk);
+    assert_eq!(rng1.ikm, rng2.ikm);
+    assert_eq!(snapshot1.key, snapshot2.key);
 
     genesis.handle.abort();
     joiner.handle.abort();
@@ -297,36 +299,25 @@ fn test_measurement_policy() -> SeismicMeasurementPolicy {
     SeismicMeasurementPolicy::dangerously_accept_any_for_testing(AttestationType::AzureTdx)
 }
 
-/// A node's derived purpose keys as raw bytes, for cross-node equality
-/// assertions. Test-only: production callers never hold all three at once.
-#[derive(Debug, PartialEq)]
-struct PurposeKeyBytes {
-    tx_io_sk: [u8; 32],
-    tx_io_pk: [u8; 33],
-    rng_ikm: [u8; 64],
-    snapshot_key: [u8; 32],
-}
-
 /// Fetch a node's purpose keys at `epoch` straight from its custodian socket.
-async fn purpose_keys(socket: &Path, epoch: u64) -> PurposeKeyBytes {
+/// Test-only: production callers never hold all three at once.
+async fn purpose_keys(
+    socket: &Path,
+    epoch: u64,
+) -> (TxIoSecretKeyBytes, RngIkmBytes, SnapshotKeyBytes) {
     let mut custodian = CustodianClient::connect(socket)
         .await
         .expect("connect to custodian socket");
     let tx_io = custodian
-        .get_tx_io_keypair(epoch)
+        .get_tx_io_secret_key(epoch)
         .await
-        .expect("fetch tx-io keypair");
+        .expect("fetch tx-io secret key");
     let rng = custodian.get_rng_ikm(epoch).await.expect("fetch rng ikm");
     let snapshot = custodian
         .get_snapshot_key(epoch)
         .await
         .expect("fetch snapshot key");
-    PurposeKeyBytes {
-        tx_io_sk: tx_io.sk,
-        tx_io_pk: tx_io.pk,
-        rng_ikm: rng.ikm,
-        snapshot_key: snapshot.key,
-    }
+    (tx_io, rng, snapshot)
 }
 
 /// Wait until the server's `healthCheck` RPC returns `OK`.
