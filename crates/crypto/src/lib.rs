@@ -7,20 +7,18 @@ use hkdf::Hkdf;
 // Re-exported so consumers version-match the secp256k1 whose types this
 // crate's API exposes.
 pub use secp256k1;
-use secp256k1::{Message, PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret, ecdsa::Signature};
-use sha2::{Digest, Sha256};
-use std::{fs, io::Read, io::Write};
-use std::{path::Path, str::FromStr};
+use secp256k1::{PublicKey, Secp256k1, SecretKey, ecdh::SharedSecret};
+use sha2::Sha256;
+use std::str::FromStr;
 
 use rand::RngCore;
-use serde::{Deserialize, Serialize};
 use sha2::digest::{consts::U12, generic_array::GenericArray};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
 
 /// The intermediate type to represent a nonce in the enclave
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct Nonce(pub [u8; AESGCM_NONCE_SIZE]);
 
 impl Nonce {
@@ -45,33 +43,16 @@ impl From<[u8; AESGCM_NONCE_SIZE]> for Nonce {
     }
 }
 
-/// Converts a `u64` nonce to a `GenericArray<u8, N>`, where `N` is the size expected by AES-GCM.
+/// Encrypts plaintext using AES-256 GCM with a 96-bit nonce.
 ///
-/// This function takes a `u64` nonce and converts it into a generic byte array
-/// with the appropriate size for AES-GCM encryption.
-///
-/// # Arguments
-/// * `nonce` - A 64-bit unsigned integer representing the nonce.
-///
-/// # Returns
-/// A `GenericArray<u8, N>` where `N` is the expected nonce size for AES-GCM encryption.
-pub fn u64_to_be_bytes_array(nonce: u64) -> [u8; AESGCM_NONCE_SIZE] {
-    let nonce_bytes = nonce.to_be_bytes().to_vec();
-    let mut padded_nonce_bytes = [0u8; AESGCM_NONCE_SIZE];
-    padded_nonce_bytes[AESGCM_NONCE_SIZE - nonce_bytes.len()..].copy_from_slice(&nonce_bytes);
-    padded_nonce_bytes
-}
-
-/// Encrypts plaintext using AES-256 GCM with a 92-bit nonce.
-///
-/// This function requires the nonce to be exactly 92 bits (12 bytes),
-/// with no padding or truncation. The caller must pass a `Vec<u8>`
-/// containing 12 bytes.
+/// Equivalent to [`aes_encrypt_aead`] with empty AAD: GCM with empty AAD
+/// produces byte-identical output. The AES-GCM encrypt precompile calls this,
+/// so its output is consensus; a test pins it.
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
 /// * `plaintext` - The slice of bytes to encrypt.
-/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (96 bits).
 ///
 /// # Returns
 /// A `Vec<u8>` containing the bytes of encrypted ciphertext.
@@ -83,11 +64,7 @@ pub fn aes_encrypt(
     plaintext: &[u8],
     nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    let nonce_array: Nonce = nonce.into();
-    let cipher = Aes256Gcm::new(key);
-    cipher
-        .encrypt(&nonce_array.into(), plaintext)
-        .map_err(|e| anyhow!("AES encryption failed: {:?}", e))
+    aes_encrypt_aead(key, plaintext, nonce, &[])
 }
 
 /// Encrypts plaintext using AES-256 GCM with AEAD (authenticated encryption with additional data).
@@ -99,7 +76,7 @@ pub fn aes_encrypt(
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for encryption.
 /// * `plaintext` - The slice of bytes to encrypt.
-/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (96 bits).
 /// * `aad` - Additional authenticated data that will be authenticated but not encrypted.
 ///
 /// # Returns
@@ -126,16 +103,15 @@ pub fn aes_encrypt_aead(
         .map_err(|e| anyhow!("AES-AEAD encryption failed: {:?}", e))
 }
 
-/// Decrypts ciphertext using AES-256 GCM with a 92-bit nonce.
+/// Decrypts ciphertext using AES-256 GCM with a 96-bit nonce.
 ///
-/// This function requires the nonce to be exactly 92 bits (12 bytes),
-/// with no padding or truncation. The caller must pass a `Vec<u8>`
-/// containing 12 bytes.
+/// Equivalent to [`aes_decrypt_aead`] with empty AAD. The AES-GCM decrypt
+/// precompile calls this, so its behavior is consensus.
 ///
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
 /// * `ciphertext` - A slice of bytes (`&[u8]`) representing the encrypted data.
-/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (96 bits).
 ///
 /// # Returns
 /// A `Vec<u8>` containing the bytes of the decrypted plaintext.
@@ -147,12 +123,7 @@ pub fn aes_decrypt(
     ciphertext: &[u8],
     nonce: impl Into<Nonce>,
 ) -> anyhow::Result<Vec<u8>> {
-    let nonce_array: Nonce = nonce.into();
-    let cipher = Aes256Gcm::new(key);
-
-    cipher
-        .decrypt(&nonce_array.into(), ciphertext)
-        .map_err(|_| anyhow!("AES decryption failed. Authentication tag does not match the given ciphertext/nonce"))
+    aes_decrypt_aead(key, ciphertext, nonce, &[])
 }
 
 /// Decrypts ciphertext using AES-256 GCM with AEAD (authenticated encryption with additional data).
@@ -164,7 +135,7 @@ pub fn aes_decrypt(
 /// # Arguments
 /// * `key` - The AES-256 GCM key used for decryption.
 /// * `ciphertext` - A slice of bytes representing the encrypted data with authentication tag.
-/// * `nonce` - A `Nonce` containing exactly 12 bytes (92 bits).
+/// * `nonce` - A `Nonce` containing exactly 12 bytes (96 bits).
 /// * `aad` - Additional authenticated data that must match what was used during encryption.
 ///
 /// # Returns
@@ -245,79 +216,6 @@ pub fn derive_aes_key(
     Ok(*Key::<Aes256Gcm>::from_slice(&okm))
 }
 
-/// Signs a message digest using the provided Secp256k1 secret key.
-///
-/// This function first hashes the provided message using SHA-256 to create a digest,
-/// then signs the resulting hash using the given `SecretKey`. The signature is returned
-/// in compact form as a `Vec<u8>`.
-///
-/// # Arguments
-///
-/// * `msg` - A byte slice representing the message to be signed.
-/// * `key` - The `SecretKey` used to sign the hashed message.
-///
-/// # Returns
-///
-/// This function returns a `Result` containing:
-/// * `Ok(Vec<u8>)` - A vector containing the compact serialized signature on success.
-/// * `Err(secp256k1::Error)` - An error if signing fails (e.g., if the message digest is invalid).
-pub fn secp256k1_sign_digest(msg: &[u8], key: SecretKey) -> Result<Vec<u8>, secp256k1::Error> {
-    // Create a Secp256k1 context for signing
-    let secp = Secp256k1::signing_only();
-
-    // Hash the message using SHA256
-    let hash = Sha256::digest(msg);
-    let hash_bytes: [u8; 32] = hash.into();
-    let message = Message::from_digest(hash_bytes);
-
-    // Sign the message with the secret key
-    let signature = secp.sign_ecdsa(&message, &key);
-
-    // Return the signature as a byte vector
-    Ok(signature.serialize_compact().to_vec())
-}
-
-/// Verifies a Secp256k1 signature for a given message and public key.
-///
-/// This function hashes the message using SHA-256 to create a digest, then verifies
-/// the provided signature using the corresponding `PublicKey`. The signature must be
-/// in compact form (64 bytes).
-///
-/// # Arguments
-///
-/// * `msg` - A byte slice representing the original message.
-/// * `sig` - A byte slice containing the compact serialized signature to verify.
-/// * `pubkey` - The `PublicKey` used to verify the signature.
-///
-/// # Returns
-///
-/// This function returns a `Result` containing:
-/// * `Ok(true)` - If the signature is valid for the provided message and public key.
-/// * `Ok(false)` - If the signature is invalid.
-/// * `Err(secp256k1::Error)` - If verification fails due to an invalid message,
-pub fn secp256k1_verify(
-    msg: &[u8],
-    sig: &[u8],
-    pubkey: PublicKey,
-) -> Result<bool, secp256k1::Error> {
-    // Create a Secp256k1 context for verification
-    let secp = Secp256k1::verification_only();
-
-    // Hash the message using SHA256
-    let hash = Sha256::digest(msg);
-    let hash_bytes: [u8; 32] = hash.into();
-    let message = Message::from_digest(hash_bytes);
-
-    // Deserialize the signature from a compact format
-    let signature = Signature::from_compact(sig)?;
-
-    // Verify the signature with the public key
-    match secp.verify_ecdsa(&message, &signature, &pubkey) {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false),
-    }
-}
-
 /// The well-known tx-io keypair for transaction encryption on networks
 /// running the well-known keys: clients ECDH against the public half to
 /// encrypt calldata, the node decrypts with the secret half.
@@ -386,38 +284,6 @@ pub fn well_known_rng_ikm() -> RngIkm {
     ))
 }
 
-/// Encrypts the provided data using an AES key derived from
-/// the provided public key and the provided private key
-pub fn ecdh_encrypt(
-    pk: &PublicKey,
-    sk: &SecretKey,
-    domain: AesKeyDomain,
-    data: &[u8],
-    nonce: impl Into<Nonce>,
-) -> Result<Vec<u8>, anyhow::Error> {
-    let shared_secret = SharedSecret::new(pk, sk);
-    let aes_key = derive_aes_key(&shared_secret, domain)
-        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
-    let encrypted_data = aes_encrypt(&aes_key, data, nonce)?;
-    Ok(encrypted_data)
-}
-
-/// Decrypts the provided data using a domain-separated AES key derived from
-/// the provided public key and the provided private key.
-pub fn ecdh_decrypt(
-    pk: &PublicKey,
-    sk: &SecretKey,
-    domain: AesKeyDomain,
-    data: &[u8],
-    nonce: impl Into<Nonce>,
-) -> Result<Vec<u8>, anyhow::Error> {
-    let shared_secret = SharedSecret::new(pk, sk);
-    let aes_key = derive_aes_key(&shared_secret, domain)
-        .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
-    let decrypted_data = aes_decrypt(&aes_key, data, nonce)?;
-    Ok(decrypted_data)
-}
-
 /// Encrypts the provided data using AEAD with a domain-separated AES key
 /// derived from the provided public key and the provided private key.
 pub fn ecdh_encrypt_aead(
@@ -450,90 +316,6 @@ pub fn ecdh_decrypt_aead(
         .map_err(|e| anyhow!("Error deriving AES key: {:?}", e))?;
     let decrypted_data = aes_decrypt_aead(&aes_key, data, nonce, aad)?;
     Ok(decrypted_data)
-}
-
-/// Encrypts a file using the provided AES key and saves the output with an embedded nonce.
-///
-/// This function reads the contents of the input file, generates a random nonce,
-/// encrypts the data using AES-GCM, and writes the nonce followed by the ciphertext
-/// into the specified output file. The nonce is required for decryption and must
-/// be stored along with the ciphertext.
-///
-/// # Arguments
-/// * `input_path` - Path to the plaintext input file.
-/// * `output_path` - Path where the encrypted file (nonce + ciphertext) will be written.
-/// * `key` - AES-256-GCM key used for encryption.
-///
-/// # Returns
-/// Returns `Ok(())` on success, or an error if reading, encryption, or writing fails.
-pub fn encrypt_file(
-    input_path: &str,
-    output_path: &str,
-    key: &Key<Aes256Gcm>,
-) -> Result<(), anyhow::Error> {
-    let plaintext = fs::read(input_path)
-        .map_err(|e| anyhow::anyhow!("Failed to read input file {}: {:?}", input_path, e))?;
-
-    // Generate a random nonce
-    let nonce = Nonce::new_rand();
-
-    // Encrypt the data
-    let ciphertext = aes_encrypt(key, &plaintext, nonce.clone()).expect("Encryption failed!");
-
-    // Get the parent directory and create it if it doesn't exist
-    if let Some(parent) = Path::new(output_path).parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Save nonce + ciphertext together
-    let mut output_file = fs::File::create(output_path)
-        .map_err(|e| anyhow::anyhow!("Failed to create output file {}: {:?}", output_path, e))?;
-    output_file.write_all(&nonce.0)?; // Write nonce first
-    output_file.write_all(&ciphertext)?; // Write encrypted content
-
-    Ok(())
-}
-
-// Decrypts a file previously encrypted with `encrypt_file`, using the provided AES key.
-///
-/// This function reads the encrypted file, extracts the nonce (prepended during encryption),
-/// decrypts the ciphertext using AES-GCM, and writes the decrypted plaintext to the specified output path.
-///
-/// # Arguments
-/// * `input_path` - Path to the encrypted file (must contain nonce + ciphertext).
-/// * `output_path` - Path where the decrypted file content will be written.
-/// * `key` - AES-256-GCM key used for decryption.
-///
-/// # Returns
-/// Returns `Ok(())` on success, or an error if reading, decryption, or writing fails.
-pub fn decrypt_file(
-    input_path: impl AsRef<Path>,
-    output_path: impl AsRef<Path>,
-    key: &Key<Aes256Gcm>,
-) -> Result<(), anyhow::Error> {
-    let input_path = input_path.as_ref();
-    let output_path = output_path.as_ref();
-
-    let mut file = fs::File::open(input_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open input file {:?}: {:?}", input_path, e))?;
-    let mut file_data = Vec::new();
-    file.read_to_end(&mut file_data)?;
-
-    // Extract nonce (first 12 bytes)
-    if file_data.len() < AESGCM_NONCE_SIZE {
-        anyhow::bail!("File is too small to contain a nonce!");
-    }
-    let nonce_bytes: [u8; AESGCM_NONCE_SIZE] = file_data[..AESGCM_NONCE_SIZE]
-        .try_into()
-        .map_err(|e| anyhow::anyhow!("Unexpected error casting nonce bytes: {:?}", e))?;
-    let ciphertext = &file_data[AESGCM_NONCE_SIZE..];
-
-    // Decrypt
-    let decrypted_data = aes_decrypt(key, ciphertext, nonce_bytes)?;
-
-    fs::write(output_path, decrypted_data)
-        .map_err(|e| anyhow::anyhow!("Failed to write output file {:?}: {:?}", output_path, e))?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -618,6 +400,55 @@ mod tests {
             let key = derive_aes_key(&shared_secret, domain).unwrap();
             assert_eq!(hex::encode(key.as_slice()), expected, "{domain:?}");
         }
+    }
+
+    /// `aes_encrypt`/`aes_decrypt` back the AES-GCM precompiles, so their
+    /// output is consensus. They now delegate to the AEAD variants with empty
+    /// AAD; pin that against the standard AES-256-GCM test vectors (McGrew &
+    /// Viega, "The Galois/Counter Mode of Operation", test cases 13 and 14)
+    /// and against the cipher called directly with no AAD, which is what
+    /// these functions did before delegating.
+    #[test]
+    fn non_aead_aes_matches_gcm_with_empty_aad() {
+        let key = Key::<Aes256Gcm>::from_slice(&[0u8; 32]);
+        let nonce = [0u8; AESGCM_NONCE_SIZE];
+
+        // Test case 13: empty plaintext -> tag only.
+        assert_eq!(
+            hex::encode(aes_encrypt(key, &[], nonce).unwrap()),
+            "530f8afbc74536b9a963b4f1c4cb738b"
+        );
+        // Test case 14: one zero block -> ciphertext || tag.
+        assert_eq!(
+            hex::encode(aes_encrypt(key, &[0u8; 16], nonce).unwrap()),
+            "cea7403d4d606b6e074ec5d3baf39d18d0d1c8a799996bf0265b98b5d48ab919"
+        );
+
+        let key = Key::<Aes256Gcm>::from_slice(&[0x11; 32]);
+        let nonce = [0x22; AESGCM_NONCE_SIZE];
+        for len in [0, 1, 15, 16, 17, 64, 1000] {
+            let plaintext: Vec<u8> = (0..len).map(|i| i as u8).collect();
+            let direct = Aes256Gcm::new(key)
+                .encrypt(&Nonce(nonce).into(), plaintext.as_slice())
+                .unwrap();
+
+            let ciphertext = aes_encrypt(key, &plaintext, nonce).unwrap();
+            assert_eq!(ciphertext, direct, "len {len}");
+            assert_eq!(
+                ciphertext,
+                aes_encrypt_aead(key, &plaintext, nonce, &[]).unwrap(),
+                "len {len}"
+            );
+            assert_eq!(aes_decrypt(key, &ciphertext, nonce).unwrap(), plaintext);
+            assert_eq!(
+                aes_decrypt_aead(key, &ciphertext, nonce, &[]).unwrap(),
+                plaintext
+            );
+        }
+
+        // A ciphertext bound to non-empty AAD must not open without it.
+        let bound = aes_encrypt_aead(key, b"payload", nonce, b"aad").unwrap();
+        assert!(aes_decrypt(key, &bound, nonce).is_err());
     }
 
     #[test]
