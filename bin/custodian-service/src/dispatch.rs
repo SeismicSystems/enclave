@@ -179,7 +179,7 @@ fn wrap_root_key(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seismic_custodian_ipc::AdmittedOn;
+    use seismic_custodian_ipc::{AdmittedOn, AttemptId};
     use std::os::unix::fs::PermissionsExt as _;
     use std::path::{Path, PathBuf};
 
@@ -327,7 +327,7 @@ mod tests {
         let Response::Error { message } = dispatch(
             &joiner,
             Request::InstallRootKeyFromVerifiedBootstrapResponse {
-                attempt_id: [1; 32],
+                attempt_id: AttemptId([1; 32]),
                 root_key_request_binding: BINDING,
                 responder_eph_pk: [3; 33],
                 wrapped_root_key: vec![4; 60],
