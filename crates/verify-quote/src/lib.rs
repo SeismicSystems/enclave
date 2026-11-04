@@ -74,9 +74,9 @@ const QUOTE_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 /// hands back, which carries these five fields beside everything the verdict
 /// rested on.
 ///
-/// The four claims are untrusted input: the quote's `report_data` is what
-/// decides whether the node's keys really are these, so a wrong claim surfaces
-/// as a binding mismatch.
+/// The four claims are untrusted input: the binding the quote commits to is
+/// what decides whether the node's keys really are these, so a wrong claim
+/// surfaces as a binding mismatch.
 #[derive(Debug, Deserialize)]
 pub struct HarvestRecord {
     /// The nonce the quote was requested with (32 bytes hex).
@@ -98,15 +98,17 @@ pub struct HarvestRecord {
     pub evidence: AttestationExchangeMessage,
 }
 
-/// What a passing verification proves, whatever its purpose: the `report_data`
-/// the quote carried — recomputed by the verifier and matched — and every
+/// What a passing verification proves, whatever its purpose: the binding the
+/// quote committed to — recomputed by the verifier and matched — and every
 /// register the quote attests.
 ///
 /// Every quoted register is carried, not just the ones the policy pins,
 /// because the caller keeps this as provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuoteReport {
-    /// The 64-byte `report_data` bound into the quote.
+    /// The 64-byte binding the quote commits to: on GCP the TDX `report_data`;
+    /// on Azure the user data in the HCL runtime claims, which the TDX
+    /// `report_data` commits to by hash.
     pub binding: [u8; 64],
 
     /// Every register the quote covers, in the platform's own shape.
@@ -422,7 +424,7 @@ pub async fn verify_deploy(
     })
 }
 
-/// The 64-byte `report_data` a harvested quote must carry.
+/// The 64-byte binding a harvested quote must commit to.
 ///
 /// Pure and deliberately trivial: this one line is the single definition of the
 /// check, linked by everything that verifies a harvest.
@@ -440,7 +442,7 @@ pub fn harvest_binding(
     ))
 }
 
-/// The 64-byte `report_data` a deploy-verification quote must carry
+/// The 64-byte binding a deploy-verification quote must commit to
 /// (same single-definition rationale as [`harvest_binding`]).
 pub fn deploy_binding(network_id: &NetworkId, deployment_nonce: &[u8; 32]) -> [u8; 64] {
     binding64_from_digest32(deploy_verification_binding(network_id, deployment_nonce))

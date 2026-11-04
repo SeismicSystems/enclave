@@ -495,7 +495,8 @@ mod tests {
     use alloy::{rpc::client::RpcClient, transports::mock::Asserter};
     use alloy_primitives::{Bytes, b256, hex};
     use seismic_attestation::{
-        AzureGuestMeasurements, TdxMeasurements, VerifiedAzureAttestation, VerifiedTdxAttestation,
+        AzureGuestMeasurements, NetworkId, TdxMeasurements, VerifiedAzureAttestation,
+        VerifiedTdxAttestation, bindings::root_key_request_binding,
     };
     use seismic_custodian::{Custodian, EphemeralKeypair};
     use seismic_custodian_ipc::{
@@ -953,13 +954,14 @@ mod tests {
         let mut client = CustodianClient::connect(&custodian.socket)
             .await
             .expect("connect to custodian");
-        wrap_for_admitted_requester(
-            &mut client,
-            admitted_on,
-            [0x33; 32],
-            EphemeralKeypair::generate().pk_compressed(),
-        )
-        .await
+        let requester_eph_pk = EphemeralKeypair::generate().pk_compressed();
+        let request_binding = root_key_request_binding(
+            &NetworkId::from_bytes([0x11; 32]),
+            &[0x22; 32],
+            &requester_eph_pk,
+        );
+        wrap_for_admitted_requester(&mut client, admitted_on, request_binding, requester_eph_pk)
+            .await
     }
 
     /// Queue one admission at block 0 on the pinned chain: `latest` is block

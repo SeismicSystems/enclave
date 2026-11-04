@@ -84,7 +84,7 @@ pub struct FoundingArchive {
 }
 
 impl FoundingArchive {
-    /// The 64-byte `report_data` this archive's evidence must carry.
+    /// The 64-byte binding this archive's evidence must commit to.
     pub fn binding(&self) -> [u8; 64] {
         crate::harvest_binding(
             &self.harvest_nonce,
