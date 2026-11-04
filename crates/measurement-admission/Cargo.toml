@@ -12,8 +12,18 @@ description = "Admission-ID derivation and measurement-policy compiler for the o
 [lints]
 workspace = true
 
+[features]
+# The full `IMeasurementRegistry` protocol interface (`registry_abi`), with its
+# Alloy RPC bindings. Off by default: the joiner and the attestation service
+# never call the registry's mutating half. On for this crate's own tests, and
+# for the seismic repo, which pins this crate and holds the interface to the
+# canonical contract artifact it owns.
+registry-abi = ["dep:alloy-contract", "dep:alloy-sol-types"]
+
 [dependencies]
+alloy-contract = { workspace = true, optional = true }
 alloy-primitives.workspace = true
+alloy-sol-types = { workspace = true, optional = true }
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -23,4 +33,6 @@ thiserror.workspace = true
 [dev-dependencies]
 alloy.workspace = true
 attestation.workspace = true
+# This crate itself, so its tests link the `registry-abi` interface.
+seismic-measurement-admission = { workspace = true, features = ["registry-abi"] }
 tokio.workspace = true

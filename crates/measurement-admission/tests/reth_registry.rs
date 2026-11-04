@@ -16,8 +16,10 @@
 //! test plays the deploy role: it compiles a golden policy document with
 //! [`compile_policy`] and adds [`registry_genesis_storage`] to the registry
 //! account before boot. The template's registry code is pinned to
-//! [`REGISTRY_RUNTIME_CODE_HASH`], so it cannot drift from the canonical
-//! `contracts/artifacts/MeasurementRegistry.json` unnoticed.
+//! [`REGISTRY_RUNTIME_CODE_HASH`], which keeps this repo consistent with
+//! itself; the seismic repo holds that hash to its canonical
+//! `contracts/artifacts/MeasurementRegistry.json` at the rev that pins this
+//! crate.
 //!
 //! Requires a `seismic-reth` binary: `SEISMIC_RETH_BIN`, `$PATH`, or a
 //! sibling `seismic-reth` checkout's target directory. The binary is required:
@@ -40,10 +42,8 @@ use alloy::{
 use seismic_measurement_admission::{
     CompiledPolicy, compile_policy,
     genesis::{REGISTRY_RUNTIME_CODE_HASH, registry_genesis_storage},
+    registry_abi::IMeasurementRegistry,
 };
-
-mod common;
-use common::IMeasurementRegistry;
 
 const REGISTRY: Address = address!("0x1000000000000000000000000000000000000001");
 

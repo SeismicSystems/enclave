@@ -1,6 +1,6 @@
 //! Registry genesis-storage derivation, frozen against the canonical
 //! `MeasurementRegistry.sol` layout, see:
-//! https://github.com/SeismicSystems/seismic/blob/main/contracts/src/enclave/MeasurementRegistry.sol
+//! https://github.com/SeismicSystems/seismic/blob/main/contracts/src/predeploys/MeasurementRegistry.sol
 //!
 //! The registry is a genesis predeploy — its runtime (deployed) bytecode is
 //! installed directly into the genesis account, so no constructor ever

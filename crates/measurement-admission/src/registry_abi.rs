@@ -1,17 +1,25 @@
-//! Shared `sol!` bindings for the registry test suites.
+//! The full protocol interface of the canonical `MeasurementRegistry`
+//! contract
+//! (https://github.com/SeismicSystems/seismic/blob/main/contracts/src/predeploys/MeasurementRegistry.sol),
+//! behind the `registry-abi` feature.
 //!
-//! `IMeasurementRegistry` mirrors the full protocol surface of the canonical
-//! `MeasurementRegistry` contract — `registry_abi.rs` holds its selector set
-//! equal to the canonical artifact's ABI, so the mutating functions belong here
-//! even though only `reth_registry.rs`'s admin path exercises them.
+//! The interface lives beside [`REGISTRY_RUNTIME_CODE_HASH`] and the storage
+//! layout in [`crate::genesis`] because all three describe the same contract
+//! build. The seismic repo owns that build: it pins this crate and holds this
+//! interface's selectors, and the runtime-code hash, to its committed
+//! artifact. This repo never reads the artifact, so a contract change is
+//! checked once, where the artifact lives, at the rev that pins this crate.
+//!
 //! Enclave *runtime* code reaches the registry through
 //! `seismic-measurement-registry-client`'s narrow read-only binding instead.
+//!
+//! [`REGISTRY_RUNTIME_CODE_HASH`]: crate::genesis::REGISTRY_RUNTIME_CODE_HASH
 
-#![allow(dead_code)]
-
-use alloy::sol;
+use alloy_sol_types::sol;
 
 sol! {
+    /// The registry's full external surface: its reads and the admin's two
+    /// mutations.
     #[sol(rpc)]
     interface IMeasurementRegistry {
         function admin() external view returns (address);
