@@ -8,8 +8,8 @@
 use crate::error::IpcError;
 use crate::framing::{read_frame, write_frame};
 use crate::messages::{
-    AdmittedOn, Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
-    TxIoPublicKeyBytes, TxIoSecretKeyBytes, WrappedRootKeyBytes,
+    AdmittedOn, AttemptId, Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes,
+    SnapshotKeyBytes, TxIoPublicKeyBytes, TxIoSecretKeyBytes, WrappedRootKeyBytes,
 };
 use std::path::Path;
 use tokio::net::UnixStream;
@@ -137,7 +137,7 @@ impl CustodianClient {
 
     pub async fn install_root_key_from_verified_bootstrap_response(
         &mut self,
-        attempt_id: [u8; 32],
+        attempt_id: AttemptId,
         root_key_request_binding: [u8; 32],
         responder_eph_pk: [u8; 33],
         wrapped_root_key: Vec<u8>,
@@ -227,7 +227,7 @@ mod tests {
         ));
 
         let attempt = RootKeyBootstrapAttemptBytes {
-            attempt_id: [3; 32],
+            attempt_id: AttemptId([3; 32]),
             requester_eph_pk: [4; 33],
         };
         let (mut client, server) =
@@ -249,7 +249,7 @@ mod tests {
         let (mut client, server) = scripted_client(Response::RootKeyInstalled);
         let result = client
             .install_root_key_from_verified_bootstrap_response(
-                [5; 32],
+                AttemptId([5; 32]),
                 [6; 32],
                 [7; 33],
                 vec![8; 60],
@@ -269,7 +269,7 @@ mod tests {
         else {
             panic!("expected install request");
         };
-        assert_eq!(attempt_id, [5; 32]);
+        assert_eq!(attempt_id, AttemptId([5; 32]));
         assert_eq!(root_key_request_binding, [6; 32]);
         assert_eq!(responder_eph_pk, [7; 33]);
         assert_eq!(wrapped_root_key, vec![8; 60]);

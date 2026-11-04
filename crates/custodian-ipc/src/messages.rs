@@ -77,11 +77,10 @@ pub enum Request {
     /// this method. Raw evidence deliberately does not cross this boundary;
     /// possession of the ACL grant is the authorization assertion.
     InstallRootKeyFromVerifiedBootstrapResponse {
-        /// Opaque attempt identifier returned by the initial
-        /// [`Request::CreateRootKeyBootstrapAttempt`] call. It selects the
-        /// requester ephemeral secret retained for this bootstrap exchange.
-        #[serde(with = "serde_bytes")]
-        attempt_id: [u8; 32],
+        /// Returned by the initial [`Request::CreateRootKeyBootstrapAttempt`]
+        /// call. It selects the requester ephemeral secret retained for this
+        /// bootstrap exchange.
+        attempt_id: AttemptId,
         /// SHA-256 binding of the original bootstrap request transcript:
         /// `root_key_request_binding(network_id, nonce_b, eph_pk_b)`. This must
         /// be the same value supplied to [`Request::WrapRootKey`] by the
@@ -217,13 +216,25 @@ pub struct TxIoPublicKeyBytes {
     pub pk: [u8; 33],
 }
 
+/// Opaque correlation token for one requester-side root-key bootstrap attempt.
+///
+/// The custodian mints it on [`Request::CreateRootKeyBootstrapAttempt`] and
+/// takes it back on [`Request::InstallRootKeyFromVerifiedBootstrapResponse`],
+/// where it selects the retained ephemeral secret. Callers pass it through
+/// without inspecting it. Its own type keeps it from being swapped with the
+/// request binding, the other 32-byte argument of the install call.
+///
+/// Encodes as a bare CBOR byte string, like the raw array it wraps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AttemptId(#[serde(with = "serde_bytes")] pub [u8; 32]);
+
 /// One pending requester-side root-key bootstrap attempt. The matching
 /// ephemeral secret remains in the custodian process.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RootKeyBootstrapAttemptBytes {
-    /// Opaque correlation token used to select the retained ephemeral secret.
-    #[serde(with = "serde_bytes")]
-    pub attempt_id: [u8; 32],
+    /// Selects the retained ephemeral secret on install.
+    pub attempt_id: AttemptId,
     /// Requester ephemeral ECDH public key, 33-byte compressed SEC1.
     #[serde(with = "serde_bytes")]
     pub requester_eph_pk: [u8; 33],
@@ -304,7 +315,7 @@ mod tests {
             },
             Request::RetireFoundingPolicy,
             Request::InstallRootKeyFromVerifiedBootstrapResponse {
-                attempt_id: [0x11; 32],
+                attempt_id: AttemptId([0x11; 32]),
                 root_key_request_binding: [0xAB; 32],
                 responder_eph_pk: [0xCD; 33],
                 wrapped_root_key: vec![0xEF; 60],
@@ -343,14 +354,14 @@ mod tests {
         assert_eq!(tx_io.pk, [5; 33]);
 
         let response = Response::RootKeyBootstrapAttemptCreated(RootKeyBootstrapAttemptBytes {
-            attempt_id: [6; 32],
+            attempt_id: AttemptId([6; 32]),
             requester_eph_pk: [7; 33],
         });
         let Response::RootKeyBootstrapAttemptCreated(attempt) = from_cbor(&to_cbor(&response))
         else {
             panic!("wrong variant");
         };
-        assert_eq!(attempt.attempt_id, [6; 32]);
+        assert_eq!(attempt.attempt_id, AttemptId([6; 32]));
         assert_eq!(attempt.requester_eph_pk, [7; 33]);
 
         for response in [
@@ -385,6 +396,18 @@ mod tests {
             admitted_on: AdmittedOn::LivePolicy,
         });
         let marker = [0x58, 0x20, 0xAB, 0xAB];
+        assert!(
+            encoded.windows(marker.len()).any(|w| w == marker),
+            "expected 32-byte byte-string header in {encoded:02x?}"
+        );
+
+        // The newtype must not change the wire format: still a bare byte
+        // string, not an array or a one-field map.
+        let encoded = to_cbor(&RootKeyBootstrapAttemptBytes {
+            attempt_id: AttemptId([0x5A; 32]),
+            requester_eph_pk: [0xCD; 33],
+        });
+        let marker = [0x58, 0x20, 0x5A, 0x5A];
         assert!(
             encoded.windows(marker.len()).any(|w| w == marker),
             "expected 32-byte byte-string header in {encoded:02x?}"

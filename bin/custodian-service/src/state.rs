@@ -33,7 +33,7 @@ use anyhow::{Context as _, Result, anyhow};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_custodian::{Custodian, EphemeralKeypair, unwrap_root_key};
-use seismic_custodian_ipc::AdmittedOn;
+use seismic_custodian_ipc::{AdmittedOn, AttemptId};
 use seismic_network_manifest::NetworkManifestV1;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -102,14 +102,14 @@ pub enum WrapGate<T> {
 /// One requester-side bootstrap attempt: the ephemeral secret retained for
 /// exactly one exchange, addressed by an opaque id.
 struct PendingAttempt {
-    id: [u8; 32],
+    id: AttemptId,
     eph: EphemeralKeypair,
 }
 
 /// Outcome of [`CustodianState::create_bootstrap_attempt`].
 pub enum CreateAttemptOutcome {
     Created {
-        attempt_id: [u8; 32],
+        attempt_id: AttemptId,
         requester_eph_pk: [u8; 33],
     },
     RootKeyAlreadyPresent,
@@ -290,6 +290,7 @@ impl CustodianState {
                     .expect("OS RNG must produce an attempt id");
                 let eph = EphemeralKeypair::generate();
                 let requester_eph_pk = eph.pk_compressed();
+                let id = AttemptId(id);
                 *attempt = Some(PendingAttempt { id, eph });
                 CreateAttemptOutcome::Created {
                     attempt_id: id,
@@ -312,7 +313,7 @@ impl CustodianState {
     /// is the one that makes the key the network's.
     pub fn install_root_key(
         &self,
-        attempt_id: [u8; 32],
+        attempt_id: AttemptId,
         root_key_request_binding: [u8; 32],
         responder_eph_pk: [u8; 33],
         wrapped_root_key: &[u8],
@@ -457,7 +458,7 @@ mod tests {
         (wrapped.responder_eph_pk.serialize(), wrapped.wrapped)
     }
 
-    fn created(state: &CustodianState) -> ([u8; 32], [u8; 33]) {
+    fn created(state: &CustodianState) -> (AttemptId, [u8; 33]) {
         let CreateAttemptOutcome::Created {
             attempt_id,
             requester_eph_pk,
@@ -486,7 +487,7 @@ mod tests {
             CreateAttemptOutcome::RootKeyAlreadyPresent
         ));
         assert!(matches!(
-            state.install_root_key([0; 32], BINDING, [0; 33], &[]),
+            state.install_root_key(AttemptId([0; 32]), BINDING, [0; 33], &[]),
             InstallOutcome::RootKeyAlreadyPresent
         ));
     }
@@ -497,7 +498,7 @@ mod tests {
         let state = awaiting(&luks);
         assert!(state.with_custodian(|_| ()).is_none());
         assert!(matches!(
-            state.install_root_key([0; 32], BINDING, [0; 33], &[]),
+            state.install_root_key(AttemptId([0; 32]), BINDING, [0; 33], &[]),
             InstallOutcome::UnknownAttempt
         ));
     }
@@ -684,7 +685,7 @@ mod tests {
         ));
         assert_eq!(state.retire_founding_policy(), None);
         assert!(matches!(
-            state.install_root_key([0; 32], BINDING, [0; 33], &[]),
+            state.install_root_key(AttemptId([0; 32]), BINDING, [0; 33], &[]),
             InstallOutcome::UnknownAttempt
         ));
         assert!(!dir.path().join("luks-keys").exists());

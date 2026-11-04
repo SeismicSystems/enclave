@@ -35,8 +35,8 @@ pub use framing::{MAX_FRAME_BODY_LEN, read_frame_blocking, write_frame_blocking}
 #[cfg(feature = "client")]
 pub use framing::{read_frame, write_frame};
 pub use messages::{
-    AdmittedOn, Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes, SnapshotKeyBytes,
-    TxIoPublicKeyBytes, TxIoSecretKeyBytes, WrappedRootKeyBytes,
+    AdmittedOn, AttemptId, Request, Response, RngIkmBytes, RootKeyBootstrapAttemptBytes,
+    SnapshotKeyBytes, TxIoPublicKeyBytes, TxIoSecretKeyBytes, WrappedRootKeyBytes,
 };
 
 /// Default path for the custodian IPC socket. seismic-images creates the

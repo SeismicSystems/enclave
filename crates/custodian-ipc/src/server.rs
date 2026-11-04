@@ -408,7 +408,7 @@ mod tests {
 
     fn install_request() -> Request {
         Request::InstallRootKeyFromVerifiedBootstrapResponse {
-            attempt_id: [0; 32],
+            attempt_id: crate::messages::AttemptId([0; 32]),
             root_key_request_binding: [0; 32],
             responder_eph_pk: [0; 33],
             wrapped_root_key: Vec::new(),
