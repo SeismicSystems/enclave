@@ -31,7 +31,7 @@ What conforms today, and where each requirement lands:
 | Role | Implementation | Sections |
 | --- | --- | --- |
 | compiler, admission-ID derivation, genesis-storage derivation | this crate, as a library (the deploy repository's Rust CLI puts it at the command line) | 4-8 |
-| registry contract | [`MeasurementRegistry.sol`](https://github.com/SeismicSystems/seismic/blob/main/contracts/src/enclave/MeasurementRegistry.sol) in the Seismic repository | 8, 9 |
+| registry contract | [`MeasurementRegistry.sol`](https://github.com/SeismicSystems/seismic/blob/main/contracts/src/predeploys/MeasurementRegistry.sol) in the Seismic repository | 8, 9 |
 | responder admission at join time | [`bin/attestation-service`](../../bin/attestation-service/src/admission.rs) | 11 |
 | registry read path | [`seismic-measurement-registry-client`](../measurement-registry-client/) | 9, 11 |
 | deploy tooling: genesis assembly and revision deltas | [`tee/cli`](https://github.com/SeismicSystems/deploy/tree/main/tee/cli) in the deploy repository | 8, 10 |
@@ -715,10 +715,10 @@ document states means regenerating the reports in the same change.
 | `tests/golden.rs` | The fixtures compile and promote to the committed bytes. |
 | `tests/spec_vectors.rs` | Every value in this document matches the fixtures. |
 | `tests/attested_tls_parity.rs` | Accepted semantics equal the permissive matcher's. |
-| `tests/registry_abi.rs` | The Rust interface matches the canonical contract ABI. |
-| `tests/fixture_parity.rs` | The Seismic repository's fixture copies are byte-identical. |
+| `src/registry_abi.rs` unit tests | The Rust registry interface declares exactly the protocol signatures. |
 | `tests/reth_registry.rs` | Genesis policy and the revision lifecycle on a real node. |
 | [`MeasurementRegistry.t.sol`](https://github.com/SeismicSystems/seismic/blob/main/contracts/test/MeasurementRegistry.t.sol) | Registry rules, slot vectors, and the compiled fixture loaded as genesis storage. |
+| [`enclave_pin.rs`](https://github.com/SeismicSystems/seismic/blob/main/tee/cli/network/tests/enclave_pin.rs) | At the rev the Seismic repository pins: the runtime-code hash and the Rust interfaces match its contract artifact, and its fixture copy recompiles to its compiled copy. |
 
 ## 13. Change control
 

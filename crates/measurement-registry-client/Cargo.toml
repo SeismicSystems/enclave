@@ -17,5 +17,3 @@ alloy-contract.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 
-[dev-dependencies]
-serde_json = { workspace = true }

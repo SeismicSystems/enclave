@@ -36,10 +36,12 @@ jobs:
       - name: Build workspace and deny warnings
         run: RUSTFLAGS="-D warnings" cargo build --workspace
 
-  # Everything hermetic given committed files: the hosted test suites plus
-  # the cross-repo parity gates, which read files checked out from the
-  # seismic repo's main branch — never a built artifact. Keeping built
-  # artifacts out is what lets this job serve as the required per-PR check.
+  # Everything hermetic given this commit's files: no built artifact and no
+  # other repo, which is what lets this job serve as the required per-PR
+  # check. The cross-repo checks against the MeasurementRegistry contract
+  # (runtime-code hash, ABI, policy fixtures) run in the seismic repo, which
+  # owns the contract and pins these crates, at the rev it pins
+  # (https://github.com/SeismicSystems/seismic/blob/main/tee/cli/network/tests/enclave_pin.rs).
   tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -52,22 +54,6 @@ jobs:
       # libraries; GitHub-hosted runners don't ship them.
       - name: Install TPM build dependencies
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev
-      # Keep the Rust registry interfaces and the registry runtime-code pin tied
-      # to the canonical artifact that feeds reth genesis, and the seismic
-      # repo's copies of the two-record policy document and its compiled report
-      # tied to the goldens. The artifact remains owned by the seismic repo and
-      # the copied fixtures by this one; each side checks out the other's
-      # committed file rather than trusting a local copy to stay current.
-      - name: Check out seismic contracts artifact and fixture copies
-        uses: actions/checkout@v6
-        with:
-          repository: SeismicSystems/seismic
-          ref: main
-          path: .context/seismic
-          sparse-checkout: |
-            contracts/artifacts/MeasurementRegistry.json
-            contracts/test/fixtures
-          sparse-checkout-cone-mode: false
       # The live seismic-attestation-service test targets (evidence,
       # admission) need a TDX CVM, and seismic-measurement-admission's
       # reth_registry test needs a seismic-reth binary; those run in their
@@ -77,23 +63,6 @@ jobs:
           cargo test --workspace
           --exclude seismic-attestation-service
           --exclude seismic-measurement-admission
-      # Both parity targets read the same artifact and need no seismic-reth
-      # binary, so they run here rather than in measurement_admission_tests:
-      # the client's runtime read binding, and the admission crate's full
-      # protocol interface plus its registry runtime-code pin.
-      - name: Check MeasurementRegistry ABI parity
-        env:
-          MEASUREMENT_REGISTRY_ARTIFACT: ${{ github.workspace }}/.context/seismic/contracts/artifacts/MeasurementRegistry.json
-        run: >-
-          cargo test -p seismic-measurement-registry-client --test abi_parity -- --ignored
-          && cargo test -p seismic-measurement-admission --test registry_abi -- --ignored
-      # The seismic repo's Solidity fixture tests run against a committed copy
-      # of two of this crate's golden fixtures; regenerating them must
-      # fail here until that copy is updated in step.
-      - name: Check measurement-policy fixture parity
-        env:
-          SEISMIC_CONTRACTS_FIXTURES: ${{ github.workspace }}/.context/seismic/contracts/test/fixtures
-        run: cargo test -p seismic-measurement-admission --test fixture_parity -- --ignored
       - name: Run attestation-service unit tests
         run: cargo test -p seismic-attestation-service --lib --bins
 

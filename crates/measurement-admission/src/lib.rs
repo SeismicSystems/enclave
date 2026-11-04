@@ -31,6 +31,8 @@ use std::{collections::HashMap, fmt};
 pub mod genesis;
 pub mod policy;
 pub mod promote;
+#[cfg(feature = "registry-abi")]
+pub mod registry_abi;
 pub mod report;
 
 pub use policy::{CompiledPolicy, CompiledRecord, PolicyError, SchemaTuple, compile_policy};
