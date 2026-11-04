@@ -13,6 +13,7 @@ use std::str::FromStr;
 
 use rand::RngCore;
 use sha2::digest::{consts::U12, generic_array::GenericArray};
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub const AESGCM_NONCE_SIZE: usize = 12; // Size of AES-GCM nonce in bytes
@@ -248,6 +249,9 @@ pub fn well_known_tx_io_keypair() -> secp256k1::Keypair {
 /// already read the live copy. Hot paths that only read the key, such as each
 /// precompile call, should borrow it rather than copy it.
 ///
+/// `==` is constant-time, so comparing two keys leaks nothing about where
+/// they differ.
+///
 /// Not `Serialize`: wire formats carry their own byte DTO (e.g.
 /// `seismic-custodian-ipc`'s `RngIkmBytes`) and convert at their boundary.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
@@ -265,6 +269,14 @@ impl RngIkm {
         &self.0
     }
 }
+
+impl PartialEq for RngIkm {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ct_eq(&other.0).into()
+    }
+}
+
+impl Eq for RngIkm {}
 
 impl std::fmt::Debug for RngIkm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -355,6 +367,17 @@ mod tests {
     fn rng_ikm_debug_is_redacted() {
         let ikm = RngIkm::from_bytes([0xab; RngIkm::LEN]);
         assert_eq!(format!("{ikm:?}"), "RngIkm(<redacted>)");
+    }
+
+    #[test]
+    fn rng_ikm_eq_compares_every_byte() {
+        let ikm = RngIkm::from_bytes([0xab; RngIkm::LEN]);
+        assert_eq!(ikm, RngIkm::from_bytes([0xab; RngIkm::LEN]));
+
+        // A difference in the last byte must still count.
+        let mut last_differs = [0xab; RngIkm::LEN];
+        last_differs[RngIkm::LEN - 1] = 0xac;
+        assert_ne!(ikm, RngIkm::from_bytes(last_differs));
     }
 
     /// Known-answer test shared with the TypeScript (aesKeygen.ts) and Python
