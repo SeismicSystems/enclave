@@ -252,7 +252,7 @@ async fn try_fetch_root_key_from_peer(
     custodian
         .install_root_key_from_verified_bootstrap_response(
             attempt.attempt_id,
-            request_binding,
+            request_binding.into_bytes(),
             response.eph_pk_a.serialize(),
             response.wrapped,
         )

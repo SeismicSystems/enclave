@@ -57,7 +57,10 @@ use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_attestation::{
     AdmissionPredicate, AttestationError, AttestationExchangeMessage, AttestationType, NetworkId,
-    bindings::{binding64_from_digest32, root_key_request_binding, root_key_response_binding},
+    bindings::{
+        RootKeyRequestBinding, binding64_from_digest32, root_key_request_binding,
+        root_key_response_binding,
+    },
     generate_evidence, verify_evidence_with_predicate,
 };
 use seismic_custodian_ipc::{AdmittedOn, CustodianClient, IpcError, WrappedRootKeyBytes};
@@ -111,7 +114,7 @@ pub fn build_root_key_request(
         .expect("OS RNG must produce a handshake nonce");
 
     let binding = root_key_request_binding(network_id, &nonce_b, &requester_eph_pk.serialize());
-    let evidence = generate_evidence(attestation_type, binding64_from_digest32(binding))
+    let evidence = generate_evidence(attestation_type, binding.binding64())
         .context("generating requester attestation evidence")?;
 
     Ok(RootKeyRequest {
@@ -182,13 +185,10 @@ pub async fn answer_root_key_request(
     //    request's claimed fields.
     let expected =
         root_key_request_binding(network_id, &request.nonce_b, &request.eph_pk_b.serialize());
-    let (_, admitted_on) = verify_evidence_with_predicate(
-        request.evidence.clone(),
-        binding64_from_digest32(expected),
-        admission,
-    )
-    .await
-    .map_err(|source| AnswerError::VerifyRequester { source })?;
+    let (_, admitted_on) =
+        verify_evidence_with_predicate(request.evidence.clone(), expected.binding64(), admission)
+            .await
+            .map_err(|source| AnswerError::VerifyRequester { source })?;
 
     // 2. Verification succeeded: authorize the custodian to wrap the root key.
     let wrap = wrap_for_admitted_requester(
@@ -228,11 +228,11 @@ pub async fn answer_root_key_request(
 pub(crate) async fn wrap_for_admitted_requester(
     custodian: &mut CustodianClient,
     admitted_on: AdmittedOn,
-    request_binding: [u8; 32],
+    request_binding: RootKeyRequestBinding,
     requester_eph_pk: [u8; 33],
 ) -> Result<WrappedRootKeyBytes, AnswerError> {
     custodian
-        .wrap_root_key(request_binding, requester_eph_pk, admitted_on)
+        .wrap_root_key(request_binding.into_bytes(), requester_eph_pk, admitted_on)
         .await
         .map_err(|source| match source {
             IpcError::FoundingPolicyRetired => AnswerError::FoundingPolicyRetired,
@@ -255,7 +255,7 @@ pub async fn verify_root_key_response(
     request: &RootKeyRequest,
     network_id: &NetworkId,
     admission: &impl AdmissionPredicate<Admitted = ()>,
-) -> Result<[u8; 32]> {
+) -> Result<RootKeyRequestBinding> {
     // Verify the responder's quote: recompute the response binding from our
     // own network_id + the nonce we chose + the responder's ephemeral key +
     // the exact ciphertext. A tampered field or a foreign network fails here.

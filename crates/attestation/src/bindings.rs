@@ -18,14 +18,37 @@
 use crate::manifest::NetworkId;
 use sha2::{Digest, Sha256};
 
-/// Binding for TxSeismic tx_io public key evidence.
-pub fn tx_io_binding(network_id: &NetworkId, tx_io_pk: &[u8; 33], epoch: u64) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(b"seismic-tx-io-v1:");
-    hasher.update(network_id.as_bytes());
-    hasher.update(tx_io_pk);
-    hasher.update(epoch.to_be_bytes());
-    hasher.finalize().into()
+/// Digest of [`root_key_request_binding`]: what the requester's quote covers,
+/// and the AEAD AAD the custodian wraps and unwraps the root key under.
+///
+/// The only binding with its own type, because it is the only one that
+/// travels: it is returned from the requester's response check and handed to
+/// the custodian, and both sides of the handshake hold it next to a response
+/// binding. Typed, returning or wrapping under the response binding by mistake
+/// fails to compile instead of failing the AEAD tag. The other bindings are
+/// quoted or checked where they are derived, so they stay raw digests.
+///
+/// The custodian IPC carries it as plain `[u8; 32]`, by design: the custodian
+/// treats it as opaque bytes and does not depend on this crate. Callers
+/// convert with [`into_bytes`](Self::into_bytes) at that boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RootKeyRequestBinding([u8; 32]);
+
+impl RootKeyRequestBinding {
+    /// The digest.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    /// The digest, for the custodian IPC, which carries it as plain bytes.
+    pub fn into_bytes(self) -> [u8; 32] {
+        self.0
+    }
+
+    /// The 64-byte attestation input; see [`binding64_from_digest32`].
+    pub fn binding64(&self) -> [u8; 64] {
+        binding64_from_digest32(self.0)
+    }
 }
 
 /// Binding for a root-key bootstrap requester quote.
@@ -33,13 +56,13 @@ pub fn root_key_request_binding(
     network_id: &NetworkId,
     nonce_b: &[u8; 32],
     eph_pk_b: &[u8; 33],
-) -> [u8; 32] {
+) -> RootKeyRequestBinding {
     let mut hasher = Sha256::new();
     hasher.update(b"seismic-root-key-req-v1:");
     hasher.update(network_id.as_bytes());
     hasher.update(nonce_b);
     hasher.update(eph_pk_b);
-    hasher.finalize().into()
+    RootKeyRequestBinding(hasher.finalize().into())
 }
 
 /// Binding for a root-key bootstrap responder quote.
@@ -55,6 +78,15 @@ pub fn root_key_response_binding(
     hasher.update(nonce_b);
     hasher.update(eph_pk_a);
     hasher.update(wrapped);
+    hasher.finalize().into()
+}
+/// Binding for TxSeismic tx_io public key evidence.
+pub fn tx_io_binding(network_id: &NetworkId, tx_io_pk: &[u8; 33], epoch: u64) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"seismic-tx-io-v1:");
+    hasher.update(network_id.as_bytes());
+    hasher.update(tx_io_pk);
+    hasher.update(epoch.to_be_bytes());
     hasher.finalize().into()
 }
 
@@ -149,7 +181,7 @@ mod tests {
             "226d77df41e0a51c6173fdbc58df2302aeea627a9051c051afc861ebc4a16f46"
         );
         assert_eq!(
-            hex::encode(root_key_request_binding(&network_id, &nonce, &eph_pk_b)),
+            hex::encode(root_key_request_binding(&network_id, &nonce, &eph_pk_b).as_bytes()),
             "1c4e440a61093dcbc3574a938cc545b8807cdd87529202e6761d01c58aae0184"
         );
         assert_eq!(
