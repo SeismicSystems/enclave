@@ -21,7 +21,7 @@ use seismic_attestation::{NetworkId, NetworkManifestV1};
 
 /// Read the manifest from `path`, strictly parse it as v1, and derive the
 /// [`NetworkId`] from the exact file bytes.
-pub fn load_manifest(path: &Path) -> Result<(NetworkManifestV1, NetworkId)> {
+pub(crate) fn load_manifest(path: &Path) -> Result<(NetworkManifestV1, NetworkId)> {
     let bytes = std::fs::read(path)
         .with_context(|| format!("reading network manifest from {}", path.display()))?;
 

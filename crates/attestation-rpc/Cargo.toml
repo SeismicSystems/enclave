@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Purpose-specific Seismic attestation JSON-RPC types"
 
+[lints]
+workspace = true
+
 [dependencies]
 jsonrpsee.workspace = true
 secp256k1.workspace = true

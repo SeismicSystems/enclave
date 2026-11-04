@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Wire protocol, client, and server for the Seismic custodian Unix socket"
 
+[lints]
+workspace = true
+
 [dependencies]
 ciborium.workspace = true
 libc.workspace = true

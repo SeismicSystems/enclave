@@ -21,7 +21,7 @@ use tracing::info;
 /// hash) — callers must not transform them further — plus the fields other
 /// POST-time checks cross-reference, so they never re-parse the schema.
 #[derive(Debug)]
-pub struct ValidatedManifest {
+pub(crate) struct ValidatedManifest {
     pub bytes: Vec<u8>,
     pub chain_id: u64,
     pub namespace: String,
@@ -31,7 +31,7 @@ pub struct ValidatedManifest {
 }
 
 /// Decode the `[network].manifest_base64` embed and strictly validate it.
-pub fn decode_and_validate(manifest_base64: &str) -> Result<ValidatedManifest> {
+pub(crate) fn decode_and_validate(manifest_base64: &str) -> Result<ValidatedManifest> {
     // Be forgiving about transport-layer line wrapping (PEM-style); this
     // changes nothing about the decoded bytes.
     let stripped: String = manifest_base64
@@ -65,7 +65,7 @@ pub fn decode_and_validate(manifest_base64: &str) -> Result<ValidatedManifest> {
 /// `network_id` presentation form: lowercase 0x-hex of SHA-256(bytes).
 /// Equivalently `sha256sum` of the written file — every mismatch diagnosis
 /// starts with comparing this line against the deploy tool's output.
-pub fn network_id_hex(manifest_bytes: &[u8]) -> String {
+pub(crate) fn network_id_hex(manifest_bytes: &[u8]) -> String {
     NetworkId::from_manifest_bytes(manifest_bytes).to_string()
 }
 

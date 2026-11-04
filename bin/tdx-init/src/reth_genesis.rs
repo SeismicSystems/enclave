@@ -44,7 +44,10 @@ struct GenesisConfigProbe {
 /// but both add a dependency this boot-time translator doesn't otherwise carry
 /// (the image's binary layout, or reth's crates). The module docs cover why the
 /// structural check suffices.
-pub fn decode_and_validate(reth_genesis_base64: &str, manifest_chain_id: u64) -> Result<Vec<u8>> {
+pub(crate) fn decode_and_validate(
+    reth_genesis_base64: &str,
+    manifest_chain_id: u64,
+) -> Result<Vec<u8>> {
     // Be forgiving about transport-layer line wrapping (PEM-style); this
     // changes nothing about the decoded bytes.
     let stripped: String = reth_genesis_base64

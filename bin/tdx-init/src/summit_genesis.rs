@@ -44,7 +44,7 @@ struct GenesisProbe {
 /// but both add a dependency this boot-time translator doesn't otherwise carry
 /// (the image's binary layout, or summit's crates). The module docs cover why
 /// the structural check suffices.
-pub fn decode_and_validate(
+pub(crate) fn decode_and_validate(
     summit_genesis_base64: &str,
     manifest_namespace: &str,
 ) -> Result<Vec<u8>> {

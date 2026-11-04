@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "AES-GCM / ECDH / HKDF helpers shared across the Seismic stack"
 
+[lints]
+workspace = true
+
 [dependencies]
 aes-gcm.workspace = true
 anyhow.workspace = true

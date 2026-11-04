@@ -13,6 +13,9 @@ description = "Standalone service process for the Seismic key custodian"
 # built from src/main.rs; the crate also exposes a lib (src/lib.rs) that the
 # attestation-service integration tests drive directly.
 
+[lints]
+workspace = true
+
 [dependencies]
 seismic-custodian.workspace = true
 seismic-network-manifest.workspace = true

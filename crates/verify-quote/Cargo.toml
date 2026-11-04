@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Relying-party verification of Seismic node quotes against intended image measurements"
 
+[lints]
+workspace = true
+
 [lib]
 name = "seismic_verify_quote"
 path = "src/lib.rs"

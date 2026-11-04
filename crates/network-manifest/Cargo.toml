@@ -9,6 +9,9 @@ license.workspace = true
 readme = "README.md"
 description = "Network-manifest schema (NetworkManifestV1) and network_id derivation"
 
+[lints]
+workspace = true
+
 [dependencies]
 hex.workspace = true
 serde.workspace = true

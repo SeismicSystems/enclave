@@ -36,7 +36,7 @@ use std::{net::SocketAddr, path::PathBuf};
 use tracing::{info, warn};
 
 #[derive(Clone)]
-pub struct AttestationService {
+pub(crate) struct AttestationService {
     /// Unix-socket path of the key custodian, the separate local process that
     /// owns `root_key`. This service holds no key material: each method opens
     /// a connection here for its key operations (a handful of requests per
@@ -53,7 +53,7 @@ pub struct AttestationService {
 }
 
 impl AttestationService {
-    pub fn new(
+    pub(crate) fn new(
         custodian_socket: PathBuf,
         network_id: NetworkId,
         admission: RegistryAdmission,
@@ -171,7 +171,7 @@ impl AttestationRpcServer for AttestationService {
     }
 }
 
-pub async fn start_server(
+pub(crate) async fn start_server(
     addr: SocketAddr,
     args: Args,
     peers: &[String],

@@ -31,6 +31,13 @@ authors = ["Seismic Systems"]
 license = "MIT"
 readme = "README.md"
 
+# Every member opts in with `[lints] workspace = true`. Levels are `warn`:
+# CI builds with `RUSTFLAGS="-D warnings"`, so they are already fatal there.
+[workspace.lints.rust]
+# A `pub` item in a private module is visible only inside its crate. Spelling it
+# `pub(crate)` says so, which leaves bare `pub` meaning "part of this crate's API".
+unreachable_pub = "warn"
+
 [workspace.dependencies]
 # workspace libs
 seismic-attestation = { path = "crates/attestation" }

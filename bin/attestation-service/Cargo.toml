@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Seismic network-facing attestation service"
 
+[lints]
+workspace = true
+
 [lib]
 name = "seismic_attestation_service"
 path = "src/lib.rs"

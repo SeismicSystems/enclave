@@ -53,7 +53,7 @@ const SUMMIT_CONSENSUS_PORT: u16 = 18551;
 /// disagree about who the cohort is. This node's own entry is dropped from
 /// both — nothing here is a list this node uses to reach itself.
 #[derive(Debug)]
-pub struct PeerLists {
+pub(crate) struct PeerLists {
     /// The other founding nodes' enodes, in the order given. Both of reth's
     /// devp2p flags take this list (`reth-p2p.env`'s `RETH_BOOTNODES_FLAG` and
     /// `RETH_TRUSTED_PEERS_FLAG`), because they do different jobs with it:
@@ -76,7 +76,7 @@ pub struct PeerLists {
 /// a node has no reason to reach itself. A node that does not hold the pinned
 /// candidate ([`holds_pinned_candidate`]) must end up with at least one peer,
 /// or it has no source for `root_key`.
-pub fn derive_peer_lists(
+pub(crate) fn derive_peer_lists(
     node: &NodeConfig,
     bootnodes: &[Bootnode],
     holds_pinned_candidate: bool,
@@ -127,7 +127,10 @@ pub fn derive_peer_lists(
 /// Whether the custodian's candidate, as its candidate tx_io_pk file names it,
 /// is the key the manifest pins. A missing file reads as `false`: the harvest
 /// cannot quote a box without one, so assemble cannot have pinned it.
-pub fn holds_pinned_candidate(candidate_tx_io_pk_path: &Path, pin: &[u8; 33]) -> Result<bool> {
+pub(crate) fn holds_pinned_candidate(
+    candidate_tx_io_pk_path: &Path,
+    pin: &[u8; 33],
+) -> Result<bool> {
     Ok(candidate_tx_io_pk::read(candidate_tx_io_pk_path)?
         .is_some_and(|candidate| candidate == *pin))
 }
@@ -149,7 +152,7 @@ pub fn holds_pinned_candidate(candidate_tx_io_pk_path: &Path, pin: &[u8; 33]) ->
 ///
 /// A `SocketAddr` rather than a formatted string: its `Display` brackets IPv6,
 /// which is the form summit parses.
-pub fn summit_advertised_addr(node: &NodeConfig) -> SocketAddr {
+pub(crate) fn summit_advertised_addr(node: &NodeConfig) -> SocketAddr {
     SocketAddr::new(node.external_ip, SUMMIT_CONSENSUS_PORT)
 }
 

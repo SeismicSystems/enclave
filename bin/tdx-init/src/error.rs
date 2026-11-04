@@ -2,7 +2,7 @@ use axum::{http::StatusCode, response::IntoResponse, response::Response};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum TdxInitError {
+pub(crate) enum TdxInitError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -30,7 +30,7 @@ pub enum TdxInitError {
     ServerError(String),
 }
 
-pub type Result<T> = std::result::Result<T, TdxInitError>;
+pub(crate) type Result<T> = std::result::Result<T, TdxInitError>;
 
 impl IntoResponse for TdxInitError {
     fn into_response(self) -> Response {

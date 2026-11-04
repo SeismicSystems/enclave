@@ -6,7 +6,7 @@ use tdx_init_config::{Bootnode, InitConfig};
 use tokio::fs;
 use tracing::info;
 
-pub const DEFAULT_FILE_MODE: u32 = 0o644;
+pub(crate) const DEFAULT_FILE_MODE: u32 = 0o644;
 
 /// Translate the operator-supplied [`InitConfig`] into per-service config
 /// files under `conf_dir`. Each downstream service reads its own file in
@@ -20,7 +20,7 @@ pub const DEFAULT_FILE_MODE: u32 = 0o644;
 /// `candidate_tx_io_pk_path` is the custodian's candidate tx_io_pk file,
 /// compared with the manifest's pin to decide whether this node may go without
 /// peers.
-pub async fn write_service_configs(
+pub(crate) async fn write_service_configs(
     conf_dir: &Path,
     candidate_tx_io_pk_path: &Path,
     config: &InitConfig,

@@ -9,6 +9,9 @@ license.workspace = true
 readme = "README.md"
 description = "Seismic attestation evidence types and policy checks"
 
+[lints]
+workspace = true
+
 [dependencies]
 tracing.workspace = true
 hex.workspace = true

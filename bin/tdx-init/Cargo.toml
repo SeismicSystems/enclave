@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Boot-time node initialization: receives node config over HTTP and writes the enclave/reth runtime env"
 
+[lints]
+workspace = true
+
 [dependencies]
 seismic-custodian-ipc.workspace = true
 seismic-network-manifest.workspace = true
