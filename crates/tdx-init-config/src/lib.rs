@@ -1,20 +1,22 @@
 //! The bootstrap config a Seismic node accepts at deploy time: the schema of
-//! the TOML document POSTed to `tdx-init` on `:8080`, and the only definition
-//! of that wire format.
+//! the TOML document POSTed to `tdx-init` on `:8080`, the only definition
+//! of that wire format, and the checks a config must pass.
 //!
-//! It is a crate of its own so both ends of the POST hold the same types: the
-//! on-node `tdx-init` binary deserializes [`InitConfig`] and fans it out into
-//! per-service config files, and deploy tooling constructs the same struct
-//! rather than hand-assembling TOML. Nothing here does I/O, so linking it
-//! costs a downstream crate nothing but `serde`. Validation is split:
+//! It is a crate of its own so both ends of the POST hold the same types and
+//! run the same checks: the on-node `tdx-init` binary deserializes
+//! [`InitConfig`] and fans it out into per-service config files, and deploy
+//! tooling constructs the same struct rather than hand-assembling TOML.
+//! Nothing here does I/O. Validation is split:
 //!
-//! - here: the shape of each field that has one. `external_ip` is an
+//! - in the types: the shape of each field that has one. `external_ip` is an
 //!   `IpAddr` and each bootnode a [`Bootnode`]. Neither can be built from an
-//!   invalid string, so the check runs wherever a config is parsed or built,
-//!   in `tdx-init` and in deploy tooling alike;
-//! - in `tdx-init`: every check that needs more than one field (the manifest
-//!   schema, the genesis commitments, the peers against the custodian's
-//!   candidate key), run when the POST is handled.
+//!   invalid string, so the check runs wherever a config is parsed or built;
+//! - in [`InitConfig::validate`]: the checks across fields, of the manifest
+//!   and the two genesis files it pins (`validate.rs`). `tdx-init` runs it on
+//!   every POST, deploy tooling before it POSTs;
+//! - in `tdx-init`: the one check that needs node state, whether a node
+//!   with no peer in `bootnodes` holds the custodian candidate the manifest
+//!   pins.
 //!
 //! `deny_unknown_fields` throughout: a field this build does not know is a
 //! deploy tool and a node that disagree on the format, which must be a clean
@@ -25,8 +27,13 @@ use std::net::IpAddr;
 
 mod bootnode;
 mod hostname;
+mod validate;
 pub use bootnode::{Bootnode, BootnodeHost, InvalidBootnode};
 pub use hostname::{Hostname, InvalidHostname};
+pub use validate::{
+    InvalidManifest, InvalidNetwork, InvalidRethGenesis, InvalidSummitGenesis, ValidatedNetwork,
+    check_reth_genesis, check_summit_genesis,
+};
 
 /// Operator-supplied initialization config, received over HTTP at deploy
 /// time and fanned out by tdx-init into per-component config files under
@@ -61,10 +68,10 @@ pub struct InitConfig {
 ///
 /// `network_id = SHA-256(exact network-manifest.json bytes)`, so the manifest
 /// travels base64-encoded (opaque bytes) rather than as an inline string:
-/// tdx-init validates it at POST time and writes the decoded bytes verbatim
-/// to `network-manifest.json` under `/run/seismic/conf`, never
-/// parse-and-re-serialize. Validation lives in `bin/tdx-init/src/manifest.rs`
-/// (schema in the `seismic-network-manifest` crate).
+/// [`InitConfig::validate`] decodes and checks it, and tdx-init writes the
+/// decoded bytes verbatim to `network-manifest.json` under
+/// `/run/seismic/conf`, never parse-and-re-serialize. The schema is the
+/// `seismic-network-manifest` crate's.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
@@ -78,12 +85,12 @@ pub struct NetworkConfig {
     /// assembled set rather than three independent values — pairing a manifest
     /// with a genesis it doesn't pin yields a node that can't join the cohort
     /// it claims to belong to (a reth genesis block hash its peers reject, or a
-    /// summit `chain_domain` no handshake matches). tdx-init doesn't recompute
-    /// either commitment in-process — that would need reth's own chain-spec
-    /// parse path and summit's SSZ implementation — so it enforces the cheap
-    /// fields the manifest duplicates for exactly this purpose (`eth.chain_id`,
-    /// `summit.namespace`) and leaves the hashes to deploy, which verifies both
-    /// before POSTing.
+    /// summit `chain_domain` no handshake matches). [`InitConfig::validate`]
+    /// doesn't recompute either commitment — that would need reth's own
+    /// chain-spec parse path and summit's SSZ implementation — so it enforces
+    /// the cheap fields the manifest duplicates for exactly this purpose
+    /// (`eth.chain_id`, `summit.namespace`) and leaves the hashes to deploy,
+    /// which verifies both before POSTing.
     pub manifest_base64: String,
 
     /// base64 encoding of the reth genesis JSON — the chain spec
@@ -91,9 +98,8 @@ pub struct NetworkConfig {
     /// /run/seismic/conf/reth-genesis.json`). Network-wide like the manifest,
     /// whose `eth.genesis_hash` pins its genesis block; required because a
     /// node booted without it has no chain spec and reth crash-loops.
-    /// Validated at POST time against the manifest's `eth.chain_id`
-    /// (`bin/tdx-init/src/reth_genesis.rs`) and written verbatim to
-    /// `reth-genesis.json` under `/run/seismic/conf`.
+    /// Checked against the manifest's `eth.chain_id` ([`check_reth_genesis`])
+    /// and written verbatim to `reth-genesis.json` under `/run/seismic/conf`.
     pub reth_genesis_base64: String,
 
     /// base64 encoding of the summit genesis TOML — the consensus-layer
@@ -104,9 +110,9 @@ pub struct NetworkConfig {
     /// `summit.genesis_config_digest` pins the result. Required because a node
     /// booted without it has no consensus genesis and its summit blocks
     /// forever — late joiners need it just as much as the founders do.
-    /// Validated structurally at POST time against the manifest's
-    /// `summit.namespace` (`bin/tdx-init/src/summit_genesis.rs`) and written
-    /// verbatim to `summit-genesis.toml` under `/run/seismic/conf`.
+    /// Checked against the manifest's `summit.namespace`
+    /// ([`check_summit_genesis`]) and written verbatim to
+    /// `summit-genesis.toml` under `/run/seismic/conf`.
     pub summit_genesis_base64: String,
 
     /// Network-wide devp2p bootnodes, as `enode://<128 hex pubkey>@host:port`

@@ -7,13 +7,16 @@ homepage.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Schema of the bootstrap config tdx-init accepts over HTTP at deploy time"
+description = "Schema of the bootstrap config tdx-init accepts over HTTP at deploy time, and its checks"
 
 [lints]
 workspace = true
 
 [dependencies]
-serde.workspace = true
+seismic-network-manifest.workspace = true
 
-[dev-dependencies]
+base64.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 toml.workspace = true

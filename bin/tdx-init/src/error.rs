@@ -9,14 +9,8 @@ pub(crate) enum TdxInitError {
     #[error("TOML parse error: {0}")]
     Toml(#[from] toml::de::Error),
 
-    #[error("invalid network manifest: {0}")]
-    InvalidManifest(String),
-
-    #[error("invalid reth genesis: {0}")]
-    InvalidRethGenesis(String),
-
-    #[error("invalid summit genesis: {0}")]
-    InvalidSummitGenesis(String),
+    #[error(transparent)]
+    InvalidNetwork(#[from] tdx_init_config::InvalidNetwork),
 
     #[error("invalid peer config: {0}")]
     InvalidPeers(String),
@@ -38,18 +32,7 @@ impl IntoResponse for TdxInitError {
             TdxInitError::Toml(e) => (StatusCode::BAD_REQUEST, format!("Invalid TOML: {e}")),
             // An operator config error: fail the deploy POST loudly rather
             // than surfacing at a later boot.
-            TdxInitError::InvalidManifest(msg) => (
-                StatusCode::BAD_REQUEST,
-                format!("invalid network manifest: {msg}"),
-            ),
-            TdxInitError::InvalidRethGenesis(msg) => (
-                StatusCode::BAD_REQUEST,
-                format!("invalid reth genesis: {msg}"),
-            ),
-            TdxInitError::InvalidSummitGenesis(msg) => (
-                StatusCode::BAD_REQUEST,
-                format!("invalid summit genesis: {msg}"),
-            ),
+            TdxInitError::InvalidNetwork(e) => (StatusCode::BAD_REQUEST, with_sources(&e)),
             TdxInitError::InvalidPeers(msg) => (
                 StatusCode::BAD_REQUEST,
                 format!("invalid peer config: {msg}"),
@@ -66,5 +49,38 @@ impl IntoResponse for TdxInitError {
         };
 
         (status, message).into_response()
+    }
+}
+
+/// `err` and its causes, outermost first, as `what: why: ...`. The operator
+/// sees only the response body, so it carries the whole chain, not the
+/// outermost message alone (`invalid reth genesis`).
+fn with_sources(err: &dyn std::error::Error) -> String {
+    let mut message = err.to_string();
+    let mut source = err.source();
+    while let Some(cause) = source {
+        message.push_str(": ");
+        message.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    message
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tdx_init_config::{InvalidNetwork, InvalidRethGenesis};
+
+    #[test]
+    fn a_400_body_carries_the_cause() {
+        let err = InvalidNetwork::from(InvalidRethGenesis::ChainIdMismatch {
+            found: 5125,
+            expected: 5124,
+        });
+        assert_eq!(
+            with_sources(&err),
+            "invalid reth genesis: config.chainId 5125 does not match the manifest's eth.chain_id \
+             5124"
+        );
     }
 }

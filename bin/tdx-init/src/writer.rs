@@ -2,7 +2,7 @@ use crate::error::Result;
 use std::net::{IpAddr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tdx_init_config::{Bootnode, InitConfig};
+use tdx_init_config::{Bootnode, InitConfig, ValidatedNetwork};
 use tokio::fs;
 use tracing::info;
 
@@ -25,45 +25,39 @@ pub(crate) async fn write_service_configs(
     candidate_tx_io_pk_path: &Path,
     config: &InitConfig,
 ) -> Result<()> {
-    let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
+    let network = config.validate()?;
     let peers = crate::peers::derive_peer_lists(
         &config.node,
         &config.network.bootnodes,
-        crate::peers::holds_pinned_candidate(candidate_tx_io_pk_path, &manifest.founding_tx_io_pk)?,
+        crate::peers::holds_pinned_candidate(
+            candidate_tx_io_pk_path,
+            &network.manifest().founding_tx_io_pk,
+        )?,
     )?;
     let summit_addr = crate::peers::summit_advertised_addr(&config.node);
-    let genesis = crate::reth_genesis::decode_and_validate(
-        &config.network.reth_genesis_base64,
-        manifest.chain_id,
-    )?;
-    let summit_genesis = crate::summit_genesis::decode_and_validate(
-        &config.network.summit_genesis_base64,
-        &manifest.namespace,
-    )?;
 
     fs::create_dir_all(conf_dir).await?;
     write_attestation_svc_env(conf_dir, &peers.root_key_urls).await?;
     write_reth_p2p_env(conf_dir, &peers.peer_enodes, config.node.external_ip).await?;
     write_summit_env(conf_dir, summit_addr).await?;
-    write_network_manifest(conf_dir, &manifest).await?;
-    write_reth_genesis(conf_dir, &genesis).await?;
-    write_summit_genesis(conf_dir, &summit_genesis).await?;
+    write_network_manifest(conf_dir, &network).await?;
+    write_reth_genesis(conf_dir, network.reth_genesis()).await?;
+    write_summit_genesis(conf_dir, network.summit_genesis()).await?;
     Ok(())
 }
 
 /// Write the validated manifest bytes verbatim (byte-exactness rule):
 /// consumers derive `network_id` by hashing this file themselves, so any
 /// re-rendering here would silently change the network's identity.
-async fn write_network_manifest(
-    conf_dir: &Path,
-    manifest: &crate::manifest::ValidatedManifest,
-) -> Result<()> {
+async fn write_network_manifest(conf_dir: &Path, network: &ValidatedNetwork) -> Result<()> {
     let path = conf_dir.join("network-manifest.json");
-    write_with_mode(&path, &manifest.bytes, DEFAULT_FILE_MODE).await?;
+    write_with_mode(&path, network.manifest_bytes(), DEFAULT_FILE_MODE).await?;
+    // `network_id` is `sha256sum` of the written file: every mismatch
+    // diagnosis starts with comparing this line against the deploy tool's.
     info!(
         "wrote {} (network_id {})",
         path.display(),
-        crate::manifest::network_id_hex(&manifest.bytes),
+        network.network_id(),
     );
     Ok(())
 }
@@ -175,15 +169,22 @@ mod tests {
     use tdx_init_config::{NetworkConfig, NodeConfig};
     use tempfile::TempDir;
 
+    /// A reth genesis whose chainId is the fixture manifest's.
+    const RETH_GENESIS: &[u8] = br#"{"config":{"chainId":5124,"mercuryTime":0},"alloc":{}}"#;
+    /// A summit genesis whose namespace is the fixture manifest's.
+    const SUMMIT_GENESIS: &[u8] = b"namespace = \"seismic-devnet-3\"\nchain_id = 5124\n";
+
     /// A candidate tx_io_pk file naming the fixture manifest's pin, so
     /// `sample_config` (no bootnodes) is valid; the guard keeps the file alive.
     fn pinned_candidate() -> (TempDir, std::path::PathBuf) {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("candidate-tx-io-pk");
-        let manifest =
-            crate::manifest::decode_and_validate(&sample_config().network.manifest_base64).unwrap();
-        seismic_custodian_ipc::candidate_tx_io_pk::write(&path, &manifest.founding_tx_io_pk)
-            .unwrap();
+        let network = sample_config().validate().unwrap();
+        seismic_custodian_ipc::candidate_tx_io_pk::write(
+            &path,
+            &network.manifest().founding_tx_io_pk,
+        )
+        .unwrap();
         (dir, path)
     }
 
@@ -201,17 +202,10 @@ mod tests {
                     "../../../crates/network-manifest/fixtures/network-manifest-v1.json"
                 )),
                 // A genesis whose chainId matches the fixture manifest's.
-                reth_genesis_base64: base64::engine::general_purpose::STANDARD.encode(
-                    crate::reth_genesis::tests::genesis_json(
-                        crate::reth_genesis::tests::FIXTURE_CHAIN_ID,
-                    ),
-                ),
+                reth_genesis_base64: base64::engine::general_purpose::STANDARD.encode(RETH_GENESIS),
                 // A summit genesis whose namespace matches the fixture manifest's.
-                summit_genesis_base64: base64::engine::general_purpose::STANDARD.encode(
-                    crate::summit_genesis::tests::genesis_toml(
-                        crate::summit_genesis::tests::FIXTURE_NAMESPACE,
-                    ),
-                ),
+                summit_genesis_base64: base64::engine::general_purpose::STANDARD
+                    .encode(SUMMIT_GENESIS),
                 bootnodes: vec![],
             },
             node: NodeConfig {
@@ -296,7 +290,9 @@ mod tests {
             .unwrap_err();
         assert!(matches!(
             err,
-            crate::error::TdxInitError::InvalidSummitGenesis(_)
+            crate::error::TdxInitError::InvalidNetwork(
+                tdx_init_config::InvalidNetwork::SummitGenesis(_)
+            )
         ));
         assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
     }
@@ -429,9 +425,7 @@ mod tests {
             .unwrap();
 
         let written = std::fs::read(tmp.path().join("reth-genesis.json")).unwrap();
-        let expected =
-            crate::reth_genesis::tests::genesis_json(crate::reth_genesis::tests::FIXTURE_CHAIN_ID);
-        assert_eq!(written, expected);
+        assert_eq!(written, RETH_GENESIS);
     }
 
     #[tokio::test]
@@ -445,10 +439,7 @@ mod tests {
             .unwrap();
 
         let written = std::fs::read(tmp.path().join("summit-genesis.toml")).unwrap();
-        let expected = crate::summit_genesis::tests::genesis_toml(
-            crate::summit_genesis::tests::FIXTURE_NAMESPACE,
-        );
-        assert_eq!(written, expected);
+        assert_eq!(written, SUMMIT_GENESIS);
     }
 
     #[tokio::test]

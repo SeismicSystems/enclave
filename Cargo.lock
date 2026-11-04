@@ -6475,9 +6475,6 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "seismic-custodian-ipc",
- "seismic-network-manifest",
- "serde",
- "serde_json",
  "tdx-init-config",
  "tempfile",
  "thiserror 2.0.18",
@@ -6491,7 +6488,11 @@ dependencies = [
 name = "tdx-init-config"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "seismic-network-manifest",
  "serde",
+ "serde_json",
+ "thiserror 2.0.18",
  "toml",
 ]
 

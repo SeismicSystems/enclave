@@ -105,18 +105,20 @@ flowchart LR
 ### What tdx-init checks at POST time
 
 A failed check answers `400` and writes nothing, so a bad config fails the
-deploy rather than a later boot. The shape of `bootnodes` and `external_ip` is
-checked while the TOML is parsed, by
-[`tdx-init-config`](../../crates/tdx-init-config)'s types, so deploy tooling
-building a config runs the same checks.
+deploy rather than a later boot. Every check but the bootnodes' pin is
+[`tdx-init-config`](../../crates/tdx-init-config)'s, so deploy tooling runs
+the same code before it POSTs: the shape of `bootnodes` and `external_ip`
+while the TOML is parsed, by its types, and the three `[network]` artifacts
+against one another by `InitConfig::validate`. tdx-init still runs all of it
+on every POST: `:8080` is unauthenticated, so the node never relies on the
+sender having checked.
 
 - **`manifest_base64`**: the strict v1 schema, parsed by
   [`seismic-network-manifest`](../../crates/network-manifest).
 - **`reth_genesis_base64`**: valid JSON whose `config.chainId` equals the
   manifest's `eth.chain_id`. The manifest's `eth.genesis_hash` covers the
   genesis block (header, and the alloc through the state root) but not the
-  file's `config` section, so the hash commitment is checked deploy-side
-  (`src/reth_genesis.rs`).
+  file's `config` section, so the hash commitment is checked deploy-side.
 - **`summit_genesis_base64`**: valid TOML whose `namespace` equals the
   manifest's `summit.namespace`. The manifest pins summit's SSZ
   `config_digest`, which covers the consensus parameters and every
@@ -124,7 +126,7 @@ building a config runs the same checks.
   recompute it without reimplementing summit's layout. Deploy checks it
   against the manifest before POSTing, and summit derives its P2P and signing
   domains from it, so a node fed a divergent genesis can't complete a
-  handshake (`src/summit_genesis.rs`).
+  handshake.
 - **`bootnodes`**: each entry is `enode://<128 hex pubkey>@host:port`, with
   the host an IPv4 address, a bracketed IPv6 address or an RFC 1123 hostname
   (letters, digits and `-` in dot-separated labels, at most 253 characters),
