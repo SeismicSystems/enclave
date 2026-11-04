@@ -145,12 +145,12 @@ mod tests {
     // The sync path a std-only host would use: pure functions, no I/O.
     #[test]
     fn pure_encode_decode_roundtrips_without_io() {
-        let frame = encode_frame(&Request::GetTxIoKeypair { epoch: 9 }).expect("encode");
+        let frame = encode_frame(&Request::GetTxIoSecretKey { epoch: 9 }).expect("encode");
         let header: [u8; FRAME_HEADER_LEN] = frame[..FRAME_HEADER_LEN].try_into().expect("header");
         let body_len = decode_header(header).expect("header length");
         assert_eq!(body_len, frame.len() - FRAME_HEADER_LEN);
         let decoded: Request = decode_body(&frame[FRAME_HEADER_LEN..]).expect("decode");
-        let Request::GetTxIoKeypair { epoch } = decoded else {
+        let Request::GetTxIoSecretKey { epoch } = decoded else {
             panic!("wrong variant");
         };
         assert_eq!(epoch, 9);
@@ -221,7 +221,7 @@ mod tests {
         #[tokio::test]
         async fn async_and_blocking_interoperate() {
             let (mut client, mut server) = tokio::io::duplex(1024);
-            write_frame(&mut client, &Request::GetTxIoKeypair { epoch: 3 })
+            write_frame(&mut client, &Request::GetTxIoSecretKey { epoch: 3 })
                 .await
                 .expect("write");
             let decoded: Request = read_frame(&mut server).await.expect("read").expect("some");
@@ -229,7 +229,7 @@ mod tests {
             let roundtrip: Request = read_frame_blocking(&mut frame.as_slice())
                 .expect("read")
                 .expect("some");
-            let Request::GetTxIoKeypair { epoch } = roundtrip else {
+            let Request::GetTxIoSecretKey { epoch } = roundtrip else {
                 panic!("wrong variant");
             };
             assert_eq!(epoch, 3);

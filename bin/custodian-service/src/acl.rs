@@ -138,7 +138,7 @@ mod tests {
         )
         .expect("valid specs");
 
-        assert!(acl.allows(1001, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(acl.allows(1001, &Request::GetTxIoSecretKey { epoch: 0 }));
         assert!(acl.allows(1001, &Request::GetRngIkm { epoch: 0 }));
         assert!(!acl.allows(1001, &Request::GetSnapshotKey { epoch: 0 }));
         assert!(!acl.allows(1001, &Request::CreateRootKeyBootstrapAttempt));
@@ -147,17 +147,17 @@ mod tests {
         assert!(acl.allows(1002, &Request::CreateRootKeyBootstrapAttempt));
         assert!(acl.allows(1002, &Request::RetireFoundingPolicy));
         assert!(!acl.allows(1001, &Request::RetireFoundingPolicy));
-        assert!(!acl.allows(1002, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(!acl.allows(1002, &Request::GetTxIoSecretKey { epoch: 0 }));
 
         // Ping stays open even to ungranted UIDs.
         assert!(acl.allows(4242, &Request::Ping));
-        assert!(!acl.allows(4242, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(!acl.allows(4242, &Request::GetTxIoSecretKey { epoch: 0 }));
     }
 
     #[test]
     fn no_specs_is_deny_by_default() {
         let acl = build_acl(&[], fake_resolve).expect("empty specs");
-        assert!(!acl.allows(1001, &Request::GetTxIoKeypair { epoch: 0 }));
+        assert!(!acl.allows(1001, &Request::GetTxIoSecretKey { epoch: 0 }));
         assert!(acl.allows(1001, &Request::Ping));
     }
 
