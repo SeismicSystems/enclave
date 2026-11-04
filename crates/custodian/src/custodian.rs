@@ -108,8 +108,8 @@ impl Custodian {
     /// Derives the 64 bytes of HKDF input key material that seed the RNG
     /// precompile (0x64). The precompile re-derives from them on every call,
     /// so these bytes are consensus for the network's lifetime.
-    pub fn get_rng_ikm(&self, epoch: u64) -> [u8; 64] {
-        self.expand_purpose(KeyPurpose::RngPrecompile, epoch)
+    pub fn get_rng_ikm(&self, epoch: u64) -> seismic_crypto::RngIkm {
+        seismic_crypto::RngIkm::from_bytes(self.expand_purpose(KeyPurpose::RngPrecompile, epoch))
     }
 
     /// Retrieves the AES-256-GCM encryption key used for snapshot operations.
