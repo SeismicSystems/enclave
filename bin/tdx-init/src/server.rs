@@ -67,25 +67,26 @@ pub(crate) async fn run_initialization_server() -> Result<InitConfig> {
 async fn handle_config(State(state): State<AppState>, body: String) -> Result<Response> {
     let config: InitConfig = toml::from_str(&body)?;
 
-    // Validate the network artifacts while the operator's POST is still
-    // waiting on a response: a bad (or absent) manifest, reth genesis, summit
-    // genesis, or peer config must 400 the deploy, not fail at boot when the
-    // attestation service/reth/summit try to use them.
-    let manifest = crate::manifest::decode_and_validate(&config.network.manifest_base64)?;
-    crate::reth_genesis::decode_and_validate(
-        &config.network.reth_genesis_base64,
-        manifest.chain_id,
-    )?;
-    crate::summit_genesis::decode_and_validate(
-        &config.network.summit_genesis_base64,
-        &manifest.namespace,
-    )?;
+    // Validate while the operator's POST is still waiting on a response: a
+    // bad (or absent) manifest, reth genesis, summit genesis, or peer config
+    // must 400 the deploy, not fail at boot when the attestation
+    // service/reth/summit try to use them. The checks without node state are
+    // tdx-init-config's, the same code deploy tooling ran before POSTing; this
+    // node never relies on that, since `:8080` is unauthenticated.
+    let network = config.validate()?;
+    info!(
+        "network artifacts valid: name={} chain_id={} namespace={} network_id={}",
+        network.manifest().name,
+        network.manifest().eth.chain_id,
+        network.manifest().summit.namespace,
+        network.network_id(),
+    );
     crate::peers::derive_peer_lists(
         &config.node,
         &config.network.bootnodes,
         crate::peers::holds_pinned_candidate(
             Path::new(candidate_tx_io_pk::CANDIDATE_TX_IO_PK_PATH),
-            &manifest.founding_tx_io_pk,
+            &network.manifest().founding_tx_io_pk,
         )?,
     )?;
 

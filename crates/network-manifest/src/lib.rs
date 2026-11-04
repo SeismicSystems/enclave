@@ -234,8 +234,10 @@ impl NetworkManifestV1 {
 
 #[derive(Debug, Error)]
 pub enum ManifestError {
+    /// The serde error is the source, not part of the message: every
+    /// consumer renders the chain, which would otherwise print it twice.
     #[error(
-        "manifest does not match schema v{version}: {0}",
+        "manifest does not match schema v{version}",
         version = NetworkManifestV1::VERSION
     )]
     Json(#[from] serde_json::Error),
