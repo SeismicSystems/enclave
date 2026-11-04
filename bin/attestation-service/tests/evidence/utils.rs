@@ -9,7 +9,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub fn get_args(n: u16, conf_dir: PathBuf, custodian_socket: PathBuf, reth_rpc_url: &str) -> Args {
+pub(crate) fn get_args(
+    n: u16,
+    conf_dir: PathBuf,
+    custodian_socket: PathBuf,
+    reth_rpc_url: &str,
+) -> Args {
     Args {
         peer_listen: SocketAddr::from(([0, 0, 0, 0], 7878 + n)),
         // Port 0: the harvest is up in every test, never called, and must
@@ -24,7 +29,7 @@ pub fn get_args(n: u16, conf_dir: PathBuf, custodian_socket: PathBuf, reth_rpc_u
 
 /// Stand in for tdx-init: write the files the service reads from its conf
 /// dir, the done marker last.
-pub fn write_conf_dir(conf_dir: &Path, manifest: &[u8], peers: &[String]) {
+pub(crate) fn write_conf_dir(conf_dir: &Path, manifest: &[u8], peers: &[String]) {
     std::fs::create_dir_all(conf_dir).expect("create conf dir");
     std::fs::write(conf_dir.join(conf::NETWORK_MANIFEST), manifest).expect("write manifest");
     let env = format!("SEISMIC_ROOT_KEY_PEERS={}\n", peers.join(","));
@@ -56,7 +61,7 @@ fn fixture_genesis_hash() -> B256 {
 /// the full live-TEE admission path — verified evidence → admission ID → fresh
 /// chain state → registry query — while denial behavior is covered by the
 /// admission module's unit tests.
-pub async fn spawn_accepting_registry() -> String {
+pub(crate) async fn spawn_accepting_registry() -> String {
     let server = ServerBuilder::default()
         .build("127.0.0.1:0")
         .await
@@ -109,7 +114,7 @@ pub async fn spawn_accepting_registry() -> String {
 
 /// Serve `state` over a custodian socket from a dedicated thread — the same
 /// transport and dispatch the standalone `seismic-custodian-service` binary runs.
-pub fn spawn_custodian(state: CustodianState, socket: &Path) {
+pub(crate) fn spawn_custodian(state: CustodianState, socket: &Path) {
     let listener = bind(socket).expect("bind custodian socket");
     std::thread::spawn(move || {
         serve(listener, MethodAcl::own_uid_only(), move |request| {

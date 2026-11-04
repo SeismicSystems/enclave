@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "RAM-only custodian of the Seismic network root key"
 
+[lints]
+workspace = true
+
 [dependencies]
 seismic-crypto.workspace = true
 

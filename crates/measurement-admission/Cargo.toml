@@ -9,6 +9,9 @@ license.workspace = true
 readme = "README.md"
 description = "Admission-ID derivation and measurement-policy compiler for the on-chain MeasurementRegistry"
 
+[lints]
+workspace = true
+
 [dependencies]
 alloy-primitives.workspace = true
 hex.workspace = true

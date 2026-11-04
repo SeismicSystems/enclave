@@ -22,7 +22,7 @@ struct AppState {
     config_sender: Arc<tokio::sync::Mutex<Option<oneshot::Sender<InitConfig>>>>,
 }
 
-pub async fn run_initialization_server() -> Result<InitConfig> {
+pub(crate) async fn run_initialization_server() -> Result<InitConfig> {
     let (config_tx, config_rx) = oneshot::channel();
 
     let state = AppState {

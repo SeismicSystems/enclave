@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Canonical rendering of the network manifest over seismic-network-manifest, for deploy tooling to link"
 
+[lints]
+workspace = true
+
 [dependencies]
 seismic-network-manifest.workspace = true
 

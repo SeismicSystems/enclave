@@ -23,7 +23,7 @@ const LUKS_STATUS_FILE: &str = "/run/seismic/status/luks.json";
 /// [`LuksProvisioningStatus::Unknown`] when it exists but can't be read or
 /// parsed (a broken status pipeline, which is distinct from "done"). Best-effort
 /// telemetry: a polling CLI must never get a hard error, so this is infallible.
-pub fn read() -> LuksProvisioningStatus {
+pub(crate) fn read() -> LuksProvisioningStatus {
     read_from(LUKS_STATUS_FILE)
 }
 

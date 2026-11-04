@@ -9,6 +9,9 @@ license.workspace = true
 readme.workspace = true
 description = "Read-only Alloy client for the on-chain MeasurementRegistry"
 
+[lints]
+workspace = true
+
 [dependencies]
 alloy-contract.workspace = true
 alloy-primitives.workspace = true
