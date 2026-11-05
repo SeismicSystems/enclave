@@ -65,7 +65,7 @@ use seismic_attestation::{
     AttestationType, NetworkId, SeismicMeasurementPolicy, VerifiedSeismicAttestation,
     VerifyOptions, generate_evidence, verify_evidence_with_policy,
 };
-use seismic_attestation_rpc::AttestationRpcClient as _;
+use seismic_attestation_rpc::{AttestationRpcClient as _, RootKeyResponse};
 use seismic_attestation_service::{
     Args,
     api::{AdmissionChainStatus, NodeStatusRpcClient as _},
@@ -809,7 +809,7 @@ async fn wait_for_health(
 async fn request_root_key(
     responder_url: &str,
     manifest: &[u8],
-) -> Result<Vec<u8>, jsonrpsee::core::client::Error> {
+) -> Result<RootKeyResponse, jsonrpsee::core::client::Error> {
     let eph_sk = secp256k1::SecretKey::from_slice(&[0x42u8; 32]).expect("valid test secret key");
     let eph_pk = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &eph_sk);
     let request = build_root_key_request(
@@ -822,15 +822,14 @@ async fn request_root_key(
         .request_timeout(HANDSHAKE_TIMEOUT)
         .build(responder_url)
         .expect("create handshake client");
-    client
-        .get_wrapped_root_key(serde_json::to_vec(&request).expect("serialize root-key request"))
-        .await
+    client.get_wrapped_root_key(request).await
 }
 
-/// The JSON-RPC error code a failed handshake surfaced.
 /// The refusal a denied handshake came back with, read off the wire the way a
 /// joining node reads it.
-fn denial_refusal(result: Result<Vec<u8>, jsonrpsee::core::client::Error>) -> RootKeyRefusal {
+fn denial_refusal(
+    result: Result<RootKeyResponse, jsonrpsee::core::client::Error>,
+) -> RootKeyRefusal {
     match result {
         Err(jsonrpsee::core::client::Error::Call(error)) => RootKeyRefusal::from_code(error.code())
             .unwrap_or_else(|| {

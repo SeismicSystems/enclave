@@ -9,13 +9,11 @@ use crate::{
     Args,
     admission::RegistryAdmission,
     api::{AdmissionChainStatus, LuksProvisioningStatus, NodeStatusRpcServer},
-    bootstrap::{RootKeyRequest, answer_root_key_request},
+    bootstrap::answer_root_key_request,
     conf,
     join::ensure_root_key_present,
     network::load_manifest,
-    rpc_error::{
-        internal_rpc_error, invalid_root_key_request_rpc_error, root_key_answer_rpc_error,
-    },
+    rpc_error::{internal_rpc_error, root_key_answer_rpc_error},
 };
 use alloy_primitives::{Address, B256};
 use jsonrpsee::{
@@ -29,7 +27,8 @@ use seismic_attestation::{
     generate_evidence,
 };
 use seismic_attestation_rpc::{
-    AttestationRpcServer, DeployVerificationResponse, TxIoAttestationResponse,
+    AttestationRpcServer, DeployVerificationResponse, RootKeyRequest, RootKeyResponse,
+    TxIoAttestationResponse,
 };
 use seismic_custodian_ipc::{CustodianClient, IpcError};
 use std::{net::SocketAddr, path::PathBuf};
@@ -102,15 +101,12 @@ impl AttestationRpcServer for AttestationService {
     /// Verifies the requester's attestation, has the custodian wrap the root
     /// key to its attested ephemeral key, and returns the wrapped key plus our
     /// own quote over the response transcript. See [`crate::bootstrap`].
-    async fn get_wrapped_root_key(&self, request: Vec<u8>) -> RpcResult<Vec<u8>> {
-        let request: RootKeyRequest =
-            serde_json::from_slice(&request).map_err(invalid_root_key_request_rpc_error)?;
-
+    async fn get_wrapped_root_key(&self, request: RootKeyRequest) -> RpcResult<RootKeyResponse> {
         let mut custodian = self
             .connect_custodian()
             .await
             .map_err(|error| internal_rpc_error("connecting to custodian", error))?;
-        let response = answer_root_key_request(
+        answer_root_key_request(
             &request,
             &self.network_id,
             &mut custodian,
@@ -118,10 +114,7 @@ impl AttestationRpcServer for AttestationService {
             self.attestation_type,
         )
         .await
-        .map_err(root_key_answer_rpc_error)?;
-
-        serde_json::to_vec(&response)
-            .map_err(|error| internal_rpc_error("serializing root-key response", error))
+        .map_err(root_key_answer_rpc_error)
     }
 
     /// Generate complete evidence bound to this service's tx-io public key,

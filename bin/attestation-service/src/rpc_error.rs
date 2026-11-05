@@ -7,6 +7,10 @@
 //! unauthenticated caller learns the outcome and nothing about why — so the
 //! failure detail lives in this responder's log instead.
 //!
+//! A request that does not parse never reaches this module: jsonrpsee answers
+//! it with `InvalidParams` before the handler runs, and the parser detail it
+//! attaches describes only the caller's own input.
+//!
 //! The two denials are terminal, read by the joiner's operator as *your*
 //! configuration is wrong, so each is only sent when this responder positively
 //! attributed the failure. Anything it cannot attribute answers as an internal
@@ -110,15 +114,6 @@ impl From<DenialKind> for RootKeyRefusal {
             }
         }
     }
-}
-
-pub(crate) fn invalid_root_key_request_rpc_error(error: impl Debug) -> ErrorObjectOwned {
-    warn!(?error, "invalid root-key request");
-    ErrorObjectOwned::owned(
-        ErrorCode::InvalidParams.code(),
-        "Invalid root-key request",
-        None::<()>,
-    )
 }
 
 pub(crate) fn internal_rpc_error(operation: &'static str, error: impl Debug) -> ErrorObjectOwned {
@@ -330,10 +325,6 @@ mod tests {
 
     #[test]
     fn rpc_errors_expose_only_stable_messages() {
-        let invalid = invalid_root_key_request_rpc_error("private parser detail");
-        assert_eq!(invalid.code(), ErrorCode::InvalidParams.code());
-        assert_eq!(invalid.message(), "Invalid root-key request");
-
         let internal = internal_rpc_error("generating evidence", "private backend detail");
         assert_eq!(internal.code(), ErrorCode::InternalError.code());
         assert_eq!(internal.message(), "Internal error");
@@ -345,7 +336,7 @@ mod tests {
             assert_eq!(error.message(), refusal.message());
         }
 
-        for error in refused.into_iter().chain([invalid, internal]) {
+        for error in refused.into_iter().chain([internal]) {
             assert!(!error.to_string().contains("private"));
         }
     }

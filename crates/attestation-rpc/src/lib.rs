@@ -49,14 +49,45 @@ pub trait AttestationRpc {
     /// Return the network root key wrapped to an attested booting peer.
     ///
     /// The caller is a joining node's own attestation service, acquiring the
-    /// network root key it does not yet hold from an existing node.
-    ///
-    /// The bodies remain opaque until `RootKeyRequest` and `RootKeyResponse`
-    /// move into the planned bootstrap protocol crate. Keeping them opaque
-    /// here preserves the existing wire format without creating a dependency
-    /// on the attestation-service implementation.
+    /// network root key it does not yet hold from an existing node. The
+    /// responder verifies `request.evidence` and appraises the requester's
+    /// measurements before wrapping anything; see [`RootKeyRequest`] and
+    /// [`RootKeyResponse`] for the transcript each side attests.
     #[method(name = "getWrappedRootKey")]
-    async fn get_wrapped_root_key(&self, request: Vec<u8>) -> RpcResult<Vec<u8>>;
+    async fn get_wrapped_root_key(&self, request: RootKeyRequest) -> RpcResult<RootKeyResponse>;
+}
+
+/// The requester's half of the root-key bootstrap handshake: a fresh nonce and
+/// ephemeral pubkey, attested by `evidence` over
+/// [`root_key_request_binding`](seismic_attestation::bindings::root_key_request_binding).
+///
+/// The ephemeral key travels as a `secp256k1::PublicKey` (compressed on the
+/// wire); the binding helpers consume its 33-byte SEC1 form via `.serialize()`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RootKeyRequest {
+    /// Requester-fresh replay protection, bound into both quotes.
+    pub nonce_b: [u8; 32],
+    /// Requester ephemeral ECDH pubkey; the matching secret stays in the
+    /// requester's custodian.
+    pub eph_pk_b: secp256k1::PublicKey,
+    /// Requester attestation over `root_key_request_binding(network_id,
+    /// nonce_b, eph_pk_b)`.
+    pub evidence: AttestationExchangeMessage,
+}
+
+/// The responder's half of the root-key bootstrap handshake: its ephemeral
+/// pubkey, the AEAD-wrapped root key, and its attestation over
+/// [`root_key_response_binding`](seismic_attestation::bindings::root_key_response_binding).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RootKeyResponse {
+    /// Responder ephemeral ECDH pubkey.
+    pub eph_pk_a: secp256k1::PublicKey,
+    /// `nonce(12) || AES-256-GCM(root_key)`, as produced by
+    /// `seismic_custodian::Custodian::wrap_root_key_for_peer`.
+    pub wrapped: Vec<u8>,
+    /// Responder attestation over `root_key_response_binding(network_id,
+    /// nonce_b, eph_pk_a, wrapped)`.
+    pub evidence: AttestationExchangeMessage,
 }
 
 /// Complete evidence needed by a relying client to authenticate a tx-io key.
