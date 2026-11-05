@@ -12,7 +12,7 @@
 
 use crate::{
     admission::AdmitAnyTdxGuest,
-    bootstrap::{RootKeyResponse, build_root_key_request, verify_root_key_response},
+    bootstrap::{build_root_key_request, verify_root_key_response},
     rpc_error::RootKeyRefusal,
 };
 use anyhow::Context as _;
@@ -236,9 +236,7 @@ async fn try_fetch_root_key_from_peer(
     let request = build_root_key_request(network_id, &requester_eph_pk, attestation_type)?;
 
     let client = HttpClientBuilder::default().build(peer)?;
-    let request_bytes = serde_json::to_vec(&request)?;
-    let response_bytes = client.get_wrapped_root_key(request_bytes).await?;
-    let response: RootKeyResponse = serde_json::from_slice(&response_bytes)?;
+    let response = client.get_wrapped_root_key(request.clone()).await?;
 
     // The joiner's appraisal of the responder is permissive: the custodian
     // installs the key only if it derives the manifest's pin; see

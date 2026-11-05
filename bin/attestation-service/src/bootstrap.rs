@@ -56,46 +56,15 @@ use anyhow::{Context, Result};
 use rand::{TryRngCore as _, rngs::OsRng};
 use secp256k1::PublicKey;
 use seismic_attestation::{
-    AdmissionPredicate, AttestationError, AttestationExchangeMessage, AttestationType, NetworkId,
+    AdmissionPredicate, AttestationError, AttestationType, NetworkId,
     bindings::{
         RootKeyRequestBinding, binding64_from_digest32, root_key_request_binding,
         root_key_response_binding,
     },
     generate_evidence, verify_evidence_with_predicate,
 };
+use seismic_attestation_rpc::{RootKeyRequest, RootKeyResponse};
 use seismic_custodian_ipc::{AdmittedOn, CustodianClient, IpcError, WrappedRootKeyBytes};
-use serde::{Deserialize, Serialize};
-
-/// The requester's half of the handshake: a fresh nonce + ephemeral pubkey,
-/// attested by `evidence` over [`root_key_request_binding`].
-///
-/// The ephemeral key travels as a `secp256k1::PublicKey` (compressed on the
-/// wire); the binding helpers consume its 33-byte SEC1 form via `.serialize()`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RootKeyRequest {
-    /// Requester-fresh replay protection, bound into both quotes.
-    pub nonce_b: [u8; 32],
-    /// Requester ephemeral ECDH pubkey; the matching secret stays in the
-    /// requester's custodian.
-    pub eph_pk_b: PublicKey,
-    /// Requester attestation over `root_key_request_binding(network_id,
-    /// nonce_b, eph_pk_b)`.
-    pub evidence: AttestationExchangeMessage,
-}
-
-/// The responder's half: its ephemeral pubkey, the AEAD-wrapped root key, and
-/// its attestation over [`root_key_response_binding`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RootKeyResponse {
-    /// Responder ephemeral ECDH pubkey.
-    pub eph_pk_a: PublicKey,
-    /// `nonce(12) || AES-256-GCM(root_key)`; see
-    /// [`Custodian::wrap_root_key_for_peer`].
-    pub wrapped: Vec<u8>,
-    /// Responder attestation over `root_key_response_binding(network_id,
-    /// nonce_b, eph_pk_a, wrapped)`.
-    pub evidence: AttestationExchangeMessage,
-}
 
 /// Requester step 1: build the request the booting node POSTs to a peer.
 ///
